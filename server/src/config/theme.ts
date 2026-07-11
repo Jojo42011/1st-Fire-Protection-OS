@@ -1,30 +1,30 @@
 /**
- * Brand theme — the single source of truth for colors, echoed to every client page.
- * Change these and the whole app re-skins.
+ * Brand theme — the single source of truth for colors, mirrored in client/theme.css
+ * and the shell. This is the REAL 1st Fire Protection brand: a fire-station command
+ * center — red = the fire, navy = the uniform, off-white = the blueprint, gold = the badge.
  */
 export const THEME = {
-  bg: '#101B33', // deepest navy — page background
-  panel: '#1B2A48', // card / sidebar navy
-  panel2: '#223255', // raised card
-  text: '#FFFFFF', // headings — bold, uppercase, condensed
-  muted: '#93A4C0', // blue-gray body text
-  line: 'rgba(255,255,255,0.08)',
-  line2: 'rgba(255,255,255,0.18)',
-  accent: '#E23744', // FIRE RED — buttons, underlines, active
-  accent2: '#FF5A66', // hover / gradient top
-  ok: '#46C77E', // "online" / connected green
-  warn: '#E8B23A',
-  font: '"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif',
-  display: '"Archivo","Anton",Impact,"Inter",sans-serif',
-  mono: 'ui-monospace,"SF Mono",Menlo,Consolas,monospace',
+  // Off-white blueprint paper — the page ground
+  paper: '#F5F7F9',
+  panel: '#FFFFFF',
+  // Navy — the uniform: sidebar, dark sections, footer
+  navy: '#1E2D40',
+  navy2: '#26384f',
+  navyLine: '#34465d',
+  // Ink + neutrals (navy-biased, never pure grey)
+  ink: '#1E2D40',
+  muted: '#5C6B7D',
+  line: '#D2DAE2',
+  line2: '#B9C4CF',
+  // Primary red — the fire
+  red: '#E53935',
+  redDeep: '#C62828',
+  redTint: '#FCE9E8',
+  // Accent gold — the badge (certifications, excellence)
+  gold: '#F5B81B',
+  goldDeep: '#B9860C',
+  ok: '#2E9E5B',
+  // Type
+  sans: "'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+  mono: "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace",
 };
-
-/** Rendered as a <style>:root{...}</style> block injected into every client page. */
-export function themeCssVars(): string {
-  return `:root{
-  --bg:${THEME.bg};--panel:${THEME.panel};--panel-2:${THEME.panel2};--text:${THEME.text};
-  --muted:${THEME.muted};--line:${THEME.line};--line-2:${THEME.line2};--accent:${THEME.accent};
-  --accent-2:${THEME.accent2};--ok:${THEME.ok};--warn:${THEME.warn};
-  --font:${THEME.font};--display:${THEME.display};--mono:${THEME.mono};
-}`;
-}

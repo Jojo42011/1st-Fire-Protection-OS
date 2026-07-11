@@ -21,7 +21,7 @@ router.get('/api/invoices', (_req, res) => {
     summary: getReceivablesSummary(),
     invoices,
     reminders,
-    live: integrationConnected('quickbooks') || integrationConnected('stripe'),
+    live: integrationConnected('servicetrade') || integrationConnected('stripe'),
   });
 });
 

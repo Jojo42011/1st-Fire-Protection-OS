@@ -15,24 +15,24 @@ export const AGENTS: AgentDef[] = [
   {
     key: 'calls',
     name: 'Call Receptionist',
-    role: 'Answers calls 24/7, books jobs, captures leads',
+    role: 'Answers the SA line 24/7, classifies & routes into Teams, captures leads',
     home: true,
     status: 'connecting',
-    connectVia: ['vapi', 'elevenlabs'],
+    connectVia: ['vapi', 'twilio', 'elevenlabs', 'microsoft365'],
   },
   {
     key: 'invoices',
     name: 'Invoice Collector',
     role: 'Chases receivables, drafts reminders, tracks aging',
     status: 'standalone',
-    connectVia: ['quickbooks', 'stripe', 'gmail'],
+    connectVia: ['servicetrade', 'stripe', 'gmail'],
   },
   {
     key: 'reviews',
     name: 'Review Collector',
-    role: 'Requests reviews, drafts replies, tracks reputation',
+    role: 'Requests reviews on job completion, drafts replies, tracks reputation',
     status: 'standalone',
-    connectVia: ['google_business', 'gmail'],
+    connectVia: ['servicetrade', 'google_business', 'facebook'],
   },
 ];
 
