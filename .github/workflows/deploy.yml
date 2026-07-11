@@ -3,6 +3,7 @@ name: Deploy
 on:
   push:
     branches: [main, master]
+  workflow_dispatch: {}   # manual "Run workflow" button in the Actions tab
 
 jobs:
   build:
@@ -29,8 +30,7 @@ jobs:
     name: Deploy to Fly.io
     needs: build
     runs-on: ubuntu-latest
-    # only deploy when a token is configured; otherwise this job is skipped safely
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+    concurrency: deploy-group   # never run two deploys at once (SQLite = one machine)
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -39,7 +39,9 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "No FLY_API_TOKEN set — skipping deploy (build passed)."
+            echo "No FLY_API_TOKEN secret set — skipping deploy (build passed)."
+            echo "Add it in: repo → Settings → Secrets and variables → Actions → New repository secret."
             exit 0
           fi
-          flyctl deploy --remote-only
+          # --ha=false keeps it to a single machine (required for SQLite on one volume)
+          flyctl deploy --remote-only --ha=false
