@@ -8,65 +8,54 @@ Data in `/data/1stfp.db` survives deploys, restarts, and machine moves.
 
 ---
 
-## Option A — Deploy from your machine (fastest, recommended for the first deploy)
+## Option A — Auto-deploy from GitHub (RECOMMENDED — no local machine needed)
 
-You run these locally; your Fly token never leaves your machine.
+Everything runs in the cloud: GitHub's runner builds + deploys to Fly on every push.
+The workflow (`.github/workflows/deploy.yml`) **bootstraps the app + volume on its first
+run**, so you never touch a terminal. You only do two things once, both in a browser:
 
-### 1. Install flyctl + log in
-```bash
-# macOS
-brew install flyctl
-# Linux / WSL
-curl -L https://fly.io/install.sh | sh
+### 1. Create a Fly.io account + API token (browser)
+- Sign up / log in at <https://fly.io> (a payment card is required even on the free
+  allowances).
+- Go to the Fly dashboard → **Tokens** (org-level) → **Create token** (or Account →
+  Access Tokens). Copy it. This token can create apps and deploy.
 
-fly auth login
-```
+### 2. Add the token as a GitHub repo secret (browser)
+- In this repo on GitHub: **Settings → Secrets and variables → Actions →
+  New repository secret**.
+- Name: `FLY_API_TOKEN` — Value: paste the token. Save. (It's encrypted; it never
+  appears in logs.)
+- *(Optional)* If your Fly org isn't the default `personal`, add a repo **variable**
+  `FLY_ORG` with your org slug.
 
-### 2. Create the app (names are globally unique)
-Pick a unique name and keep it in sync with `fly.toml` (the `app = ` line).
-```bash
-cd 1st-Fire-Protection-OS
-APP=first-fp-os-<yourname>          # <-- choose a unique name
-fly apps create "$APP"
-sed -i '' "s/^app = .*/app = \"$APP\"/" fly.toml   # macOS (use sed -i on Linux)
-```
-Already have an app? Skip `apps create` and just set `app = "<your-app>"` in `fly.toml`.
+### 3. Trigger a deploy
+- Push any change (or GitHub → **Actions** tab → *Deploy to Fly.io* → **Run workflow**).
+- First run: creates the app `first-fp-os` (rename in `fly.toml` if that's taken — edit
+  the `app = ` line right in GitHub's web editor), auto-creates the `fp_data` volume,
+  deploys one machine. Every later push just deploys an update.
+- URL: `https://<app-name>.fly.dev`. Watch progress in the **Actions** tab.
 
-### 3. First deploy (auto-creates the volume from `initial_size` in fly.toml)
-```bash
-fly deploy --remote-only --ha=false
-```
-`--ha=false` guarantees a single machine. The `[mounts] initial_size = "1gb"` line
-makes Fly create the `fp_data` volume automatically on this first deploy.
-
-> Prefer to create the volume explicitly? Do it before deploying:
-> `fly volumes create fp_data --region dfw --size 1`
-
-### 4. Open it
-```bash
-fly open           # -> https://<APP>.fly.dev
-fly logs           # watch it boot + seed
-```
-
-That's it. It boots on seeded sample data with **zero secrets** (graceful
-degradation). Add keys when you're ready — see step 6.
+That's the whole thing. Data in `/data/1stfp.db` (facts, calls, reviews, memory) persists
+across every deploy. Add API keys later as Fly secrets — see the bottom section.
 
 ---
 
-## Option B — Auto-deploy from GitHub (ongoing)
+## Option B — Deploy from your own machine (only if you prefer the CLI)
 
-The repo already has `.github/workflows/deploy.yml`. It build-checks + boot-smoke-tests
-every push, and deploys when a Fly token is present.
-
-1. Create a deploy token:
-   ```bash
-   fly tokens create deploy -x 999999h
-   ```
-2. In GitHub: **repo → Settings → Secrets and variables → Actions → New repository
-   secret** → name `FLY_API_TOKEN`, paste the token. (It's encrypted; it never appears
-   in logs.)
-3. The app + volume must exist first — do Option A steps 2–3 once. After that, every
-   push to `main`/`master` (or the **Run workflow** button) deploys with `--ha=false`.
+### 1. Install flyctl + log in
+```bash
+brew install flyctl                 # macOS   (Linux/WSL: curl -L https://fly.io/install.sh | sh)
+fly auth login
+```
+### 2. Create the app + deploy
+```bash
+cd 1st-Fire-Protection-OS
+APP=first-fp-os-<yourname>          # must be globally unique + start with a letter
+perl -pi -e "s/^app = .*/app = \"$APP\"/" fly.toml
+fly apps create "$APP"
+fly deploy --remote-only --ha=false # --ha=false = one machine; volume auto-creates
+fly open
+```
 
 ---
 

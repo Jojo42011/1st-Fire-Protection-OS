@@ -1,8 +1,9 @@
-name: Deploy
+name: Deploy to Fly.io
 
+# Every push to these branches auto-deploys to the cloud. No local machine involved.
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, claude/1st-fire-protection-app-6klq0t]
   workflow_dispatch: {}   # manual "Run workflow" button in the Actions tab
 
 jobs:
@@ -34,14 +35,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Deploy
+
+      - name: Deploy (bootstraps app + volume on first run)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
         run: |
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "No FLY_API_TOKEN secret set — skipping deploy (build passed)."
-            echo "Add it in: repo → Settings → Secrets and variables → Actions → New repository secret."
-            exit 0
+            echo "::error::No FLY_API_TOKEN secret set."
+            echo "Add it in: repo -> Settings -> Secrets and variables -> Actions -> New repository secret (name: FLY_API_TOKEN)."
+            exit 1
           fi
-          # --ha=false keeps it to a single machine (required for SQLite on one volume)
+
+          # app name is the single source of truth in fly.toml
+          APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/.*"(.*)".*/\1/')
+          echo "Target app: $APP"
+
+          # create the app once (idempotent — no-op if it already exists)
+          if ! flyctl status --app "$APP" >/dev/null 2>&1; then
+            echo "Creating app $APP in org $FLY_ORG ..."
+            flyctl apps create "$APP" --org "$FLY_ORG"
+          else
+            echo "App $APP already exists — deploying update."
+          fi
+
+          # Deploy. --ha=false keeps it to ONE machine (required for SQLite on one volume).
+          # The [mounts] initial_size in fly.toml auto-creates the fp_data volume on first deploy.
           flyctl deploy --remote-only --ha=false
+
+          echo "Deployed. URL: https://$APP.fly.dev"
