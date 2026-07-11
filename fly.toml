@@ -1,0 +1,32 @@
+# Fly.io deploy config — persistent volume for the SQLite "brain".
+app = "1st-fp-os"
+primary_region = "dfw"   # Dallas — Texas-local
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3900"
+  DB_PATH = "/data/1stfp.db"
+
+[[mounts]]
+  source = "fp_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3900
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

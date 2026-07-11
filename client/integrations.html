@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Integrations · 1st FP</title>
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  .cat{margin-top:26px}
+  .int-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:12px}
+  .int{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+  .int .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .int .name{font-weight:700;font-size:15px}
+  .int .why{color:var(--muted);font-size:12.5px;line-height:1.5}
+  .team{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px}
+  .emp{background:linear-gradient(135deg,rgba(226,55,68,.10),transparent),var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .emp .n{font-family:var(--display);font-size:19px;font-weight:800;text-transform:uppercase}
+  .emp .r{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.5}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:7px} .legend .d{width:8px;height:8px;border-radius:50%}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <h1>Integrations</h1>
+      <div class="under"></div>
+      <p>The hands of the system — every service the OS can plug into. What's connected now, what's one key away, and what's on the roadmap. This is how far the system reaches.</p>
+    </div>
+    <span id="counts" class="badge demo"><span class="d"></span>Loading…</span>
+  </div>
+
+  <div class="legend">
+    <span><span class="d" style="background:var(--ok)"></span>Connected</span>
+    <span><span class="d" style="background:var(--accent)"></span>Available · one key away</span>
+    <span><span class="d" style="background:var(--muted)"></span>Planned · roadmap</span>
+  </div>
+
+  <div class="section-title">The Team</div>
+  <div class="team" id="team"></div>
+
+  <div id="catalog"></div>
+
+<script>
+function pill(status){
+  if(status==='connected')return '<span class="pill green">Connected</span>';
+  if(status==='available')return '<span class="pill red">Available</span>';
+  return '<span class="pill gray">Planned</span>';
+}
+function statusPill(s){var map={live:'green',connecting:'amber',standalone:'gray'};return '<span class="pill '+(map[s]||'gray')+'">'+s+'</span>';}
+fetch('/api/integrations').then(function(r){return r.json();}).then(function(d){
+  var c=d.counts;
+  document.getElementById('counts').innerHTML='<span class="d"></span>'+c.connected+' connected · '+c.available+' available · '+c.planned+' planned';
+  document.getElementById('team').innerHTML=(d.team||[]).map(function(a){
+    return '<div class="emp"><div style="display:flex;justify-content:space-between;align-items:center"><div class="n">'+a.name+'</div>'+statusPill(a.status)+'</div><div class="r">'+a.role+'</div><div class="r" style="margin-top:8px;font-family:var(--mono);font-size:11px">via: '+(a.connectVia.join(' · ')||'—')+'</div></div>';
+  }).join('');
+  var cat='';
+  Object.keys(d.byCategory).forEach(function(k){
+    cat+='<div class="cat"><div class="section-title">'+k+'</div><div class="int-grid">'+d.byCategory[k].map(function(i){
+      return '<div class="int"><div class="top"><div class="name">'+i.name+'</div>'+pill(i.status)+'</div><div class="why">'+i.why+'</div></div>';
+    }).join('')+'</div></div>';
+  });
+  document.getElementById('catalog').innerHTML=cat;
+});
+</script>
+</body>
+</html>

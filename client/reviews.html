@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Review Collector · 1st FP</title>
+<link rel="stylesheet" href="/theme.css" />
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <h1>Review Collector</h1>
+      <div class="under"></div>
+      <p>Turns finished jobs into 5-star reviews and manages your reputation. Requests reviews from happy customers and drafts on-brand replies — all awaiting your approval.</p>
+    </div>
+    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone · Sample Data</span>
+  </div>
+
+  <div class="grid kpis" id="kpis"></div>
+
+  <div class="two-col" style="margin-top:22px">
+    <div>
+      <div class="section-title">Incoming Reviews</div>
+      <div id="reviews"></div>
+    </div>
+    <div>
+      <div class="section-title">Star Distribution</div>
+      <div class="card"><div class="bars" id="dist"></div></div>
+
+      <div class="section-title">Request Queue · Completed Jobs</div>
+      <div id="jobs"></div>
+      <div class="connect">
+        <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg></div>
+        <div><b>Connect to go live:</b> Google Business Profile to pull &amp; publish replies, Gmail / SMS to send requests.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+function starStr(n){return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
+function load(){
+  fetch('/api/reviews').then(function(r){return r.json();}).then(function(d){
+    var s=d.summary;
+    if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Connected · Live';}
+    document.getElementById('kpis').innerHTML=[
+      kpi('Avg Rating',s.avgRating.toFixed(1)+'★','across '+s.totalReviews+' reviews',true),
+      kpi('Total Reviews',s.totalReviews,'all sources',false),
+      kpi('This Month','+'+s.thisMonthDelta,'new reviews',false),
+      kpi('Request Queue',(d.pendingJobs||[]).length,'jobs ready to ask',false)
+    ].join('');
+    var maxd=Math.max(1,Math.max.apply(null,[1,2,3,4,5].map(function(k){return s.distribution[k]||0;})));
+    document.getElementById('dist').innerHTML=[5,4,3,2,1].map(function(k){
+      var v=s.distribution[k]||0;return '<div class="bar-row"><span class="lab">'+k+'★</span><div class="bar-track"><div class="bar-fill" style="width:'+(v/maxd*100)+'%"></div></div><span class="mono muted">'+v+'</span></div>';
+    }).join('');
+    document.getElementById('reviews').innerHTML=(d.reviews||[]).map(function(r){
+      var reply= r.reply_draft? '<div class="draft" style="margin-top:10px"><div class="meta"><b>Drafted reply</b><span class="pill '+(r.reply_status==='approved'||r.reply_status==='published'?'green':'gray')+'">'+r.reply_status+'</span></div><div class="body">'+esc(r.reply_draft)+'</div><div class="actions"><button class="btn primary" onclick="approveReply('+r.id+')" '+(r.reply_status==='approved'||r.reply_status==='published'?'disabled':'')+'>Approve &amp; Publish</button></div></div>'
+        : '<div class="actions" style="justify-content:flex-start;margin-top:10px"><button class="btn" onclick="draftReply('+r.id+')">Draft reply</button></div>';
+      return '<div class="card" style="margin-bottom:12px"><div class="meta" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+r.author+'</b> <span class="muted mono" style="font-size:11px">· '+r.source+'</span></div><span class="stars">'+starStr(r.stars)+'</span></div><div class="body" style="color:var(--text);margin-top:8px;font-size:13.5px">'+esc(r.text)+'</div>'+reply+'</div>';
+    }).join('');
+    document.getElementById('jobs').innerHTML=(d.pendingJobs||[]).map(function(j){
+      return '<div class="draft"><div class="meta"><b>'+j.customer+'</b><button class="btn" onclick="reqReview('+j.id+')">Draft request</button></div><div class="body">'+esc(j.job_desc||'')+'</div></div>';
+    }).join('') || '<div class="empty">No jobs waiting.</div>';
+    var rq=d.requests||[];
+    if(rq.length){
+      document.getElementById('jobs').innerHTML= rq.map(function(r){
+        return '<div class="draft"><div class="meta"><b>'+r.customer+'</b><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><button class="btn primary" onclick="approveReq('+r.id+')" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
+      }).join('') + document.getElementById('jobs').innerHTML;
+    }
+  });
+}
+function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
+function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function draftReply(id){fetch('/api/reviews/'+id+'/draft-reply',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function approveReply(id){fetch('/api/reviews/'+id+'/approve-reply',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function reqReview(id){fetch('/api/reviews/request/'+id,{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function approveReq(id){fetch('/api/reviews/requests/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+load();
+</script>
+</body>
+</html>

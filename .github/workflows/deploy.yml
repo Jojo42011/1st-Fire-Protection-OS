@@ -1,0 +1,45 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    name: Build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm run build
+      # keyless boot smoke test — must start on seeded data with no secrets
+      - name: Boot smoke test
+        run: |
+          DB_PATH=/tmp/ci.db PORT=3900 node server/dist/app.js &
+          PID=$!
+          sleep 3
+          curl -sf localhost:3900/api/health
+          curl -sf localhost:3900/api/integrations > /dev/null
+          kill $PID
+
+  deploy:
+    name: Deploy to Fly.io
+    needs: build
+    runs-on: ubuntu-latest
+    # only deploy when a token is configured; otherwise this job is skipped safely
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "No FLY_API_TOKEN set — skipping deploy (build passed)."
+            exit 0
+          fi
+          flyctl deploy --remote-only
