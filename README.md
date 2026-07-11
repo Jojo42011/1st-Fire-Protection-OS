@@ -1,22 +1,30 @@
-# 1st FP Operating System
+# 1st Fire Protection — Operating System
 
-An **AI operating system** for **1st FP Companies — 1st Fire Protection** (fire protection &
-life safety, Texas). Not one chatbot — a set of named AI "employees" that share **one** Express +
+An **AI operating system** for **1st Fire Protection Services, LLC** — the single-source life
+safety provider for Central & South Texas (San Antonio HQ, 9 locations, $40M+ built on word of
+mouth). Not one chatbot — a set of named AI "employees" that share **one** Express +
 better-sqlite3 backend and **one** SQLite "brain," presented behind a collapsible tabbed shell.
 
-> **WE GO ANYWHERE** — committed to saving lives and property · 108 years of combined experience.
+> **SINGLE-SOURCE LIFE SAFETY** — 108 years of combined experience · SCTRCA · MBE · SBE · HUB.
+
+**Brand:** a fire-station command center — red `#E53935` is *the fire*, navy `#1E2D40` is *the
+uniform*, off-white `#F5F7F9` blueprint is *the paper*, gold `#F5B81B` is *the badge*. Inter
+(900 uppercase, stamped-sign headings) + JetBrains Mono for technical detail. Real brand kit
+lives in `client/brand/` (tokens + fonts); the app themes off it.
 
 ## The three employees
 
 | Agent | Tab | Status | Job |
 |---|---|---|---|
-| **Call Receptionist** | `calls` (home) | connecting soon | Answers inbound calls 24/7, books inspections/service, captures leads, transfers emergencies. |
-| **Invoice Collector** | `invoices` | standalone | Chases receivables, drafts polite→firm reminders, tracks aging. |
-| **Review Collector** | `reviews` | standalone | Requests reviews from happy customers, drafts on-brand replies, tracks reputation. |
+| **Call Receptionist** | `calls` (home) | connecting soon | Answers the San Antonio line (210-377-FIRE) 24/7, classifies the call, and routes it into Teams — inspections, sprinkler/alarm service, extinguishers, billing, sales, or a named person. Complaints → Daniel Rodriguez; Mario Salinas → voicemail; Spanish callers helped in Spanish; emergencies → after-hours queue. |
+| **Invoice Collector** | `invoices` | standalone | Chases ServiceTrade receivables, drafts friendly→firm reminders, tracks aging. |
+| **Review Collector** | `reviews` | standalone | Turns completed jobs into Google/Facebook reviews, drafts on-brand replies, tracks reputation. |
 
 Two are **standalone** — they demo on seeded sample data today. The **Call Receptionist** is
-**built and one API key away from live**: the telephony webhook + LLM lead extraction already
-exist and no-op until `VAPI_API_KEY` / `ELEVENLABS_API_KEY` / `TWILIO_*` are present.
+**built and one API key away from live**: it mirrors the real San Antonio routing brain
+(`automation/vapi/system-prompt.md` in the ops repo), and the telephony webhook + LLM lead
+extraction already exist and no-op until `VAPI_API_KEY` / `TWILIO_*` / `ELEVENLABS_API_KEY`
+are present. Live path: forward 210-377-FIRE → Twilio → Vapi (BYO OpenAI key) → transfer into Teams.
 
 ## The two-layer philosophy
 

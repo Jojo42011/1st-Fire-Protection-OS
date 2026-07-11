@@ -4,39 +4,40 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Receptionist · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/theme.css" />
 <style>
-  .hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;background:linear-gradient(135deg,rgba(226,55,68,.14),transparent 60%),linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid rgba(226,55,68,.25);border-radius:18px;padding:26px 28px;margin-top:20px}
-  .hero h2{font-family:var(--display);font-size:40px;font-weight:800;text-transform:uppercase;line-height:.98}
-  .hero p{color:var(--muted);margin-top:10px;font-size:13.5px;max-width:52ch}
+  .hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;background:var(--navy);color:#fff;border-left:3px solid var(--accent);padding:28px 30px;margin-top:20px;position:relative}
+  .hero h2{font-family:var(--display);font-weight:900;font-size:38px;text-transform:uppercase;letter-spacing:-.02em;line-height:1;color:#fff}
+  .hero p{color:#B9C4CF;margin-top:12px;font-size:13.5px;max-width:54ch;line-height:1.55}
   .talk{display:flex;flex-direction:column;align-items:center;gap:12px}
-  .mic{width:78px;height:78px;border-radius:50%;border:1px solid var(--line-2);background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;box-shadow:0 0 0 0 rgba(226,55,68,.5)}
+  .mic{width:78px;height:78px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;box-shadow:0 0 0 0 rgba(229,57,53,.5)}
   .mic:hover{background:var(--accent-2)} .mic.listening{animation:ring 1.4s infinite}
-  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(226,55,68,.5)}100%{box-shadow:0 0 0 22px rgba(226,55,68,0)}}
-  .talk .hint{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-  #convo{margin-top:16px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
-  .msg{padding:9px 13px;border-radius:11px;font-size:13.5px;max-width:80%;line-height:1.5}
+  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(229,57,53,.5)}100%{box-shadow:0 0 0 22px rgba(229,57,53,0)}}
+  .talk .hint{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#B9C4CF}
+  #convo{margin-top:16px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+  .msg{padding:9px 13px;font-size:13.5px;max-width:80%;line-height:1.5}
   .msg.you{align-self:flex-end;background:var(--accent);color:#fff}
-  .msg.bot{align-self:flex-start;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--text)}
+  .msg.bot{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--text)}
   .composer{display:flex;gap:8px;margin-top:12px}
-  .composer input{flex:1;background:var(--bg);border:1px solid var(--line-2);border-radius:10px;color:var(--text);padding:11px 14px;font-family:var(--font);font-size:14px}
+  .composer input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);padding:11px 14px;font-family:var(--font);font-size:14px}
   .composer input:focus{outline:none;border-color:var(--accent)}
 </style>
 </head>
 <body>
   <div class="page-head">
     <div class="titles">
+      <p class="kicker">San Antonio Line · 210-377-FIRE</p>
       <h1>Call Receptionist</h1>
-      <div class="under"></div>
-      <p>Answers inbound calls 24/7, books inspections &amp; service, captures every lead, and hands off to a human when it's out of scope. Booking is free; quoting a price is gated to a specialist.</p>
+      <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams — inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
     </div>
     <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
   </div>
 
   <div class="hero">
     <div>
-      <h2>We Go Anywhere</h2>
-      <p>Talk to the receptionist right now — ask it to book an inspection, or say "show me the invoices" and watch it drive the screen.</p>
+      <h2>Single-Source Life Safety</h2>
+      <p>Talk to the receptionist right now — ask it to route an inspection, or say "show me the invoices" and watch it drive the screen.</p>
     </div>
     <div class="talk">
       <button class="mic" id="mic" title="Hold to talk"><svg width="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
@@ -45,7 +46,7 @@
   </div>
 
   <div class="card" style="margin-top:16px">
-    <div id="convo"><div class="msg bot">Hi, this is the front desk for 1st FP Companies — fire protection &amp; life safety across Texas. How can I help you today?</div></div>
+    <div id="convo"><div class="msg bot">Welcome to 1st Fire Protection. This is an AI, but I can answer any questions that you have and transfer to a real person if not. How can I help you today?</div></div>
     <div class="composer"><input id="q" placeholder="Type a message, or 'show me the reviews'…" /><button class="btn primary" id="send">Send</button></div>
   </div>
 
@@ -61,7 +62,7 @@
       <div id="leads"></div>
       <div class="connect">
         <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 11.6a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></div>
-        <div><b>Connect to go live:</b> add a Vapi/Twilio + ElevenLabs key and the receptionist answers real calls with no code change. The webhook &amp; lead capture are already built.</div>
+        <div><b>Connect to go live:</b> forward 210-377-FIRE → Twilio → Vapi (bring-your-own OpenAI key) and the receptionist answers real calls, transferring into Teams. The webhook &amp; lead capture are already built.</div>
       </div>
     </div>
   </div>
@@ -75,7 +76,7 @@ function load(){
     var m=d.metrics;
     document.getElementById('kpis').innerHTML=[
       kpi('Calls Today',m.callsToday,'answered',true),
-      kpi('Booked',m.booked,'inspections/service',false),
+      kpi('Routed',m.transferred,'to the right team',false),
       kpi('Leads',m.leadsCaptured,'captured',false),
       kpi('Avg Duration',fmtDur(m.avgDuration),'per call',false)
     ].join('');

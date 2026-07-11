@@ -1,24 +1,32 @@
-# Fly.io deploy config — persistent volume for the SQLite "brain".
-app = "1st-fp-os"
-primary_region = "dfw"   # Dallas — Texas-local
+# Fly.io deploy config — SQLite "brain" on a persistent volume.
+#
+# IMPORTANT: SQLite lives on ONE volume attached to ONE machine. Never scale this
+# app above a single machine (no `fly scale count 2`) — a second machine would get
+# its own empty volume and split the brain. One machine, one volume, one db file.
+
+app = "first-fp-os"          # must be globally unique on Fly & start with a letter — change if taken
+primary_region = "dfw"       # Dallas — Texas-local
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
   PORT = "3900"
-  DB_PATH = "/data/1stfp.db"
+  DB_PATH = "/data/1stfp.db" # the SQLite file, on the mounted volume
 
-[[mounts]]
+# Persistent volume for the SQLite db. `initial_size` lets `fly deploy` auto-create
+# the volume on first deploy (single machine). Data survives deploys & restarts.
+[mounts]
   source = "fp_data"
   destination = "/data"
+  initial_size = "1gb"
 
 [http_service]
   internal_port = 3900
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1    # keep the receptionist always-on (set 0 to scale-to-zero & save $)
 
   [[http_service.checks]]
     interval = "30s"

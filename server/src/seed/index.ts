@@ -16,21 +16,21 @@ export function seed(): void {
   };
   const isoAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
 
-  /* ---------- invoices (~12 across aging buckets) ---------- */
+  /* ---------- invoices (~12 across aging buckets) — real Texas customers + service lines ---------- */
   const invoices: [string, string, number, number, string][] = [
     // customer, email, amount, dueOffsetDays(negative=overdue), status
-    ['Lone Star Logistics', 'ap@lonestarlog.com', 4820.0, -8, 'sent'],
-    ['Brazos Valley Church', 'admin@bvchurch.org', 1250.0, -3, 'reminded'],
-    ['Hilltop Apartments LLC', 'billing@hilltopapts.com', 3600.0, -22, 'sent'],
-    ['Cypress Retail Group', 'finance@cypressretail.com', 9750.0, -45, 'reminded'],
-    ['Alamo Self Storage', 'owner@alamostorage.com', 780.0, -12, 'sent'],
-    ['Gulf Coast Manufacturing', 'ap@gcmfg.com', 15200.0, -67, 'reminded'],
-    ['Redbud Medical Plaza', 'billing@redbudmed.com', 5400.0, -35, 'sent'],
-    ['Trinity School District', 'ap@trinityisd.org', 2100.0, -95, 'reminded'],
-    ['Pecan Grove HOA', 'board@pecangrovehoa.org', 640.0, -5, 'sent'],
-    ['Westfield Warehouse', 'accounts@westfieldwh.com', 8300.0, -120, 'reminded'],
-    ['Bluebonnet Bakery', 'hello@bluebonnetbakery.com', 410.0, -18, 'sent'],
-    ['Rio Grande Auto', 'shop@riograndeauto.com', 1950.0, -2, 'sent'],
+    ['Alamo Heights ISD', 'ap@ahisd.example', 4820.0, -8, 'sent'],           // sprinkler inspection
+    ['Riverwalk Hospitality Group', 'billing@rwhg.example', 1250.0, -3, 'reminded'], // hood suppression
+    ['Buda Logistics Park', 'ap@budalogistics.example', 3600.0, -22, 'sent'], // alarm service
+    ['South Texas Medical Center', 'finance@stmc.example', 9750.0, -45, 'reminded'], // fire pump test
+    ['Laredo Self Storage', 'owner@laredostore.example', 780.0, -12, 'sent'], // extinguisher recharge
+    ['Gulf Coast Manufacturing', 'ap@gcmfg.example', 15200.0, -67, 'reminded'], // sprinkler install
+    ['Waco Retail Plaza', 'billing@wacoretail.example', 5400.0, -35, 'sent'], // quarterly inspection
+    ['Lubbock County Facilities', 'ap@lubbockco.example', 2100.0, -95, 'reminded'], // backflow test
+    ['Pecan Grove HOA', 'board@pecangrovehoa.example', 640.0, -5, 'sent'],   // extinguishers
+    ['Spring Industrial Warehouse', 'accounts@springwh.example', 8300.0, -120, 'reminded'], // hydrotest
+    ['McAllen Bakery Co.', 'hello@mcallenbakery.example', 410.0, -18, 'sent'], // kitchen suppression
+    ['College Station Auto', 'shop@cstxauto.example', 1950.0, -2, 'sent'],     // emergency lighting
   ];
   const insInv = db.prepare(
     `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?)`
@@ -42,36 +42,36 @@ export function seed(): void {
   const insPaid = db.prepare(
     `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status, paid_at) VALUES (?, ?, ?, ?, ?, 'paid', ?)`
   );
-  insPaid.run('Eastside Fitness', 'gm@eastsidefit.com', 2200.0, daysAgo(40), daysAgo(10), daysAgo(4));
-  insPaid.run('Magnolia Offices', 'ap@magnoliaoffices.com', 3100.0, daysAgo(50), daysAgo(20), daysAgo(9));
+  insPaid.run('Eastside Fitness (SA)', 'gm@eastsidefit.example', 2200.0, daysAgo(40), daysAgo(10), daysAgo(4));
+  insPaid.run('Magnolia Offices (Spring)', 'ap@magnoliaoffices.example', 3100.0, daysAgo(50), daysAgo(20), daysAgo(9));
 
-  /* ---------- jobs (completed → request queue) ---------- */
+  /* ---------- jobs (completed ServiceTrade jobs → request queue) ---------- */
   const jobs: [string, string][] = [
-    ['Lone Star Logistics', 'Annual sprinkler inspection & tag'],
-    ['Brazos Valley Church', 'Backflow preventer test'],
-    ['Hilltop Apartments LLC', 'Fire alarm panel service'],
-    ['Alamo Self Storage', 'Dry system trip test'],
-    ['Redbud Medical Plaza', 'Quarterly inspection'],
+    ['Alamo Heights ISD', 'Annual fire sprinkler inspection & tag'],
+    ['Riverwalk Hospitality Group', 'Kitchen hood suppression semi-annual service'],
+    ['Buda Logistics Park', 'Fire alarm panel service call'],
+    ['Laredo Self Storage', 'Dry system trip test'],
+    ['Waco Retail Plaza', 'Quarterly inspection — sprinkler & alarm'],
     ['Pecan Grove HOA', 'Clubhouse extinguisher recharge'],
-    ['Bluebonnet Bakery', 'Kitchen hood suppression check'],
-    ['Rio Grande Auto', 'New sprinkler heads install'],
+    ['McAllen Bakery Co.', 'Kitchen hood suppression check'],
+    ['College Station Auto', 'Emergency lighting & exit sign test'],
   ];
   const insJob = db.prepare(
     `INSERT INTO jobs (customer, job_desc, completed_at, requested) VALUES (?, ?, ?, 0)`
   );
   jobs.forEach((j, i) => insJob.run(j[0], j[1], daysAgo(i + 2)));
 
-  /* ---------- reviews (mostly 4-5★, a couple 3★) ---------- */
+  /* ---------- reviews (mostly 4-5★, a couple 3★) — Google + Facebook ---------- */
   const reviews: [string, string, number, string, number][] = [
-    ['google', 'Marcus T.', 5, 'Showed up on time, explained everything, and got our system tagged same day. Highly recommend.', 6],
-    ['google', 'Priya S.', 5, 'These folks really do go anywhere — drove two hours to our site without blinking. Professional crew.', 11],
+    ['google', 'Marcus T.', 5, 'Showed up on time, explained everything, and got our sprinkler system tagged same day. White-glove all the way.', 6],
+    ['google', 'Priya S.', 5, 'Drove down from San Antonio to our Laredo site without blinking. Single-source for all our life safety now.', 11],
     ['google', 'Dave R.', 4, 'Good work on our backflow test. Took a little longer than quoted but the quality was there.', 15],
-    ['yelp', 'Angela M.', 5, 'Lifesavers, literally. Caught a code issue our last company missed for years.', 21],
+    ['facebook', 'Angela M.', 5, 'Lifesavers, literally. Their inspector caught an alarm code issue our last company missed for years.', 21],
     ['google', 'Tomás L.', 3, 'Job got done but scheduling was a bit of a runaround. The tech himself was great.', 28],
-    ['facebook', 'Karen W.', 5, 'Licensed, insured, and they actually pick up the phone. Rare these days.', 33],
-    ['google', 'Sam P.', 4, 'Solid inspection, clear report. Would use again.', 40],
-    ['yelp', 'Nina H.', 3, 'Pricing was fair but I had to follow up twice for the paperwork.', 47],
-    ['google', 'Reggie B.', 5, '108 years of experience shows. Knew our old system inside and out.', 55],
+    ['facebook', 'Karen W.', 5, 'Licensed, insured, HUB-certified, and they actually pick up the phone. Rare these days.', 33],
+    ['google', 'Sam P.', 4, 'Solid annual inspection, clear report. Would use again for our Waco property.', 40],
+    ['google', 'Nina H.', 3, 'Pricing was fair but I had to follow up twice for the ITM paperwork.', 47],
+    ['google', 'Reggie B.', 5, '108 years of combined experience shows. Knew our old fire pump inside and out.', 55],
   ];
   const insRev = db.prepare(
     `INSERT INTO reviews (source, author, stars, text, received_at, reply_status) VALUES (?, ?, ?, ?, ?, 'none')`
@@ -80,14 +80,16 @@ export function seed(): void {
     insRev.run(source, author, stars, text, daysAgo(dago));
   }
 
-  /* ---------- calls + leads (receptionist demo) ---------- */
+  /* ---------- calls + leads (receptionist demo) — real SA routing outcomes ---------- */
   const calls: [string, number, string, string, string, number][] = [
     // from, duration, intent, outcome, transcript, minsAgo
-    ['+1 512 555 0142', 184, 'inspection request', 'booked', 'Caller needs an annual sprinkler inspection for a warehouse in Round Rock. Booked for next Tuesday.', 22],
-    ['+1 210 555 0199', 96, 'service call', 'message', "Caller reported a leaking sprinkler head at a retail store. Took a message for the service team.", 65],
-    ['+1 713 555 0111', 240, 'new install quote', 'transferred', 'Caller wants a quote for a new sprinkler system in a 40k sqft facility. Transferred to a specialist.', 130],
-    ['+1 469 555 0176', 58, 'general question', 'message', 'Caller asked about backflow testing requirements. Provided info, took callback details.', 200],
-    ['+1 361 555 0188', 152, 'emergency', 'transferred', 'After-hours: alarm going off at a medical plaza. Flagged as emergency and transferred immediately.', 300],
+    ['+1 210 555 0142', 184, 'Inspection request', 'transferred', 'Caller needs an annual sprinkler inspection for a warehouse near San Antonio. Routed to Inspections group (Kelsey Bovard / Mel Vela).', 22],
+    ['+1 210 555 0199', 96, 'Sprinkler service', 'transferred', 'Leaking sprinkler head at a retail store. Routed to Fire Sprinkler Service (Ronnie Blue).', 65],
+    ['+1 210 555 0111', 240, 'New install / bid', 'transferred', 'Wants a bid for a new sprinkler system in a 40k sqft facility. Routed to Sales (Clayton Cichon).', 130],
+    ['+1 210 555 0176', 74, 'Billing', 'transferred', 'Caller wants to pay an invoice. Routed to Accounting group.', 155],
+    ['+1 210 555 0188', 152, 'Emergency', 'transferred', 'After-hours: alarm going off at a medical plaza. Flagged emergency → After-hours on-call queue.', 200],
+    ['+1 210 555 0155', 63, 'Complaint', 'transferred', 'Upset about a missed appointment window. Empathized, did not argue — routed straight to Daniel Rodriguez.', 240],
+    ['+1 210 555 0133', 88, 'Spanish-speaking', 'message', 'Spanish caller needing extinguisher recharge. Helped in Spanish, took name/number/reason — Denise to route.', 300],
   ];
   const insCall = db.prepare(
     `INSERT INTO calls (from_number, started_at, duration, transcript, intent, outcome) VALUES (?, ?, ?, ?, ?, ?)`
@@ -97,10 +99,11 @@ export function seed(): void {
   }
 
   const leads: [string, string, string, string, string][] = [
-    ['Round Rock Warehouse Co.', '+1 512 555 0142', '1200 Industrial Blvd, Round Rock, TX', 'Annual sprinkler inspection', 'booked'],
+    ['Northside Warehouse Co.', '+1 210 555 0142', '1200 Industrial Blvd, San Antonio, TX', 'Annual sprinkler inspection', 'booked'],
     ['Maria Gonzalez', '+1 210 555 0199', '480 Market St, San Antonio, TX', 'Leaking sprinkler head — service', 'new'],
-    ['Houston Facility Group', '+1 713 555 0111', '900 Bayou Dr, Houston, TX', 'New system install quote', 'contacted'],
-    ['Redbud Medical Plaza', '+1 361 555 0188', '77 Wellness Way, Corpus Christi, TX', 'After-hours alarm — emergency', 'contacted'],
+    ['Hill Country Facility Group', '+1 210 555 0111', '900 Bandera Rd, San Antonio, TX', 'New sprinkler system — bid', 'contacted'],
+    ['Southtown Medical Plaza', '+1 210 555 0188', '77 Wellness Way, San Antonio, TX', 'After-hours alarm — emergency', 'contacted'],
+    ['José Ramírez', '+1 210 555 0133', 'McAllen, TX', 'Extinguisher recharge (Spanish)', 'new'],
   ];
   const insLead = db.prepare(
     `INSERT INTO leads (name, phone, address, need, status, source) VALUES (?, ?, ?, ?, ?, 'phone')`
@@ -109,11 +112,14 @@ export function seed(): void {
     insLead.run(name, phone, address, need, status);
   }
 
-  /* ---------- a few seed brain rules ---------- */
+  /* ---------- a few seed brain rules (the real SA routing logic) ---------- */
   const insRule = db.prepare(`INSERT INTO rules (rule, scope) VALUES (?, ?)`);
-  insRule.run('Never quote a price on a call — capture details and let a specialist confirm.', 'receptionist');
+  insRule.run('Never quote a price on a call — capture details and route to Sales/Ops.', 'receptionist');
+  insRule.run('Mario Salinas (President) → send to voicemail every time. Do not transfer.', 'receptionist');
+  insRule.run('Any complaint → do not handle it; route straight to Daniel Rodriguez, empathetic, no arguing.', 'receptionist');
+  insRule.run('Spanish-speaking caller → help in Spanish, do NOT transfer; capture name/number/reason for callback.', 'receptionist');
+  insRule.run('Emergency / alarm now / after-hours → After-hours on-call queue immediately.', 'receptionist');
   insRule.run('Nothing sends without human approval: reminders, review replies, and requests are drafts.', 'global');
-  insRule.run('Emergencies and out-of-scope calls transfer to a human immediately.', 'receptionist');
 
   setState('seeded', '1');
   console.log('[seed] sample data loaded (invoices, jobs, reviews, calls, leads).');

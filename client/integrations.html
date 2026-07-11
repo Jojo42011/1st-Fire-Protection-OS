@@ -4,17 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Integrations · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/theme.css" />
 <style>
   .cat{margin-top:26px}
   .int-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:12px}
-  .int{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+  .int{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);padding:16px 18px;display:flex;flex-direction:column;gap:8px}
   .int .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .int .name{font-weight:700;font-size:15px}
+  .int .name{font-weight:700;font-size:15px;color:var(--navy)}
   .int .why{color:var(--muted);font-size:12.5px;line-height:1.5}
   .team{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px}
-  .emp{background:linear-gradient(135deg,rgba(226,55,68,.10),transparent),var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
-  .emp .n{font-family:var(--display);font-size:19px;font-weight:800;text-transform:uppercase}
+  .emp{background:linear-gradient(135deg,rgba(229,57,53,.07),transparent),var(--panel);border:1px solid var(--line);border-top:3px solid var(--navy);padding:16px 18px}
+  .emp .n{font-family:var(--display);font-size:19px;font-weight:900;text-transform:uppercase;color:var(--navy)}
   .emp .r{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.5}
   .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
   .legend span{display:inline-flex;align-items:center;gap:7px} .legend .d{width:8px;height:8px;border-radius:50%}
@@ -23,9 +24,9 @@
 <body>
   <div class="page-head">
     <div class="titles">
+      <p class="kicker">The Hands · Connected Systems</p>
       <h1>Integrations</h1>
-      <div class="under"></div>
-      <p>The hands of the system — every service the OS can plug into. What's connected now, what's one key away, and what's on the roadmap. This is how far the system reaches.</p>
+      <p>Every service the OS can plug into — wired to 1st FP's real stack (ServiceTrade, Vapi, Twilio → Teams, Microsoft 365). What's connected now, what's one key away, and what's on the roadmap.</p>
     </div>
     <span id="counts" class="badge demo"><span class="d"></span>Loading…</span>
   </div>
