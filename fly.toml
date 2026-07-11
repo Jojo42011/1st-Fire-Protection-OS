@@ -4,7 +4,7 @@
 # app above a single machine (no `fly scale count 2`) — a second machine would get
 # its own empty volume and split the brain. One machine, one volume, one db file.
 
-app = "1st-fp-os"            # must be globally unique on Fly — change via `fly launch`
+app = "first-fp-os"          # must be globally unique on Fly & start with a letter — change if taken
 primary_region = "dfw"       # Dallas — Texas-local
 
 [build]
