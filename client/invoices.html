@@ -6,13 +6,33 @@
 <title>Invoice Collector · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/theme.css" />
+<style>
+  /* reminder timeline — day 1/3/5/7 dots under each invoice */
+  .timeline{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .tl-step{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1;
+    padding:3px 7px;border-radius:999px;border:1px solid var(--line,#2a3b52);color:var(--muted,#8aa)}
+  .tl-step .dot{width:7px;height:7px;border-radius:50%;background:#5b6b82}
+  .tl-step.sent{border-color:#2f7d4f;color:#7fd6a0}
+  .tl-step.sent .dot{background:#37c26b}
+  .tl-step.queued{border-color:#8a6d1f;color:#f5cf6b}
+  .tl-step.queued .dot{background:#f5b81b}
+  .tl-step.scheduled{opacity:.75}
+  .tl-step.failed{border-color:#8a2f2f;color:#ff9d9d}
+  .tl-step.failed .dot{background:#e05353}
+  .tl-step.skipped{opacity:.4;text-decoration:line-through}
+  .nudge{display:inline-flex;gap:4px}
+  .btn.mini{padding:3px 8px;font-size:11px}
+  .ch-badges{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+  .ch{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line,#2a3b52);color:var(--muted,#8aa)}
+  .ch.on{border-color:#2f7d4f;color:#7fd6a0}
+</style>
 </head>
 <body>
   <div class="page-head">
     <div class="titles">
       <p class="kicker">Receivables · Aging & Collections</p>
       <h1>Invoice Collector</h1>
-      <p>Chases receivables so you don't have to — tracks aging, drafts friendly→firm reminders, surfaces the cash that's stuck. Nothing sends without your approval.</p>
+      <p>Chases receivables so you don't have to — the moment a ServiceTrade job completes and its invoice is created, an AI-drafted reminder sequence goes out on <b>day 1, 3, 5 & 7</b>. Nudge any customer manually anytime.</p>
     </div>
     <span id="status-badge" class="badge demo"><span class="d"></span>Standalone · Sample Data</span>
   </div>
@@ -24,9 +44,9 @@
 
   <div class="two-col">
     <div>
-      <div class="section-title">Outstanding Invoices</div>
+      <div class="section-title">Outstanding Invoices <span class="muted" style="font-weight:400;font-size:12px">· reminder sequence & manual nudge</span></div>
       <div class="card" style="padding:6px 6px 2px">
-        <table><thead><tr><th>Customer</th><th class="right">Amount</th><th>Due</th><th class="right">Overdue</th><th>Status</th><th></th></tr></thead>
+        <table><thead><tr><th>Customer</th><th class="right">Amount</th><th>Reminder sequence</th><th></th></tr></thead>
         <tbody id="invoice-rows"></tbody></table>
       </div>
     </div>
@@ -35,16 +55,20 @@
       <div id="reminders"></div>
       <div class="connect">
         <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
-        <div><b>Connect to go live:</b> ServiceTrade / Stripe to pull real receivables, Email (M365) / SMS to send approved reminders automatically.</div>
+        <div>
+          <b>Connect to go live:</b> ServiceTrade arms the sequence automatically; Resend sends emails, Telnyx sends SMS. Until then, due reminders queue here for one-click approval.
+          <div class="ch-badges" id="channels"></div>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
 var fmt = function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
+var CADENCE=[1,3,5,7];
 function load(){
   fetch('/api/invoices').then(function(r){return r.json();}).then(function(d){
-    var s=d.summary;
+    var s=d.summary; CADENCE=d.cadence||CADENCE;
     if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Connected · Live';}
     document.getElementById('kpis').innerHTML=[
       kpi('Outstanding',fmt(s.totalOutstanding),s.count+' open invoices',true),
@@ -56,20 +80,62 @@ function load(){
     document.getElementById('buckets').innerHTML=['0-30','31-60','61-90','90+'].map(function(k){
       var v=s.buckets[k];return '<div class="bar-row"><span class="lab">'+k+'</span><div class="bar-track"><div class="bar-fill" style="width:'+(v/tot*100)+'%"></div></div><span class="mono muted">'+fmt(v)+'</span></div>';
     }).join('');
+
+    var tls=d.timelines||{};
     document.getElementById('invoice-rows').innerHTML=(d.invoices||[]).map(function(i){
-      var od=i.days_overdue, pill= i.status==='paid'?'<span class="pill green">paid</span>': od>90?'<span class="pill red">'+od+'d</span>': od>0?'<span class="pill amber">'+od+'d</span>':'<span class="pill gray">current</span>';
-      var act= i.status==='paid'?'':'<button class="btn" onclick="draft('+i.id+')">Draft reminder</button>';
-      return '<tr><td>'+i.customer+'</td><td class="right mono">'+fmt(i.amount)+'</td><td class="muted mono">'+(i.due_at||'')+'</td><td class="right">'+(i.status==='paid'?'—':(od>0?od:'—'))+'</td><td><span class="pill '+(i.status==='paid'?'green':'gray')+'">'+i.status+'</span></td><td class="right">'+act+'</td></tr>';
+      var od=i.days_overdue;
+      var pill= i.status==='paid'?'<span class="pill green">paid</span>': od>90?'<span class="pill red">'+od+'d late</span>': od>0?'<span class="pill amber">'+od+'d late</span>':'<span class="pill gray">current</span>';
+      var actions = i.status==='paid' ? '<span class="pill green">paid</span>' :
+        '<div class="nudge">'+
+          '<button class="btn mini" onclick="nudge('+i.id+',\'email\',this)" title="Draft & send an email reminder now">Nudge · Email</button>'+
+          '<button class="btn mini" onclick="nudge('+i.id+',\'sms\',this)" title="Draft & send an SMS reminder now">SMS</button>'+
+        '</div>';
+      return '<tr>'+
+        '<td>'+i.customer+' '+pill+'<div class="muted mono" style="font-size:11px;margin-top:3px">'+(i.due_at?('due '+i.due_at):'')+'</div></td>'+
+        '<td class="right mono">'+fmt(i.amount)+'</td>'+
+        '<td>'+timeline(i, tls[i.id])+'</td>'+
+        '<td class="right">'+actions+'</td>'+
+      '</tr>';
     }).join('');
+
     var rq=d.reminders||[];
     document.getElementById('reminders').innerHTML= rq.length? rq.map(function(r){
-      return '<div class="draft"><div class="meta"><b>'+r.customer+' · '+fmt(r.amount)+'</b><span class="pill '+(r.tier==='final'?'red':r.tier==='firm'?'amber':'gray')+'">'+r.tier+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span><button class="btn primary" onclick="approve('+r.id+',this)" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
-    }).join('') : '<div class="empty">No reminders queued. Draft one from an overdue invoice →</div>';
+      var st=r.status, stCls= st==='sent'?'green':st==='failed'?'red':st==='queued'?'amber':'gray';
+      var canSend = st==='queued'||st==='draft'||st==='approved'||st==='failed';
+      var chan = (r.channel||'email').toUpperCase();
+      return '<div class="draft"><div class="meta"><b>'+r.customer+' · '+fmt(r.amount)+'</b>'+
+        '<span class="pill '+(r.tier==='final'?'red':r.tier==='firm'?'amber':'gray')+'">'+r.tier+' · '+chan+'</span></div>'+
+        '<div class="body">'+esc(r.body||'(drafts at send time)')+'</div>'+
+        (r.error?'<div class="muted" style="color:#ff9d9d;font-size:11px">'+esc(r.error)+'</div>':'')+
+        '<div class="actions"><span class="pill '+stCls+'">'+st+'</span>'+
+        '<button class="btn primary" onclick="approve('+r.id+',this)" '+(canSend?'':'disabled')+'>Approve &amp; Send</button></div></div>';
+    }).join('') : '<div class="empty">No reminders queued. The sequence sends automatically; nudge an invoice to send one now →</div>';
+
+    var ch=d.channels||{};
+    document.getElementById('channels').innerHTML=
+      '<span class="ch '+(ch.email?'on':'')+'">Email · Resend '+(ch.email?'✓ live':'offline')+'</span>'+
+      '<span class="ch '+(ch.sms?'on':'')+'">SMS · Telnyx '+(ch.sms?'✓ live':'offline')+'</span>';
   });
+}
+function timeline(inv, steps){
+  steps = steps||[];
+  var byStep={}; steps.forEach(function(s){byStep[s.step]=s;});
+  var chips = CADENCE.map(function(day){
+    var s=byStep[day];
+    var cls = s? s.status : 'scheduled';
+    var label = 'D'+day;
+    var title = s? ('day '+day+' · '+s.status+(s.sent_at?(' '+s.sent_at):(s.scheduled_for?(' → '+s.scheduled_for):''))) : ('day '+day+' · not yet armed');
+    return '<span class="tl-step '+cls+'" title="'+title+'"><span class="dot"></span>'+label+'</span>';
+  }).join('');
+  if(inv.status==='paid') chips='<span class="muted" style="font-size:11px">sequence stopped · paid</span>';
+  else if(!steps.length) chips='<span class="muted" style="font-size:11px">not armed</span> '+chips;
+  return '<div class="timeline">'+chips+'</div>';
 }
 function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
-function draft(id){fetch('/api/invoices/'+id+'/draft-reminder',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function nudge(id,channel,btn){btn.disabled=true;btn.textContent='…';
+  fetch('/api/invoices/'+id+'/nudge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({channel:channel})})
+   .then(function(r){return r.json();}).then(load).catch(function(){load();});}
 function approve(id,btn){btn.disabled=true;fetch('/api/invoices/reminders/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 load();
 </script>

@@ -33,10 +33,58 @@ export function seed(): void {
     ['College Station Auto', 'shop@cstxauto.example', 1950.0, -2, 'sent'],     // emergency lighting
   ];
   const insInv = db.prepare(
-    `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status, job_completed_at, auto_remind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
   );
   for (const [customer, email, amount, dueOff, status] of invoices) {
-    insInv.run(customer, email, amount, daysAgo(-dueOff + 30), daysAgo(-dueOff), status);
+    // job completed the day it was invoiced (issued_at) — the reminder-cadence anchor.
+    const issued = daysAgo(-dueOff + 30);
+    insInv.run(customer, email, amount, issued, daysAgo(-dueOff), status, issued);
+  }
+
+  /* ---------- two freshly-completed jobs → live reminder sequences (day 1/3/5/7) ----------
+   * Hand-seeded so the workflow timeline renders alive on a keyless boot: early steps already
+   * "sent", later steps still "scheduled". Mirrors what the auto sweep produces once live. */
+  const insFresh = db.prepare(
+    `INSERT INTO invoices (customer, email, phone, amount, issued_at, due_at, status, servicetrade_id, job_completed_at, auto_remind)
+     VALUES (?, ?, ?, ?, ?, ?, 'reminded', ?, ?, 1)`
+  );
+  const insStep = db.prepare(
+    `INSERT INTO invoice_reminders (invoice_id, tier, body, status, channel, step, scheduled_for, sent_at, provider)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const stepBody = (customer: string, tier: string, amt: number) =>
+    tier === 'friendly'
+      ? `Hi ${customer}, a friendly reminder that your 1st Fire Protection invoice for $${amt.toFixed(0)} is ready. Thank you for trusting us with your life safety!`
+      : tier === 'firm'
+        ? `Following up on your past-due 1st Fire Protection invoice for $${amt.toFixed(0)}. Please arrange payment when you can — reply with any questions.`
+        : `Final notice on your 1st Fire Protection invoice for $${amt.toFixed(0)}. Please settle within 5 business days to keep your account in good standing.`;
+  const tierOf = (day: number) => (day >= 7 ? 'final' : day >= 5 ? 'firm' : 'friendly');
+  // [customer, email, phone, amount, completedDaysAgo, sentThroughDay]
+  const fresh: [string, string, string, number, number, number][] = [
+    ['Boerne Business Park', 'ap@boernebp.example', '+12105550731', 3250, 4, 3], // completed 4d ago; day1+day3 sent
+    ['Cibolo Creek Church', 'office@cibolocreek.example', '+12105550624', 1180, 2, 1], // completed 2d ago; day1 sent
+  ];
+  for (const [customer, email, phone, amount, completedAgo, sentThrough] of fresh) {
+    const completed = daysAgo(completedAgo);
+    const info = insFresh.run(customer, email, phone, amount, completed, daysAgo(completedAgo - 15), `demo-${customer.replace(/\W+/g, '').toLowerCase()}`, completed);
+    const invId = Number(info.lastInsertRowid);
+    for (const day of [1, 3, 5, 7]) {
+      const tier = tierOf(day);
+      const schedFor = daysAgo(completedAgo - day);
+      const sent = day <= sentThrough;
+      insStep.run(
+        invId,
+        tier,
+        sent ? stepBody(customer, tier, amount) : '',
+        sent ? 'sent' : 'scheduled',
+        'email',
+        day,
+        schedFor,
+        sent ? schedFor : null,
+        sent ? 'resend' : null
+      );
+    }
   }
   // a couple paid this month to make the "collected" KPI real
   const insPaid = db.prepare(

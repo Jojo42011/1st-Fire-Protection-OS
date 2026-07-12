@@ -167,6 +167,36 @@ export function initDb(): void {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_id
        ON calls(vapi_call_id) WHERE vapi_call_id IS NOT NULL;`
   );
+
+  /* ---------- migrations: invoice reminder workflow (ServiceTrade + Resend/Telnyx) ----------
+   * Reminders fire on a day-1/3/5/7 cadence measured from job completion, not the due date.
+   * Added as idempotent migrations so existing brains upgrade in place. */
+  addColumn('invoices', 'servicetrade_id', 'TEXT');       // ServiceTrade invoice id (idempotency key)
+  addColumn('invoices', 'servicetrade_job_id', 'TEXT');   // the completed job that produced it
+  addColumn('invoices', 'job_completed_at', 'TEXT');       // completion date → drives the cadence
+  addColumn('invoices', 'auto_remind', 'INTEGER DEFAULT 1'); // 1 = enrolled in the auto sequence
+
+  // One ServiceTrade invoice = one row. NULL ids may repeat (seed/manual rows).
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_st_id
+       ON invoices(servicetrade_id) WHERE servicetrade_id IS NOT NULL;`
+  );
+
+  // invoice_reminders gains the sequence/channel/delivery columns.
+  addColumn('invoice_reminders', 'channel', "TEXT DEFAULT 'email'"); // email|sms
+  addColumn('invoice_reminders', 'step', 'INTEGER DEFAULT 0');       // day offset (1,3,5,7); 0 = manual nudge
+  addColumn('invoice_reminders', 'scheduled_for', 'TEXT');           // date this step is due (YYYY-MM-DD)
+  addColumn('invoice_reminders', 'sent_at', 'TEXT');                 // delivery timestamp
+  addColumn('invoice_reminders', 'provider', 'TEXT');               // resend|telnyx|none
+  addColumn('invoice_reminders', 'provider_id', 'TEXT');            // provider message id
+  addColumn('invoice_reminders', 'error', 'TEXT');                  // last send error, if any
+
+  // status vocabulary: scheduled|queued|sent|failed|skipped|draft|approved.
+  // One row per (invoice, step, channel) so the sweep never double-schedules.
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_reminder_step
+       ON invoice_reminders(invoice_id, step, channel) WHERE step > 0;`
+  );
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

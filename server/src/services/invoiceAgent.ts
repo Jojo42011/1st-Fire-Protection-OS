@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { chat } from './llm';
 import { COMPANY } from '../config/constants';
+import { tierForStep } from '../config/comms';
 
 /**
  * Invoice Collector engine — a reminder-sequence strategist. Given an overdue invoice,
@@ -19,6 +20,10 @@ export interface Invoice {
   last_reminder_at: string | null;
   paid_at: string | null;
   notes: string | null;
+  servicetrade_id?: string | null;
+  servicetrade_job_id?: string | null;
+  job_completed_at?: string | null;
+  auto_remind?: number;
 }
 
 export function daysOverdue(inv: Invoice): number {
@@ -27,21 +32,29 @@ export function daysOverdue(inv: Invoice): number {
   return Math.max(0, Math.floor((Date.now() - due) / 86400000));
 }
 
-function tierFor(days: number): { tier: string; tone: string } {
+export function tierFor(days: number): { tier: string; tone: string } {
   if (days >= 30) return { tier: 'final', tone: 'a firm final notice — professional, not hostile' };
   if (days >= 14) return { tier: 'firm', tone: 'a firmer follow-up — clear and direct' };
   return { tier: 'friendly', tone: 'a friendly nudge — warm and low-pressure' };
 }
 
-/** Deterministic fallback when no LLM key is present. */
-function templateReminder(inv: Invoice, tier: string): string {
+/** The email subject line for a reminder tier. */
+export function reminderSubject(inv: Invoice, tier: string): string {
+  const amt = `$${inv.amount.toFixed(2)}`;
+  if (tier === 'final') return `Final notice · Invoice #${inv.id} (${amt}) — ${COMPANY.name}`;
+  if (tier === 'firm') return `Past due · Invoice #${inv.id} (${amt}) — ${COMPANY.name}`;
+  return `Invoice #${inv.id} (${amt}) — a quick reminder from ${COMPANY.name}`;
+}
+
+/** Deterministic email fallback when no LLM key is present. */
+function templateEmail(inv: Invoice, tier: string): string {
   const amt = `$${inv.amount.toFixed(2)}`;
   const opener =
     tier === 'final'
       ? `This is a final notice regarding invoice #${inv.id}.`
       : tier === 'firm'
         ? `Following up on invoice #${inv.id}, which is now past due.`
-        : `Just a friendly reminder about invoice #${inv.id}.`;
+        : `Just a friendly reminder about invoice #${inv.id} for the work we recently completed.`;
   return [
     `Hi ${inv.customer},`,
     '',
@@ -55,6 +68,54 @@ function templateReminder(inv: Invoice, tier: string): string {
   ].join('\n');
 }
 
+/** Deterministic SMS fallback (short) when no LLM key is present. */
+function templateSms(inv: Invoice, tier: string): string {
+  const amt = `$${inv.amount.toFixed(2)}`;
+  const lead =
+    tier === 'final'
+      ? `Final notice: invoice #${inv.id} (${amt}) is past due.`
+      : tier === 'firm'
+        ? `Reminder: invoice #${inv.id} (${amt}) is past due.`
+        : `Hi ${inv.customer}, a friendly reminder that invoice #${inv.id} (${amt}) is due.`;
+  return `${COMPANY.name}: ${lead} Reply or call ${COMPANY.phone} with any questions. Thank you!`;
+}
+
+/**
+ * Draft a channel-appropriate reminder body (email = full, SMS = short) for a given tier.
+ * Pure — does NOT persist or send. Used by both the manual nudge and the auto sweep.
+ */
+export async function draftReminder(
+  inv: Invoice,
+  tier: string,
+  tone: string,
+  channel: 'email' | 'sms'
+): Promise<{ subject: string; body: string }> {
+  const subject = reminderSubject(inv, tier);
+  const days = daysOverdue(inv);
+  let body = channel === 'sms' ? templateSms(inv, tier) : templateEmail(inv, tier);
+
+  const guidance =
+    channel === 'sms'
+      ? `Write a SINGLE SMS text message — under 320 characters, one short paragraph, no subject line, no signature block (just "${COMPANY.name}" inline).`
+      : `Write an email body — under 120 words, greeting to the customer, sign off as the company.`;
+
+  const result = await chat(
+    [
+      {
+        role: 'system',
+        content: `You draft payment-reminder messages for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. Write ${tone}. ${guidance} Never threaten. Output ONLY the message text.`,
+      },
+      {
+        role: 'user',
+        content: `Customer: ${inv.customer}\nInvoice #${inv.id}\nAmount: $${inv.amount.toFixed(2)}\nDue: ${inv.due_at}\nDays overdue: ${days}\nNotes: ${inv.notes || 'none'}`,
+      },
+    ],
+    { fast: true, maxTokens: channel === 'sms' ? 160 : 400 }
+  );
+  if (result && result.text) body = result.text;
+  return { subject, body };
+}
+
 /** Draft a reminder for an invoice and persist it as status='draft' (awaiting approval). */
 export async function draftInvoiceReminder(invoiceId: number): Promise<{ id: number; body: string; tier: string }> {
   const db = getDb();
@@ -63,25 +124,12 @@ export async function draftInvoiceReminder(invoiceId: number): Promise<{ id: num
 
   const days = daysOverdue(inv);
   const { tier, tone } = tierFor(days);
-
-  let body = templateReminder(inv, tier);
-  const result = await chat(
-    [
-      {
-        role: 'system',
-        content: `You draft payment-reminder messages for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. Write ${tone}. Keep it under 120 words, sign off as the company, never threaten. Output ONLY the message body.`,
-      },
-      {
-        role: 'user',
-        content: `Customer: ${inv.customer}\nInvoice #${inv.id}\nAmount: $${inv.amount.toFixed(2)}\nDue: ${inv.due_at}\nDays overdue: ${days}\nNotes: ${inv.notes || 'none'}`,
-      },
-    ],
-    { fast: true, maxTokens: 400 }
-  );
-  if (result && result.text) body = result.text;
+  const { body } = await draftReminder(inv, tier, tone, 'email');
 
   const info = db
-    .prepare(`INSERT INTO invoice_reminders (invoice_id, tier, body, status) VALUES (?, ?, ?, 'draft')`)
+    .prepare(
+      `INSERT INTO invoice_reminders (invoice_id, tier, body, status, channel, step) VALUES (?, ?, ?, 'draft', 'email', 0)`
+    )
     .run(invoiceId, tier, body);
   db.prepare(`UPDATE invoices SET status = 'reminded', last_reminder_at = datetime('now') WHERE id = ? AND status != 'paid'`).run(
     invoiceId
