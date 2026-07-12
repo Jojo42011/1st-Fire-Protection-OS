@@ -145,6 +145,36 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- migrations: extra call-analytics columns (Vapi) ----------
+   * Added after the base table so existing brains upgrade in place. Idempotent —
+   * addColumn checks pragma table_info first (SQLite has no ADD COLUMN IF NOT EXISTS). */
+  addColumn('calls', 'vapi_call_id', 'TEXT');           // provider call id (idempotency key)
+  addColumn('calls', 'assistant_id', 'TEXT');           // which Vapi assistant answered
+  addColumn('calls', 'ended_at', 'TEXT');               // ISO end timestamp
+  addColumn('calls', 'ended_reason', 'TEXT');           // hangup / forwarded / voicemail ...
+  addColumn('calls', 'cost', 'REAL DEFAULT 0');         // total $ for the call
+  addColumn('calls', 'cost_breakdown', 'TEXT');         // JSON: {transport,stt,llm,tts,vapi,...}
+  addColumn('calls', 'summary', 'TEXT');                // provider/analysis summary
+  addColumn('calls', 'messages', 'TEXT');               // JSON: full message log [{role,message,...}]
+  addColumn('calls', 'recording_url', 'TEXT');          // mono recording (playable)
+  addColumn('calls', 'stereo_recording_url', 'TEXT');   // stereo recording
+  addColumn('calls', 'success_evaluation', 'TEXT');     // analysis success signal
+  addColumn('calls', 'structured_data', 'TEXT');        // JSON: analysis structuredData
+
+  // One provider call = one row. NULL ids are allowed to repeat (seed/manual rows).
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_id
+       ON calls(vapi_call_id) WHERE vapi_call_id IS NOT NULL;`
+  );
+}
+
+/** Add a column only if it isn't already present (idempotent migration helper). */
+function addColumn(table: string, column: string, definition: string): void {
+  const db = getDb();
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (cols.some((c) => c.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
 export function getState(key: string): string | null {

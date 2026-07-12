@@ -22,6 +22,26 @@
   .composer{display:flex;gap:8px;margin-top:12px}
   .composer input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);padding:11px 14px;font-family:var(--font);font-size:14px}
   .composer input:focus{outline:none;border-color:var(--accent)}
+  /* call log detail */
+  tr.call-row{cursor:pointer} tr.call-row:hover{background:var(--bg)}
+  tr.call-row .chev{display:inline-block;transition:transform .15s;color:var(--muted);font-size:10px}
+  tr.call-row.open .chev{transform:rotate(90deg)}
+  td.detail-cell{padding:0!important;background:var(--bg);border-bottom:1px solid var(--line)}
+  .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+  .detail .row1{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .detail audio{height:34px;max-width:100%}
+  .detail .summary{font-size:13.5px;line-height:1.55;color:var(--text);border-left:3px solid var(--accent);padding:6px 0 6px 12px;background:#fff}
+  .detail .costs{display:flex;flex-wrap:wrap;gap:6px}
+  .detail .cbit{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;background:#fff;border:1px solid var(--line);padding:4px 8px;color:var(--muted)}
+  .detail .cbit b{color:var(--text)}
+  .detail .label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .detail .transcript{max-height:280px;overflow-y:auto;background:#fff;border:1px solid var(--line);padding:10px 12px}
+  .detail .turn{font-size:13px;line-height:1.5;margin-bottom:7px}
+  .detail .turn .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block}
+  .detail .turn.bot .who{color:var(--accent)}
+  .detail .none{font-size:12.5px;color:var(--muted)}
+  .syncbtn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:var(--navy);color:#fff;border:none;padding:7px 12px;cursor:pointer}
+  .syncbtn:hover{background:var(--accent)} .syncbtn[disabled]{opacity:.5;cursor:default}
 </style>
 </head>
 <body>
@@ -54,8 +74,11 @@
 
   <div class="two-col" style="margin-top:22px">
     <div>
-      <div class="section-title">Call Log</div>
-      <div class="card" style="padding:6px 6px 2px"><table><thead><tr><th>Time</th><th>Number</th><th>Intent</th><th class="right">Dur</th><th>Outcome</th></tr></thead><tbody id="call-rows"></tbody></table></div>
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Call Log</span>
+        <button class="syncbtn" id="sync" title="Backfill recent calls from Vapi">↻ Sync from Vapi</button>
+      </div>
+      <div class="card" style="padding:6px 6px 2px"><table><thead><tr><th>Time</th><th>Number</th><th>Intent</th><th class="right">Dur</th><th class="right">Cost</th><th>Outcome</th></tr></thead><tbody id="call-rows"></tbody></table></div>
     </div>
     <div>
       <div class="section-title">Leads Captured</div>
@@ -78,11 +101,20 @@ function load(){
       kpi('Calls Today',m.callsToday,'answered',true),
       kpi('Routed',m.transferred,'to the right team',false),
       kpi('Leads',m.leadsCaptured,'captured',false),
-      kpi('Avg Duration',fmtDur(m.avgDuration),'per call',false)
+      kpi('Avg Duration',fmtDur(m.avgDuration),'per call',false),
+      kpi('Spend Today',fmtCost(m.costToday),'AI voice cost',false)
     ].join('');
     document.getElementById('call-rows').innerHTML=(d.calls||[]).map(function(c){
       var oc=c.outcome, pill= oc==='booked'?'green':oc==='transferred'?'amber':'gray';
-      return '<tr><td class="muted mono">'+fmtTime(c.started_at)+'</td><td class="mono">'+(c.from_number||'')+'</td><td>'+(c.intent||'')+'</td><td class="right mono">'+fmtDur(c.duration)+'</td><td><span class="pill '+pill+'">'+oc+'</span></td></tr>';
+      var main='<tr class="call-row" data-id="'+c.id+'" onclick="toggleCall('+c.id+')">'+
+        '<td class="muted mono"><span class="chev">▶</span> '+fmtTime(c.started_at)+'</td>'+
+        '<td class="mono">'+esc(c.from_number||'')+'</td>'+
+        '<td>'+esc(c.intent||'')+'</td>'+
+        '<td class="right mono">'+fmtDur(c.duration)+'</td>'+
+        '<td class="right mono">'+fmtCost(c.cost)+'</td>'+
+        '<td><span class="pill '+pill+'">'+oc+'</span></td></tr>';
+      var det='<tr class="detail-tr" data-detail="'+c.id+'" style="display:none"><td class="detail-cell" colspan="6"><div class="detail">'+callDetail(c)+'</div></td></tr>';
+      return main+det;
     }).join('');
     document.getElementById('leads').innerHTML=(d.leads||[]).map(function(l){
       return '<div class="draft"><div class="meta"><b>'+(l.name||'Unknown')+'</b><span class="pill '+(l.status==='booked'?'green':l.status==='new'?'red':'gray')+'">'+l.status+'</span></div><div class="body">'+esc(l.need||'')+(l.address?'<br><span class="mono">'+esc(l.address)+'</span>':'')+'<br><span class="mono">'+(l.phone||'')+'</span></div></div>';
@@ -90,7 +122,59 @@ function load(){
   });
 }
 function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
-function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtCost(v){v=Number(v)||0;if(v===0)return '$0';if(v<1)return '$'+v.toFixed(3);return '$'+v.toFixed(2);}
+
+/* ---- expandable call detail (recording, summary, cost, transcript) ---- */
+function toggleCall(id){
+  var row=document.querySelector('tr.call-row[data-id="'+id+'"]');
+  var det=document.querySelector('tr.detail-tr[data-detail="'+id+'"]');
+  if(!det)return;
+  var open=det.style.display!=='none';
+  det.style.display=open?'none':'';
+  if(row)row.classList.toggle('open',!open);
+}
+function transcriptHtml(c){
+  var msgs=c.messages;
+  if(Array.isArray(msgs)&&msgs.length){
+    return msgs.filter(function(m){return m&&(m.message||m.content)&&m.role!=='system';}).map(function(m){
+      var bot=(m.role==='bot'||m.role==='assistant');
+      var who=bot?'Agent':(m.role==='user'?'Caller':(m.role||''));
+      return '<div class="turn '+(bot?'bot':'')+'"><span class="who">'+esc(who)+'</span>'+esc(m.message||m.content||'')+'</div>';
+    }).join('');
+  }
+  if(c.transcript){
+    return c.transcript.split(/\n+/).filter(Boolean).map(function(line){return '<div class="turn">'+esc(line)+'</div>';}).join('');
+  }
+  return '';
+}
+function callDetail(c){
+  var parts=[],r1=[];
+  if(c.recording_url)r1.push('<audio controls preload="none" src="'+esc(c.recording_url)+'"></audio>');
+  if(c.ended_reason)r1.push('<span class="cbit">ended <b>'+esc(c.ended_reason)+'</b></span>');
+  if(c.success_evaluation)r1.push('<span class="cbit">success <b>'+esc(c.success_evaluation)+'</b></span>');
+  if(c.vapi_call_id)r1.push('<span class="cbit">id <b>'+esc(String(c.vapi_call_id).slice(0,8))+'</b></span>');
+  parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call — connect Vapi and enable recording to capture audio.</span>')+'</div>');
+  if(c.summary)parts.push('<div class="summary">'+esc(c.summary)+'</div>');
+  var cb=c.cost_breakdown;
+  if(cb&&typeof cb==='object'){
+    var bits=['transport','stt','llm','tts','vapi','total'].filter(function(k){return typeof cb[k]==='number';})
+      .map(function(k){return '<span class="cbit">'+k+' <b>'+fmtCost(cb[k])+'</b></span>';});
+    if(bits.length)parts.push('<div><div class="label">Cost breakdown</div><div class="costs">'+bits.join('')+'</div></div>');
+  }
+  var t=transcriptHtml(c);
+  if(t)parts.push('<div><div class="label">Transcript</div><div class="transcript">'+t+'</div></div>');
+  return parts.join('');
+}
+var syncBtn=document.getElementById('sync');
+if(syncBtn)syncBtn.onclick=function(){
+  syncBtn.disabled=true;var orig=syncBtn.textContent;syncBtn.textContent='Syncing…';
+  fetch('/api/calls/sync',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})
+    .then(function(r){return r.json();})
+    .then(function(d){syncBtn.textContent=d.live?('✓ '+(d.synced||0)+' synced'):'Add VAPI_API_KEY';load();
+      setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},2800);})
+    .catch(function(){syncBtn.textContent='Sync failed';setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},2800);});
+};
 
 /* ---- chat + navigation contract (voice/text → tab) ---- */
 var convo=document.getElementById('convo');
