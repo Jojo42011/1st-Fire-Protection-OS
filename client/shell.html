@@ -97,7 +97,8 @@
     <div id="backdrop"></div>
     <div id="main">
       <div id="frames"></div>
-      <div id="dock"><span class="p"></span><span class="dt"><b>Receptionist</b> is live <span>· tap to return</span></span></div>
+      <!-- "Receptionist is live" return dock (id="dock"). Hidden per request; uncomment this line to re-enable. -->
+      <!-- <div id="dock"><span class="p"></span><span class="dt"><b>Receptionist</b> is live <span>· tap to return</span></span></div> -->
       <div id="toast"></div>
     </div>
   </div>
@@ -144,7 +145,7 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   }
   TABS.forEach(function(t){var f=frameEl(t.key);f.addEventListener("load",function(){watchFrame(f);});});
   function toast(m){toastEl.innerHTML=m;toastEl.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000);}
-  function activate(key,prog){if(!byKey[key])return;var f=frameEl(key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){frameEl(t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}}
+  function activate(key,prog){if(!byKey[key])return;var f=frameEl(key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){frameEl(t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;if(dock)dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}}
   function setCollapsed(v){shell.classList.toggle("collapsed",v);if(!isMobile()){try{localStorage.setItem("shell_collapsed",v?"1":"0");}catch(_){}}}
   document.getElementById("collapse").onclick=function(){setCollapsed(true);};
   document.getElementById("reopen").onclick=function(){setCollapsed(false);};
@@ -166,7 +167,7 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   window.addEventListener("orientationchange",function(){setTimeout(syncHeights,250);});
   nav.addEventListener("click",function(e){var it=e.target.closest(".nav-item");if(it)activate(it.getAttribute("data-key"));});
   backdrop.addEventListener("click",function(){setCollapsed(true);});
-  dock.addEventListener("click",function(){activate(home);});
+  if(dock)dock.addEventListener("click",function(){activate(home);});
   window.addEventListener("message",function(e){var d=e.data||{};if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}});
   var q=new URLSearchParams(location.search).get("tab");if(q&&byKey[q])activate(q);
   window.AppShell={open:function(k){activate(k,true);},collapse:setCollapsed,tabs:TABS};
