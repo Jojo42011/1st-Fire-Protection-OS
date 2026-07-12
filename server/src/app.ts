@@ -18,6 +18,7 @@ import calls from './routes/calls';
 import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
+import admin from './routes/admin';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -38,6 +39,7 @@ app.use(calls);
 app.use(callWebhook);
 app.use(integrations);
 app.use(voice);
+app.use(admin);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
