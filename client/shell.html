@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>1st Fire Protection · Operating System</title>
+<link rel="icon" type="image/png" href="/brand/logo.png" />
+<link rel="apple-touch-icon" href="/brand/logo.png" />
 <link rel="stylesheet" href="/brand/brand.css" />
 <style>
   /* THEME: the real 1st FP brand — red=the fire, navy=the uniform, off-white=the blueprint.
@@ -23,7 +25,11 @@
   #shell.collapsed #side{margin-left:calc(-1 * var(--w));opacity:0}
   #side-head{display:flex;align-items:center;justify-content:space-between;padding:20px 14px 16px 18px;border-bottom:1px solid var(--navy-line)}
   #brand{display:flex;align-items:center;gap:11px}
-  #brand .mark{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--navy));display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:500;font-size:10px;color:#fff;letter-spacing:.02em}
+  #brand .mark{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}
+  #brand .mark img{width:100%;height:100%;object-fit:contain;display:block}
+  #brand .mark .fb{display:none;font-family:var(--mono);font-weight:500;font-size:10px;color:#fff;letter-spacing:.02em}
+  #brand .mark.noimg{background:linear-gradient(135deg,var(--accent),var(--navy))}
+  #brand .mark.noimg .fb{display:block}
   #brand .t{font-family:var(--font);font-weight:900;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#fff;line-height:1}
   #brand .t small{display:block;font-family:var(--mono);font-weight:500;font-size:8.5px;letter-spacing:.18em;color:var(--sidebar-muted);margin-top:3px}
   #collapse{width:30px;height:30px;border:1px solid var(--navy-line);background:transparent;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -44,7 +50,9 @@
   .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(46,158,91,.18)}
   #reopen{position:fixed;top:16px;left:16px;z-index:60;display:none;align-items:center;gap:9px;padding:8px 14px 8px 8px;background:var(--navy);border:1px solid var(--navy-line);cursor:pointer}
   #shell.collapsed #reopen{display:flex}
-  #reopen .mark{width:22px;height:22px;background:linear-gradient(135deg,var(--accent),var(--navy))}
+  #reopen .mark{width:24px;height:24px;border-radius:50%;overflow:hidden;display:flex}
+  #reopen .mark img{width:100%;height:100%;object-fit:contain;display:block}
+  #reopen .mark.noimg{background:linear-gradient(135deg,var(--accent),var(--navy))}
   #reopen .rl{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:#fff;text-transform:uppercase}
   #main{flex:1;position:relative;min-width:0;background:var(--bg)}
   .frame{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;transition:opacity .2s;background:var(--bg)}
@@ -87,13 +95,13 @@
   <div id="shell">
     <aside id="side">
       <div id="side-head">
-        <div id="brand"><span class="mark">1FP</span><span class="t">1st&nbsp;Fire&nbsp;Protection<small>Operating System</small></span></div>
+        <div id="brand"><span class="mark"><img src="/brand/logo.png" alt="1st Fire Protection" onerror="this.closest('.mark').classList.add('noimg');this.remove();"><span class="fb">1FP</span></span><span class="t">1st&nbsp;Fire&nbsp;Protection<small>Operating System</small></span></div>
         <button id="collapse" title="Collapse (Ctrl/⌘ + \)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
       </div>
       <nav id="nav"></nav>
       <div id="side-foot"><span class="dot"></span>Online · San Antonio</div>
     </aside>
-    <div id="reopen"><span class="mark"></span><span class="rl">Menu</span></div>
+    <div id="reopen"><span class="mark"><img src="/brand/logo.png" alt="" onerror="this.closest('.mark').classList.add('noimg');this.remove();"></span><span class="rl">Menu</span></div>
     <div id="backdrop"></div>
     <div id="main">
       <div id="frames"></div>
