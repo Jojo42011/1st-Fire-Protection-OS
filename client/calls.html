@@ -31,7 +31,10 @@
       <h1>Call Receptionist</h1>
       <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams — inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
     </div>
-    <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="sync-btn" class="btn" style="display:none" onclick="syncVapi(this)">Sync from Vapi</button>
+      <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
+    </div>
   </div>
 
   <div class="hero">
@@ -70,9 +73,15 @@
 <script>
 function fmtDur(s){s=s||0;var m=Math.floor(s/60);return m+':'+String(s%60).padStart(2,'0');}
 function fmtTime(t){try{return new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}catch(e){return t;}}
+var didAutoSync=false;
 function load(){
   fetch('/api/calls').then(function(r){return r.json();}).then(function(d){
     if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Live · 24/7';}
+    // Vapi connected → show the sync control + auto-pull once on first load
+    if(d.vapi){
+      document.getElementById('sync-btn').style.display='';
+      if(!didAutoSync){didAutoSync=true;syncVapi();}
+    }
     var m=d.metrics;
     document.getElementById('kpis').innerHTML=[
       kpi('Calls Today',m.callsToday,'answered',true),
@@ -91,6 +100,15 @@ function load(){
 }
 function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+
+/* ---- Vapi tracking: pull the latest calls into the dashboard ---- */
+function syncVapi(btn){
+  if(btn){btn.disabled=true;btn.textContent='Syncing…';}
+  fetch('/api/calls/sync',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    if(btn){btn.disabled=false;btn.textContent='Sync from Vapi';}
+    load();
+  }).catch(function(){if(btn){btn.disabled=false;btn.textContent='Sync from Vapi';}});
+}
 
 /* ---- chat + navigation contract (voice/text → tab) ---- */
 var convo=document.getElementById('convo');

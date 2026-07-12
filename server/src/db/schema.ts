@@ -145,6 +145,28 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- migrations (idempotent) ---------- */
+  // Vapi tracking fields on calls (added after the initial schema).
+  addColumnIfMissing('calls', 'vapi_id', 'TEXT');
+  addColumnIfMissing('calls', 'summary', 'TEXT');
+  addColumnIfMissing('calls', 'recording_url', 'TEXT');
+  addColumnIfMissing('calls', 'ended_reason', 'TEXT');
+  addColumnIfMissing('calls', 'cost', 'REAL');
+  addColumnIfMissing('calls', 'source', "TEXT DEFAULT 'seed'"); // seed|vapi|webhook
+  // Dedup: one row per Vapi call id (partial unique — seed rows keep vapi_id NULL).
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi ON calls(vapi_id) WHERE vapi_id IS NOT NULL;`
+  );
+}
+
+/** Add a column only if it isn't already present (SQLite has no ADD COLUMN IF NOT EXISTS). */
+function addColumnIfMissing(table: string, column: string, decl: string): void {
+  const db = getDb();
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
 }
 
 export function getState(key: string): string | null {

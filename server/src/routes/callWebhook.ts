@@ -22,9 +22,10 @@ router.post('/api/webhooks/call', async (req, res) => {
       (Array.isArray(msg.messages)
         ? msg.messages.map((m: any) => `${m.role}: ${m.message || m.content || ''}`).join('\n')
         : ''),
-    intent: msg.analysis?.intent || msg.intent,
-    outcome: msg.endedReason ? 'message' : msg.outcome,
+    intent: msg.analysis?.structuredData?.intent || msg.analysis?.intent || msg.intent,
+    outcome: msg.analysis?.structuredData?.outcome || (msg.endedReason ? 'message' : msg.outcome),
     started_at: msg.startedAt || msg.started_at,
+    vapi_id: msg.call?.id || msg.callId || msg.id || body.call?.id,
   };
 
   // Graceful degradation: without a voice key we still accept + log the payload,

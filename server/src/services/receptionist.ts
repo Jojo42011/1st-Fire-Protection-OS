@@ -76,13 +76,37 @@ export async function handleEndOfCall(report: {
   intent?: string;
   outcome?: string;
   started_at?: string;
+  vapi_id?: string;
 }): Promise<{ callId: number; leadId: number | null; live: boolean }> {
   const db = getDb();
   const transcript = report.transcript || '';
+
+  // Dedup with the pull-sync: if this Vapi call was already stored, update it in place.
+  if (report.vapi_id) {
+    const existing = db.prepare('SELECT id FROM calls WHERE vapi_id = ?').get(report.vapi_id) as
+      | { id: number }
+      | undefined;
+    if (existing) {
+      db.prepare(
+        `UPDATE calls SET from_number=?, started_at=?, duration=?, transcript=?, intent=?, outcome=?
+         WHERE id=?`
+      ).run(
+        report.from_number || null,
+        report.started_at || new Date().toISOString(),
+        report.duration || 0,
+        transcript,
+        report.intent || null,
+        report.outcome || 'message',
+        existing.id
+      );
+      return { callId: existing.id, leadId: null, live: telephonyEnabled() };
+    }
+  }
+
   const info = db
     .prepare(
-      `INSERT INTO calls (from_number, started_at, duration, transcript, intent, outcome)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO calls (from_number, started_at, duration, transcript, intent, outcome, vapi_id, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'webhook')`
     )
     .run(
       report.from_number || null,
@@ -90,7 +114,8 @@ export async function handleEndOfCall(report: {
       report.duration || 0,
       transcript,
       report.intent || null,
-      report.outcome || 'message'
+      report.outcome || 'message',
+      report.vapi_id || null
     );
   const callId = Number(info.lastInsertRowid);
 

@@ -7,6 +7,7 @@ import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
 import { sttEnabled } from './config/voice';
+import { vapiEnabled, syncVapiCalls } from './services/vapi';
 
 import health from './routes/health';
 import brain from './routes/brain';
@@ -77,6 +78,20 @@ const REFLECT_MS = 1000 * 60 * 30; // every 30 min
 setInterval(() => {
   void reflect();
 }, REFLECT_MS).unref();
+
+// ---- periodic Vapi call sync (tracking) — only runs when VAPI_API_KEY is present ----
+if (vapiEnabled()) {
+  const VAPI_SYNC_MS = 1000 * 60 * 5; // every 5 min
+  void syncVapiCalls().then((r) =>
+    console.log(`[vapi] initial sync: +${r.inserted} calls, ${r.leads} leads`)
+  );
+  setInterval(() => {
+    void syncVapiCalls().then((r) => {
+      if (r.inserted) console.log(`[vapi] sync: +${r.inserted} calls, ${r.leads} leads`);
+    });
+  }, VAPI_SYNC_MS).unref();
+  console.log('[vapi] tracking enabled — syncing calls every 5 min');
+}
 
 server.listen(PORT, () => {
   console.log(`\n  1st FP Operating System`);
