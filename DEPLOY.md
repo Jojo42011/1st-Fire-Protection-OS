@@ -83,9 +83,11 @@ fly secrets set GOOGLE_BUSINESS_TOKEN=... FACEBOOK_PAGE_TOKEN=...   # Review Col
 ## Operating notes
 - **One machine only.** SQLite + one volume. Don't scale out. To resize the box:
   `fly scale vm shared-cpu-1x --memory 1024`.
-- **Backups.** Snapshot the volume: `fly volumes snapshots list <vol-id>` (Fly auto-snapshots
-  daily). To pull the db down: `fly ssh console -C "cat /data/1stfp.db" > backup.db` (or use
-  `fly sftp get /data/1stfp.db`).
+- **Backups.** Easiest — download a consistent snapshot over HTTP, no SSH:
+  `curl -fL "https://<APP>.fly.dev/api/admin/backup" -o 1stfp-backup.db` (uses SQLite's online
+  backup API, so it folds in the WAL and is never torn). Or snapshot the volume:
+  `fly volumes snapshots list <vol-id>` (Fly auto-snapshots daily), or pull the raw file with
+  `fly ssh console -C "cat /data/1stfp.db" > backup.db` / `fly sftp get /data/1stfp.db`.
 - **Always-on vs scale-to-zero.** `fly.toml` sets `min_machines_running = 1` (receptionist
   always answers, reflection cron runs). Set it to `0` to scale to zero and save money — the
   machine cold-starts on the next request (~1–2s) but the 30-min reflection cron won't fire
@@ -97,3 +99,6 @@ fly secrets set GOOGLE_BUSINESS_TOKEN=... FACEBOOK_PAGE_TOKEN=...   # Review Col
   - **CLI:** `fly ssh console -C "cd /app && npm run reset"` — same wipe + re-seed.
   - **Nuke the file (old way):** `fly ssh console -C "rm /data/1stfp.db"` then
     `fly apps restart <APP>` — it re-seeds on boot.
+- **Lock down admin endpoints.** `/api/admin/*` (reset + backup) are open by default for the
+  demo. Set a Fly secret `fly secrets set ADMIN_TOKEN=<value>` to require it — pass it as
+  `?token=<value>` or an `x-admin-token` header on every admin call.
