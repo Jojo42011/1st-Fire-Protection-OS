@@ -40,27 +40,62 @@
     </div>
   </div>
 
+  <div class="section-title">Collection Workflow · Daily Until Paid</div>
+  <div class="card hot" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="max-width:62ch;color:var(--muted);font-size:13px;line-height:1.55">
+      Enroll an overdue invoice and it goes on <b style="color:var(--navy)">autopilot</b> — an outstanding-balance
+      <b style="color:var(--navy)">email + text every day</b> until it's marked paid, escalating friendly → firm → final
+      as it ages. The moment it's paid, the chase stops automatically.
+      <span id="wf-mode"></span>
+    </div>
+    <button class="btn primary" onclick="runCycle(this)">Run today's cycle</button>
+  </div>
+
+  <div class="two-col" style="margin-top:16px">
+    <div>
+      <div class="section-title">On Autopilot</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th>Customer</th><th class="right">Amount</th><th>Day</th><th>Channels</th><th>Next</th><th>Status</th><th></th></tr></thead>
+        <tbody id="wf-rows"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Recent Sends</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th>Customer</th><th>Ch</th><th>Day</th><th>Status</th></tr></thead>
+        <tbody id="wf-activity"></tbody></table>
+      </div>
+    </div>
+  </div>
+
 <script>
 var fmt = function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
 function load(){
   fetch('/api/invoices').then(function(r){return r.json();}).then(function(d){
     var s=d.summary;
     if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Connected · Live';}
+    var wf=d.workflow||{enrolled:[],activity:[],activeCount:0};
     document.getElementById('kpis').innerHTML=[
       kpi('Outstanding',fmt(s.totalOutstanding),s.count+' open invoices',true),
       kpi('Collected · Month',fmt(s.collectedThisMonth),'paid so far',false),
       kpi('90+ Days',fmt(s.buckets['90+']),'most at risk',false),
+      kpi('On Autopilot',wf.activeCount||0,'chased daily until paid',false),
       kpi('In Queue',(d.reminders||[]).length,'reminders awaiting approval',false)
     ].join('');
     var tot=Math.max(1,s.totalOutstanding);
     document.getElementById('buckets').innerHTML=['0-30','31-60','61-90','90+'].map(function(k){
       var v=s.buckets[k];return '<div class="bar-row"><span class="lab">'+k+'</span><div class="bar-track"><div class="bar-fill" style="width:'+(v/tot*100)+'%"></div></div><span class="mono muted">'+fmt(v)+'</span></div>';
     }).join('');
+    var enrolledIds={};(wf.enrolled||[]).forEach(function(w){if(w.status==='active'||w.status==='paused')enrolledIds[w.invoice_id]=1;});
     document.getElementById('invoice-rows').innerHTML=(d.invoices||[]).map(function(i){
       var od=i.days_overdue, pill= i.status==='paid'?'<span class="pill green">paid</span>': od>90?'<span class="pill red">'+od+'d</span>': od>0?'<span class="pill amber">'+od+'d</span>':'<span class="pill gray">current</span>';
-      var act= i.status==='paid'?'':'<button class="btn" onclick="draft('+i.id+')">Draft reminder</button>';
+      var act;
+      if(i.status==='paid'){act='';}
+      else if(enrolledIds[i.id]){act='<span class="pill red">on autopilot</span>';}
+      else{act='<button class="btn" onclick="draft('+i.id+')">Draft</button> <button class="btn primary" onclick="enroll('+i.id+',this)">Enroll</button>';}
       return '<tr><td>'+i.customer+'</td><td class="right mono">'+fmt(i.amount)+'</td><td class="muted mono">'+(i.due_at||'')+'</td><td class="right">'+(i.status==='paid'?'—':(od>0?od:'—'))+'</td><td><span class="pill '+(i.status==='paid'?'green':'gray')+'">'+i.status+'</span></td><td class="right">'+act+'</td></tr>';
     }).join('');
+    renderWorkflow(wf);
     var rq=d.reminders||[];
     document.getElementById('reminders').innerHTML= rq.length? rq.map(function(r){
       return '<div class="draft"><div class="meta"><b>'+r.customer+' · '+fmt(r.amount)+'</b><span class="pill '+(r.tier==='final'?'red':r.tier==='firm'?'amber':'gray')+'">'+r.tier+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span><button class="btn primary" onclick="approve('+r.id+',this)" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
@@ -71,6 +106,31 @@ function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div cl
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 function draft(id){fetch('/api/invoices/'+id+'/draft-reminder',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 function approve(id,btn){btn.disabled=true;fetch('/api/invoices/reminders/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+
+var TIER_PILL={final:'red',firm:'amber',friendly:'gray'};
+function shortTime(t){if(!t)return '—';var s=String(t).replace('T',' ').replace('Z','');return s.slice(5,16);}
+function renderWorkflow(wf){
+  var mode=document.getElementById('wf-mode');
+  if(wf.live){mode.innerHTML=' <b style="color:var(--ok)">Live</b> — approved sends go out over '+(wf.emailLive?'Email':'')+(wf.emailLive&&wf.smsLive?' + ':'')+(wf.smsLive?'SMS':'')+'.';}
+  else{mode.innerHTML=' Sends are <b style="color:var(--accent)">simulated</b> (drafted &amp; logged) until Email (M365/Gmail) or SMS (Twilio) is connected — then the same cycle sends for real.';}
+  var rows=(wf.enrolled||[]);
+  document.getElementById('wf-rows').innerHTML= rows.length? rows.map(function(w){
+    var st=w.status, stPill= st==='active'?'<span class="pill green">active</span>': st==='paused'?'<span class="pill amber">paused</span>': st==='done'?'<span class="pill green">paid ✓</span>':'<span class="pill gray">'+st+'</span>';
+    var ch=(w.channels||'').split(',').map(function(c){return '<span class="pill gray" style="margin-right:4px">'+c+'</span>';}).join('');
+    var act='';
+    if(st==='active')act='<button class="btn" onclick="wfAct('+w.id+',\'pause\')">Pause</button> <button class="btn" onclick="wfAct('+w.id+',\'stop\')">Stop</button>';
+    else if(st==='paused')act='<button class="btn primary" onclick="wfAct('+w.id+',\'resume\')">Resume</button> <button class="btn" onclick="wfAct('+w.id+',\'stop\')">Stop</button>';
+    return '<tr><td>'+w.customer+'<div class="muted mono" style="font-size:10px">'+w.days_overdue+'d overdue</div></td><td class="right mono">'+fmt(w.amount)+'</td><td class="mono">'+(w.day_count||0)+'</td><td>'+ch+'</td><td class="muted mono" style="font-size:11px">'+(st==='active'?shortTime(w.next_run_at):'—')+'</td><td>'+stPill+'</td><td class="right">'+act+'</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="empty">Nothing on autopilot yet. Enroll an overdue invoice above →</td></tr>';
+  var act=(wf.activity||[]);
+  document.getElementById('wf-activity').innerHTML= act.length? act.map(function(a){
+    var sp= a.status==='sent'?'green': a.status==='simulated'?'amber': a.status==='skipped'?'gray':'red';
+    return '<tr><td>'+a.customer+'</td><td><span class="pill '+(TIER_PILL[a.tier]||'gray')+'">'+a.channel+'</span></td><td class="mono">'+(a.day||'')+'</td><td><span class="pill '+sp+'">'+a.status+'</span></td></tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">No sends yet — run today\'s cycle.</td></tr>';
+}
+function enroll(id,btn){btn.disabled=true;fetch('/api/invoices/'+id+'/enroll',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({channels:['email','sms']})}).then(function(r){return r.json();}).then(load);}
+function wfAct(id,action){fetch('/api/invoices/workflow/'+id+'/'+action,{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function runCycle(btn){btn.disabled=true;btn.textContent='Running…';fetch('/api/invoices/workflow/run',{method:'POST'}).then(function(r){return r.json();}).then(function(){btn.disabled=false;btn.textContent='Run today\'s cycle';load();});}
 load();
 </script>
 </body>

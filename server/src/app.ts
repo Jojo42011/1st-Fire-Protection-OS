@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
+import { runDailyCollection } from './services/collectionWorkflow';
 import { syncFromVapi } from './services/receptionist';
 import { sttEnabled } from './config/voice';
 
@@ -78,6 +79,25 @@ const REFLECT_MS = 1000 * 60 * 30; // every 30 min
 setInterval(() => {
   void reflect();
 }, REFLECT_MS).unref();
+
+// ---- invoice collection workflow (daily dunning until paid) ----
+// Checks hourly; per-invoice next_run_at gating means each enrolled invoice only gets
+// its email+text once a day until it's marked paid. Sends are simulated (logged) until
+// the Email (M365/Gmail) or SMS (Twilio) integration is present — then the same cycle
+// sends for real. Never throws; a missing integration just no-ops the send.
+const COLLECTION_MS = 1000 * 60 * 60; // check every hour, act once per day per invoice
+const runCollection = () =>
+  void runDailyCollection()
+    .then((r) => {
+      if (r.processed) {
+        console.log(
+          `[collection] daily cycle: ${r.processed} invoices · ${r.sent} sent · ${r.simulated} simulated · ${r.completed} completed`
+        );
+      }
+    })
+    .catch((err) => console.warn('[collection] cycle error:', (err as Error).message));
+runCollection(); // kick any due cycles shortly after boot
+setInterval(runCollection, COLLECTION_MS).unref();
 
 // ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
 // Complements the real-time webhook + manual Sync button: keeps the dashboard current
