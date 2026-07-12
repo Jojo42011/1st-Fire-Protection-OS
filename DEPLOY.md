@@ -90,5 +90,10 @@ fly secrets set GOOGLE_BUSINESS_TOKEN=... FACEBOOK_PAGE_TOKEN=...   # Review Col
   always answers, reflection cron runs). Set it to `0` to scale to zero and save money — the
   machine cold-starts on the next request (~1–2s) but the 30-min reflection cron won't fire
   while stopped.
-- **Reset the demo data.** `fly ssh console -C "rm /data/1stfp.db"` then `fly apps restart <APP>`
-  — it re-seeds on boot.
+- **Reset the demo data.** Three ways, no file surgery needed:
+  - **HTTP (no restart):** `curl -X POST https://<APP>.fly.dev/api/admin/reset-demo -H 'content-type: application/json' -d '{"confirm":"reset"}'`
+    — wipes every table and re-seeds the sample dataset in place. Refuses if ServiceTrade
+    is connected (looks like real data); set `ALLOW_DEMO_RESET=1` to override.
+  - **CLI:** `fly ssh console -C "cd /app && npm run reset"` — same wipe + re-seed.
+  - **Nuke the file (old way):** `fly ssh console -C "rm /data/1stfp.db"` then
+    `fly apps restart <APP>` — it re-seeds on boot.

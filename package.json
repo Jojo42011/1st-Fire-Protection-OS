@@ -8,6 +8,7 @@
     "build": "tsc -p server/tsconfig.json",
     "start": "node server/dist/app.js",
     "dev": "tsc -p server/tsconfig.json && node server/dist/app.js",
+    "reset": "npm run build && node server/dist/scripts/reset.js",
     "boot-check": "npm run build && DB_PATH=/tmp/1stfp.db PORT=3900 node server/dist/app.js"
   },
   "dependencies": {
