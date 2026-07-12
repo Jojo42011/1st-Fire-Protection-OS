@@ -17,6 +17,7 @@ import reviews from './routes/reviews';
 import calls from './routes/calls';
 import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
+import tenDLC from './routes/tenDLC';
 import voice from './routes/voice';
 
 const PORT = Number(process.env.PORT || 3900);
@@ -37,6 +38,7 @@ app.use(reviews);
 app.use(calls);
 app.use(callWebhook);
 app.use(integrations);
+app.use(tenDLC);
 app.use(voice);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
