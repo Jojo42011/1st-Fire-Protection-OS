@@ -116,7 +116,11 @@ export function initDb(): void {
       FOREIGN KEY (workflow_id) REFERENCES invoice_workflow(id) ON DELETE CASCADE
     );
 
-    /* ---------- review collector ---------- */
+    /* ---------- review collector ----------
+     * A "job" here is any completed ServiceTrade unit of work — a job, an inspection,
+     * or a service call — that we can turn into a Google review. The extra ServiceTrade
+     * fields (job_type, technician, location, contact email/phone) are added as
+     * migrations below so existing brains upgrade in place. */
     CREATE TABLE IF NOT EXISTS jobs (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       customer   TEXT NOT NULL,
@@ -143,6 +147,36 @@ export function initDb(): void {
       received_at  TEXT,
       reply_draft  TEXT,
       reply_status TEXT DEFAULT 'none'        -- none|draft|approved|published
+    );
+
+    /* ---------- review campaign (staged review-request sequence) ----------
+     * Enrolling a completed job is the human gate. Once enrolled, the campaign walks
+     * an ordered sequence of STAGES (initial ask → gentle reminder → last call),
+     * each a timed touch that drafts + sends a Google review request, until the
+     * customer leaves a review (then it auto-completes) or all stages are exhausted. */
+    CREATE TABLE IF NOT EXISTS review_workflow (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id      INTEGER NOT NULL UNIQUE,
+      status      TEXT DEFAULT 'active',       -- active|paused|done|stopped
+      channels    TEXT DEFAULT 'email,sms',    -- csv of channels to hit each stage
+      stage       INTEGER DEFAULT 0,           -- how many stages have fired (0-based cursor)
+      started_at  TEXT DEFAULT (datetime('now')),
+      last_run_at TEXT,
+      next_run_at TEXT,                         -- when the next stage is due
+      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS review_workflow_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id INTEGER NOT NULL,
+      job_id      INTEGER NOT NULL,
+      stage       INTEGER,                      -- which stage (1-based, human-facing)
+      stage_key   TEXT,                         -- ask|reminder|final
+      channel     TEXT,                         -- email|sms
+      destination TEXT,                         -- the email / phone it went to
+      body        TEXT,
+      status      TEXT DEFAULT 'simulated',     -- sent|simulated|skipped|failed
+      created_at  TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (workflow_id) REFERENCES review_workflow(id) ON DELETE CASCADE
     );
 
     /* ---------- call receptionist ---------- */
@@ -195,6 +229,24 @@ export function initDb(): void {
   db.exec(
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_id
        ON calls(vapi_call_id) WHERE vapi_call_id IS NOT NULL;`
+  );
+
+  /* ---------- migrations: ServiceTrade fields on completed jobs ----------
+   * The review campaign pulls these straight from ServiceTrade (job vs inspection vs
+   * service, the tech who ran it, the site, and where to reach the customer). Added
+   * as migrations so existing jobs upgrade in place. */
+  addColumn('jobs', 'service_trade_id', 'TEXT');           // ServiceTrade job id (idempotency key)
+  addColumn('jobs', 'job_type', "TEXT DEFAULT 'job'");     // job | inspection | service
+  addColumn('jobs', 'email', 'TEXT');                      // customer contact email
+  addColumn('jobs', 'phone', 'TEXT');                      // customer contact phone
+  addColumn('jobs', 'location', 'TEXT');                   // site / property serviced
+  addColumn('jobs', 'technician', 'TEXT');                 // tech who completed the work
+  addColumn('jobs', 'reviewed', 'INTEGER DEFAULT 0');      // 1 once the customer leaves a review
+
+  // One ServiceTrade job = one row. NULL ids are allowed to repeat (seed/manual rows).
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_service_trade_id
+       ON jobs(service_trade_id) WHERE service_trade_id IS NOT NULL;`
   );
 }
 

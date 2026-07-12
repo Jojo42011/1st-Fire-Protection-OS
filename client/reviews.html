@@ -12,7 +12,7 @@
     <div class="titles">
       <p class="kicker">Reputation · The Word-of-Mouth Engine</p>
       <h1>Review Collector</h1>
-      <p>Turns completed ServiceTrade jobs into 5-star reviews and protects the reputation that built the company. Requests reviews from happy customers and drafts on-brand replies — all awaiting your approval.</p>
+      <p>Turns completed ServiceTrade work — jobs, inspections, and service calls — into 5-star Google reviews, then protects the reputation that built the company. Runs a polite, staged follow-up and drafts on-brand replies — all awaiting your approval.</p>
     </div>
     <span id="status-badge" class="badge demo"><span class="d"></span>Standalone · Sample Data</span>
   </div>
@@ -28,26 +28,59 @@
       <div class="section-title">Star Distribution</div>
       <div class="card"><div class="bars" id="dist"></div></div>
 
-      <div class="section-title">Request Queue · Completed Jobs</div>
+      <div class="section-title">Completed Work · Ready to Ask</div>
       <div id="jobs"></div>
       <div class="connect">
         <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg></div>
-        <div><b>Connect to go live:</b> Google Business Profile + Facebook to pull &amp; publish replies, ServiceTrade to trigger on job completion, Email / SMS to send requests.</div>
+        <div><b>Connect to go live:</b> ServiceTrade to pull completed jobs/inspections/service, Google Business Profile + Facebook to pull &amp; publish replies, Email / SMS to send the staged requests.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Review Campaign · Staged Follow-Up</div>
+  <div class="card hot" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="max-width:64ch;color:var(--muted);font-size:13px;line-height:1.55">
+      Enroll a completed job and it walks a polite, timed sequence — a
+      <b style="color:var(--navy)">Google review request at each stage</b>, pulled straight from ServiceTrade:
+      <span id="stage-legend"></span>
+      The moment the customer leaves a review, the follow-up stops automatically.
+      <span id="wf-mode"></span>
+    </div>
+    <button class="btn primary" onclick="runCycle(this)">Run due stage now</button>
+  </div>
+
+  <div class="two-col" style="margin-top:16px">
+    <div>
+      <div class="section-title">On Campaign</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th>Customer</th><th>Type</th><th>Stage</th><th>Channels</th><th>Next</th><th>Status</th><th></th></tr></thead>
+        <tbody id="wf-rows"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Recent Requests</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th>Customer</th><th>Ch</th><th>Stage</th><th>Status</th></tr></thead>
+        <tbody id="wf-activity"></tbody></table>
       </div>
     </div>
   </div>
 
 <script>
 function starStr(n){return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
+var TYPE_PILL={inspection:'gray',service:'amber',job:'green'};
+var STAGE_PILL={ask:'gray',reminder:'amber',final:'red'};
+function typeBadge(t){t=t||'job';return '<span class="pill '+(TYPE_PILL[t]||'gray')+'">'+t+'</span>';}
 function load(){
   fetch('/api/reviews').then(function(r){return r.json();}).then(function(d){
     var s=d.summary;
+    var wf=d.workflow||{enrolled:[],activity:[],activeCount:0,stages:[]};
     if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Connected · Live';}
     document.getElementById('kpis').innerHTML=[
       kpi('Avg Rating',s.avgRating.toFixed(1)+'★','across '+s.totalReviews+' reviews',true),
-      kpi('Total Reviews',s.totalReviews,'all sources',false),
       kpi('This Month','+'+s.thisMonthDelta,'new reviews',false),
-      kpi('Request Queue',(d.pendingJobs||[]).length,'jobs ready to ask',false)
+      kpi('On Campaign',wf.activeCount||0,'jobs being asked',false),
+      kpi('Ready to Ask',(d.pendingJobs||[]).length,'completed jobs',false)
     ].join('');
     var maxd=Math.max(1,Math.max.apply(null,[1,2,3,4,5].map(function(k){return s.distribution[k]||0;})));
     document.getElementById('dist').innerHTML=[5,4,3,2,1].map(function(k){
@@ -58,16 +91,46 @@ function load(){
         : '<div class="actions" style="justify-content:flex-start;margin-top:10px"><button class="btn" onclick="draftReply('+r.id+')">Draft reply</button></div>';
       return '<div class="card" style="margin-bottom:12px"><div class="meta" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+r.author+'</b> <span class="muted mono" style="font-size:11px">· '+r.source+'</span></div><span class="stars">'+starStr(r.stars)+'</span></div><div class="body" style="color:var(--text);margin-top:8px;font-size:13.5px">'+esc(r.text)+'</div>'+reply+'</div>';
     }).join('');
-    document.getElementById('jobs').innerHTML=(d.pendingJobs||[]).map(function(j){
-      return '<div class="draft"><div class="meta"><b>'+j.customer+'</b><button class="btn" onclick="reqReview('+j.id+')">Draft request</button></div><div class="body">'+esc(j.job_desc||'')+'</div></div>';
-    }).join('') || '<div class="empty">No jobs waiting.</div>';
-    var rq=d.requests||[];
-    if(rq.length){
-      document.getElementById('jobs').innerHTML= rq.map(function(r){
-        return '<div class="draft"><div class="meta"><b>'+r.customer+'</b><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><button class="btn primary" onclick="approveReq('+r.id+')" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
-      }).join('') + document.getElementById('jobs').innerHTML;
-    }
+    renderJobs(d.pendingJobs||[], d.requests||[]);
+    renderCampaign(wf);
   });
+}
+function renderJobs(jobs, requests){
+  var jobsHtml=(jobs||[]).map(function(j){
+    var sub=[j.job_desc||'', j.technician?('Tech: '+j.technician):'', j.location||''].filter(Boolean).map(esc).join(' · ');
+    return '<div class="draft"><div class="meta"><b>'+esc(j.customer)+'</b> '+typeBadge(j.job_type)+'</div><div class="body">'+sub+'</div><div class="actions" style="justify-content:flex-start"><button class="btn primary" onclick="enroll('+j.id+',this)">Start campaign</button> <button class="btn" onclick="reqReview('+j.id+')">Draft one-off</button></div></div>';
+  }).join('');
+  var reqHtml=(requests||[]).map(function(r){
+    return '<div class="draft"><div class="meta"><b>'+esc(r.customer)+'</b><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><button class="btn primary" onclick="approveReq('+r.id+')" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
+  }).join('');
+  document.getElementById('jobs').innerHTML=(reqHtml+jobsHtml) || '<div class="empty">No completed work waiting.</div>';
+}
+function shortTime(t){if(!t)return '—';var s=String(t).replace('T',' ').replace('Z','');return s.slice(5,16);}
+function renderCampaign(wf){
+  (function(){
+    var lg=document.getElementById('stage-legend');
+    lg.innerHTML=' '+(wf.stages||[]).map(function(st,i){
+      return '<b style="color:var(--navy)">'+st.name+'</b>'+(st.offsetDays?(' <span class="muted">(+'+st.offsetDays+'d)</span>'):' <span class="muted">(on completion)</span>');
+    }).join(' → ')+'.';
+  })();
+  var mode=document.getElementById('wf-mode');
+  if(wf.live){mode.innerHTML=' <b style="color:var(--ok)">Live</b> — approved requests go out over '+(wf.emailLive?'Email':'')+(wf.emailLive&&wf.smsLive?' + ':'')+(wf.smsLive?'SMS':'')+'.';}
+  else{mode.innerHTML=' Requests are <b style="color:var(--accent)">simulated</b> (drafted &amp; logged) until Email (M365/Gmail) or SMS (Twilio) is connected — then the same stages send for real.';}
+  var rows=(wf.enrolled||[]);
+  document.getElementById('wf-rows').innerHTML= rows.length? rows.map(function(w){
+    var st=w.status, stPill= st==='active'?'<span class="pill green">active</span>': st==='paused'?'<span class="pill amber">paused</span>': st==='done'?'<span class="pill green">done ✓</span>':'<span class="pill gray">'+st+'</span>';
+    var ch=(w.channels||'').split(',').map(function(c){return '<span class="pill gray" style="margin-right:4px">'+c+'</span>';}).join('');
+    var stageCell= st==='done'? '<span class="muted">Complete</span>' : (w.stage_name+' <span class="muted mono" style="font-size:10px">'+Math.min(w.stage+1,w.total_stages)+'/'+w.total_stages+'</span>');
+    var act='';
+    if(st==='active')act='<button class="btn" onclick="wfAct('+w.id+',\'pause\')">Pause</button> <button class="btn" onclick="markReviewed('+w.job_id+')">Got review ✓</button>';
+    else if(st==='paused')act='<button class="btn primary" onclick="wfAct('+w.id+',\'resume\')">Resume</button> <button class="btn" onclick="wfAct('+w.id+',\'stop\')">Stop</button>';
+    return '<tr><td>'+esc(w.customer)+'</td><td>'+typeBadge(w.job_type)+'</td><td>'+stageCell+'</td><td>'+ch+'</td><td class="muted mono" style="font-size:11px">'+(st==='active'?shortTime(w.next_run_at):'—')+'</td><td>'+stPill+'</td><td class="right">'+act+'</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="empty">No campaigns yet. Start one from a completed job →</td></tr>';
+  var acts=(wf.activity||[]);
+  document.getElementById('wf-activity').innerHTML= acts.length? acts.map(function(a){
+    var sp= a.status==='sent'?'green': a.status==='simulated'?'amber': a.status==='skipped'?'gray':'red';
+    return '<tr><td>'+esc(a.customer)+'</td><td><span class="pill '+(STAGE_PILL[a.stage_key]||'gray')+'">'+a.channel+'</span></td><td class="mono">'+(a.stage||'')+'</td><td><span class="pill '+sp+'">'+a.status+'</span></td></tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">No requests yet — run a due stage.</td></tr>';
 }
 function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
@@ -75,6 +138,10 @@ function draftReply(id){fetch('/api/reviews/'+id+'/draft-reply',{method:'POST'})
 function approveReply(id){fetch('/api/reviews/'+id+'/approve-reply',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 function reqReview(id){fetch('/api/reviews/request/'+id,{method:'POST'}).then(function(r){return r.json();}).then(load);}
 function approveReq(id){fetch('/api/reviews/requests/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function enroll(id,btn){btn.disabled=true;fetch('/api/reviews/'+id+'/enroll',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({channels:['email','sms']})}).then(function(r){return r.json();}).then(load);}
+function wfAct(id,action){fetch('/api/reviews/workflow/'+id+'/'+action,{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function markReviewed(jobId){fetch('/api/reviews/'+jobId+'/mark-reviewed',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function runCycle(btn){btn.disabled=true;btn.textContent='Running…';fetch('/api/reviews/workflow/run',{method:'POST'}).then(function(r){return r.json();}).then(function(){btn.disabled=false;btn.textContent='Run due stage now';load();});}
 load();
 </script>
 </body>

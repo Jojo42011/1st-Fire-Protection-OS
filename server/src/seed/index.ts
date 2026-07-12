@@ -45,21 +45,29 @@ export function seed(): void {
   insPaid.run('Eastside Fitness (SA)', 'gm@eastsidefit.example', 2200.0, daysAgo(40), daysAgo(10), daysAgo(4));
   insPaid.run('Magnolia Offices (Spring)', 'ap@magnoliaoffices.example', 3100.0, daysAgo(50), daysAgo(20), daysAgo(9));
 
-  /* ---------- jobs (completed ServiceTrade jobs → request queue) ---------- */
-  const jobs: [string, string][] = [
-    ['Alamo Heights ISD', 'Annual fire sprinkler inspection & tag'],
-    ['Riverwalk Hospitality Group', 'Kitchen hood suppression semi-annual service'],
-    ['Buda Logistics Park', 'Fire alarm panel service call'],
-    ['Laredo Self Storage', 'Dry system trip test'],
-    ['Waco Retail Plaza', 'Quarterly inspection — sprinkler & alarm'],
-    ['Pecan Grove HOA', 'Clubhouse extinguisher recharge'],
-    ['McAllen Bakery Co.', 'Kitchen hood suppression check'],
-    ['College Station Auto', 'Emergency lighting & exit sign test'],
+  /* ---------- jobs (completed ServiceTrade work → review campaign) ----------
+   * Fields mirror what the Review Collector pulls from ServiceTrade on completion:
+   * work type (job|inspection|service), the tech who ran it, the site, and where to
+   * reach the customer. Enrolling one of these starts the staged review campaign. */
+  const jobs: [string, string, string, string, string, string, string][] = [
+    // customer, job_desc, job_type, email, phone, location, technician
+    ['Alamo Heights ISD', 'Annual fire sprinkler inspection & tag', 'inspection', 'ap@ahisd.example', '+1 210 555 0210', 'Admin Building — San Antonio', 'Kelsey Bovard'],
+    ['Riverwalk Hospitality Group', 'Kitchen hood suppression semi-annual service', 'service', 'billing@rwhg.example', '+1 210 555 0231', 'Riverwalk kitchen — San Antonio', 'Ronnie Blue'],
+    ['Buda Logistics Park', 'Fire alarm panel service call', 'service', 'ap@budalogistics.example', '+1 512 555 0244', 'Distribution Center — Buda, TX', 'Matt Shaner'],
+    ['Gulf Coast Manufacturing', 'New fire sprinkler system install — Phase 1', 'job', 'ap@gcmfg.example', '+1 361 555 0279', 'Plant 2 — Corpus Christi, TX', 'Clayton Cichon'],
+    ['Laredo Self Storage', 'Dry system trip test', 'inspection', 'owner@laredostore.example', '+1 956 555 0268', 'Laredo, TX', 'Mel Vela'],
+    ['Waco Retail Plaza', 'Quarterly inspection — sprinkler & alarm', 'inspection', 'billing@wacoretail.example', '+1 254 555 0281', 'Waco, TX', 'Kelsey Bovard'],
+    ['Pecan Grove HOA', 'Clubhouse extinguisher recharge', 'service', 'board@pecangrovehoa.example', '+1 281 555 0305', 'Clubhouse — Richmond, TX', 'Shawn Ellis'],
+    ['McAllen Bakery Co.', 'Kitchen hood suppression check', 'inspection', 'hello@mcallenbakery.example', '+1 956 555 0327', 'McAllen, TX', 'Mel Vela'],
+    ['College Station Auto', 'Emergency lighting & exit sign test', 'inspection', 'shop@cstxauto.example', '+1 979 555 0338', 'College Station, TX', 'Tamara Reed'],
   ];
   const insJob = db.prepare(
-    `INSERT INTO jobs (customer, job_desc, completed_at, requested) VALUES (?, ?, ?, 0)`
+    `INSERT INTO jobs (customer, job_desc, job_type, email, phone, location, technician, service_trade_id, completed_at, requested)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
   );
-  jobs.forEach((j, i) => insJob.run(j[0], j[1], daysAgo(i + 2)));
+  jobs.forEach((j, i) =>
+    insJob.run(j[0], j[1], j[2], j[3], j[4], j[5], j[6], `ST-${10000 + i}`, daysAgo(i + 2))
+  );
 
   /* ---------- reviews (mostly 4-5★, a couple 3★) — Google + Facebook ---------- */
   const reviews: [string, string, number, string, number][] = [
