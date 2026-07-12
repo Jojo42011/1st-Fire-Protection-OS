@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>1st Fire Protection · Operating System</title>
 <link rel="stylesheet" href="/brand/brand.css" />
 <style>
@@ -57,7 +57,20 @@
   #toast{position:absolute;top:18px;left:50%;transform:translateX(-50%) translateY(-24px);z-index:70;background:var(--navy);border:1px solid var(--navy-line);color:#fff;font-size:13px;padding:11px 18px;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;box-shadow:0 8px 24px rgba(30,45,64,.22)}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   #toast b{color:var(--gold)}
-  @media (max-width:780px){:root{--w:212px}}
+  /* backdrop dims the content behind the drawer on mobile */
+  #backdrop{position:fixed;inset:0;z-index:15;background:rgba(15,22,33,.5);opacity:0;pointer-events:none;transition:opacity .3s;display:none}
+  @media (max-width:820px){
+    /* sidebar becomes an overlay drawer — it no longer pushes the content */
+    #side{position:fixed;top:0;left:0;bottom:0;height:100vh;height:100dvh;width:min(84vw,290px);margin-left:0;opacity:1;
+          transform:translateX(0);transition:transform .34s cubic-bezier(.4,0,.2,1);box-shadow:0 12px 40px rgba(15,22,33,.4)}
+    #shell.collapsed #side{margin-left:0;opacity:1;transform:translateX(-102%)}
+    #main{width:100%}
+    #backdrop{display:block}
+    #shell:not(.collapsed) #backdrop{opacity:1;pointer-events:auto}
+    /* reopen "Menu" button always reachable, clear of notches */
+    #reopen{top:max(12px,env(safe-area-inset-top));left:12px;padding:10px 15px 10px 10px}
+    #dock{bottom:max(16px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:340px;justify-content:center}
+  }
 </style>
 </head>
 <body>
@@ -71,6 +84,7 @@
       <div id="side-foot"><span class="dot"></span>Online · San Antonio</div>
     </aside>
     <div id="reopen"><span class="mark"></span><span class="rl">Menu</span></div>
+    <div id="backdrop"></div>
     <div id="main">
       <div id="frames"></div>
       <div id="dock"><span class="p"></span><span class="dt"><b>Receptionist</b> is live <span>· tap to return</span></span></div>
@@ -94,17 +108,27 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 (function(){ "use strict";
   var byKey={}; TABS.forEach(function(t){byKey[t.key]=t;});
   var home=(TABS.find(function(t){return t.home;})||TABS[0]).key, current=home;
-  var nav=document.getElementById("nav"),frames=document.getElementById("frames"),dock=document.getElementById("dock"),toastEl=document.getElementById("toast"),shell=document.getElementById("shell");
+  var nav=document.getElementById("nav"),frames=document.getElementById("frames"),dock=document.getElementById("dock"),toastEl=document.getElementById("toast"),shell=document.getElementById("shell"),backdrop=document.getElementById("backdrop");
+  var mq=window.matchMedia("(max-width:820px)");
+  function isMobile(){return mq.matches;}
   nav.innerHTML=TABS.map(function(t,i){var sep=(i===1)?'<div class="nav-sep">Agents</div>':'';return sep+'<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'"><div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';}).join("");
   frames.innerHTML=TABS.map(function(t){var src=t.key===home?' src="'+t.src+'"':'';return '<iframe class="frame'+(t.key===current?' active':'')+'" id="frame-'+t.key+'" data-src="'+t.src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';}).join("");
   function toast(m){toastEl.innerHTML=m;toastEl.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000);}
-  function activate(key,prog){if(!byKey[key])return;var f=document.getElementById("frame-"+key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){document.getElementById("frame-"+t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');}
-  function setCollapsed(v){shell.classList.toggle("collapsed",v);try{localStorage.setItem("shell_collapsed",v?"1":"0");}catch(_){}}
+  function activate(key,prog){if(!byKey[key])return;var f=document.getElementById("frame-"+key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){document.getElementById("frame-"+t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');if(isMobile())setCollapsed(true);}
+  function setCollapsed(v){shell.classList.toggle("collapsed",v);if(!isMobile()){try{localStorage.setItem("shell_collapsed",v?"1":"0");}catch(_){}}}
   document.getElementById("collapse").onclick=function(){setCollapsed(true);};
   document.getElementById("reopen").onclick=function(){setCollapsed(false);};
   document.addEventListener("keydown",function(e){if((e.metaKey||e.ctrlKey)&&e.key==="\\"){e.preventDefault();setCollapsed(!shell.classList.contains("collapsed"));}});
-  try{if(localStorage.getItem("shell_collapsed")==="1")shell.classList.add("collapsed");}catch(_){}
+  // desktop restores saved state; mobile always starts with the drawer closed
+  if(isMobile()){shell.classList.add("collapsed");}
+  else{try{if(localStorage.getItem("shell_collapsed")==="1")shell.classList.add("collapsed");}catch(_){}}
+  // keep the drawer state sane when rotating / resizing across the breakpoint
+  (mq.addEventListener?mq.addEventListener.bind(mq,"change"):mq.addListener.bind(mq))(function(){
+    if(isMobile())setCollapsed(true);
+    else{try{setCollapsed(localStorage.getItem("shell_collapsed")==="1");}catch(_){setCollapsed(false);}}
+  });
   nav.addEventListener("click",function(e){var it=e.target.closest(".nav-item");if(it)activate(it.getAttribute("data-key"));});
+  backdrop.addEventListener("click",function(){setCollapsed(true);});
   dock.addEventListener("click",function(){activate(home);});
   window.addEventListener("message",function(e){var d=e.data||{};if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}});
   var q=new URLSearchParams(location.search).get("tab");if(q&&byKey[q])activate(q);
