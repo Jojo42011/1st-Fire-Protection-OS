@@ -64,12 +64,22 @@
     #side{position:fixed;top:0;left:0;bottom:0;height:100vh;height:100dvh;width:min(84vw,290px);margin-left:0;opacity:1;
           transform:translateX(0);transition:transform .34s cubic-bezier(.4,0,.2,1);box-shadow:0 12px 40px rgba(15,22,33,.4)}
     #shell.collapsed #side{margin-left:0;opacity:1;transform:translateX(-102%)}
-    #main{width:100%}
+    /* iOS/Android don't scroll a fixed-height iframe's overflow, so on mobile we
+       flow the layout: the OUTER document scrolls and each iframe is sized to its
+       content height by JS. */
+    html,body{height:auto;overflow:visible}
+    #shell{display:block;height:auto;min-height:100dvh;width:100%}
+    #main{position:static;width:100%;height:auto;min-height:100dvh}
+    #frames{position:relative}
+    .frame{position:relative;inset:auto;width:100%;height:auto;opacity:1;pointer-events:auto;transition:none;display:none}
+    .frame.active{display:block}
     #backdrop{display:block}
     #shell:not(.collapsed) #backdrop{opacity:1;pointer-events:auto}
     /* reopen "Menu" button always reachable, clear of notches */
     #reopen{top:max(12px,env(safe-area-inset-top));left:12px;padding:10px 15px 10px 10px}
-    #dock{bottom:max(16px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:340px;justify-content:center}
+    /* dock/toast pinned to the viewport now that the document itself scrolls */
+    #dock{position:fixed;bottom:max(16px,env(safe-area-inset-bottom));width:calc(100% - 32px);max-width:340px;justify-content:center}
+    #toast{position:fixed}
   }
 </style>
 </head>
@@ -113,8 +123,28 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   function isMobile(){return mq.matches;}
   nav.innerHTML=TABS.map(function(t,i){var sep=(i===1)?'<div class="nav-sep">Agents</div>':'';return sep+'<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'"><div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';}).join("");
   frames.innerHTML=TABS.map(function(t){var src=t.key===home?' src="'+t.src+'"':'';return '<iframe class="frame'+(t.key===current?' active':'')+'" id="frame-'+t.key+'" data-src="'+t.src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';}).join("");
+  function frameEl(key){return document.getElementById("frame-"+key);}
+  /* On mobile the document scrolls, so each iframe must be as tall as its content
+     (same-origin lets us read it directly). On desktop the iframe scrolls itself. */
+  function fitFrame(f){
+    if(!f)return;
+    if(!isMobile()){f.style.height="";return;}
+    try{var doc=f.contentWindow&&f.contentWindow.document;if(!doc||!doc.body)return;
+      var h=Math.max(doc.documentElement.scrollHeight||0,doc.body.scrollHeight||0);
+      if(h>0)f.style.height=h+"px";}catch(_){}
+  }
+  function watchFrame(f){
+    try{var win=f.contentWindow,doc=win.document,refit=function(){fitFrame(f);};
+      if(typeof win.ResizeObserver!=="undefined"){new win.ResizeObserver(refit).observe(doc.body);}
+      win.addEventListener("resize",refit);
+      /* pages fill in via fetch after load — poll briefly to catch late growth */
+      var n=0,iv=setInterval(function(){refit();if(++n>24)clearInterval(iv);},250);
+    }catch(_){}
+    fitFrame(f);
+  }
+  TABS.forEach(function(t){var f=frameEl(t.key);f.addEventListener("load",function(){watchFrame(f);});});
   function toast(m){toastEl.innerHTML=m;toastEl.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(function(){toastEl.classList.remove("show");},3000);}
-  function activate(key,prog){if(!byKey[key])return;var f=document.getElementById("frame-"+key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){document.getElementById("frame-"+t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');if(isMobile())setCollapsed(true);}
+  function activate(key,prog){if(!byKey[key])return;var f=frameEl(key);if(f&&!f.src)f.src=f.getAttribute("data-src");TABS.forEach(function(t){frameEl(t.key).classList.toggle("active",t.key===key);var ni=nav.querySelector('.nav-item[data-key="'+t.key+'"]');if(ni)ni.classList.toggle("active",t.key===key);});current=key;dock.classList.toggle("show",key!==home);if(prog&&key!==home)toast('Opened <b>'+byKey[key].label+'</b>');if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}}
   function setCollapsed(v){shell.classList.toggle("collapsed",v);if(!isMobile()){try{localStorage.setItem("shell_collapsed",v?"1":"0");}catch(_){}}}
   document.getElementById("collapse").onclick=function(){setCollapsed(true);};
   document.getElementById("reopen").onclick=function(){setCollapsed(false);};
@@ -122,11 +152,18 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   // desktop restores saved state; mobile always starts with the drawer closed
   if(isMobile()){shell.classList.add("collapsed");}
   else{try{if(localStorage.getItem("shell_collapsed")==="1")shell.classList.add("collapsed");}catch(_){}}
-  // keep the drawer state sane when rotating / resizing across the breakpoint
+  // keep the drawer + iframe heights sane when rotating / resizing across the breakpoint
+  function syncHeights(){
+    if(isMobile()){fitFrame(frameEl(current));}
+    else{TABS.forEach(function(t){frameEl(t.key).style.height="";});}
+  }
   (mq.addEventListener?mq.addEventListener.bind(mq,"change"):mq.addListener.bind(mq))(function(){
     if(isMobile())setCollapsed(true);
     else{try{setCollapsed(localStorage.getItem("shell_collapsed")==="1");}catch(_){setCollapsed(false);}}
+    syncHeights();
   });
+  window.addEventListener("resize",syncHeights);
+  window.addEventListener("orientationchange",function(){setTimeout(syncHeights,250);});
   nav.addEventListener("click",function(e){var it=e.target.closest(".nav-item");if(it)activate(it.getAttribute("data-key"));});
   backdrop.addEventListener("click",function(){setCollapsed(true);});
   dock.addEventListener("click",function(){activate(home);});
