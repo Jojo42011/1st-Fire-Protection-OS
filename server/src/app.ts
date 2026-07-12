@@ -7,7 +7,10 @@ import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
 import { syncFromVapi } from './services/receptionist';
+import { runDueReminders } from './services/reminderWorkflow';
+import { syncFromServiceTrade } from './services/serviceTrade';
 import { sttEnabled } from './config/voice';
+import { serviceTradeEnabled, resendEnabled, telnyxEnabled } from './config/comms';
 
 import health from './routes/health';
 import brain from './routes/brain';
@@ -15,6 +18,7 @@ import invoices from './routes/invoices';
 import reviews from './routes/reviews';
 import calls from './routes/calls';
 import callWebhook from './routes/callWebhook';
+import serviceTradeWebhook from './routes/serviceTradeWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
 
@@ -35,6 +39,7 @@ app.use(invoices);
 app.use(reviews);
 app.use(calls);
 app.use(callWebhook);
+app.use(serviceTradeWebhook);
 app.use(integrations);
 app.use(voice);
 
@@ -78,6 +83,42 @@ const REFLECT_MS = 1000 * 60 * 30; // every 30 min
 setInterval(() => {
   void reflect();
 }, REFLECT_MS).unref();
+
+// ---- invoice reminder sweep — the day-1/3/5/7 workflow engine ----
+// Runs hourly: sends every reminder whose date has arrived (via Resend/Telnyx) and skips
+// steps on invoices that got paid. Always runs so the sequence advances; when comms keys are
+// absent, due reminders are drafted and left 'queued' for one-click approval (graceful).
+const REMINDER_SWEEP_MS = 1000 * 60 * 60; // hourly
+const runReminderSweep = () =>
+  void runDueReminders()
+    .then((r) => {
+      if (r.sent || r.queued || r.failed || r.skipped) {
+        console.log(
+          `[invoices] reminder sweep — sent:${r.sent} queued:${r.queued} failed:${r.failed} skipped:${r.skipped}`
+        );
+      }
+    })
+    .catch((err) => console.warn('[invoices] reminder sweep error:', (err as Error).message));
+runReminderSweep(); // initial sweep on boot
+setInterval(runReminderSweep, REMINDER_SWEEP_MS).unref();
+{
+  const email = resendEnabled() ? 'Resend' : 'queued (no RESEND key)';
+  const sms = telnyxEnabled() ? 'Telnyx' : 'queued (no TELNYX key)';
+  console.log(`[invoices] reminder workflow enabled — hourly sweep · email→${email} · sms→${sms}`);
+}
+
+// ---- periodic ServiceTrade backfill — only when SERVICETRADE_TOKEN is present ----
+if (serviceTradeEnabled()) {
+  const ST_SYNC_MS = 1000 * 60 * 15; // every 15 min
+  const runStSync = () =>
+    void syncFromServiceTrade().then((r) => {
+      if (r.synced) console.log(`[serviceTrade] auto-sync: ${r.synced} invoices`);
+      else if (r.error) console.warn(`[serviceTrade] auto-sync error: ${r.error}`);
+    });
+  runStSync();
+  setInterval(runStSync, ST_SYNC_MS).unref();
+  console.log('[serviceTrade] tracking enabled — auto-syncing invoices every 15 min');
+}
 
 // ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
 // Complements the real-time webhook + manual Sync button: keeps the dashboard current
