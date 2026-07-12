@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
+import { syncFromVapi } from './services/receptionist';
 import { sttEnabled } from './config/voice';
 
 import health from './routes/health';
@@ -77,6 +78,21 @@ const REFLECT_MS = 1000 * 60 * 30; // every 30 min
 setInterval(() => {
   void reflect();
 }, REFLECT_MS).unref();
+
+// ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
+// Complements the real-time webhook + manual Sync button: keeps the dashboard current
+// even if a webhook delivery is missed. No-ops (and logs nothing) without the key.
+if (process.env.VAPI_API_KEY) {
+  const VAPI_SYNC_MS = 1000 * 60 * 5; // every 5 min
+  const runSync = () =>
+    void syncFromVapi().then((r) => {
+      if (r.synced) console.log(`[vapi] auto-sync: ${r.synced} calls`);
+      else if (r.error) console.warn(`[vapi] auto-sync error: ${r.error}`);
+    });
+  runSync(); // initial backfill on boot
+  setInterval(runSync, VAPI_SYNC_MS).unref();
+  console.log('[vapi] tracking enabled — auto-syncing calls every 5 min');
+}
 
 server.listen(PORT, () => {
   console.log(`\n  1st FP Operating System`);
