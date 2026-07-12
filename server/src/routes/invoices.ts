@@ -1,11 +1,19 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { draftInvoiceReminder, getReceivablesSummary, daysOverdue, Invoice } from '../services/invoiceAgent';
+import {
+  enrollInvoice,
+  setWorkflowStatus,
+  completeWorkflowIfPaid,
+  runDailyCollection,
+  getWorkflowState,
+  Channel,
+} from '../services/collectionWorkflow';
 import { integrationConnected } from '../config/integrations';
 
 const router = Router();
 
-/** Dashboard data: summary + invoice list + reminder queue. */
+/** Dashboard data: summary + invoice list + reminder queue + collection workflow. */
 router.get('/api/invoices', (_req, res) => {
   const db = getDb();
   const invoices = (db.prepare(`SELECT * FROM invoices ORDER BY (status='paid'), due_at`).all() as Invoice[]).map(
@@ -21,6 +29,7 @@ router.get('/api/invoices', (_req, res) => {
     summary: getReceivablesSummary(),
     invoices,
     reminders,
+    workflow: getWorkflowState(),
     live: integrationConnected('servicetrade') || integrationConnected('stripe'),
   });
 });
@@ -46,10 +55,36 @@ router.post('/api/invoices/reminders/:id/approve', (req, res) => {
 
 /** Mark an invoice paid (manual reconcile until QuickBooks/Stripe are wired). */
 router.post('/api/invoices/:id/mark-paid', (req, res) => {
-  getDb()
-    .prepare(`UPDATE invoices SET status = 'paid', paid_at = datetime('now') WHERE id = ?`)
-    .run(Number(req.params.id));
+  const id = Number(req.params.id);
+  getDb().prepare(`UPDATE invoices SET status = 'paid', paid_at = datetime('now') WHERE id = ?`).run(id);
+  completeWorkflowIfPaid(id); // stop chasing a paid invoice
   res.json({ ok: true });
+});
+
+/* ─────────────── Collection Workflow (daily dunning until paid) ─────────────── */
+
+/** Enroll an invoice into the daily email+text workflow (the human gate). */
+router.post('/api/invoices/:id/enroll', (req, res) => {
+  try {
+    const channels = Array.isArray(req.body?.channels) ? (req.body.channels as Channel[]) : undefined;
+    const wf = enrollInvoice(Number(req.params.id), channels);
+    res.json({ ok: true, workflow: wf });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/** Pause / resume / stop a workflow. */
+router.post('/api/invoices/workflow/:id/:action(pause|resume|stop)', (req, res) => {
+  const map = { pause: 'paused', resume: 'active', stop: 'stopped' } as const;
+  setWorkflowStatus(Number(req.params.id), map[req.params.action as keyof typeof map]);
+  res.json({ ok: true });
+});
+
+/** Run today's cycle now (demo trigger; the cron runs this daily). */
+router.post('/api/invoices/workflow/run', async (_req, res) => {
+  const result = await runDailyCollection({ force: true });
+  res.json({ ok: true, result });
 });
 
 export default router;

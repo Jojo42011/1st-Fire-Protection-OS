@@ -17,26 +17,26 @@ export function seed(): void {
   const isoAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
 
   /* ---------- invoices (~12 across aging buckets) — real Texas customers + service lines ---------- */
-  const invoices: [string, string, number, number, string][] = [
-    // customer, email, amount, dueOffsetDays(negative=overdue), status
-    ['Alamo Heights ISD', 'ap@ahisd.example', 4820.0, -8, 'sent'],           // sprinkler inspection
-    ['Riverwalk Hospitality Group', 'billing@rwhg.example', 1250.0, -3, 'reminded'], // hood suppression
-    ['Buda Logistics Park', 'ap@budalogistics.example', 3600.0, -22, 'sent'], // alarm service
-    ['South Texas Medical Center', 'finance@stmc.example', 9750.0, -45, 'reminded'], // fire pump test
-    ['Laredo Self Storage', 'owner@laredostore.example', 780.0, -12, 'sent'], // extinguisher recharge
-    ['Gulf Coast Manufacturing', 'ap@gcmfg.example', 15200.0, -67, 'reminded'], // sprinkler install
-    ['Waco Retail Plaza', 'billing@wacoretail.example', 5400.0, -35, 'sent'], // quarterly inspection
-    ['Lubbock County Facilities', 'ap@lubbockco.example', 2100.0, -95, 'reminded'], // backflow test
-    ['Pecan Grove HOA', 'board@pecangrovehoa.example', 640.0, -5, 'sent'],   // extinguishers
-    ['Spring Industrial Warehouse', 'accounts@springwh.example', 8300.0, -120, 'reminded'], // hydrotest
-    ['McAllen Bakery Co.', 'hello@mcallenbakery.example', 410.0, -18, 'sent'], // kitchen suppression
-    ['College Station Auto', 'shop@cstxauto.example', 1950.0, -2, 'sent'],     // emergency lighting
+  const invoices: [string, string, string, number, number, string][] = [
+    // customer, email, phone, amount, dueOffsetDays(negative=overdue), status
+    ['Alamo Heights ISD', 'ap@ahisd.example', '+1 210 555 0210', 4820.0, -8, 'sent'],           // sprinkler inspection
+    ['Riverwalk Hospitality Group', 'billing@rwhg.example', '+1 210 555 0231', 1250.0, -3, 'reminded'], // hood suppression
+    ['Buda Logistics Park', 'ap@budalogistics.example', '+1 512 555 0244', 3600.0, -22, 'sent'], // alarm service
+    ['South Texas Medical Center', 'finance@stmc.example', '+1 210 555 0257', 9750.0, -45, 'reminded'], // fire pump test
+    ['Laredo Self Storage', 'owner@laredostore.example', '+1 956 555 0268', 780.0, -12, 'sent'], // extinguisher recharge
+    ['Gulf Coast Manufacturing', 'ap@gcmfg.example', '+1 361 555 0279', 15200.0, -67, 'reminded'], // sprinkler install
+    ['Waco Retail Plaza', 'billing@wacoretail.example', '+1 254 555 0281', 5400.0, -35, 'sent'], // quarterly inspection
+    ['Lubbock County Facilities', 'ap@lubbockco.example', '+1 806 555 0293', 2100.0, -95, 'reminded'], // backflow test
+    ['Pecan Grove HOA', 'board@pecangrovehoa.example', '+1 281 555 0305', 640.0, -5, 'sent'],   // extinguishers
+    ['Spring Industrial Warehouse', 'accounts@springwh.example', '+1 281 555 0316', 8300.0, -120, 'reminded'], // hydrotest
+    ['McAllen Bakery Co.', 'hello@mcallenbakery.example', '+1 956 555 0327', 410.0, -18, 'sent'], // kitchen suppression
+    ['College Station Auto', 'shop@cstxauto.example', '+1 979 555 0338', 1950.0, -2, 'sent'],     // emergency lighting
   ];
   const insInv = db.prepare(
-    `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoices (customer, email, phone, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
-  for (const [customer, email, amount, dueOff, status] of invoices) {
-    insInv.run(customer, email, amount, daysAgo(-dueOff + 30), daysAgo(-dueOff), status);
+  for (const [customer, email, phone, amount, dueOff, status] of invoices) {
+    insInv.run(customer, email, phone, amount, daysAgo(-dueOff + 30), daysAgo(-dueOff), status);
   }
   // a couple paid this month to make the "collected" KPI real
   const insPaid = db.prepare(
