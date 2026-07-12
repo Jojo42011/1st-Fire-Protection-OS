@@ -25,6 +25,7 @@ export const COMPANY = {
   emergency: '844-701-3964',
   email: 'dispatch@1stfpcompanies.com',
   site: '1stfpcompanies.com',
+  reviewLink: 'https://g.page/r/1st-fire-protection-services/review', // Google review shortlink used in review requests
   hours: 'Mon–Fri 7:00a–5:00p CT · 24-hr emergency & monitoring',
   certs: ['SCTRCA', 'MBE', 'SBE', 'HUB', 'NFPA', 'NAFED'],
   services: [

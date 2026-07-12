@@ -7,6 +7,7 @@ import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
 import { runDailyCollection } from './services/collectionWorkflow';
+import { runReviewCampaign } from './services/reviewWorkflow';
 import { syncFromVapi } from './services/receptionist';
 import { sttEnabled } from './config/voice';
 
@@ -98,6 +99,26 @@ const runCollection = () =>
     .catch((err) => console.warn('[collection] cycle error:', (err as Error).message));
 runCollection(); // kick any due cycles shortly after boot
 setInterval(runCollection, COLLECTION_MS).unref();
+
+// ---- review campaign (staged review-request sequence) ----
+// Checks hourly; per-job next_run_at gating means each enrolled job only advances one
+// stage when its next touch is due (Initial Ask → Gentle Reminder → Last Call), then the
+// campaign completes. Auto-completes the moment a review is logged. Sends are simulated
+// (logged) until the Email (M365/Gmail) or SMS (Twilio) integration is present — then the
+// same stages send for real. Never throws; a missing integration just no-ops the send.
+const REVIEW_CAMPAIGN_MS = 1000 * 60 * 60; // check every hour, act once per due stage per job
+const runReviews = () =>
+  void runReviewCampaign()
+    .then((r) => {
+      if (r.processed || r.completed) {
+        console.log(
+          `[reviews] campaign cycle: ${r.processed} stages · ${r.sent} sent · ${r.simulated} simulated · ${r.completed} completed`
+        );
+      }
+    })
+    .catch((err) => console.warn('[reviews] cycle error:', (err as Error).message));
+runReviews(); // kick any due stages shortly after boot
+setInterval(runReviews, REVIEW_CAMPAIGN_MS).unref();
 
 // ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
 // Complements the real-time webhook + manual Sync button: keeps the dashboard current
