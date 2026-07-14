@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { getDb } from '../db/index';
+import { setState } from '../db/schema';
 import { resetDb } from '../db/reset';
 import { integrationConnected } from '../config/integrations';
 
@@ -72,6 +73,7 @@ router.get('/api/admin/backup', async (req, res) => {
 
   try {
     await getDb().backup(tmp); // consistent snapshot including WAL
+    setState('last_backup_at', new Date().toISOString()); // surfaced via /api/introspect health
     res.download(tmp, filename, (err) => {
       void cleanup();
       if (err && !res.headersSent) console.warn('[admin] backup send error:', err.message);

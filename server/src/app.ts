@@ -8,6 +8,7 @@ import { seed } from './seed/index';
 import { reflect } from './services/reflection';
 import { runDailyCollection } from './services/collectionWorkflow';
 import { syncFromVapi } from './services/receptionist';
+import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
 
 import health from './routes/health';
@@ -19,6 +20,7 @@ import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
 import admin from './routes/admin';
+import introspect from './routes/introspect';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -40,6 +42,7 @@ app.use(callWebhook);
 app.use(integrations);
 app.use(voice);
 app.use(admin);
+app.use(introspect);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -100,6 +103,13 @@ const runCollection = () =>
     .catch((err) => console.warn('[collection] cycle error:', (err as Error).message));
 runCollection(); // kick any due cycles shortly after boot
 setInterval(runCollection, COLLECTION_MS).unref();
+
+// ---- daily Booker Growth report (introspection push) ----
+// Silent no-op unless AIOS_REPORT_URL + AIOS_REPORT_KEY are both set; failures are
+// logged and swallowed so reporting can never affect the app itself.
+const AIOS_REPORT_MS = 1000 * 60 * 60 * 24; // daily
+setTimeout(() => void sendAiosReport(), 1000 * 60).unref(); // first report ~1 min after boot
+setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 
 // ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
 // Complements the real-time webhook + manual Sync button: keeps the dashboard current
