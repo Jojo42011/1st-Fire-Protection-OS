@@ -23,27 +23,31 @@ export function seed(): void {
   };
   const isoAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
 
-  /* ---------- invoices (~12 across aging buckets) — real Texas customers + service lines ---------- */
-  const invoices: [string, string, number, number, string][] = [
-    // customer, email, amount, dueOffsetDays(negative=overdue), status
-    ['Alamo Heights ISD', 'ap@ahisd.example', 4820.0, -8, 'sent'],           // sprinkler inspection
-    ['Riverwalk Hospitality Group', 'billing@rwhg.example', 1250.0, -3, 'reminded'], // hood suppression
-    ['Buda Logistics Park', 'ap@budalogistics.example', 3600.0, -22, 'sent'], // alarm service
-    ['South Texas Medical Center', 'finance@stmc.example', 9750.0, -45, 'reminded'], // fire pump test
-    ['Laredo Self Storage', 'owner@laredostore.example', 780.0, -12, 'sent'], // extinguisher recharge
-    ['Gulf Coast Manufacturing', 'ap@gcmfg.example', 15200.0, -67, 'reminded'], // sprinkler install
-    ['Waco Retail Plaza', 'billing@wacoretail.example', 5400.0, -35, 'sent'], // quarterly inspection
-    ['Lubbock County Facilities', 'ap@lubbockco.example', 2100.0, -95, 'reminded'], // backflow test
-    ['Pecan Grove HOA', 'board@pecangrovehoa.example', 640.0, -5, 'sent'],   // extinguishers
-    ['Spring Industrial Warehouse', 'accounts@springwh.example', 8300.0, -120, 'reminded'], // hydrotest
-    ['McAllen Bakery Co.', 'hello@mcallenbakery.example', 410.0, -18, 'sent'], // kitchen suppression
-    ['College Station Auto', 'shop@cstxauto.example', 1950.0, -2, 'sent'],     // emergency lighting
+  /* ---------- invoices (16 across aging buckets, ~$3.5M outstanding) — real Texas customers + service lines ---------- */
+  const invoices: [string, string, string, number, number, string][] = [
+    // customer, email, phone, amount, dueOffsetDays(negative=overdue), status
+    ['Alamo Heights ISD', 'ap@ahisd.example', '+1 210 555 0210', 48200.0, -8, 'sent'],            // district-wide sprinkler inspection & tag
+    ['Riverwalk Hospitality Group', 'billing@rwhg.example', '+1 210 555 0231', 62500.0, -3, 'reminded'], // hood suppression — 9 properties
+    ['College Station Auto Group', 'ap@cstxautogroup.example', '+1 979 555 0338', 19500.0, -2, 'sent'],  // emergency lighting & exit signage
+    ['Pecan Grove HOA', 'board@pecangrovehoa.example', '+1 281 555 0305', 6400.0, -5, 'sent'],     // clubhouse & amenity extinguishers
+    ['Frost Data Center (Austin)', 'ap@frostdc.example', '+1 512 555 0412', 128000.0, -12, 'sent'], // tenant fit-out pre-action sprinkler
+    ['Waco Retail Plaza', 'billing@wacoretail.example', '+1 254 555 0281', 54000.0, -22, 'sent'],  // quarterly inspection — sprinkler & alarm
+    ['Buda Logistics Park', 'ap@budalogistics.example', '+1 512 555 0244', 87300.0, -28, 'reminded'], // fire alarm panel upgrade
+    ['Museum District Tower (Houston)', 'finance@mdtower.example', '+1 713 555 0455', 210000.0, -35, 'reminded'], // high-rise standpipe & pump ITM
+    ['Laredo Distribution Center', 'ap@laredodist.example', '+1 956 555 0268', 36000.0, -42, 'sent'], // dry system service
+    ['South Texas Medical Center', 'finance@stmc.example', '+1 210 555 0257', 397500.0, -45, 'reminded'], // fire pump replacement & test
+    ['Lubbock County Facilities', 'ap@lubbockco.example', '+1 806 555 0293', 145000.0, -58, 'reminded'], // backflow & sprinkler retrofit
+    ['Gulf Coast Manufacturing', 'ap@gcmfg.example', '+1 361 555 0279', 425000.0, -67, 'reminded'], // new sprinkler system install
+    ['McAllen Convention Center', 'ap@mcallencc.example', '+1 956 555 0327', 96000.0, -78, 'reminded'], // alarm system modernization
+    ['Spring Industrial Warehouse', 'accounts@springwh.example', '+1 281 555 0316', 283000.0, -95, 'reminded'], // high-hazard ESFR sprinkler & hydrotest
+    ['Permian Basin Energy Campus', 'ap@pbenergy.example', '+1 432 555 0501', 512000.0, -120, 'reminded'], // campus-wide fire alarm & sprinkler retrofit
+    ['Port of Corpus Christi Terminal', 'finance@poccterminal.example', '+1 361 555 0523', 989600.0, -140, 'reminded'], // terminal fire protection retrofit (master contract)
   ];
   const insInv = db.prepare(
-    `INSERT INTO invoices (customer, email, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO invoices (customer, email, phone, amount, issued_at, due_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
-  for (const [customer, email, amount, dueOff, status] of invoices) {
-    insInv.run(customer, email, amount, daysAgo(-dueOff + 30), daysAgo(-dueOff), status);
+  for (const [customer, email, phone, amount, dueOff, status] of invoices) {
+    insInv.run(customer, email, phone, amount, daysAgo(-dueOff + 30), daysAgo(-dueOff), status);
   }
   // a couple paid this month to make the "collected" KPI real
   const insPaid = db.prepare(

@@ -87,6 +87,35 @@ export function initDb(): void {
       FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
     );
 
+    /* ---------- collection workflow (daily dunning until paid) ----------
+     * Enrolling an overdue invoice is the human gate. Once enrolled, the daily
+     * cycle drafts + sends an outstanding-balance email AND text every day until
+     * the invoice is marked paid (then the workflow auto-completes). */
+    CREATE TABLE IF NOT EXISTS invoice_workflow (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id  INTEGER NOT NULL UNIQUE,
+      status      TEXT DEFAULT 'active',       -- active|paused|done|stopped
+      channels    TEXT DEFAULT 'email,sms',    -- csv of channels to hit each day
+      day_count   INTEGER DEFAULT 0,           -- how many daily cycles have run
+      started_at  TEXT DEFAULT (datetime('now')),
+      last_run_at TEXT,
+      next_run_at TEXT,                         -- when the next daily cycle is due
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS invoice_workflow_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id INTEGER NOT NULL,
+      invoice_id  INTEGER NOT NULL,
+      day         INTEGER,                      -- which daily cycle (1-based)
+      channel     TEXT,                         -- email|sms
+      tier        TEXT,                         -- friendly|firm|final
+      destination TEXT,                         -- the email / phone it went to
+      body        TEXT,
+      status      TEXT DEFAULT 'simulated',     -- sent|simulated|skipped|failed
+      created_at  TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (workflow_id) REFERENCES invoice_workflow(id) ON DELETE CASCADE
+    );
+
     /* ---------- review collector ---------- */
     CREATE TABLE IF NOT EXISTS jobs (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,

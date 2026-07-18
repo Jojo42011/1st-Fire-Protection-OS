@@ -5,6 +5,11 @@ page, doc, or deck at these tokens so everything stays consistent.
 
 - `brand.css` — design tokens (CSS custom properties) + decorative components
 - `fonts/` — Inter (400/700/900) and JetBrains Mono (500), latin subset `.woff2`
+- `logo.png` — the round 1FP/Texas emblem. Served at `/brand/logo.png` and used
+  as the app favicon and the sidebar brand mark in `client/shell.html`. Keep it a
+  PNG (do not convert to SVG). Drop a replacement at this exact path to swap it;
+  no code changes needed. Until the file exists the sidebar falls back to the
+  "1FP" gradient badge.
 
 ## Overall feel
 

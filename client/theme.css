@@ -91,6 +91,35 @@ tr:hover td{background:var(--bg)}
 .connect b{color:var(--navy)}
 
 .two-col{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start;margin-top:6px}
+/* min-width:0 lets columns shrink so an inner scrolling table can't blow out the grid */
+.two-col>*{min-width:0}
 @media (max-width:900px){.two-col{grid-template-columns:1fr}}
 .empty{color:var(--muted);font-size:13px;padding:20px;text-align:center}
 .stars{color:var(--gold);letter-spacing:1px}
+
+/* ---- Mobile / small screens ---- */
+/* Let the page body flow at its natural height so the shell can size the iframe and
+   the OUTER document scrolls — mobile browsers don't scroll a fixed iframe's overflow. */
+@media (max-width:820px){
+  html,body{height:auto;overflow:visible}
+  body{min-height:100dvh}
+}
+@media (max-width:640px){
+  /* extra top padding clears the shell's floating "Menu" button */
+  body{padding:64px 16px 48px;background-size:20px 20px}
+  .page-head{margin-bottom:2px}
+  .page-head .titles .kicker{font-size:10.5px;letter-spacing:.16em;margin-bottom:8px}
+  .page-head .titles h1{font-size:26px}
+  .page-head .titles p{font-size:13px;margin-top:9px}
+  .grid{gap:12px;margin-top:16px}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .card{padding:15px 16px}
+  .kpi .value{font-size:26px}
+  .section-title{margin:24px 0 10px}
+  /* wide tables scroll horizontally inside their card instead of breaking the layout */
+  .card:has(> table){overflow-x:auto;-webkit-overflow-scrolling:touch;padding:6px}
+  .card > table{min-width:540px}
+  th,td{padding:10px}
+  .btn{padding:9px 13px;font-size:12px}
+  .draft .actions{flex-wrap:wrap}
+}
