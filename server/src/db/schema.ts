@@ -144,6 +144,70 @@ export function initDb(): void {
       content    TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    /* ---------- the operator (operational audit) ---------- */
+    CREATE TABLE IF NOT EXISTS audit_pillars (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      key      TEXT NOT NULL UNIQUE,          -- 'inspections', 'finance', ...
+      name     TEXT NOT NULL,
+      tagline  TEXT,
+      sort     INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS audit_locations (
+      id      INTEGER PRIMARY KEY AUTOINCREMENT,
+      name    TEXT NOT NULL UNIQUE,
+      role    TEXT,                            -- 'HQ' | 'branch'
+      notes   TEXT,
+      mapped  INTEGER DEFAULT 0                -- has the audit touched this site yet
+    );
+    CREATE TABLE IF NOT EXISTS audit_systems (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      category   TEXT,                         -- field-service | accounting | comms | spreadsheet ...
+      owner      TEXT,
+      truth_for  TEXT,                         -- what it's the source of truth for
+      gaps       TEXT,                         -- what it doesn't talk to / manual hand-offs
+      pillar_key TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS audit_people (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      role       TEXT,
+      location   TEXT,
+      carries    TEXT,                         -- the knowledge only they hold
+      risk       TEXT DEFAULT 'low',           -- low|medium|high (single-point-of-failure)
+      pillar_key TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS audit_workflows (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT NOT NULL,
+      trigger_desc TEXT,                       -- what kicks it off
+      stalls      TEXT,                        -- where it stalls / breaks
+      pillar_key  TEXT,
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS audit_findings (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      pillar_key    TEXT,
+      kind          TEXT DEFAULT 'leak',       -- leak|risk|gap|strength
+      title         TEXT NOT NULL,
+      detail        TEXT,                      -- why it matters (benchmark-cited)
+      severity      TEXT DEFAULT 'medium',     -- low|medium|high|critical
+      cost_hint     TEXT,
+      capability_id TEXT,                      -- matched build from the catalog
+      status        TEXT DEFAULT 'open',       -- open|dismissed|building
+      source_note_id INTEGER,
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS audit_notes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      text       TEXT NOT NULL,                -- what the CEO/staff actually said
+      location   TEXT,                         -- which site it was about (optional)
+      analysis   TEXT,                         -- JSON: the operator's full read
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------

@@ -16,6 +16,7 @@ import calls from './routes/calls';
 import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
+import audit from './routes/audit';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -36,6 +37,7 @@ app.use(calls);
 app.use(callWebhook);
 app.use(integrations);
 app.use(voice);
+app.use(audit);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -46,6 +48,7 @@ app.get('/shell', page('shell.html'));
 app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
+app.get('/audit', page('audit.html'));
 app.get('/integrations', page('integrations.html'));
 
 // static assets (theme.css etc.)
@@ -82,5 +85,5 @@ server.listen(PORT, () => {
   console.log(`\n  1st FP Operating System`);
   console.log(`  ▸ http://localhost:${PORT}`);
   console.log(`  ▸ client: ${CLIENT_DIR}`);
-  console.log(`  ▸ tabs: /calls (home) /invoices /reviews /integrations\n`);
+  console.log(`  ▸ tabs: /calls (home) /invoices /reviews /audit /integrations\n`);
 });

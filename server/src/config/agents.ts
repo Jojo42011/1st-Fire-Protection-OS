@@ -34,6 +34,13 @@ export const AGENTS: AgentDef[] = [
     status: 'standalone',
     connectVia: ['servicetrade', 'google_business', 'facebook'],
   },
+  {
+    key: 'audit',
+    name: 'The Operator',
+    role: 'Enterprise audit brain — maps the operation live, finds the leaks, matches the AI builds',
+    status: 'standalone',
+    connectVia: ['anthropic', 'openai'],
+  },
 ];
 
 export function agentByKey(key: string): AgentDef | undefined {

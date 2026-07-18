@@ -1,11 +1,18 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
+import { PILLARS } from '../config/auditor';
+import { COMPANY } from '../config/constants';
 
 /**
  * Idempotent seed — guarded by a system_state flag so every dashboard looks alive on first
  * boot (standalone-until-connected). Safe to call on every boot; only runs once.
  */
 export function seed(): void {
+  // The audit foundation + sample content run on their own flags so existing brains
+  // (already seeded) still pick them up on upgrade.
+  ensureAuditFoundation();
+  seedAudit();
+
   if (getState('seeded') === '1') return;
   const db = getDb();
 
@@ -123,4 +130,93 @@ export function seed(): void {
 
   setState('seeded', '1');
   console.log('[seed] sample data loaded (invoices, jobs, reviews, calls, leads).');
+}
+
+/**
+ * Audit foundation — the structural skeleton (pillars + the 9 real locations).
+ * Runs EVERY boot, idempotent via UNIQUE constraints, so upgraded deployments get it.
+ */
+function ensureAuditFoundation(): void {
+  const db = getDb();
+  const insPillar = db.prepare(
+    `INSERT OR IGNORE INTO audit_pillars (key, name, tagline, sort) VALUES (?, ?, ?, ?)`
+  );
+  PILLARS.forEach((p, i) => insPillar.run(p.key, p.name, p.tagline, i));
+
+  const insLoc = db.prepare(`INSERT OR IGNORE INTO audit_locations (name, role) VALUES (?, ?)`);
+  COMPANY.locations.forEach((name, i) => insLoc.run(name, i === 0 ? 'HQ' : 'branch'));
+}
+
+/**
+ * Audit sample content — pre-loads what we already know about 1st FP (real stack, real
+ * veterans, benchmark leaks) so The Operator walks into the room already understanding
+ * the business. Own flag so existing deployments pick it up.
+ */
+function seedAudit(): void {
+  if (getState('seeded_audit') === '1') return;
+  const db = getDb();
+
+  /* systems we already know they run (from the integration catalog / ops repo) */
+  const systems: [string, string, string, string, string][] = [
+    // name, category, truth_for, gaps, pillar
+    ['ServiceTrade', 'field-service', 'Jobs, inspections, deficiencies, invoices', 'Completions don\'t trigger reviews or collections automatically', 'inspections'],
+    ['Microsoft 365 / Teams', 'comms', 'Email, call transfers, office coordination', 'Call outcomes live in chat threads, not in a system', 'dispatch'],
+    ['Vapi + Twilio (this OS)', 'voice', 'The San Antonio line — AI receptionist', '', 'dispatch'],
+    ['Spreadsheets', 'spreadsheet', 'The real coordination layer between systems', 'Manually re-keyed from ServiceTrade; nine local versions of the truth', 'finance'],
+  ];
+  const insSys = db.prepare(
+    `INSERT INTO audit_systems (name, category, truth_for, gaps, pillar_key) VALUES (?, ?, ?, ?, ?)`
+  );
+  for (const s of systems) insSys.run(...s);
+
+  /* the veterans we already know by name (from the routing brain) */
+  const people: [string, string, string, string, string, string][] = [
+    // name, role, location, carries, risk, pillar
+    ['Daniel Rodriguez', 'Operations Manager', 'San Antonio', 'Every complaint and unclassifiable call routes through him — the escalation brain', 'high', 'people'],
+    ['Kelsey Bovard', 'Inspections Scheduling', 'San Antonio', 'Holds the inspection calendar and AHJ scheduling quirks', 'high', 'inspections'],
+    ['Ronnie Blue', 'Sprinkler Service Manager', 'San Antonio', 'Sprinkler service triage and crew knowledge', 'medium', 'service'],
+    ['Matt Shaner', 'Fire Alarm Service Manager', 'San Antonio', 'Alarm service triage; panel/system history by account', 'medium', 'service'],
+    ['Ed Portillo', 'Vendor Relations', 'San Antonio', 'Supplier relationships and pricing history', 'medium', 'sales'],
+  ];
+  const insPpl = db.prepare(
+    `INSERT INTO audit_people (name, role, location, carries, risk, pillar_key) VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  for (const p of people) insPpl.run(...p);
+
+  /* the heartbeat workflow, traced */
+  db.prepare(
+    `INSERT INTO audit_workflows (name, trigger_desc, stalls, pillar_key) VALUES (?, ?, ?, ?)`
+  ).run(
+    'Inspection → deficiency → repair → cash (the ITM lifecycle)',
+    'NFPA cadence: contract schedules the inspection',
+    'Deficiency-to-quote lag; quote follow-up; invoice-to-payment aging',
+    'inspections'
+  );
+
+  /* benchmark findings pre-loaded so the leak table opens alive */
+  const findings: [string, string, string, string, string, string, string][] = [
+    // pillar, kind, title, detail, severity, cost_hint, capability
+    ['inspections', 'leak', 'Deficiency findings are managed informally, not as a pipeline',
+      'Systematic shops convert 30–50% of deficiencies into paid repairs; informal handling leaves that revenue on the table.',
+      'high', '30–50% of repair revenue', 'deficiency_pipeline'],
+    ['sales', 'leak', 'Repair quotes take days to go out after an inspection',
+      'Quotes sent within 24h convert 2–3× better than week-old quotes. Turnaround is the #1 conversion lever.',
+      'high', '2–3× conversion delta', 'quote_drafter'],
+    ['finance', 'leak', 'Receivables chased by hand, invoices go out late',
+      '~60% of contractor invoices are paid late; manual invoicing adds 15–30 days of DSO.',
+      'high', '15–30 days of DSO', 'invoice_chaser'],
+    ['growth', 'gap', 'Nine locations, no side-by-side view of the same numbers',
+      'Each branch runs its own way; variance is invisible until it becomes a problem. One brain over all nine is the consolidation play.',
+      'medium', '', 'location_command'],
+  ];
+  const insFnd = db.prepare(
+    `INSERT INTO audit_findings (pillar_key, kind, title, detail, severity, cost_hint, capability_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  for (const f of findings) insFnd.run(...f);
+
+  // San Antonio is where the audit starts — HQ is touched by definition.
+  db.prepare(`UPDATE audit_locations SET mapped = 1 WHERE role = 'HQ'`).run();
+
+  setState('seeded_audit', '1');
+  console.log('[seed] audit foundation loaded (pillars, locations, known systems, veterans, benchmark leaks).');
 }

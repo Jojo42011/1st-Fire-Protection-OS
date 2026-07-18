@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Operator · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* ---- capture console (the facilitator's instrument) ---- */
+  .console{background:var(--navy);border-left:3px solid var(--accent);padding:22px 24px;margin-top:20px}
+  .console .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#B9C4CF;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .console .lbl .p{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .console .row{display:flex;gap:8px;flex-wrap:wrap}
+  .console input{flex:1;min-width:260px;background:#fff;border:1px solid transparent;color:var(--text);padding:13px 15px;font-family:var(--font);font-size:14.5px}
+  .console input:focus{outline:none;border-color:var(--accent)}
+  .console select{background:var(--navy-2,#26384f);border:1px solid rgba(255,255,255,.2);color:#fff;padding:0 12px;font-family:var(--mono);font-size:11px}
+  .console .go{background:var(--accent);color:#fff;border:none;padding:0 22px;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+  .console .go:hover{background:var(--accent-2)} .console .go[disabled]{opacity:.5}
+  .console .hint{font-family:var(--mono);font-size:10px;color:#8A9AB0;margin-top:9px}
+
+  /* ---- the operator's live read ---- */
+  .read{border:1px solid var(--line);background:#fff;padding:18px 20px;margin-top:10px;display:none}
+  .read.show{display:block;animation:rise .3s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .read .rhead{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .read .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .chip{font-family:var(--mono);font-size:10.5px;padding:5px 10px;border:1px solid var(--line-2);color:var(--text);background:var(--bg)}
+  .chip.pillar{border-color:var(--accent);color:var(--accent);font-weight:600}
+  .capline{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--bg);border-left:3px solid var(--gold);margin-bottom:8px}
+  .capline .cname{font-weight:800;font-size:13px;white-space:nowrap}
+  .capline .cname .lv{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;color:#fff;background:var(--ok);padding:2px 5px;margin-left:6px;vertical-align:2px}
+  .capline .cp{font-size:13px;color:var(--text);line-height:1.5}
+  .qline{font-size:13.5px;line-height:1.55;padding:7px 0 7px 14px;border-left:2px solid var(--line-2);color:var(--text);margin-bottom:5px}
+  .qline b{color:var(--accent)}
+
+  /* ---- pillar grid ---- */
+  .pillars{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:14px}
+  .pillar{background:#fff;border:1px solid var(--line);padding:16px 16px 14px;cursor:pointer;position:relative;transition:border-color .15s,transform .12s}
+  .pillar:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .pillar h3{font-family:var(--font);font-weight:900;font-size:14.5px;text-transform:uppercase;letter-spacing:.01em}
+  .pillar .tag{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45;min-height:32px}
+  .pillar .meter{height:4px;background:var(--bg);margin-top:10px;position:relative}
+  .pillar .meter i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--accent),var(--gold));transition:width .5s ease}
+  .pillar .stats{display:flex;gap:10px;font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:9px;letter-spacing:.04em}
+  .pillar .caps{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;min-height:0}
+  .pillar .cap{font-family:var(--mono);font-size:9px;letter-spacing:.04em;padding:3px 7px;background:rgba(245,184,27,.14);border:1px solid var(--gold);color:#7a5c00;animation:bloom .4s ease}
+  .pillar .cap.lv{background:rgba(46,158,91,.12);border-color:var(--ok);color:var(--ok)}
+  @keyframes bloom{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+  .pillar .cov{position:absolute;top:14px;right:14px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+
+  /* ---- locations strip ---- */
+  .locs{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+  .loc{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;padding:7px 12px;border:1px solid var(--line-2);background:#fff;color:var(--muted);cursor:pointer;transition:.15s}
+  .loc:hover{border-color:var(--accent)}
+  .loc.mapped{border-color:var(--ok);color:var(--ok);background:rgba(46,158,91,.06)}
+  .loc.hq::after{content:"HQ";font-size:8px;color:var(--gold);margin-left:6px;letter-spacing:.1em}
+
+  /* ---- detail drawer ---- */
+  .drawer{display:none;background:#fff;border:1px solid var(--accent);padding:18px 20px;margin-top:12px}
+  .drawer.show{display:block;animation:rise .25s ease}
+  .drawer h4{font-weight:900;text-transform:uppercase;font-size:15px}
+  .drawer .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:12px}
+  .drawer .col .t{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .drawer .it{font-size:12.5px;line-height:1.5;padding:7px 0;border-bottom:1px solid var(--bg)}
+  .drawer .it b{display:block;font-size:12.5px}
+  .drawer .it span{color:var(--muted);font-size:11.5px}
+
+  /* ---- brief ---- */
+  #brief-panel{display:none;background:#fff;border:1px solid var(--line);padding:24px 28px;margin-top:14px}
+  #brief-panel.show{display:block;animation:rise .3s ease}
+  #brief-md{font-size:13.5px;line-height:1.65}
+  #brief-md h1{font-size:20px;text-transform:uppercase;font-weight:900;margin-bottom:10px}
+  #brief-md h2{font-size:14px;text-transform:uppercase;font-weight:900;margin:18px 0 8px;color:var(--accent)}
+  #brief-md li{margin:0 0 8px 18px}
+  #brief-md strong{font-weight:800}
+  #brief-md em{color:var(--muted)}
+  #brief-md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .risk-high{color:var(--accent);font-weight:700}.risk-medium{color:#b8860b;font-weight:600}.risk-low{color:var(--muted)}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <p class="kicker">Operator Brain · Enterprise Discovery</p>
+      <h1>The Operator</h1>
+      <p>An enterprise operations consultant living inside the OS. Say what you learn in the room — it maps the observation onto the business, finds the leak, cites the benchmark, matches the AI build, and hands you the next question. The map is the audit.</p>
+    </div>
+    <span id="status-badge" class="badge soon"><span class="d"></span>Rules Engine</span>
+  </div>
+
+  <!-- the facilitator's instrument -->
+  <div class="console">
+    <div class="lbl"><span class="p"></span>Live capture — what did they just say?</div>
+    <div class="row">
+      <input id="obs" placeholder='e.g. "Repair quotes wait a week because everything queues behind one estimator"' />
+      <select id="loc-sel"><option value="">All locations</option></select>
+      <button class="go" id="go">Log it</button>
+    </div>
+    <div class="hint">ENTER to log · the operator classifies it, finds the leak, matches the build, and asks the next question</div>
+  </div>
+
+  <!-- the operator's read on the last observation -->
+  <div class="read" id="read">
+    <div class="rhead" id="read-engine">The Operator's read</div>
+    <div class="chips" id="read-chips"></div>
+    <div id="read-caps"></div>
+    <div id="read-qs"></div>
+  </div>
+
+  <div class="grid kpis" id="kpis" style="margin-top:20px"></div>
+
+  <div class="section-title" style="margin-top:22px">The Nine Locations</div>
+  <div class="locs" id="locs"></div>
+
+  <div class="section-title" style="margin-top:22px">The Pillar Map <span style="font-weight:400;color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0">— click a pillar to open it</span></div>
+  <div class="pillars" id="pillars"></div>
+  <div class="drawer" id="drawer"></div>
+
+  <div class="two-col" style="margin-top:24px">
+    <div>
+      <div class="section-title">The Leak Table</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th></th><th>Finding</th><th>Pillar</th><th>→ What we build</th></tr></thead><tbody id="leak-rows"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Single Points of Failure</div>
+      <div id="vets"></div>
+      <div class="section-title" style="margin-top:18px">Ask Next</div>
+      <div id="asknext"></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center;margin-top:26px">
+    <button class="btn primary" id="brief-btn">Generate Executive Brief</button>
+    <button class="btn" id="brief-copy" style="display:none">Copy Markdown</button>
+    <span class="mono" style="font-size:10px;color:var(--muted)" id="brief-note"></span>
+  </div>
+  <div id="brief-panel"><div id="brief-md"></div></div>
+  <div style="height:40px"></div>
+
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
+var STATE=null, BRIEF_RAW='';
+
+function load(){
+  fetch('/api/audit').then(function(r){return r.json();}).then(render);
+}
+function render(d){
+  STATE=d;
+  var b=document.getElementById('status-badge');
+  if(d.brain){b.className='badge live';b.innerHTML='<span class="d"></span>Operator Brain · Live';}
+  else{b.className='badge soon';b.innerHTML='<span class="d"></span>Rules Engine · add LLM key for full brain';}
+
+  var m=d.metrics;
+  document.getElementById('kpis').innerHTML=[
+    kpi('Coverage',m.coverage+'%','of the operation mapped',true),
+    kpi('Leaks Found',m.leaks,'on the leak table',false),
+    kpi('Builds Matched',m.builds,'AI employees identified',false),
+    kpi('Key People',m.veterans,'single points of failure',false),
+    kpi('Locations',m.locationsMapped+'/'+m.locationsTotal,'sites touched',false)
+  ].join('');
+
+  // locations
+  var sel=document.getElementById('loc-sel'),cur=sel.value;
+  sel.innerHTML='<option value="">All locations</option>'+d.locations.map(function(l){return '<option'+(l.name===cur?' selected':'')+'>'+esc(l.name)+'</option>';}).join('');
+  document.getElementById('locs').innerHTML=d.locations.map(function(l){
+    return '<span class="loc'+(l.mapped?' mapped':'')+(l.role==='HQ'?' hq':'')+'" onclick="toggleLoc('+l.id+','+(l.mapped?0:1)+')" title="Click to mark '+(l.mapped?'unmapped':'mapped')+'">'+esc(l.name)+'</span>';
+  }).join('');
+
+  // pillars
+  document.getElementById('pillars').innerHTML=d.pillars.map(function(p){
+    var caps=p.capabilities.map(function(c){return '<span class="cap'+(c.live?' lv':'')+'" title="'+(c.live?'Already live in this OS':'Matched build')+'">'+esc(c.name)+'</span>';}).join('');
+    var st=p.counts;
+    return '<div class="pillar" onclick="openPillar(\''+p.key+'\')">'+
+      '<span class="cov">'+p.coverage+'%</span><h3>'+esc(p.name)+'</h3><div class="tag">'+esc(p.tagline)+'</div>'+
+      '<div class="meter"><i style="width:'+p.coverage+'%"></i></div>'+
+      '<div class="stats"><span>'+st.systems+' sys</span><span>'+st.people+' ppl</span><span>'+st.workflows+' flows</span><span>'+st.findings+' finds</span></div>'+
+      '<div class="caps">'+caps+'</div></div>';
+  }).join('');
+
+  // leak table
+  var sevPill={critical:'red',high:'red',medium:'amber',low:'gray'};
+  document.getElementById('leak-rows').innerHTML=d.findings.filter(function(f){return f.kind!=='strength';}).map(function(f){
+    var pn=(d.pillars.find(function(p){return p.key===f.pillar_key;})||{}).name||f.pillar_key||'—';
+    return '<tr><td><span class="pill '+(sevPill[f.severity]||'amber')+'">'+esc(f.severity)+'</span></td>'+
+      '<td><b style="font-size:12.5px">'+esc(f.title)+'</b>'+(f.detail?'<br><span class="muted" style="font-size:11.5px">'+esc(f.detail)+'</span>':'')+'</td>'+
+      '<td class="mono" style="font-size:10.5px">'+esc(pn)+'</td>'+
+      '<td>'+(f.capability?'<b style="font-size:12px;color:var(--accent)">'+esc(f.capability)+'</b>'+(f.capability_live?' <span class="pill green">live</span>':''):'<span class="muted">—</span>')+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" class="empty">No findings yet — start capturing.</td></tr>';
+
+  // veterans
+  document.getElementById('vets').innerHTML=d.people.map(function(p){
+    return '<div class="draft"><div class="meta"><b>'+esc(p.name)+'</b><span class="risk-'+esc(p.risk)+'">'+esc(p.risk)+' risk</span></div>'+
+      '<div class="body">'+esc(p.role||'')+(p.location?' · '+esc(p.location):'')+'<br><span class="muted">'+esc(p.carries||'')+'</span></div></div>';
+  }).join('')||'<div class="empty">No people mapped yet.</div>';
+
+  // ask-next: pull last analysis questions or defaults
+  var qs=[];
+  try{var last=d.notes&&d.notes[0]?null:null;}catch(e){}
+  var openF=d.findings.filter(function(f){return f.status==='open';});
+  document.getElementById('asknext').innerHTML=(window._lastQs&&window._lastQs.length?window._lastQs:[
+    'How many days from deficiency found to quote sent — and who is it waiting on?',
+    'What number do you wish you saw every morning that you currently get monthly?',
+    'If '+((d.people[0]||{}).name||'your key person')+' left tomorrow, what breaks first?'
+  ]).map(function(q){return '<div class="qline">'+esc(q)+'</div>';}).join('');
+}
+
+/* capture */
+function logObs(){
+  var inp=document.getElementById('obs'),go=document.getElementById('go');
+  var text=inp.value.trim();if(!text)return;
+  go.disabled=true;go.textContent='Reading…';
+  fetch('/api/audit/capture',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({text:text,location:document.getElementById('loc-sel').value||undefined})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    go.disabled=false;go.textContent='Log it';inp.value='';
+    if(!d.ok){alert(d.error||'capture failed');return;}
+    showRead(d.analysis);
+    render(d.state);
+  })
+  .catch(function(){go.disabled=false;go.textContent='Log it';});
+}
+function showRead(a){
+  var r=document.getElementById('read');r.classList.add('show');
+  document.getElementById('read-engine').textContent='The Operator\'s read · '+(a.engine==='operator-llm'?'full brain':'rules engine');
+  var chips=a.pillars.map(function(p){
+    var pd=(STATE.pillars.find(function(x){return x.key===p;})||{});
+    return '<span class="chip pillar">'+esc(pd.name||p)+'</span>';
+  });
+  (a.systems||[]).forEach(function(s){chips.push('<span class="chip">⚙ '+esc(s.name)+'</span>');});
+  (a.people||[]).forEach(function(p){chips.push('<span class="chip">👤 '+esc(p.name)+'</span>');});
+  (a.findings||[]).forEach(function(f){chips.push('<span class="chip">'+esc(f.kind||'leak')+': '+esc(f.severity||'medium')+'</span>');});
+  document.getElementById('read-chips').innerHTML=chips.join('');
+  document.getElementById('read-caps').innerHTML=(a.capabilities||[]).map(function(c){
+    var cat=(STATE.catalog.find(function(x){return x.id===c.id;})||{});
+    return '<div class="capline"><span class="cname">WE BUILD: '+esc(cat.name||c.id)+(cat.live?'<span class="lv">LIVE IN THIS OS</span>':'')+'</span><span class="cp">'+esc(c.pitch||cat.what||'')+'</span></div>';
+  }).join('');
+  window._lastQs=(a.questions||[]);
+  document.getElementById('read-qs').innerHTML=(a.questions||[]).map(function(q){
+    return '<div class="qline"><b>Ask:</b> '+esc(q)+'</div>';
+  }).join('');
+}
+document.getElementById('go').onclick=logObs;
+document.getElementById('obs').addEventListener('keydown',function(e){if(e.key==='Enter')logObs();});
+
+/* pillar drawer */
+function openPillar(key){
+  var d=STATE;if(!d)return;
+  var p=d.pillars.find(function(x){return x.key===key;});
+  var drawer=document.getElementById('drawer');
+  if(drawer.getAttribute('data-key')===key&&drawer.classList.contains('show')){drawer.classList.remove('show');return;}
+  drawer.setAttribute('data-key',key);
+  var sys=d.systems.filter(function(s){return s.pillar_key===key;});
+  var ppl=d.people.filter(function(s){return s.pillar_key===key;});
+  var wf=d.workflows.filter(function(s){return s.pillar_key===key;});
+  var fnd=d.findings.filter(function(s){return s.pillar_key===key;});
+  function col(t,items,fn){return '<div class="col"><div class="t">'+t+' ('+items.length+')</div>'+(items.map(fn).join('')||'<div class="it"><span>none mapped yet</span></div>')+'</div>';}
+  drawer.innerHTML='<h4>'+esc(p.name)+' · '+p.coverage+'% mapped</h4><div class="cols">'+
+    col('Systems',sys,function(s){return '<div class="it"><b>'+esc(s.name)+'</b><span>'+esc(s.gaps||s.truth_for||s.category||'')+'</span></div>';})+
+    col('People',ppl,function(s){return '<div class="it"><b>'+esc(s.name)+' · <span class="risk-'+esc(s.risk)+'">'+esc(s.risk)+'</span></b><span>'+esc(s.carries||s.role||'')+'</span></div>';})+
+    col('Workflows',wf,function(s){return '<div class="it"><b>'+esc(s.name)+'</b><span>'+esc(s.stalls?'stalls: '+s.stalls:s.trigger_desc||'')+'</span></div>';})+
+    col('Findings',fnd,function(s){return '<div class="it"><b>'+esc(s.title)+'</b><span>'+esc(s.detail||'')+'</span></div>';})+
+    '</div>';
+  drawer.classList.add('show');
+  drawer.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function toggleLoc(id,mapped){
+  fetch('/api/audit/locations/'+id+'/mapped',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mapped:!!mapped})})
+    .then(function(){load();});
+}
+
+/* executive brief */
+document.getElementById('brief-btn').onclick=function(){
+  var btn=this;btn.disabled=true;btn.textContent='Assembling…';
+  fetch('/api/audit/brief',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false;btn.textContent='Generate Executive Brief';
+    if(!d.ok){alert(d.error||'failed');return;}
+    BRIEF_RAW=d.markdown;
+    document.getElementById('brief-md').innerHTML=mdToHtml(d.markdown);
+    document.getElementById('brief-panel').classList.add('show');
+    document.getElementById('brief-copy').style.display='';
+    document.getElementById('brief-note').textContent=d.engine==='operator-llm'?'polished by the operator brain':'assembled by the rules engine';
+    document.getElementById('brief-panel').scrollIntoView({behavior:'smooth',block:'start'});
+  }).catch(function(){btn.disabled=false;btn.textContent='Generate Executive Brief';});
+};
+document.getElementById('brief-copy').onclick=function(){
+  navigator.clipboard&&navigator.clipboard.writeText(BRIEF_RAW);this.textContent='Copied ✓';var b=this;setTimeout(function(){b.textContent='Copy Markdown';},1600);
+};
+/* minimal markdown → html (headings, bold, italics, lists, hr) */
+function mdToHtml(md){
+  var html=esc(md);
+  html=html.replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
+  html=html.replace(/^---$/gm,'<hr>');
+  html=html.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>').replace(/_([^_]+)_/g,'<em>$1</em>');
+  html=html.replace(/^\d+\. (.*)$/gm,'<li>$1</li>').replace(/^- (.*)$/gm,'<li>$1</li>');
+  return html.split(/\n{2,}/).map(function(b){return b.indexOf('<h')===0||b.indexOf('<hr')===0?b:'<p>'+b.replace(/\n/g,'<br>')+'</p>';}).join('');
+}
+load();
+</script>
+</body>
+</html>

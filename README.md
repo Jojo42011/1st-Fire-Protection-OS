@@ -12,13 +12,14 @@ uniform*, off-white `#F5F7F9` blueprint is *the paper*, gold `#F5B81B` is *the b
 (900 uppercase, stamped-sign headings) + JetBrains Mono for technical detail. Real brand kit
 lives in `client/brand/` (tokens + fonts); the app themes off it.
 
-## The three employees
+## The four employees
 
 | Agent | Tab | Status | Job |
 |---|---|---|---|
 | **Call Receptionist** | `calls` (home) | connecting soon | Answers the San Antonio line (210-377-FIRE) 24/7, classifies the call, and routes it into Teams — inspections, sprinkler/alarm service, extinguishers, billing, sales, or a named person. Complaints → Daniel Rodriguez; Mario Salinas → voicemail; Spanish callers helped in Spanish; emergencies → after-hours queue. |
 | **Invoice Collector** | `invoices` | standalone | Chases ServiceTrade receivables, drafts friendly→firm reminders, tracks aging. |
 | **Review Collector** | `reviews` | standalone | Turns completed jobs into Google/Facebook reviews, drafts on-brand replies, tracks reputation. |
+| **The Operator** | `audit` | standalone | An enterprise operations consultant living in the OS. Runs the live discovery audit: log what the CEO says → it classifies the observation onto the 8 operational pillars, finds the leak (benchmark-cited: 30–50% deficiency conversion, 24h-quote 2–3× lever, 15–30 days DSO), matches it to a buildable AI capability that blooms on the pillar map, and hands back the next consultant question. Tracks all 9 locations, the veteran/SPOF map, and assembles the executive brief on demand. Full rules-engine fallback — the keyless demo still lands. |
 
 Two are **standalone** — they demo on seeded sample data today. The **Call Receptionist** is
 **built and one API key away from live**: it mirrors the real San Antonio routing brain

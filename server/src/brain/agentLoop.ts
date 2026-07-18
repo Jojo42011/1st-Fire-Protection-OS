@@ -28,6 +28,8 @@ function degradedReply(userText: string): string {
     return 'The Review Collector is up on sample data — I can open it. (Add an LLM key for live drafting.)';
   if (t.includes('call') || t.includes('lead'))
     return "The Call Receptionist is built and connecting soon — it'll answer calls and capture leads once a voice key is added.";
+  if (t.includes('audit') || t.includes('operator'))
+    return 'The Operator is ready — open the Audit tab and it will map the operation live: pillars, leaks, veterans, and the AI builds that fix them.';
   return `Hi, this is the front desk for ${COMPANY.name}. I'm running in offline mode — add an OpenAI or Anthropic key to enable full conversation. I can still open any dashboard tab for you.`;
 }
 
