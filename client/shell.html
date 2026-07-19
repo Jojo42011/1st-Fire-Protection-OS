@@ -111,26 +111,70 @@
     </div>
   </div>
 <script>
-/* ---- 1st FP TABS ---- */
-var TABS = [
-  { key:"audit",     label:"The Operator",      sub:"The brain · always on", src:"/audit", home:true,
+/* ---- 1st FP TABS ----
+   Two layers. CONTROL = the top-level agents that manage the company (the Operator finds
+   the gaps, the Harness builds/strengthens the agents, the Roster is the team). DEPARTMENTS
+   = the sub-agents, grouped by the department they serve, built dynamically from the
+   roster so a newly-shipped agent shows up under its department automatically. SYSTEM =
+   the integrations. Founding agents keep their rich dedicated pages; harness-built agents
+   open a generic console (/agent?key=). */
+var CONTROL_TABS = [
+  { key:"audit",     label:"The Operator",  sub:"Finds the gaps",   src:"/audit", home:true, sep:"Command",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>' },
-  { key:"harness",   label:"The Harness",       sub:"Builds the gaps",  src:"/harness",
+  { key:"harness",   label:"The Harness",   sub:"Builds the agents", src:"/harness",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2z"/><path d="M18 14l3 3M14 18l3 3"/></svg>' },
-  { key:"roster",    label:"The Roster",        sub:"The whole team",   src:"/roster",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M15.5 20a4.5 4.5 0 0 1 6-4.2"/></svg>' },
-  { key:"calls",     label:"Receptionist",     sub:"Live · 24/7",      src:"/calls", sep:"Agents",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 11.6a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg>' },
-  { key:"invoices",  label:"Invoice Collector", sub:"Receivables",     src:"/invoices",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>' },
-  { key:"reviews",   label:"Review Collector",  sub:"Reputation",      src:"/reviews",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg>' },
-  { key:"integrations", label:"Integrations",   sub:"The hands",       src:"/integrations", sep:"System",
+  { key:"roster",    label:"The Roster",    sub:"The whole team",   src:"/roster",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M15.5 20a4.5 4.5 0 0 1 6-4.2"/></svg>' }
+];
+var SYSTEM_TABS = [
+  { key:"integrations", label:"Integrations", sub:"The hands", src:"/integrations", sep:"System",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' }
 ];
+/* Founding agents keep their dedicated pages; everyone else opens the generic console. */
+var FOUNDING_PAGES = { calls:"/calls", invoices:"/invoices", reviews:"/reviews" };
+/* Department display order (Devon's org): the rest fall in after, by roster order. */
+var DEPT_ORDER = ["growth","inspections","service","sales","projects","reception","finance","hr","ops","vendors"];
+var AGENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>';
 var NAV_MESSAGE_TYPE = "app-navigate";
 var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>';
-(function(){ "use strict";
+
+/* Build the department tabs from the live roster, grouped + ordered by department. The
+   Operator (audit) is control, not a department worker, so it is skipped here. */
+function departmentTabs(agents){
+  var groups = {}, order = [];
+  agents.forEach(function(a){
+    if(a.key==="audit") return;
+    var pk = a.pillar_key || "ops", pname = a.pillar || pk;
+    if(!groups[pk]){ groups[pk] = { name:pname, items:[] }; order.push(pk); }
+    groups[pk].items.push(a);
+  });
+  order.sort(function(x,y){
+    var ix=DEPT_ORDER.indexOf(x), iy=DEPT_ORDER.indexOf(y);
+    return (ix<0?99:ix) - (iy<0?99:iy);
+  });
+  var tabs = [];
+  order.forEach(function(pk){
+    var g = groups[pk];
+    g.items.forEach(function(a,i){
+      tabs.push({
+        key:a.key, label:a.name, sub:a.role||"",
+        src: FOUNDING_PAGES[a.key] || ("/agent?key=" + encodeURIComponent(a.key)),
+        sep: i===0 ? g.name : undefined,
+        icon: AGENT_ICON
+      });
+    });
+  });
+  return tabs;
+}
+
+function bootShell(agents){
+  var TABS = CONTROL_TABS.concat(departmentTabs(agents||[]), SYSTEM_TABS);
+  initShell(TABS);
+}
+/* Fetch the roster, then build the nav. If it fails, the control + system tabs still work. */
+fetch("/api/roster").then(function(r){return r.json();}).then(function(d){ bootShell((d&&d.agents)||[]); }).catch(function(){ bootShell([]); });
+
+function initShell(TABS){ "use strict";
   var byKey={}; TABS.forEach(function(t){byKey[t.key]=t;});
   var home=(TABS.find(function(t){return t.home;})||TABS[0]).key, current=home;
   var nav=document.getElementById("nav"),frames=document.getElementById("frames"),dock=document.getElementById("dock"),toastEl=document.getElementById("toast"),shell=document.getElementById("shell"),backdrop=document.getElementById("backdrop");
@@ -182,10 +226,15 @@ var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
   nav.addEventListener("click",function(e){var it=e.target.closest(".nav-item");if(it)activate(it.getAttribute("data-key"));});
   backdrop.addEventListener("click",function(){setCollapsed(true);});
   if(dock)dock.addEventListener("click",function(){activate(home);});
-  window.addEventListener("message",function(e){var d=e.data||{};if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}});
+  window.addEventListener("message",function(e){var d=e.data||{};
+    if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}
+    /* a new agent shipped (or one got strengthened) rebuilds the left pane so it shows up
+       under its department, keeping the tab the user is on. */
+    if(d.type==="roster-changed"){ location.replace(location.pathname+"?tab="+encodeURIComponent(current)); }
+  });
   var q=new URLSearchParams(location.search).get("tab");if(q&&byKey[q])activate(q);
   window.AppShell={open:function(k){activate(k,true);},collapse:setCollapsed,tabs:TABS};
-})();
+}
 </script>
 </body>
 </html>

@@ -67,6 +67,7 @@ app.get('/reviews', page('reviews.html'));
 app.get('/audit', page('audit.html'));
 app.get('/harness', page('harness.html'));
 app.get('/roster', page('roster.html'));
+app.get('/agent', page('agent.html'));
 app.get('/integrations', page('integrations.html'));
 
 // static assets (theme.css etc.)

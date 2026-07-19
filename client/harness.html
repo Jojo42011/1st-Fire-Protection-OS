@@ -193,7 +193,8 @@ document.addEventListener('click',async function(e){
   var b=e.target.closest('[data-ship]');if(!b)return;
   b.disabled=true;b.textContent='Shipping…';
   var r=await post('/api/harness/orders/'+b.getAttribute('data-ship')+'/ship');
-  if(r&&r.ok){toast(r.result?esc(r.result.charAt(0).toUpperCase()+r.result.slice(1))+'.':'Shipped.');render(r.state);}
+  if(r&&r.ok){toast(r.result?esc(r.result.charAt(0).toUpperCase()+r.result.slice(1))+'.':'Shipped.');render(r.state);
+    try{window.parent.postMessage({type:'roster-changed'},'*');}catch(_){/* standalone */}}
 });
 
 get('/api/harness').then(render);

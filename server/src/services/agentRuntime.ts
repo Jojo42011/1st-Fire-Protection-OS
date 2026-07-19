@@ -67,6 +67,7 @@ export function listAgents(): any[] {
       key: r.key,
       name: r.name,
       role: r.role,
+      pillar_key: r.pillar_key,
       pillar: r.pillar_key ? pillarByKey(r.pillar_key)?.name || r.pillar_key : null,
       capability_id: r.capability_id,
       origin: r.origin, // founding | harness
