@@ -4,6 +4,7 @@ import { activeProvider } from '../config/models';
 import { OPERATOR_SYSTEM_PROMPT, PILLARS, pillarByKey } from '../config/auditor';
 import { CAPABILITIES, capabilityById } from '../config/capabilities';
 import { COMPANY } from '../config/constants';
+import { rememberFact, rememberEpisode } from '../db/memory';
 
 /**
  * THE OPERATOR — audit engine.
@@ -211,10 +212,41 @@ async function llmAnalysis(text: string, location?: string, department?: string)
 
 /* ─────────────────────── capture + persist ─────────────────────── */
 
+/** Persist follow-up questions one depth level down, deduped per pillar. Returns how many were new. */
+function persistFollowups(questions: string[], pillar: string, depth: number): number {
+  const db = getDb();
+  const ins = db.prepare(
+    `INSERT INTO audit_questions (question, pillar_key, depth_level, status) VALUES (?, ?, ?, 'open')`
+  );
+  let inserted = 0;
+  for (const q of questions) {
+    if (!q || !q.trim()) continue;
+    const dup = db
+      .prepare(`SELECT id FROM audit_questions WHERE lower(question) = lower(?) AND pillar_key = ?`)
+      .get(q, pillar);
+    if (!dup) {
+      ins.run(q, pillar, depth);
+      inserted++;
+    }
+  }
+  return inserted;
+}
+
+/** Consultant drill-down lenses — the keyless brain still deepens the interview by
+ *  rotating these when it has no LLM to generate a sharper, novel follow-up. */
+const DRILL_LENSES = [
+  'Put a number on that: how many, how long, or how much per month?',
+  'Where exactly does that stall, and who owns the step?',
+  'If the person who handles that left tomorrow, what breaks first?',
+  'How does that differ from one location to the next today?',
+  'What would it be worth to fix that in the next 90 days?',
+];
+
 export async function capture(
   text: string,
   location?: string,
-  department?: string
+  department?: string,
+  questionId?: number
 ): Promise<Analysis & { noteId: number }> {
   const analysis =
     (activeProvider() !== 'none' ? await llmAnalysis(text, location, department) : null) ||
@@ -280,7 +312,53 @@ export async function capture(
   // mark the location as touched
   if (location) db.prepare(`UPDATE audit_locations SET mapped = 1 WHERE name = ?`).run(location);
 
+  // ── deepen the interview ladder ──
+  // If this answered a specific question, close it and record the answer.
+  let answeredDepth = 0;
+  if (questionId) {
+    const qrow = db.prepare(`SELECT depth_level FROM audit_questions WHERE id = ?`).get(questionId) as
+      | { depth_level: number }
+      | undefined;
+    if (qrow) {
+      db.prepare(
+        `UPDATE audit_questions SET status = 'answered', answer = ?, source_note_id = ?, answered_at = datetime('now') WHERE id = ?`
+      ).run(text, noteId, questionId);
+      answeredDepth = qrow.depth_level;
+    }
+  }
+  // Persist the operator's sharper follow-ups one level deeper (durable, resumable).
+  const followPillar = analysis.pillars[0] || department || 'ops';
+  const newQs = persistFollowups(analysis.questions, followPillar, answeredDepth + 1);
+  // If this answered a question and the brain produced no genuinely new follow-up
+  // (the keyless rules engine recycles the deck), synthesize a deeper consultant
+  // probe so the ladder still advances one level.
+  if (questionId && newQs === 0) {
+    persistFollowups([DRILL_LENSES[answeredDepth % DRILL_LENSES.length]], followPillar, answeredDepth + 1);
+  }
+
+  // ── write into the hull's shared memory so EVERY agent gets smarter ──
+  try {
+    const pillarName = pillarByKey(followPillar)?.name || followPillar;
+    await rememberFact(COMPANY.name, `operator noted (${pillarName})`, text.slice(0, 220), 0.6);
+    rememberEpisode('operator', `Audit: ${analysis.findings[0]?.title || text.slice(0, 80)}`, text, 0.6);
+  } catch {
+    /* memory is best-effort; never block the capture */
+  }
+
+  // ── daily "getting smarter" log ──
+  const today = new Date().toISOString().slice(0, 10);
+  db.prepare(
+    `INSERT INTO audit_days (day, facts_learned, coverage_pct) VALUES (?, 1, 0)
+     ON CONFLICT(day) DO UPDATE SET facts_learned = facts_learned + 1`
+  ).run(today);
+
   return { ...analysis, noteId };
+}
+
+/** Approve a proposed build — the human gate that turns a gap into a work order. */
+export function approveGap(id: number): { ok: boolean } {
+  getDb().prepare(`UPDATE audit_findings SET queue_status = 'approved', status = 'building' WHERE id = ?`).run(id);
+  return { ok: true };
 }
 
 /* ─────────────────────── state rollup ─────────────────────── */
@@ -295,6 +373,9 @@ export function auditState() {
     .all() as any[];
   const notes = db.prepare(`SELECT id, text, location, created_at FROM audit_notes ORDER BY id DESC LIMIT 12`).all();
   const locations = db.prepare(`SELECT * FROM audit_locations ORDER BY id`).all() as any[];
+  const questions = db
+    .prepare(`SELECT id, question, pillar_key, depth_level, status FROM audit_questions`)
+    .all() as any[];
 
   const pillars = PILLARS.map((p) => {
     const sys = systems.filter((s) => s.pillar_key === p.key).length;
@@ -302,12 +383,20 @@ export function auditState() {
     const wf = workflows.filter((s) => s.pillar_key === p.key).length;
     const fnd = findings.filter((s) => s.pillar_key === p.key);
     const capIds = Array.from(new Set(fnd.map((f) => f.capability_id).filter(Boolean))) as string[];
-    // coverage: how mapped is this pillar (entities + evidence, capped)
-    const coverage = Math.min(100, sys * 18 + ppl * 15 + wf * 22 + fnd.length * 12);
+    const answered = questions.filter((q) => q.pillar_key === p.key && q.status === 'answered').length;
+    const openQuestions = questions
+      .filter((q) => q.pillar_key === p.key && q.status === 'open')
+      .sort((a, b) => a.depth_level - b.depth_level || a.id - b.id)
+      .slice(0, 8)
+      .map((q) => ({ id: q.id, question: q.question, depth: q.depth_level }));
+    // coverage: how mapped is this pillar (entities + evidence + interview depth, capped)
+    const coverage = Math.min(100, sys * 18 + ppl * 15 + wf * 22 + fnd.length * 12 + answered * 8);
     return {
       ...p,
       counts: { systems: sys, people: ppl, workflows: wf, findings: fnd.length },
       coverage,
+      answered,
+      openQuestions,
       capabilities: capIds.map((id) => {
         const c = capabilityById(id)!;
         return { id, name: c.name, live: !!c.live };
@@ -315,10 +404,44 @@ export function auditState() {
     };
   });
 
+  // ── the gap feed / build queue: matched findings are proposed builds ──
+  const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const gapFeed = findings
+    .filter((f) => f.capability_id && capabilityById(f.capability_id))
+    .map((f) => {
+      const c = capabilityById(f.capability_id)!;
+      return {
+        id: f.id,
+        pillar_key: f.pillar_key,
+        pillar: pillarByKey(f.pillar_key)?.name || f.pillar_key,
+        title: f.title,
+        detail: f.detail,
+        severity: f.severity,
+        build: c.name,
+        build_id: c.id,
+        build_type: c.live ? 'UPGRADE' : 'NEW',
+        value: f.value_line || f.cost_hint || '',
+        queue_status: f.queue_status || 'proposed',
+      };
+    })
+    .sort((a, b) => {
+      const qa = a.queue_status === 'proposed' ? 0 : 1;
+      const qb = b.queue_status === 'proposed' ? 0 : 1;
+      return qa - qb || (sevRank[a.severity] ?? 2) - (sevRank[b.severity] ?? 2);
+    });
+
+  const days = db.prepare(`SELECT day, facts_learned, coverage_pct FROM audit_days ORDER BY day`).all() as any[];
+  const questionsAnswered = questions.filter((q) => q.status === 'answered').length;
+  const buildsApproved = findings.filter((f) => ['approved', 'building', 'shipped'].includes(f.queue_status)).length;
+
   const mappedLocations = locations.filter((l) => l.mapped).length;
   const openLeaks = findings.filter((f) => f.kind !== 'strength').length;
   const matchedBuilds = new Set(findings.map((f) => f.capability_id).filter(Boolean)).size;
   const coverageAvg = Math.round(pillars.reduce((a, p) => a + p.coverage, 0) / pillars.length);
+
+  // keep today's "getting smarter" trend point current with live coverage
+  const todayKey = new Date().toISOString().slice(0, 10);
+  db.prepare(`UPDATE audit_days SET coverage_pct = ? WHERE day = ?`).run(coverageAvg, todayKey);
 
   return {
     brain: activeProvider() !== 'none',
@@ -330,7 +453,11 @@ export function auditState() {
       veterans: people.filter((p) => p.risk === 'high').length,
       locationsMapped: mappedLocations,
       locationsTotal: locations.length,
+      questionsAnswered,
+      buildsApproved,
     },
+    gapFeed,
+    days,
     pillars,
     locations,
     systems,

@@ -75,6 +75,22 @@
   .leak-detail.show{display:block;animation:rise .3s ease}
   .more{background:transparent;border:none;color:var(--ink-3);font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;padding:16px 6px}
   .more:hover{color:var(--ink-2)}
+
+  /* the build queue (gap feed) */
+  .gap{display:flex;align-items:center;gap:14px;padding:15px 6px;border-bottom:1px solid var(--hair)}
+  .gap .gt{font-family:var(--mono);font-size:9px;letter-spacing:.14em;padding:4px 8px;border:1px solid var(--hair-2);color:var(--ink-2);flex:none}
+  .gap .gt.NEW{color:var(--gold);border-color:rgba(245,184,27,.4)}
+  .gap .gt.UPGRADE{color:var(--ok);border-color:rgba(46,158,91,.4)}
+  .gap .t{flex:1;font-size:14px;color:var(--ink);min-width:0;line-height:1.4}
+  .gap .t small{color:var(--ink-3);font-size:12px}
+  .gap .approve{background:transparent;border:1px solid var(--hair-2);color:var(--ink);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:9px 16px;cursor:pointer;flex:none;transition:.15s}
+  .gap .approve:hover{border-color:var(--ok);background:rgba(46,158,91,.1);color:#fff}
+  .gap .qs{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ok);flex:none;display:flex;align-items:center;gap:7px}
+  .gap .qs::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px rgba(46,158,91,.5)}
+  /* getting-smarter trend */
+  .trend-bars{display:flex;align-items:flex-end;gap:6px;height:64px;padding:6px}
+  .trend-bars .tb{flex:1;max-width:30px;background:linear-gradient(180deg,var(--red),rgba(229,57,53,.22));min-height:3px}
+  .trend-note{font-family:var(--mono);font-size:10px;color:var(--ink-3);padding:8px 6px 0}
   .foot-act{margin-top:70px;display:flex;justify-content:center}
   .ghost{background:transparent;border:1px solid var(--hair-2);color:var(--ink);font-family:var(--sans);font-weight:700;
     font-size:12px;letter-spacing:.18em;text-transform:uppercase;padding:16px 40px;cursor:pointer;transition:.2s}
@@ -174,6 +190,18 @@
       <button class="more" id="more" style="display:none">Show all</button>
     </section>
 
+    <!-- THE BUILD QUEUE — the Operator proposes; a human approves; it becomes a work order -->
+    <section class="sec" id="queue-sec">
+      <div class="sec-head"><span class="micro">The build queue</span><span class="micro" id="queue-note" style="color:var(--ink-3)"></span></div>
+      <div id="queue"></div>
+    </section>
+
+    <!-- GETTING SMARTER — the longer it runs, the more of the company lives inside it -->
+    <section class="sec" id="trend-sec" style="display:none">
+      <div class="sec-head"><span class="micro">Getting smarter</span></div>
+      <div id="trend"></div>
+    </section>
+
     <div class="foot-act"><button class="ghost" id="brief-btn">Executive Brief</button></div>
   </div>
 
@@ -240,9 +268,9 @@
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 var STATE=null,BRIEF_RAW='',SHOW_ALL=false;
 var CUR=null;        // current department key
-var DECK=[],QI=0;    // question deck + index
-var ANSWERED={};     // per-dept answered count
-var ACTIVATED={};    // per-dept Set of activated agent indices
+var DECK=[],QI=0;    // the department's OPEN questions (from persisted state) + index
+// The interview, coverage, and assembly are all derived from persisted server state now,
+// so the audit RESUMES and DEEPENS across sessions instead of living in browser memory.
 
 /* ───────── data ───────── */
 function load(){return fetch('/api/audit').then(function(r){return r.json();}).then(function(d){STATE=d;renderHome();if(CUR)renderAssembly();return d;});}
@@ -315,10 +343,50 @@ function renderHome(){
   renderWheel();
   var m=d.metrics;
   document.getElementById('strip').innerHTML=[
-    ['Leaks found',m.leaks,''],['Builds matched',m.builds,''],['Key people',m.veterans,''],
+    ['Leaks found',m.leaks,''],['Builds queued',m.buildsApproved||0,''],['Answered',m.questionsAnswered||0,''],
     ['Sites',m.locationsMapped,'/'+m.locationsTotal]
   ].map(function(x){return '<div class="t"><span class="micro">'+x[0]+'</span><div class="v">'+x[1]+'<small>'+x[2]+'</small></div></div>';}).join('');
   renderLeaks();
+  renderQueue();
+  renderTrend();
+}
+/* ── the build queue: the Operator's proposed builds, human-approved into work orders ── */
+function renderQueue(){
+  var feed=(STATE.gapFeed||[]);
+  var note=document.getElementById('queue-note');
+  var proposed=feed.filter(function(g){return g.queue_status==='proposed';}).length;
+  note.textContent=feed.length?(proposed+' proposed · '+(feed.length-proposed)+' approved'):'';
+  document.getElementById('queue').innerHTML = feed.length ? feed.map(function(g){
+    var approved=g.queue_status!=='proposed';
+    return '<div class="gap">'+
+      '<span class="gt '+esc(g.build_type)+'">'+esc(g.build_type)+'</span>'+
+      '<span class="t">'+esc(g.build)+' <small>'+esc(g.pillar)+(g.value?' · '+esc(g.value):'')+'</small></span>'+
+      (approved?'<span class="qs">In build queue</span>'
+               :'<button class="approve" data-gid="'+g.id+'">Approve ›</button>')+
+      '</div>';
+  }).join('') : '<div style="color:var(--ink-3);font-size:13px;padding:14px 6px">No proposed builds yet — answer the Operator\'s questions and it will surface the gaps worth building.</div>';
+  document.querySelectorAll('#queue .approve').forEach(function(b){
+    b.addEventListener('click',function(){
+      var id=b.getAttribute('data-gid');b.disabled=true;b.textContent='…';
+      fetch('/api/audit/findings/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();})
+        .then(function(d){if(d&&d.ok){STATE=d.state;renderHome();}});
+    });
+  });
+}
+/* ── getting smarter: the daily coverage trend ── */
+function renderTrend(){
+  var days=(STATE.days||[]);
+  var sec=document.getElementById('trend-sec');
+  if(!days.length){sec.style.display='none';return;}
+  sec.style.display='';
+  var max=Math.max(100,Math.max.apply(null,days.map(function(d){return d.coverage_pct||0;})));
+  var bars=days.slice(-30).map(function(d){
+    var h=Math.max(3,Math.round((d.coverage_pct||0)/max*100));
+    return '<div class="tb" style="height:'+h+'%"><title>'+esc(d.day)+': '+(d.coverage_pct||0)+'%</title></div>';
+  }).join('');
+  var latest=days[days.length-1];
+  document.getElementById('trend').innerHTML='<div class="trend-bars">'+bars+'</div>'+
+    '<div class="trend-note">'+days.length+' day'+(days.length>1?'s':'')+' of learning · '+(latest.coverage_pct||0)+'% of the company mapped and climbing</div>';
 }
 function renderLeaks(){
   var rows=STATE.findings.filter(function(f){return f.kind!=='strength';});
@@ -339,12 +407,19 @@ document.getElementById('more').onclick=function(){SHOW_ALL=!SHOW_ALL;renderLeak
 
 /* ───────── department view ───────── */
 function dep(){return STATE.departments.find(function(x){return x.key===CUR;});}
+function pillarOf(key){return STATE.pillars.find(function(x){return x.key===key;})||{coverage:0,answered:0,openQuestions:[],capabilities:[]};}
+/* Build the visible deck from the SERVER's open questions for this pillar (persisted +
+   deepening), matching chips from the static deck where the text lines up. */
+function loadDeck(){
+  var p=pillarOf(CUR),d=dep(),chipsByQ={};
+  (d.questions||[]).forEach(function(q){chipsByQ[q.q]=q.chips||[];});
+  DECK=(p.openQuestions||[]).map(function(q){return {id:q.id,q:q.question,depth:q.depth||0,chips:chipsByQ[q.question]||[]};});
+  QI=0;
+}
 function openDept(key){
   CUR=key;
   var d=dep();if(!d)return;
-  if(!ACTIVATED[key])ACTIVATED[key]=[];
-  if(!ANSWERED[key])ANSWERED[key]=0;
-  DECK=d.questions.slice();QI=Math.min(ANSWERED[key],DECK.length-1);
+  loadDeck();
   document.getElementById('home').style.display='none';
   var dv=document.getElementById('dept');dv.style.display='block';dv.classList.remove('fadein');void dv.offsetWidth;dv.classList.add('fadein');
   document.getElementById('top-sub').textContent='Audit · '+d.name;
@@ -364,15 +439,15 @@ function goHome(){
   load();
 }
 function renderQuestion(){
-  var d=dep(),qc=document.getElementById('q-count');
+  var qc=document.getElementById('q-count'),p=pillarOf(CUR);
   if(QI>=DECK.length){
-    qc.textContent='Consult complete — '+ANSWERED[CUR]+' answered';
-    document.getElementById('q-text').textContent='Department mapped. Anything else he said worth logging?';
+    qc.textContent='Consult saved · '+(p.answered||0)+' answered';
+    document.getElementById('q-text').textContent='This department is mapped for now. Anything else he said worth logging?';
     document.getElementById('q-chips').innerHTML='';
     return;
   }
   var q=DECK[QI];
-  qc.textContent='The consult · '+(QI+1)+' of '+DECK.length;
+  qc.textContent='The consult · '+((p.answered||0)+1)+(q.depth?' · depth '+q.depth:'');
   document.getElementById('q-text').textContent=q.q;
   document.getElementById('q-chips').innerHTML=(q.chips||[]).map(function(c){
     return '<button class="chip">'+esc(c)+'</button>';
@@ -384,28 +459,18 @@ function renderQuestion(){
 function sendAnswer(){
   var inp=document.getElementById('ans'),text=inp.value.trim();
   if(!text)return;
-  var q=QI<DECK.length?DECK[QI].q:'(open note)';
-  var payload=q==='(open note)'?text:q+' — '+text;
+  var cq=QI<DECK.length?DECK[QI]:null;
+  var payload=cq?(cq.q+' — '+text):text;
   inp.value='';
-  // log it
   var log=document.getElementById('qlog');
-  log.insertAdjacentHTML('afterbegin','<div class="item"><b>'+esc(text)+'</b>'+esc(q!=='(open note)'?q:'')+'</div>');
-  ANSWERED[CUR]++;QI++;
-  activateNext();
-  renderQuestion();
+  log.insertAdjacentHTML('afterbegin','<div class="item"><b>'+esc(text)+'</b>'+esc(cq?cq.q:'(open note)')+'</div>');
   fetch('/api/audit/capture',{method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({text:payload,department:CUR})})
+    body:JSON.stringify({text:payload,department:CUR,questionId:cq?cq.id:undefined})})
   .then(function(r){return r.json();})
   .then(function(d){
     if(!d.ok)return;
-    STATE=d.state;
-    // adaptive follow-up from the operator slots in next
-    var qs=(d.analysis.questions||[]).filter(function(x){
-      return !DECK.some(function(dq){return dq.q===x;});
-    });
-    if(qs.length&&QI<=DECK.length)DECK.splice(QI,0,{q:qs[0],chips:[]});
-    // matched capabilities light their agents
-    (d.analysis.capabilities||[]).forEach(function(c){activateByCapability(c.id);});
+    STATE=d.state;           // persisted: answer stored, follow-up queued one level deeper
+    loadDeck();              // pull the refreshed open questions (the ladder advanced)
     renderQuestion();
     renderAssembly();
   });
@@ -427,25 +492,24 @@ document.getElementById('mic').onclick=function(){
   rec.start();
 };
 
-/* activation model: each answer assembles one more agent; capability matches jump theirs on */
-function activateNext(){
-  var d=dep(),act=ACTIVATED[CUR];
-  for(var i=0;i<d.agents.length;i++){
-    if(act.indexOf(i)<0){act.push(i);return;}
-  }
-}
-function activateByCapability(capId){
-  var d=dep(),act=ACTIVATED[CUR];
+/* activation is DERIVED from persisted state (survives reload): an agent stands up when
+   an answer has reached it, when its capability was matched, or when it's already live. */
+function activatedFor(key){
+  var p=pillarOf(key),d=dep(),set={};
+  var ans=p.answered||0,capIds=(p.capabilities||[]).map(function(c){return c.id;});
   d.agents.forEach(function(a,i){
-    if(a.capability_id===capId&&act.indexOf(i)<0)act.push(i);
+    if(i<ans)set[i]=1;
+    if(a.live)set[i]=1;
+    if(a.capability_id&&capIds.indexOf(a.capability_id)>=0)set[i]=1;
   });
+  return Object.keys(set).map(Number);
 }
 
 /* the assembly: dept-AI core + agent nodes + systems, lighting up */
 function renderAssembly(){
   if(!CUR)return;
-  var d=dep(),act=ACTIVATED[CUR]||[];
-  var p=(STATE.pillars.find(function(x){return x.key===CUR;})||{coverage:0});
+  var d=dep(),act=activatedFor(CUR);
+  var p=pillarOf(CUR);
   document.getElementById('d-pc').textContent=p.coverage+'% MAPPED';
   var cx=260,cy=178,html='';
   var n=d.agents.length,spread=Math.min(Math.PI*.9,n*.75),a0=-Math.PI/2-spread/2+(spread/n)/2;

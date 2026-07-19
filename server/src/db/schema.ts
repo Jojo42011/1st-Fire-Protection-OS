@@ -237,6 +237,30 @@ export function initDb(): void {
       analysis   TEXT,                         -- JSON: the operator's full read
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    /* The interview ladder — persisted so the audit RESUMES and DEEPENS across
+       sessions instead of living in browser memory. Each answer stores here and
+       queues a sharper follow-up one depth level down. */
+    CREATE TABLE IF NOT EXISTS audit_questions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      question       TEXT NOT NULL,
+      pillar_key     TEXT,
+      depth_level    INTEGER DEFAULT 0,         -- 0 = opening deck; +1 per follow-up
+      asked_of       TEXT,                      -- role/person the question targets (optional)
+      status         TEXT DEFAULT 'open',       -- open | answered
+      answer         TEXT,
+      source_note_id INTEGER,                   -- the note this question's answer created
+      created_at     TEXT DEFAULT (datetime('now')),
+      answered_at    TEXT
+    );
+
+    /* Daily "getting smarter" log — one row per day, so the OS can show that the
+       longer it runs, the more of the company lives inside it. */
+    CREATE TABLE IF NOT EXISTS audit_days (
+      day           TEXT PRIMARY KEY,           -- YYYY-MM-DD
+      facts_learned INTEGER DEFAULT 0,          -- observations captured that day
+      coverage_pct  INTEGER DEFAULT 0           -- overall coverage snapshot at day end
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
@@ -260,6 +284,12 @@ export function initDb(): void {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_id
        ON calls(vapi_call_id) WHERE vapi_call_id IS NOT NULL;`
   );
+
+  /* ---------- the gap feed / build queue (the seed of the in-OS harness) ----------
+   * A matched finding is a PROPOSED build. A human approves it -> it becomes a work
+   * order the OS can act on. Added as columns so existing brains upgrade in place. */
+  addColumn('audit_findings', 'queue_status', "TEXT DEFAULT 'proposed'"); // proposed|approved|building|shipped
+  addColumn('audit_findings', 'value_line', 'TEXT');                       // the one-line business case
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { PILLARS } from '../config/auditor';
+import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
 
 /**
@@ -13,6 +14,7 @@ export function seed(): void {
   ensureAuditFoundation();
   seedAudit();
   seedGrowth();
+  seedQuestions();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -292,4 +294,26 @@ function seedGrowth(): void {
 
   setState('seeded_growth', '1');
   console.log('[seed] growth intelligence loaded (SFMO/permit/bid feeds + 5 growth gaps on the Growth pillar).');
+}
+
+/**
+ * The interview ladder — seed each department's opening question deck (depth 0) so the
+ * Operator has somewhere to start. Every answer then persists a sharper follow-up one
+ * level deeper (auditAgent.capture), so the interview resumes and gets sharper across
+ * sessions instead of resetting each visit. Own flag so existing brains pick it up.
+ */
+function seedQuestions(): void {
+  if (getState('seeded_questions') === '1') return;
+  const db = getDb();
+  const ins = db.prepare(
+    `INSERT INTO audit_questions (question, pillar_key, depth_level, status) VALUES (?, ?, 0, 'open')`
+  );
+  for (const d of DEPARTMENTS) {
+    for (const q of d.questions) {
+      const dup = db.prepare(`SELECT id FROM audit_questions WHERE lower(question) = lower(?)`).get(q.q);
+      if (!dup) ins.run(q.q, d.key);
+    }
+  }
+  setState('seeded_questions', '1');
+  console.log('[seed] interview ladder seeded (opening question decks per department).');
 }

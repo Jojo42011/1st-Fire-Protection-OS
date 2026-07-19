@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { auditState, capture, generateBrief } from '../services/auditAgent';
+import { auditState, capture, generateBrief, approveGap } from '../services/auditAgent';
 
 const router = Router();
 
@@ -15,8 +15,9 @@ router.post('/api/audit/capture', async (req, res) => {
   if (!text) return res.status(400).json({ ok: false, error: 'text required' });
   const location = req.body?.location ? String(req.body.location) : undefined;
   const department = req.body?.department ? String(req.body.department) : undefined;
+  const questionId = req.body?.questionId ? Number(req.body.questionId) : undefined;
   try {
-    const analysis = await capture(text, location, department);
+    const analysis = await capture(text, location, department, questionId);
     res.json({ ok: true, analysis, state: auditState() });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });
@@ -54,6 +55,16 @@ router.post('/api/audit/findings/:id/status', (req, res) => {
     return res.status(400).json({ ok: false, error: 'bad status' });
   getDb().prepare(`UPDATE audit_findings SET status = ? WHERE id = ?`).run(status, Number(req.params.id));
   res.json({ ok: true });
+});
+
+/** Approve a proposed build — the human gate that moves a gap into the build queue. */
+router.post('/api/audit/findings/:id/approve', (req, res) => {
+  try {
+    approveGap(Number(req.params.id));
+    res.json({ ok: true, state: auditState() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 /** Mark a location mapped/unmapped while walking the sites. */
