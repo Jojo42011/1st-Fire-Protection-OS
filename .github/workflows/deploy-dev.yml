@@ -1,0 +1,77 @@
+name: Deploy DEV preview to Fly.io
+
+# Stands up an ISOLATED development/preview app (first-fp-os-dev) from fly.dev.toml so
+# Devon can visually compare development vs production. It is a separate app with its own
+# volume in Devon's Fly account — it never touches production (first-fp-os).
+#
+# Boots keyless on seeded sample data (no secrets required beyond FLY_API_TOKEN).
+#
+# One-time setup (Devon, on the fork repo):
+#   1. Actions tab -> enable workflows (GitHub disables Actions on forks by default).
+#   2. Settings -> Secrets and variables -> Actions -> New repository secret:
+#        FLY_API_TOKEN = <a Fly deploy token from your Fly account>
+# Then run this from the Actions tab ("Run workflow"), or push to the claude/* branch.
+
+on:
+  push:
+    branches: ["claude/**"]      # working-branch pushes refresh the dev preview
+  workflow_dispatch: {}          # manual "Run workflow" button
+
+jobs:
+  build:
+    name: Build check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+      # keyless boot smoke test — must start on seeded data with no secrets
+      - name: Boot smoke test
+        run: |
+          DB_PATH=/tmp/ci.db PORT=3900 node server/dist/app.js &
+          PID=$!
+          sleep 3
+          curl -sf localhost:3900/api/health
+          curl -sf localhost:3900/api/audit > /dev/null
+          kill $PID
+
+  deploy:
+    name: Deploy DEV to Fly.io
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency: deploy-dev-group   # one dev machine, one volume — never race deploys
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy the isolated dev preview (bootstraps app + volume on first run)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::No FLY_API_TOKEN secret set on this repo."
+            echo "Add it in: repo -> Settings -> Secrets and variables -> Actions -> New repository secret (name: FLY_API_TOKEN)."
+            exit 1
+          fi
+
+          # app name is the single source of truth in fly.dev.toml
+          APP=$(grep -E '^app\s*=' fly.dev.toml | head -1 | sed -E 's/.*"(.*)".*/\1/')
+          echo "Target DEV app: $APP"
+
+          # create the dev app once (idempotent — no-op if it already exists)
+          if ! flyctl status --app "$APP" >/dev/null 2>&1; then
+            echo "Creating app $APP in org $FLY_ORG ..."
+            flyctl apps create "$APP" --org "$FLY_ORG"
+          else
+            echo "App $APP already exists — deploying update."
+          fi
+
+          # --ha=false keeps it to ONE machine (SQLite on one volume). fly.dev.toml
+          # scales it to zero when idle, so the preview is near-free.
+          flyctl deploy --config fly.dev.toml --remote-only --ha=false
+
+          echo "DEV preview deployed. URL: https://$APP.fly.dev"

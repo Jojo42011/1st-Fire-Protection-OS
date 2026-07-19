@@ -1,0 +1,42 @@
+# Fly.io DEV/PREVIEW deploy config — a fully isolated sibling of production.
+#
+# Production is `first-fp-os` (in the upstream owner's Fly account). THIS deploys a
+# SEPARATE app, `first-fp-os-dev`, with its OWN volume, in Devon's Fly account, so the
+# two can never touch. It boots keyless on seeded sample data (no secrets needed) — it
+# exists only so Devon can visually compare development vs production side by side.
+#
+# Deploy: flyctl deploy --config fly.dev.toml --remote-only --ha=false
+# Same single-machine + one-volume SQLite discipline as production (never scale to 2).
+
+app = "first-fp-os-dev"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3900"
+  DB_PATH = "/data/1stfp.db"
+
+[mounts]
+  source = "fp_dev_data"        # distinct from production's fp_data
+  destination = "/data"
+  initial_size = "1gb"
+
+[http_service]
+  internal_port = 3900
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0      # scale-to-zero: near-free preview, ~2-3s cold start
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
