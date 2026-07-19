@@ -14,8 +14,9 @@ router.post('/api/audit/capture', async (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!text) return res.status(400).json({ ok: false, error: 'text required' });
   const location = req.body?.location ? String(req.body.location) : undefined;
+  const department = req.body?.department ? String(req.body.department) : undefined;
   try {
-    const analysis = await capture(text, location);
+    const analysis = await capture(text, location, department);
     res.json({ ok: true, analysis, state: auditState() });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });

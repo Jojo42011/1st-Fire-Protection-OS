@@ -21,16 +21,13 @@ export interface PillarDef {
   tagline: string;
 }
 
-export const PILLARS: PillarDef[] = [
-  { key: 'inspections', name: 'Inspections (ITM)', tagline: 'The recurring heartbeat — NFPA-driven inspect/test/maintain contracts' },
-  { key: 'service', name: 'Service & Repair', tagline: 'Deficiency repairs, service calls, emergencies — where inspections become revenue' },
-  { key: 'sales', name: 'Sales & Estimating', tagline: 'Bids, quotes, proposals — new install and repair pipeline' },
-  { key: 'dispatch', name: 'Dispatch & Scheduling', tagline: 'Techs, trucks, routes — the most expensive resource, hour by hour' },
-  { key: 'compliance', name: 'Compliance & AHJ', tagline: 'Codes, permits, jurisdictions — every city has its own rules' },
-  { key: 'finance', name: 'Finance & Receivables', tagline: 'Invoicing, collections, cash — where slow paperwork bleeds margin' },
-  { key: 'people', name: 'People & Knowledge', tagline: 'Veterans, tribal knowledge, single points of failure' },
-  { key: 'growth', name: 'Reputation & Growth', tagline: 'Reviews, referrals, multi-location expansion' },
-];
+/** The pillars ARE the real departments — one source of truth in departments.ts. */
+import { DEPARTMENTS } from './departments';
+export const PILLARS: PillarDef[] = DEPARTMENTS.map((d) => ({
+  key: d.key,
+  name: d.name,
+  tagline: d.tagline,
+}));
 
 export function pillarByKey(key: string): PillarDef | undefined {
   return PILLARS.find((p) => p.key === key);

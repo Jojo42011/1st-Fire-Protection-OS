@@ -40,51 +40,22 @@ export interface Analysis {
 /* ─────────────────── deterministic fallback brain ─────────────────── */
 
 const PILLAR_HINTS: [string, RegExp][] = [
-  ['inspections', /inspect|itm|nfpa|annual|quarterly|tag|test(ing)?|backflow|hydro/i],
-  ['service', /repair|service call|emergency|leak|break|fix|deficien|alarm going/i],
-  ['sales', /quote|estimat|bid|proposal|sales|install|price|margin|win/i],
-  ['dispatch', /dispatch|schedul|route|tech(nician)?s?\b|truck|calendar|book/i],
-  ['compliance', /ahj|code|permit|jurisdiction|marshal|compliance|citation|violation/i],
-  ['finance', /invoice|receivab|collect|owe|pay|billing|cash|dso|aging|quickbooks|account/i],
-  ['people', /retir|in his head|in her head|only one|tribal|train|hire|onboard|veteran|knows every/i],
-  ['growth', /review|reputation|referral|marketing|location|branch|expand|growth/i],
+  ['inspections', /inspect|itm|nfpa|annual|quarterly|tag\b|test(ing)?|backflow|hydro|agreement|renewal/i],
+  ['service', /repair|service call|emergency|on.?call|after.?hours|leak|break|fix|deficien|alarm going|dispatch|schedul|route|truck|windshield|tech(nician)?s?\b/i],
+  ['sales', /quote|estimat|bid|proposal|sales|price|margin|win rate|lead|referral|review|reputation/i],
+  ['projects', /project|permit|ahj|jurisdiction|marshal|code|submittal|closeout|install\b|citation|violation/i],
+  ['finance', /invoice|receivab|collect|owe|payab|billing|cash|dso|aging|quickbooks|account|payment/i],
+  ['hr', /hir(e|ing)|recruit|onboard|training|cert(ification)?s?\b|license|apprentice|new (tech|guy|hire)|staff/i],
+  ['ops', /complain|escalat|dashboard|kpi|visibility|branch(es)?|location|side.?by.?side|retir|in (his|her|their) head|only one|tribal|veteran|knows every/i],
+  ['vendors', /vendor|supplier|procure|purchase|po\b|pricing|material/i],
+  ['reception', /front desk|phone|call(s|er)?\b|message|reception|answer|voicemail|sticky|spanish/i],
 ];
 
-/** Sharp, quantified follow-ups per pillar — what a veteran operator asks next. */
-const PILLAR_QUESTIONS: Record<string, string[]> = {
-  inspections: [
-    'How many inspection agreements are active, and who watches for ones that quietly lapse?',
-    'When a deficiency is found on site, how many days until a quote is in the customer\'s inbox?',
-  ],
-  service: [
-    'What percentage of deficiencies found actually convert to paid repair work? (Systematic shops hit 30–50%.)',
-    'What happens to an after-hours emergency call today, step by step?',
-  ],
-  sales: [
-    'How long does a repair quote sit before it goes out — and who is it waiting on?',
-    'What\'s your win rate when the quote goes out inside 24 hours versus a week?',
-  ],
-  dispatch: [
-    'Who builds the schedule, and what breaks when that person is out for a week?',
-    'How many billable hours per tech per day — and how much is windshield time?',
-  ],
-  compliance: [
-    'Which jurisdictions have quirks that only one person knows how to navigate?',
-    'How do you track the different AHJ requirements across your nine cities?',
-  ],
-  finance: [
-    'What\'s the total outstanding right now — and how long would it take you to get that number?',
-    'How many days from job-complete to invoice-sent? (Manual invoicing adds 15–30 days of DSO.)',
-  ],
-  people: [
-    'If that person left tomorrow, what breaks first — and who else can do it today?',
-    'What\'s written down versus what walks out the door at 5pm?',
-  ],
-  growth: [
-    'Which location runs best, which is the problem child — and does anyone see them side by side?',
-    'After a job completes, does anything systematically ask the customer for a review?',
-  ],
-};
+/** Fallback follow-ups per department — the deck's own consulting questions. */
+import { DEPARTMENTS } from '../config/departments';
+const PILLAR_QUESTIONS: Record<string, string[]> = Object.fromEntries(
+  DEPARTMENTS.map((d) => [d.key, d.questions.map((q) => q.q)])
+);
 
 /** Detect the person named in "X is the only one who..." style observations. */
 function sniffPerson(text: string): { name: string; carries: string } | null {
@@ -114,9 +85,15 @@ function severityFromText(text: string): string {
 }
 
 /** The keyless operator: rules-engine classification, matching, and questioning. */
-function rulesAnalysis(text: string): Analysis {
+function rulesAnalysis(text: string, department?: string): Analysis {
   const pillars = PILLAR_HINTS.filter(([, re]) => re.test(text)).map(([k]) => k);
-  if (!pillars.length) pillars.push('growth');
+  // an active department deep-dive anchors the classification
+  if (department && pillarByKey(department)) {
+    const i = pillars.indexOf(department);
+    if (i > 0) pillars.splice(i, 1);
+    if (i !== 0) pillars.unshift(department);
+  }
+  if (!pillars.length) pillars.push('ops');
   const top = pillars.slice(0, 3);
 
   // capability matching off catalog triggers
@@ -195,7 +172,7 @@ function auditContextSummary(): string {
     .join('\n');
 }
 
-async function llmAnalysis(text: string, location?: string): Promise<Analysis | null> {
+async function llmAnalysis(text: string, location?: string, department?: string): Promise<Analysis | null> {
   const result = await chat(
     [
       { role: 'system', content: OPERATOR_SYSTEM_PROMPT },
@@ -203,6 +180,8 @@ async function llmAnalysis(text: string, location?: string): Promise<Analysis | 
         role: 'user',
         content: `${auditContextSummary()}\n\n${
           location ? `This observation is about the ${location} location.\n` : ''
+        }${
+          department ? `We are deep-diving the "${department}" department — anchor your read there.\n` : ''
         }OBSERVATION: "${text}"`,
       },
     ],
@@ -231,9 +210,14 @@ async function llmAnalysis(text: string, location?: string): Promise<Analysis | 
 
 /* ─────────────────────── capture + persist ─────────────────────── */
 
-export async function capture(text: string, location?: string): Promise<Analysis & { noteId: number }> {
+export async function capture(
+  text: string,
+  location?: string,
+  department?: string
+): Promise<Analysis & { noteId: number }> {
   const analysis =
-    (activeProvider() !== 'none' ? await llmAnalysis(text, location) : null) || rulesAnalysis(text);
+    (activeProvider() !== 'none' ? await llmAnalysis(text, location, department) : null) ||
+    rulesAnalysis(text, department);
 
   const db = getDb();
   const noteInfo = db
@@ -358,6 +342,13 @@ export function auditState() {
     })),
     notes,
     catalog: CAPABILITIES.map((c) => ({ id: c.id, name: c.name, what: c.what, live: !!c.live })),
+    departments: DEPARTMENTS.map((d) => ({
+      ...d,
+      agents: d.agents.map((a) => ({
+        ...a,
+        live: a.live || (a.capability_id ? !!capabilityById(a.capability_id)?.live : false),
+      })),
+    })),
   };
 }
 

@@ -142,6 +142,24 @@ export function seed(): void {
  */
 function ensureAuditFoundation(): void {
   const db = getDb();
+
+  // Migrate rows recorded under the original 8-pillar model onto the real
+  // 9-department model. Idempotent: once remapped there is nothing left to touch.
+  const REMAP: [string, string][] = [
+    ['dispatch', 'service'],
+    ['compliance', 'projects'],
+    ['people', 'ops'],
+    ['growth', 'ops'],
+  ];
+  for (const table of ['audit_systems', 'audit_people', 'audit_workflows', 'audit_findings']) {
+    for (const [oldKey, newKey] of REMAP) {
+      db.prepare(`UPDATE ${table} SET pillar_key = ? WHERE pillar_key = ?`).run(newKey, oldKey);
+    }
+  }
+  // Ed Portillo is Vendor Relations — was filed under sales before vendors existed.
+  db.prepare(`UPDATE audit_people SET pillar_key = 'vendors' WHERE name = 'Ed Portillo'`).run();
+  db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people','growth')`).run();
+
   const insPillar = db.prepare(
     `INSERT OR IGNORE INTO audit_pillars (key, name, tagline, sort) VALUES (?, ?, ?, ?)`
   );
@@ -164,8 +182,8 @@ function seedAudit(): void {
   const systems: [string, string, string, string, string][] = [
     // name, category, truth_for, gaps, pillar
     ['ServiceTrade', 'field-service', 'Jobs, inspections, deficiencies, invoices', 'Completions don\'t trigger reviews or collections automatically', 'inspections'],
-    ['Microsoft 365 / Teams', 'comms', 'Email, call transfers, office coordination', 'Call outcomes live in chat threads, not in a system', 'dispatch'],
-    ['Vapi + Twilio (this OS)', 'voice', 'The San Antonio line — AI receptionist', '', 'dispatch'],
+    ['Microsoft 365 / Teams', 'comms', 'Email, call transfers, office coordination', 'Call outcomes live in chat threads, not in a system', 'ops'],
+    ['Vapi + Twilio (this OS)', 'voice', 'The San Antonio line — AI receptionist', '', 'reception'],
     ['Spreadsheets', 'spreadsheet', 'The real coordination layer between systems', 'Manually re-keyed from ServiceTrade; nine local versions of the truth', 'finance'],
   ];
   const insSys = db.prepare(
@@ -176,11 +194,11 @@ function seedAudit(): void {
   /* the veterans we already know by name (from the routing brain) */
   const people: [string, string, string, string, string, string][] = [
     // name, role, location, carries, risk, pillar
-    ['Daniel Rodriguez', 'Operations Manager', 'San Antonio', 'Every complaint and unclassifiable call routes through him — the escalation brain', 'high', 'people'],
+    ['Daniel Rodriguez', 'Operations Manager', 'San Antonio', 'Every complaint and unclassifiable call routes through him — the escalation brain', 'high', 'ops'],
     ['Kelsey Bovard', 'Inspections Scheduling', 'San Antonio', 'Holds the inspection calendar and AHJ scheduling quirks', 'high', 'inspections'],
     ['Ronnie Blue', 'Sprinkler Service Manager', 'San Antonio', 'Sprinkler service triage and crew knowledge', 'medium', 'service'],
     ['Matt Shaner', 'Fire Alarm Service Manager', 'San Antonio', 'Alarm service triage; panel/system history by account', 'medium', 'service'],
-    ['Ed Portillo', 'Vendor Relations', 'San Antonio', 'Supplier relationships and pricing history', 'medium', 'sales'],
+    ['Ed Portillo', 'Vendor Relations', 'San Antonio', 'Supplier relationships and pricing history', 'medium', 'vendors'],
   ];
   const insPpl = db.prepare(
     `INSERT INTO audit_people (name, role, location, carries, risk, pillar_key) VALUES (?, ?, ?, ?, ?, ?)`
@@ -209,7 +227,7 @@ function seedAudit(): void {
     ['finance', 'leak', 'Receivables chased by hand, invoices go out late',
       '~60% of contractor invoices are paid late; manual invoicing adds 15–30 days of DSO.',
       'high', '15–30 days of DSO', 'invoice_chaser'],
-    ['growth', 'gap', 'Nine locations, no side-by-side view of the same numbers',
+    ['ops', 'gap', 'Nine locations, no side-by-side view of the same numbers',
       'Each branch runs its own way; variance is invisible until it becomes a problem. One brain over all nine is the consolidation play.',
       'medium', '', 'location_command'],
   ];

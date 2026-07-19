@@ -26,7 +26,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'AI Receptionist',
     what: 'Answers every line 24/7, classifies the call, routes it, captures the lead.',
     builds: 'Voice agent on your numbers with your real routing brain — already answering in this OS.',
-    pillars: ['dispatch', 'growth'],
+    pillars: ['reception', 'service'],
     live: true,
     triggers: ['phone', 'call', 'answer', 'front desk', 'reception', 'after.?hours', 'miss(ed|ing) calls?', 'voicemail', 'spanish'],
   },
@@ -44,7 +44,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Review Collector',
     what: 'Turns every completed job into a Google review and drafts the on-brand reply.',
     builds: 'Job-completion → review request pipeline + reply drafting — already running in this OS.',
-    pillars: ['growth'],
+    pillars: ['reception', 'sales'],
     live: true,
     triggers: ['review', 'reputation', 'google', 'word of mouth', 'referral'],
   },
@@ -77,7 +77,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Veteran Knowledge Capture',
     what: 'The stuff only one person knows becomes the company brain — captured in-flow, not in a binder.',
     builds: 'Memory agent that interviews and shadows your veterans (dispatch quirks, AHJ contacts, customer history) into searchable operating rules.',
-    pillars: ['people', 'compliance'],
+    pillars: ['ops', 'hr'],
     triggers: ['in (his|her|their) head', 'only (one|person|guy|gal)', 'tribal', 'retir', 'knows every', 'if (he|she|they) le(ft|aves)', 'veteran', 'institutional'],
   },
   {
@@ -85,7 +85,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Dispatch Optimizer',
     what: 'Techs are the most expensive resource — utilization and windshield time decide the P&L.',
     builds: 'Scheduling agent that batches jobs by geography and cert, protects inspection routes, and flags underloaded days.',
-    pillars: ['dispatch', 'service'],
+    pillars: ['service', 'inspections'],
     triggers: ['dispatch', 'schedul', 'route', 'routing', 'windshield', 'drive time', 'utilization', 'double.?book', 'truck'],
   },
   {
@@ -93,7 +93,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'AHJ Compliance Watchdog',
     what: 'Every jurisdiction has its own rules — this agent knows each AHJ\'s quirks so compliance stops living in one person\'s head.',
     builds: 'Per-jurisdiction knowledge base (permit rules, inspector preferences, code cycles) + deadline watcher across all locations.',
-    pillars: ['compliance'],
+    pillars: ['projects'],
     triggers: ['ahj', 'jurisdiction', 'city', 'county', 'fire marshal', 'permit', 'code', 'nfpa', 'inspector prefer'],
   },
   {
@@ -101,7 +101,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'System Data Bridge',
     what: 'Every place a human re-types data from one system into another is a leak an agent closes.',
     builds: 'Integration agents between your systems of record (ServiceTrade ↔ accounting ↔ Teams ↔ spreadsheets) — one entry, everywhere.',
-    pillars: ['finance', 'dispatch', 'inspections'],
+    pillars: ['finance', 'projects', 'inspections'],
     triggers: ['spreadsheet', 'excel', 're.?(type|enter|key)', 'manual(ly)? (enter|input|move|copy)', 'copy.?paste', 'doesn.?t talk', 'export', 'double entry', 'two systems'],
   },
   {
@@ -109,7 +109,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Multi-Location Command',
     what: 'Nine branches, one brain — see every location\'s numbers side by side instead of nine versions of the truth.',
     builds: 'Cross-location rollup: same KPIs per branch (revenue, aging, utilization, deficiency conversion), variance flagged automatically.',
-    pillars: ['growth', 'finance', 'dispatch'],
+    pillars: ['ops', 'finance'],
     triggers: ['location', 'branch', 'office', 'austin|waco|mcallen|laredo|lubbock|college station|houston|corpus', 'their own way', 'each (site|branch|office)', 'consolidat', 'roll.?up'],
   },
   {
@@ -117,7 +117,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Executive Numbers Agent',
     what: 'If it takes days to answer "how much do they owe us?", the answer is an agent, not a meeting.',
     builds: 'Always-current command dashboard + ask-anything interface over the company\'s live numbers.',
-    pillars: ['finance', 'growth'],
+    pillars: ['finance', 'ops'],
     triggers: ['report', 'dashboard', 'kpi', 'numbers', 'how much', 'end of (the )?month', 'visibility', 'don.?t know until'],
   },
   {
@@ -125,7 +125,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'After-Hours Emergency Triage',
     what: 'Alarm going off at 2am gets triaged, routed to on-call, and logged before a human even wakes up.',
     builds: 'Emergency line agent: severity triage, on-call escalation into Teams, incident log tied to the account.',
-    pillars: ['service', 'dispatch'],
+    pillars: ['service'],
     triggers: ['emergency', 'after.?hours', 'on.?call', 'alarm going', '2 ?am', 'night', 'weekend'],
   },
   {
@@ -141,7 +141,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     name: 'Tech Onboarding Brain',
     what: 'New techs ramp in weeks, not years, when the company\'s knowledge is queryable in the truck.',
     builds: 'Field assistant trained on your procedures, past jobs, and code references — answers on-site questions instantly.',
-    pillars: ['people', 'service'],
+    pillars: ['hr', 'service'],
     triggers: ['new (tech|hire|guy)', 'training', 'onboard', 'ramp', 'shortage', 'hiring', 'green', 'apprentice'],
   },
 ];
