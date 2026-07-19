@@ -130,45 +130,50 @@ var SYSTEM_TABS = [
   { key:"integrations", label:"Integrations", sub:"The hands", src:"/integrations", sep:"System",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' }
 ];
-/* Founding agents keep their dedicated pages; everyone else opens the generic console. */
+/* Founding agents keep their rich dedicated dashboards. These live as HIDDEN tabs (present as
+   frames, not shown in the nav) so a department page can open them via app-navigate. */
 var FOUNDING_PAGES = { calls:"/calls", invoices:"/invoices", reviews:"/reviews" };
+var HIDDEN_TABS = [
+  { key:"calls",    label:"Call Receptionist", src:"/calls",    hidden:true },
+  { key:"invoices", label:"Invoice Collector", src:"/invoices", hidden:true },
+  { key:"reviews",  label:"Review Collector",  src:"/reviews",  hidden:true }
+];
 /* Department display order (Devon's org): the rest fall in after, by roster order. */
 var DEPT_ORDER = ["growth","inspections","service","sales","projects","reception","finance","hr","ops","vendors"];
-var AGENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>';
+var DEPT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
 var NAV_MESSAGE_TYPE = "app-navigate";
 var DEFAULT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/></svg>';
 
-/* Build the department tabs from the live roster, grouped + ordered by department. The
-   Operator (audit) is control, not a department worker, so it is skipped here. */
+/* Build ONE button per department from the live roster (space-conscious: the pane shows
+   departments, not every agent). Each opens a roster-style page filtered to that department.
+   The Operator (audit) is control, not a department worker, so it is skipped here. */
 function departmentTabs(agents){
   var groups = {}, order = [];
   agents.forEach(function(a){
     if(a.key==="audit") return;
     var pk = a.pillar_key || "ops", pname = a.pillar || pk;
-    if(!groups[pk]){ groups[pk] = { name:pname, items:[] }; order.push(pk); }
-    groups[pk].items.push(a);
+    if(!groups[pk]){ groups[pk] = { name:pname, count:0 }; order.push(pk); }
+    groups[pk].count++;
   });
   order.sort(function(x,y){
     var ix=DEPT_ORDER.indexOf(x), iy=DEPT_ORDER.indexOf(y);
     return (ix<0?99:ix) - (iy<0?99:iy);
   });
-  var tabs = [];
-  order.forEach(function(pk){
+  return order.map(function(pk,i){
     var g = groups[pk];
-    g.items.forEach(function(a,i){
-      tabs.push({
-        key:a.key, label:a.name, sub:a.role||"",
-        src: FOUNDING_PAGES[a.key] || ("/agent?key=" + encodeURIComponent(a.key)),
-        sep: i===0 ? g.name : undefined,
-        icon: AGENT_ICON
-      });
-    });
+    return {
+      key:"dept-"+pk,
+      label:g.name,
+      sub:g.count+" agent"+(g.count===1?"":"s"),
+      src:"/roster?dept="+encodeURIComponent(pk)+"&name="+encodeURIComponent(g.name),
+      sep: i===0 ? "Departments" : undefined,
+      icon: DEPT_ICON
+    };
   });
-  return tabs;
 }
 
 function bootShell(agents){
-  var TABS = CONTROL_TABS.concat(departmentTabs(agents||[]), SYSTEM_TABS);
+  var TABS = CONTROL_TABS.concat(departmentTabs(agents||[]), HIDDEN_TABS, SYSTEM_TABS);
   initShell(TABS);
 }
 /* Fetch the roster, then build the nav. If it fails, the control + system tabs still work. */
@@ -180,7 +185,7 @@ function initShell(TABS){ "use strict";
   var nav=document.getElementById("nav"),frames=document.getElementById("frames"),dock=document.getElementById("dock"),toastEl=document.getElementById("toast"),shell=document.getElementById("shell"),backdrop=document.getElementById("backdrop");
   var mq=window.matchMedia("(max-width:820px)");
   function isMobile(){return mq.matches;}
-  nav.innerHTML=TABS.map(function(t){var sep=t.sep?'<div class="nav-sep">'+t.sep+'</div>':'';return sep+'<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'"><div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';}).join("");
+  nav.innerHTML=TABS.filter(function(t){return !t.hidden;}).map(function(t){var sep=t.sep?'<div class="nav-sep">'+t.sep+'</div>':'';return sep+'<div class="nav-item'+(t.key===current?' active':'')+'" data-key="'+t.key+'" title="'+t.label+'"><div class="ic">'+(t.icon||DEFAULT_ICON)+'</div><div class="tx"><div class="l">'+t.label+'</div><div class="s">'+(t.sub||'')+'</div></div></div>';}).join("");
   frames.innerHTML=TABS.map(function(t){var src=t.key===home?' src="'+t.src+'"':'';return '<iframe class="frame'+(t.key===current?' active':'')+'" id="frame-'+t.key+'" data-src="'+t.src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';}).join("");
   function frameEl(key){return document.getElementById("frame-"+key);}
   /* On mobile the document scrolls, so each iframe must be as tall as its content

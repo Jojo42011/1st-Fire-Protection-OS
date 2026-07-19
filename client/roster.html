@@ -116,10 +116,17 @@ var initials=function(n){return String(n||'?').split(/\s+/).map(function(w){retu
 async function get(u){var r=await fetch(u);return r.json();}
 async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
 var AGENTS={};
+/* Department view: /roster?dept=<pillar_key>&name=<display>. Absent -> the whole team. */
+var DEPT=new URLSearchParams(location.search).get('dept');
+var DEPT_NAME=new URLSearchParams(location.search).get('name');
+/* Founding agents have rich dashboards; inside the shell their card opens the dashboard, not the console. */
+var FOUNDING={calls:1,invoices:1,reviews:1};
+var inShell=(function(){try{return window.parent!==window;}catch(_){return false;}})();
 
 function card(a){
   var badge=a.origin==='harness'?'<span class="badge built">Built by the Harness</span>':'<span class="badge found">Founding</span>';
   var know=(a.knowledge||[]).slice(0,4).map(function(k){return '<div class="s"><span class="k">+</span><span>'+esc(k)+'</span></div>';}).join('');
+  var cta=(FOUNDING[a.key]&&inShell)?'Open dashboard →':'Put it to work →';
   return '<div class="card fadein">'+
     '<div class="h"><div class="av">'+esc(initials(a.name))+'</div>'+
       '<div class="hn"><div class="nm">'+esc(a.name)+'</div><div class="rl">'+esc(a.role||'')+'</div></div>'+badge+'</div>'+
@@ -127,17 +134,27 @@ function card(a){
       '<span class="chip">'+(a.skill_count||0)+' skill'+((a.skill_count===1)?'':'s')+'</span>'+
       '<span class="chip"><span class="live-dot" style="display:inline-block;margin-right:5px"></span>Live</span></div>'+
     (know?'<div class="know">'+know+'</div>':'')+
-    '<div class="foot"><button class="btn ghost" data-talk="'+esc(a.key)+'">Put it to work →</button></div></div>';
+    '<div class="foot"><button class="btn ghost" data-talk="'+esc(a.key)+'">'+cta+'</button></div></div>';
 }
 
 function render(d){
-  var ags=d.agents||[];
-  ags.forEach(function(a){AGENTS[a.key]=a;});
+  var all=d.agents||[];
+  all.forEach(function(a){AGENTS[a.key]=a;});
+  var ags = DEPT ? all.filter(function(a){return (a.pillar_key||'')===DEPT;}) : all;
   var built=ags.filter(function(a){return a.origin==='harness';}).length;
+  if(DEPT){
+    var nm = DEPT_NAME || (ags[0]&&ags[0].pillar) || 'Department';
+    document.title = nm+' · 1st FP';
+    var h1=document.querySelector('.top .id h1'); if(h1) h1.textContent=nm;
+    var mc=document.querySelector('.top .id .micro'); if(mc) mc.textContent='Department';
+    var tg=document.getElementById('tagline'); if(tg) tg.textContent=nm;
+    var lh=document.querySelector('.lede h2'); if(lh) lh.textContent='The '+nm+' team.';
+    var lp=document.querySelector('.lede p'); if(lp) lp.textContent='Every agent working '+nm+' in this OS. Open any of them and put it to work.';
+  }
   document.getElementById('strip').innerHTML=
     '<div class="t"><div class="micro">Agents live</div><div class="v ok">'+ags.length+'</div></div>'+
     '<div class="t"><div class="micro">Built by the Harness</div><div class="v gold">'+built+'</div></div>';
-  document.getElementById('grid').innerHTML=ags.length?ags.map(card).join(''):'<div class="empty">No agents yet.</div>';
+  document.getElementById('grid').innerHTML=ags.length?ags.map(card).join(''):'<div class="empty">No agents in this department yet.</div>';
 }
 
 // console
@@ -155,7 +172,11 @@ function closeCon(){document.getElementById('scrim').classList.remove('show');cu
 function bubble(cls,txt){var b=document.getElementById('c-body');var d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;b.appendChild(d);b.scrollTop=b.scrollHeight;return d;}
 
 document.addEventListener('click',function(e){
-  var t=e.target.closest('[data-talk]');if(t){openCon(t.getAttribute('data-talk'));}
+  var t=e.target.closest('[data-talk]');if(!t)return;
+  var key=t.getAttribute('data-talk');
+  // Founding agents have rich dashboards: inside the shell, hop to that tab instead of the console.
+  if(FOUNDING[key]&&inShell){ window.parent.postMessage({type:'app-navigate',tab:key},'*'); return; }
+  openCon(key);
 });
 document.getElementById('c-x').addEventListener('click',closeCon);
 document.getElementById('scrim').addEventListener('click',function(e){if(e.target===this)closeCon();});
