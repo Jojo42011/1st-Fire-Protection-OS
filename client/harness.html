@@ -140,7 +140,7 @@ async function get(u){var r=await fetch(u);return r.json();}
 async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
 
 function inboxCard(f){
-  var tag=f.mode==='upgrade'?'Strengthen':'New agent';
+  var tag=f.mode==='upgrade'?'Strengthen':(f.custom?'Off-catalog agent':'New agent');
   return '<div class="card fadein"><div class="pk">'+esc(f.pillar)+' · '+esc(tag)+'</div>'+
     '<div class="ti">'+esc(f.title)+'</div>'+
     (f.action?'<div class="bd">'+esc(f.action)+'</div>':'')+
@@ -149,11 +149,12 @@ function inboxCard(f){
 }
 function orderCard(o,shipped){
   var isUp=o.mode==='upgrade';
-  var tag=isUp?'Strengthen':'New agent';
+  var tag=isUp?'Strengthen':(o.custom?'Off-catalog agent':'New agent');
   var know=(o.knowledge||[]).map(function(s,i){return '<div class="step"><span class="k">+</span><span>'+esc(s)+'</span></div>';}).join('');
   var head=isUp?('Strengthen '+esc(o.agent_name||'')):('Build '+esc(o.agent_name||o.title));
+  var live=o.agent_built!==false; // honest: only claim live if the agent really exists
   var foot=shipped
-    ? '<div class="foot"><span class="pill live">'+(isUp?'Smarter':'Live in the Roster')+'</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
+    ? '<div class="foot"><span class="pill '+(live?'live':'')+'">'+(isUp?'Smarter':(live?'Live in the Roster':'Pending'))+'</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
     : '<div class="foot"><button class="btn ship" data-ship="'+o.id+'">Ship it</button><span class="eta">~'+(o.eta_weeks||2)+' wk</span><span class="eng">'+esc(o.engine||'')+'</span></div>';
   return '<div class="card fadein'+(shipped?' shipped':'')+'"><div class="pk">'+esc(tag)+'</div>'+
     '<div class="ti">'+head+'</div>'+

@@ -294,6 +294,20 @@ function seedGrowth(): void {
   );
   for (const f of findings) insFnd.run(...f);
 
+  // An OFF-CATALOG gap: nothing in the build catalog covers fleet maintenance, but a
+  // 9-location field-service company lives and dies by its trucks. The Operator proposes a
+  // CUSTOM agent for it, so the harness can grow the team beyond the preset builds.
+  db.prepare(
+    `INSERT INTO audit_findings (pillar_key, kind, title, detail, severity, cost_hint, capability_id) VALUES (?, ?, ?, ?, ?, ?, NULL)`
+  ).run(
+    'ops',
+    'gap',
+    'Fleet vehicle maintenance is reactive, trucks fail in the field',
+    'Nine locations run on service trucks, but preventive maintenance is ad hoc: a truck down mid-route means missed inspections and emergency-rate rentals. No catalog build covers this, so it needs a custom agent that tracks each vehicle, schedules PM by mileage/hours, and flags a truck before it strands a crew.',
+    'medium',
+    'missed routes + rental cost'
+  );
+
   setState('seeded_growth', '1');
   console.log('[seed] growth intelligence loaded (SFMO/permit/bid feeds + 5 growth gaps on the Growth pillar).');
 }

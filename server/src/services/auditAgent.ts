@@ -87,6 +87,30 @@ function severityFromText(text: string): string {
 }
 
 /** The keyless operator: rules-engine classification, matching, and questioning. */
+/**
+ * Name a custom (off-catalog) agent from the gap it fixes. Keyless and deterministic: take
+ * the meaningful words of the finding, title-case two or three of them, and append "Agent"
+ * (e.g. "Deficiency findings are managed informally" -> "Deficiency Findings Agent"). The
+ * harness sharpens this with an LLM when a key is present; this is the honest keyless name.
+ */
+const NAME_STOPWORDS = new Set([
+  'the','a','an','and','or','but','of','to','in','on','for','by','with','is','are','not','no','be','been',
+  'that','this','it','its','as','at','from','into','out','up','down','our','their','have','has','we','they',
+  'go','goes','going','get','gets','yet','still','just','than','then','so','do','does','done','each','every',
+]);
+export function customAgentName(title: string, pillarKey?: string | null): string {
+  const words = String(title || '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !NAME_STOPWORDS.has(w.toLowerCase()));
+  const core = words.slice(0, 3).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  if (!core.length) {
+    const p = pillarKey ? pillarByKey(pillarKey)?.name || pillarKey : 'Operations';
+    return `${p} Agent`;
+  }
+  return `${core.join(' ')} Agent`;
+}
+
 function rulesAnalysis(text: string, department?: string): Analysis {
   const pillars = PILLAR_HINTS.filter(([, re]) => re.test(text)).map(([k]) => k);
   // an active department deep-dive anchors the classification
@@ -406,10 +430,29 @@ export function auditState() {
 
   // ── the gap feed / build queue: matched findings are proposed builds ──
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  // Matched findings propose a catalog build. UNMATCHED leaks (no capability) are not
+  // dropped: the Operator proposes a CUSTOM agent for them, so the team can grow in
+  // directions the catalog does not list yet. Strengths are not builds.
   const gapFeed = findings
-    .filter((f) => f.capability_id && capabilityById(f.capability_id))
+    .filter((f) => f.kind !== 'strength' && (capabilityById(f.capability_id) || f.kind === 'gap' || f.kind === 'leak' || f.kind === 'risk'))
     .map((f) => {
-      const c = capabilityById(f.capability_id)!;
+      const c = f.capability_id ? capabilityById(f.capability_id) : undefined;
+      if (c) {
+        return {
+          id: f.id,
+          pillar_key: f.pillar_key,
+          pillar: pillarByKey(f.pillar_key)?.name || f.pillar_key,
+          title: f.title,
+          detail: f.detail,
+          severity: f.severity,
+          build: c.name,
+          build_id: c.id,
+          build_type: c.live ? 'UPGRADE' : 'NEW',
+          custom: false,
+          value: f.value_line || f.cost_hint || '',
+          queue_status: f.queue_status || 'proposed',
+        };
+      }
       return {
         id: f.id,
         pillar_key: f.pillar_key,
@@ -417,9 +460,10 @@ export function auditState() {
         title: f.title,
         detail: f.detail,
         severity: f.severity,
-        build: c.name,
-        build_id: c.id,
-        build_type: c.live ? 'UPGRADE' : 'NEW',
+        build: customAgentName(f.title, f.pillar_key),
+        build_id: null,
+        build_type: 'NEW',
+        custom: true, // off-catalog: the Operator invented this agent for a gap the catalog misses
         value: f.value_line || f.cost_hint || '',
         queue_status: f.queue_status || 'proposed',
       };

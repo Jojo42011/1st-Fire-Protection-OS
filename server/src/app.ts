@@ -21,6 +21,7 @@ import integrations from './routes/integrations';
 import voice from './routes/voice';
 import audit from './routes/audit';
 import harness from './routes/harness';
+import { healRoster } from './services/harness';
 import roster from './routes/roster';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
@@ -31,6 +32,10 @@ const CLIENT_DIR = path.resolve(__dirname, '../../client');
 // ---- boot the brain ----
 initDb();
 seed();
+// Backfill agents for any build order that shipped before the roster existed, so a shipped
+// card never claims "live in the roster" without a real agent behind it.
+const healed = healRoster();
+if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into live agents`);
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
