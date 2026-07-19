@@ -255,7 +255,13 @@ export async function capture(text: string, location?: string): Promise<Analysis
   );
   for (const p of analysis.people) {
     if (!p?.name) continue;
-    const dup = db.prepare(`SELECT id FROM audit_people WHERE lower(name)=lower(?)`).get(p.name);
+    // partial-name dedupe: "Kelsey" must match the existing "Kelsey Bovard", not duplicate her
+    const dup = db
+      .prepare(
+        `SELECT id FROM audit_people
+         WHERE lower(name) LIKE '%'||lower(?)||'%' OR lower(?) LIKE '%'||lower(name)||'%'`
+      )
+      .get(p.name, p.name);
     if (!dup) pplIns.run(p.name, p.role || null, location || null, p.carries || null, p.risk || 'medium', p.pillar || analysis.pillars[0] || null);
   }
   const wfIns = db.prepare(
