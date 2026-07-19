@@ -1,16 +1,17 @@
 import { chat } from './llm';
-import { MODELS, activeCoder, coderLabel } from '../config/models';
+import { MODELS, activeCoder, coderLabel, swarmMode, swarmSize } from '../config/models';
 import { COMPANY } from '../config/constants';
 
 /**
  * THE CODER - the harness's code-writing arm.
  *
  * When the harness builds a new agent, it also has a dedicated CODER model write a real
- * TypeScript module for that agent (not just the data persona). Kimi K2 (Moonshot) is the
- * default coder; Claude/GPT code as a fallback; with no key the harness emits a real
- * template module. The output is a reviewable ARTIFACT: a human reads the diff and merges
- * it through the normal dev pipeline. Nothing here is hot-loaded into the running app - the
- * OS proposes code, a person ships it, exactly like every other gate in this system.
+ * TypeScript module for that agent (not just the data persona). Kimi K3 (Moonshot) is the
+ * default coder, and for complex builds it escalates to the K3 SWARM (parallel kimi-k3 coder
+ * passes + a reviewer that merges the best); Claude/GPT code as a fallback; with no key the
+ * harness emits a real template module. The output is a reviewable ARTIFACT: a human reads the
+ * diff and merges it through the normal dev pipeline. Nothing here is hot-loaded into the
+ * running app - the OS proposes code, a person ships it, like every other gate in this system.
  */
 
 function slug(s: string): string {
@@ -79,46 +80,45 @@ export async function handle(input: AgentInput, ctx: AgentContext): Promise<Agen
 `;
 }
 
-/** Route a coder prompt to Kimi (Moonshot, OpenAI-compatible) / Claude / GPT. */
-async function coderChat(system: string, user: string, maxTokens = 1400): Promise<string | null> {
-  const coder = activeCoder();
-  if (coder === 'kimi') {
-    try {
-      const res = await fetch(`${MODELS.moonshot.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${process.env.MOONSHOT_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: MODELS.moonshot.chat,
-          max_tokens: maxTokens,
-          temperature: 0.2,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        }),
-      });
-      if (!res.ok) throw new Error(`moonshot ${res.status}: ${await res.text()}`);
-      const data = (await res.json()) as any;
-      return (data.choices?.[0]?.message?.content || '').trim() || null;
-    } catch (err) {
-      console.warn('[coder] kimi failed, degrading:', (err as Error).message);
-      return null;
+type Msg = { role: 'system' | 'user'; content: string };
+
+/**
+ * Call Kimi K3 (Moonshot, OpenAI-compatible). K3 fixes temperature/top_p/n/penalties server-side,
+ * so we send NONE of them (they 400). max_tokens is used; if the server insists on
+ * max_completion_tokens we retry once with that name. Model overridable (single vs swarm).
+ */
+async function kimiComplete(messages: Msg[], maxTokens = 1600, model = MODELS.moonshot.chat): Promise<string | null> {
+  const call = (tokenKey: 'max_tokens' | 'max_completion_tokens') =>
+    fetch(`${MODELS.moonshot.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.MOONSHOT_API_KEY}` },
+      body: JSON.stringify({ model, [tokenKey]: maxTokens, messages }),
+    });
+  try {
+    let res = await call('max_tokens');
+    if (res.status === 400) {
+      const body = await res.text();
+      if (/max_completion_tokens/i.test(body)) res = await call('max_completion_tokens');
+      else throw new Error(`moonshot 400: ${body}`);
     }
+    if (!res.ok) throw new Error(`moonshot ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as any;
+    return (data.choices?.[0]?.message?.content || '').trim() || null;
+  } catch (err) {
+    console.warn('[coder] kimi failed, degrading:', (err as Error).message);
+    return null;
   }
+}
+
+/** Route one coder prompt to the active coder (Kimi K3 / Claude / GPT). Keyless -> null. */
+async function coderComplete(system: string, user: string, maxTokens = 1600): Promise<string | null> {
+  const coder = activeCoder();
+  if (coder === 'kimi') return kimiComplete([{ role: 'system', content: system }, { role: 'user', content: user }], maxTokens);
   if (coder === 'anthropic' || coder === 'openai') {
-    const res = await chat(
-      [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      { maxTokens }
-    );
+    const res = await chat([{ role: 'system', content: system }, { role: 'user', content: user }], { maxTokens });
     return res?.text || null;
   }
-  return null; // keyless
+  return null;
 }
 
 function stripFences(s: string): string {
@@ -128,32 +128,119 @@ function stripFences(s: string): string {
     .trim();
 }
 
+/** A candidate is only usable if it is actually the module we asked for. */
+function isValidModule(code: string): boolean {
+  return /export\s+async\s+function\s+handle/.test(code) && /export\s+const\s+meta/.test(code);
+}
+
+/** The coder's instructions for writing one module. */
+function coderSystem(offCatalog: boolean): string {
+  return `You are the CODER inside ${COMPANY.name}'s AI operating system. Write ONE self-contained TypeScript module for a new agent.${offCatalog ? ' This agent is off-catalog, so design its logic from scratch for the gap described.' : ''} Output ONLY the code, no prose, no markdown fences. It must implement this contract exactly:\n${CONTRACT}\nKeep it dependency-free (no imports), fully typed, and realistic for a ${COMPANY.industry} company. Put real, useful logic in handle(); use ctx.recall / ctx.remember; leave a TODO only where a real external integration would be needed.`;
+}
+
+/** The gap description handed to every coder. */
+function coderUser(spec: Spec, finding: any, pillar: string): string {
+  return `AGENT: ${spec.name}\nROLE: ${spec.role}\nPILLAR: ${finding.pillar_key || pillar}\nWHY IT EXISTS (the gap): ${finding.title}\nDETAIL: ${finding.detail || ''}\nSTARTING SKILLS:\n- ${(spec.knowledge || []).join('\n- ')}`;
+}
+
 /**
- * Write the agent's code module. Returns the code, where it would live, and which coder
- * wrote it. Keyless (or on any coder failure) returns a real template module, so the harness
- * always produces a mergeable artifact.
+ * THE K3 SWARM - "K3 Swarm" has no distinct API model, so we run the real thing it describes:
+ * a planner pass, N parallel kimi-k3 coder passes (each with a different emphasis), and a
+ * reviewer pass that merges the strongest into one final module. Kimi-only; returns null so the
+ * caller can fall back to a single pass or the template.
+ */
+async function generateAgentModuleSwarm(spec: Spec, finding: any, pillar: string): Promise<string | null> {
+  const model = MODELS.moonshot.swarm;
+  const n = swarmSize();
+  const offCatalog = !finding.capability_id;
+  const user = coderUser(spec, finding, pillar);
+
+  // 1) Planner: one short implementation plan the whole swarm follows.
+  const plan = await kimiComplete(
+    [
+      {
+        role: 'system',
+        content: `You are the lead of a coder swarm inside ${COMPANY.name}'s AI operating system. Write a short, concrete implementation plan (5-8 bullets) for a self-contained TypeScript agent module implementing this contract:\n${CONTRACT}\nReal logic in handle() using ctx.recall/ctx.remember; dependency-free; realistic for a ${COMPANY.industry} company. Output ONLY the plan, no code.`,
+      },
+      { role: 'user', content: user },
+    ],
+    900,
+    model
+  );
+
+  // 2) N coders in parallel, each with a distinct emphasis.
+  const angles = [
+    'prioritize correctness and edge cases',
+    'prioritize clean, minimal, readable code',
+    'prioritize genuinely useful real logic and helpful actions[]',
+    'prioritize thorough use of the shared brain (recall then remember)',
+    'prioritize robustness and input validation',
+  ];
+  const coders = Array.from({ length: n }, (_, i) =>
+    kimiComplete(
+      [
+        {
+          role: 'system',
+          content: `${coderSystem(offCatalog)}${plan ? `\nFollow this implementation plan:\n${plan}` : ''}\nYour emphasis for this version: ${angles[i % angles.length]}.`,
+        },
+        { role: 'user', content: user },
+      ],
+      1700,
+      model
+    )
+  );
+  const candidates = (await Promise.all(coders))
+    .map((c) => (c ? stripFences(c) : null))
+    .filter((c): c is string => !!c && isValidModule(c));
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  // 3) Reviewer: merge the strongest into one final module.
+  const reviewed = await kimiComplete(
+    [
+      {
+        role: 'system',
+        content: `You are the reviewer of a coder swarm. You are given ${candidates.length} candidate TypeScript modules for the SAME agent. Produce the single best FINAL module: merge the strongest ideas, fix any bugs, and implement this contract exactly:\n${CONTRACT}\nOutput ONLY the final code, no prose, no markdown fences.`,
+      },
+      { role: 'user', content: candidates.map((c, i) => `--- CANDIDATE ${i + 1} ---\n${c}`).join('\n\n') },
+    ],
+    2400,
+    model
+  );
+  const finalCode = reviewed ? stripFences(reviewed) : null;
+  return finalCode && isValidModule(finalCode) ? finalCode : candidates[0];
+}
+
+/**
+ * Write the agent's code module. Returns the code, where it would live, and which coder wrote
+ * it. Escalates to the K3 swarm for complex builds (per MOONSHOT_SWARM). Keyless, or on any
+ * failure, returns a real template module, so the harness always produces a mergeable artifact.
  */
 export async function generateAgentModule(
   spec: Spec,
   finding: any,
-  pillar: string
+  pillar: string,
+  opts?: { complex?: boolean }
 ): Promise<{ code: string; path: string; engine: string }> {
   const key = slug(spec.name);
   const path = `server/src/agents/generated/${key}.ts`;
   const template = templateModule(spec, finding, pillar);
+  const coder = activeCoder();
+  if (coder === 'none') return { code: template, path, engine: 'template' };
 
-  if (activeCoder() === 'none') return { code: template, path, engine: 'template' };
+  // The swarm is a Kimi-only escalation: always in 'all' mode, only for complex builds in 'hard'.
+  const mode = swarmMode();
+  const useSwarm = coder === 'kimi' && (mode === 'all' || (mode === 'hard' && !!opts?.complex));
+  if (useSwarm) {
+    const swarm = await generateAgentModuleSwarm(spec, finding, pillar);
+    if (swarm) return { code: swarm, path, engine: `coder-kimi-k3-swarm-x${swarmSize()}` };
+    // fall through to a single pass on swarm failure
+  }
 
-  const system = `You are the CODER inside ${COMPANY.name}'s AI operating system. Write ONE self-contained TypeScript module for a new agent. Output ONLY the code, no prose, no markdown fences. It must implement this contract exactly:\n${CONTRACT}\nKeep it dependency-free (no imports), fully typed, and realistic for a ${COMPANY.industry} company. Put real, useful logic in handle(); use ctx.recall / ctx.remember; leave a TODO only where a real external integration would be needed.`;
-  const user = `AGENT: ${spec.name}\nROLE: ${spec.role}\nPILLAR: ${finding.pillar_key || pillar}\nWHY IT EXISTS (the gap): ${finding.title}\nDETAIL: ${finding.detail || ''}\nSTARTING SKILLS:\n- ${(spec.knowledge || []).join('\n- ')}`;
-
-  const out = await coderChat(system, user);
+  const out = await coderComplete(coderSystem(!finding.capability_id), coderUser(spec, finding, pillar));
   if (out) {
     const code = stripFences(out);
-    // Basic sanity: it must actually be the module we asked for.
-    if (/export\s+async\s+function\s+handle/.test(code) && /export\s+const\s+meta/.test(code)) {
-      return { code, path, engine: `coder-${activeCoder()}` };
-    }
+    if (isValidModule(code)) return { code, path, engine: coder === 'kimi' ? 'coder-kimi-k3' : `coder-${coder}` };
   }
   return { code: template, path, engine: 'template' };
 }

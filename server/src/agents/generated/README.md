@@ -1,9 +1,10 @@
 # Generated agent modules (harness output)
 
-The Harness's coder (Kimi K2 by default) writes a real TypeScript module here for each new
-agent it builds. **These are reviewable artifacts, not live code.** A module lands here only
-when a human reviews the diff on the Harness tab and merges it through the normal dev
-pipeline. Nothing in this folder is hot-loaded or auto-executed by the running app.
+The Harness's coder (Kimi K3 by default, escalating to the K3 swarm for complex builds) writes
+a real TypeScript module here for each new agent it builds. The swarm (parallel kimi-k3 coder
+passes + a reviewer/merge) writes the exact same contract. **These are reviewable artifacts, not
+live code.** A module lands here only when a human reviews the diff on the Harness tab and merges
+it through the normal dev pipeline. Nothing in this folder is hot-loaded or auto-executed.
 
 Every module implements one contract:
 

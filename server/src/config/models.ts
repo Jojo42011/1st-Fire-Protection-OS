@@ -14,10 +14,16 @@ export const MODELS = {
     chat: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     embed: process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small',
   },
-  // Kimi K2 (Moonshot AI) - the dedicated CODER for the harness. OpenAI-compatible API.
-  // Keeps codegen on a cheap, strong coding model while Claude stays the reasoning brain.
+  // Kimi K3 (Moonshot AI) - the dedicated CODER for the harness. OpenAI-compatible API.
+  // Keeps codegen on a strong coding model while Claude stays the reasoning brain.
+  // NOTE (K3): the server fixes temperature/top_p/n/penalties - do NOT send them, they 400.
+  // reasoning_effort accepts only "max". Context 1M; default max_completion_tokens 131072.
   moonshot: {
-    chat: process.env.MOONSHOT_MODEL || 'kimi-k2-0711-preview',
+    chat: process.env.MOONSHOT_MODEL || 'kimi-k3',
+    // "K3 Swarm" has no distinct API model id (it is a subscription concurrency feature), so the
+    // swarm runs as parallel kimi-k3 passes. Overridable: if Moonshot ships a real swarm model id,
+    // set MOONSHOT_SWARM_MODEL and the swarm passes use it - a one-line swap, no invented ids.
+    swarm: process.env.MOONSHOT_SWARM_MODEL || process.env.MOONSHOT_MODEL || 'kimi-k3',
     baseUrl: process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1',
   },
 };
@@ -47,7 +53,7 @@ export function activeCoder(): Coder {
 export function coderLabel(): string {
   switch (activeCoder()) {
     case 'kimi':
-      return 'Kimi K2';
+      return 'Kimi K3';
     case 'anthropic':
       return 'Claude';
     case 'openai':
@@ -55,6 +61,24 @@ export function coderLabel(): string {
     default:
       return 'template';
   }
+}
+
+/**
+ * When the harness escalates to the swarm (parallel kimi-k3 passes + a reviewer/merge).
+ *   'off'  - never; one coder pass per build
+ *   'hard' - only for complex/off-catalog builds (default)
+ *   'all'  - every build (max quality, max cost)
+ * Only meaningful when the coder is Kimi; other coders always run a single pass.
+ */
+export type SwarmMode = 'off' | 'hard' | 'all';
+export function swarmMode(): SwarmMode {
+  const v = (process.env.MOONSHOT_SWARM || 'hard').toLowerCase();
+  return v === 'off' || v === 'all' ? v : 'hard';
+}
+/** How many parallel coder passes the swarm runs (clamped 2-5). */
+export function swarmSize(): number {
+  const n = Number(process.env.MOONSHOT_SWARM_SIZE || 3);
+  return Math.max(2, Math.min(5, Number.isFinite(n) ? n : 3));
 }
 
 export function embeddingsEnabled(): boolean {

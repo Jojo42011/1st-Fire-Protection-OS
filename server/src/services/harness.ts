@@ -208,7 +208,9 @@ export async function runHarness(): Promise<{ built: number }> {
       codePath: string | null = null,
       codeEngine: string | null = null;
     if (mode === 'new' && draft.spec) {
-      const gen = await generateAgentModule(draft.spec, f, cap.name);
+      // Complex builds (off-catalog, or a deep gap) earn the K3 swarm when it is enabled.
+      const complex = !cap.id || (f.detail || '').length > 240;
+      const gen = await generateAgentModule(draft.spec, f, cap.name, { complex });
       code = gen.code;
       codePath = gen.path;
       codeEngine = gen.engine;
