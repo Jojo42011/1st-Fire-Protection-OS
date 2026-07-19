@@ -82,10 +82,19 @@ export async function handle(input: AgentInput, ctx: AgentContext): Promise<Agen
 
 type Msg = { role: 'system' | 'user'; content: string };
 
+// Last coder diagnostic, surfaced in the harness API so a degrade is never silent.
+let _lastNote: string | null = null;
+function setNote(n: string | null) {
+  _lastNote = n;
+}
+export function coderNote(): string | null {
+  return _lastNote;
+}
+
 /**
  * Call Kimi K3 (Moonshot, OpenAI-compatible). K3 fixes temperature/top_p/n/penalties server-side,
- * so we send NONE of them (they 400). max_tokens is used; if the server insists on
- * max_completion_tokens we retry once with that name. Model overridable (single vs swarm).
+ * so we send NONE of them (they 400). We send max_tokens; on ANY 400 we retry once with
+ * max_completion_tokens (K3's native param). Errors are captured in _lastNote, not just logged.
  */
 async function kimiComplete(messages: Msg[], maxTokens = 1600, model = MODELS.moonshot.chat): Promise<string | null> {
   const call = (tokenKey: 'max_tokens' | 'max_completion_tokens') =>
@@ -98,14 +107,18 @@ async function kimiComplete(messages: Msg[], maxTokens = 1600, model = MODELS.mo
     let res = await call('max_tokens');
     if (res.status === 400) {
       const body = await res.text();
-      if (/max_completion_tokens/i.test(body)) res = await call('max_completion_tokens');
-      else throw new Error(`moonshot 400: ${body}`);
+      // Broad retry: the token param name is the most likely 400 on K3; try the native name.
+      res = await call('max_completion_tokens');
+      if (!res.ok) throw new Error(`moonshot 400 (model=${model}): ${body.slice(0, 300)}`);
     }
-    if (!res.ok) throw new Error(`moonshot ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`moonshot ${res.status} (model=${model}): ${(await res.text()).slice(0, 300)}`);
     const data = (await res.json()) as any;
-    return (data.choices?.[0]?.message?.content || '').trim() || null;
+    const text = (data.choices?.[0]?.message?.content || '').trim();
+    return text || null;
   } catch (err) {
-    console.warn('[coder] kimi failed, degrading:', (err as Error).message);
+    const msg = (err as Error).message;
+    console.warn('[coder] kimi failed, degrading:', msg);
+    setNote(`api-error: ${msg}`);
     return null;
   }
 }
@@ -226,6 +239,7 @@ export async function generateAgentModule(
   const path = `server/src/agents/generated/${key}.ts`;
   const template = templateModule(spec, finding, pillar);
   const coder = activeCoder();
+  setNote(null);
   if (coder === 'none') return { code: template, path, engine: 'template' };
 
   // The swarm is a Kimi-only escalation: always in 'all' mode, only for complex builds in 'hard'.
@@ -233,14 +247,24 @@ export async function generateAgentModule(
   const useSwarm = coder === 'kimi' && (mode === 'all' || (mode === 'hard' && !!opts?.complex));
   if (useSwarm) {
     const swarm = await generateAgentModuleSwarm(spec, finding, pillar);
-    if (swarm) return { code: swarm, path, engine: `coder-kimi-k3-swarm-x${swarmSize()}` };
+    if (swarm) {
+      setNote('ok');
+      return { code: swarm, path, engine: `coder-kimi-k3-swarm-x${swarmSize()}` };
+    }
     // fall through to a single pass on swarm failure
   }
 
   const out = await coderComplete(coderSystem(!finding.capability_id), coderUser(spec, finding, pillar));
   if (out) {
     const code = stripFences(out);
-    if (isValidModule(code)) return { code, path, engine: coder === 'kimi' ? 'coder-kimi-k3' : `coder-${coder}` };
+    if (isValidModule(code)) {
+      setNote('ok');
+      return { code, path, engine: coder === 'kimi' ? 'coder-kimi-k3' : `coder-${coder}` };
+    }
+    // Got output but it wasn't a valid module (e.g. K3 wrapped it in prose) - record why.
+    if (!_lastNote || _lastNote === 'ok') setNote(`invalid-output: ${out.replace(/\s+/g, ' ').slice(0, 160)}`);
+  } else if (!_lastNote) {
+    setNote('no-output');
   }
   return { code: template, path, engine: 'template' };
 }

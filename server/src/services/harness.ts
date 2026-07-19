@@ -7,7 +7,7 @@ import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
 import { CAPABILITY_TO_FOUNDING_AGENT, createAgentFromOrder, getAgent, upgradeAgent } from './agentRuntime';
 import { customAgentName } from './auditAgent';
-import { generateAgentModule } from './codegen';
+import { generateAgentModule, coderNote } from './codegen';
 import { activeCoder, coderLabel } from '../config/models';
 
 interface CapLike {
@@ -364,8 +364,9 @@ export function harnessState() {
   return {
     company: { name: COMPANY.name },
     brain: activeProvider() !== 'none',
-    coder: coderLabel(), // who writes the code: Kimi K2 | Claude | GPT | template
+    coder: coderLabel(), // who writes the code: Kimi K3 | Claude | GPT | template
     coder_live: activeCoder() !== 'none',
+    coder_note: coderNote(), // last codegen diagnostic (ok | api-error:.. | invalid-output:..)
     metrics: {
       pending: inbox.length,
       staged: staged.length,
