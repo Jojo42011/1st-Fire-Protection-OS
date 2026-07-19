@@ -1,9 +1,11 @@
 name: Deploy to Fly.io
 
-# Every push to these branches auto-deploys to the cloud. No local machine involved.
+# Pushes to main/master auto-deploy to the cloud. No local machine involved.
+# Working branches (claude/*) do NOT auto-deploy: shipping is an explicit,
+# reviewed merge to main, never a side effect of a branch push.
 on:
   push:
-    branches: [main, master, claude/1st-fire-protection-app-6klq0t]
+    branches: [main, master]
   workflow_dispatch: {}   # manual "Run workflow" button in the Actions tab
 
 jobs:
@@ -15,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install
+      - run: npm ci
       - run: npm run build
       # keyless boot smoke test — must start on seeded data with no secrets
       - name: Boot smoke test

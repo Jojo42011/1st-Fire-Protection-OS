@@ -1,15 +1,3 @@
 {
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/merge-to-main.sh",
-            "statusMessage": "Merging working branch into main..."
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }
