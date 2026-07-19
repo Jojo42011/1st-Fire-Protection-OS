@@ -12,6 +12,7 @@ export function seed(): void {
   // (already seeded) still pick them up on upgrade.
   ensureAuditFoundation();
   seedAudit();
+  seedGrowth();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -145,11 +146,12 @@ function ensureAuditFoundation(): void {
 
   // Migrate rows recorded under the original 8-pillar model onto the real
   // 9-department model. Idempotent: once remapped there is nothing left to touch.
+  // NOTE: 'growth' is now a real, current pillar (Growth & Market Expansion), so it is
+  // deliberately NOT remapped/deleted here anymore.
   const REMAP: [string, string][] = [
     ['dispatch', 'service'],
     ['compliance', 'projects'],
     ['people', 'ops'],
-    ['growth', 'ops'],
   ];
   for (const table of ['audit_systems', 'audit_people', 'audit_workflows', 'audit_findings']) {
     for (const [oldKey, newKey] of REMAP) {
@@ -158,7 +160,7 @@ function ensureAuditFoundation(): void {
   }
   // Ed Portillo is Vendor Relations — was filed under sales before vendors existed.
   db.prepare(`UPDATE audit_people SET pillar_key = 'vendors' WHERE name = 'Ed Portillo'`).run();
-  db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people','growth')`).run();
+  db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people')`).run();
 
   const insPillar = db.prepare(
     `INSERT OR IGNORE INTO audit_pillars (key, name, tagline, sort) VALUES (?, ?, ?, ?)`
@@ -241,4 +243,53 @@ function seedAudit(): void {
 
   setState('seeded_audit', '1');
   console.log('[seed] audit foundation loaded (pillars, locations, known systems, veterans, benchmark leaks).');
+}
+
+/**
+ * Growth intelligence — context fed in from Booker Growth's Texas fire-protection market
+ * research so The Operator walks in already seeing the GROWTH gaps, not just operational
+ * leaks. Illustrative/benchmark findings (no invented accounts); the real targets come
+ * from the public feeds (SFMO license DB, permits, bid boards) when connected. Own flag so
+ * existing brains pick it up on upgrade.
+ */
+function seedGrowth(): void {
+  if (getState('seeded_growth') === '1') return;
+  const db = getDb();
+
+  // the public feeds that power expansion — a "system of record" the OS should mine
+  db.prepare(
+    `INSERT INTO audit_systems (name, category, truth_for, gaps, pillar_key) VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    'SFMO License DB + Permit Portals + Bid Boards',
+    'public-data',
+    'Texas competitor map, new-construction signal, and competitively-bid contracts',
+    'All public and free, none of it mined today — competitor/white-space map, acquisition targets, permit-to-ITM signal, and ISD/municipal RFPs are unused',
+    'growth'
+  );
+
+  const findings: [string, string, string, string, string, string, string][] = [
+    // pillar, kind, title, detail, severity, cost_hint, capability
+    ['growth', 'gap', 'New-construction permits that become ITM accounts are not captured systematically',
+      'Every new commercial building is a code-mandated future inspection account. Catching the permit and timing outreach to the acceptance test converts installs into decades of recurring ITM; today it is relationship-driven, not systematic.',
+      'high', 'future recurring ITM', 'permit_hunter'],
+    ['growth', 'leak', 'Installs and one-off repairs are not converted into recurring agreements',
+      'Recurring ITM mix is the master value driver — operators at 40%+ recurring trade 2–3 EBITDA turns higher. Every completed install/one-off without an agreement is recurring revenue left on the table.',
+      'high', '2–3 EBITDA turns', 'recurring_capture'],
+    ['growth', 'gap', 'Competitor and white-space map lives in people\'s heads, not on a board',
+      'The Texas SFMO publishes every licensed fire contractor. Mapped by metro it shows where coverage is thin (expansion white space) and which small shops are acquisition targets — density-first from San Antonio outward.',
+      'medium', '', 'territory_map'],
+    ['growth', 'gap', 'Small independent shops are being consolidated by nationals, not sourced here first',
+      'The market is fragmented and consolidating fast; a small shop with an inspection book is a portable recurring-revenue asset. The SFMO DB surfaces tuck-in targets in your own metros before a national buys the route.',
+      'medium', 'route density', 'acquisition_scout'],
+    ['growth', 'gap', 'ISD and municipal fire-inspection RFPs are not systematically watched',
+      'School districts and cities must competitively bid inspection work; a missed posting is a missed multi-year contract. District bid boards and the state ESBD are public and watchable.',
+      'medium', 'multi-year contracts', 'bid_watcher'],
+  ];
+  const insFnd = db.prepare(
+    `INSERT INTO audit_findings (pillar_key, kind, title, detail, severity, cost_hint, capability_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  for (const f of findings) insFnd.run(...f);
+
+  setState('seeded_growth', '1');
+  console.log('[seed] growth intelligence loaded (SFMO/permit/bid feeds + 5 growth gaps on the Growth pillar).');
 }

@@ -144,6 +144,46 @@ export const CAPABILITIES: CapabilityDef[] = [
     pillars: ['hr', 'service'],
     triggers: ['new (tech|hire|guy)', 'training', 'onboard', 'ramp', 'shortage', 'hiring', 'green', 'apprentice'],
   },
+  {
+    id: 'permit_hunter',
+    name: 'Permit-to-ITM Hunter',
+    what: 'Every new commercial building is a code-mandated future inspection account — this catches the permit and times the pitch to the acceptance test.',
+    builds: 'Agent that watches city/county permit portals for fire sprinkler/alarm permits, cross-references the AHJ and the owner/property manager, and queues timed outreach at the acceptance-test / first-annual window.',
+    pillars: ['growth', 'sales'],
+    triggers: ['permit', 'new construction', 'new building', 'developer', 'general contractor', '\\bgc\\b', 'ground.?break', 'acceptance test', 'coming out of the ground'],
+  },
+  {
+    id: 'territory_map',
+    name: 'Texas Territory Map',
+    what: 'Maps every state-licensed fire contractor and the metros where coverage is thin — so you expand into white space instead of a knife fight.',
+    builds: 'Pulls the Texas SFMO public license database into a live competitor map by metro; scores white-space and route-density opportunity San Antonio → Austin → Houston/DFW.',
+    pillars: ['growth', 'ops'],
+    triggers: ['expand', 'expansion', 'territory', 'market share', 'competitor', 'white ?space', 'new (market|metro)', 'take over (texas|the)', 'grow(th|ing)? (into|across)'],
+  },
+  {
+    id: 'recurring_capture',
+    name: 'Recurring-Revenue Capture',
+    what: 'Recurring ITM is what raises the whole company\'s value — operators at 40%+ recurring trade 2–3 EBITDA turns higher — so every install and one-off should become an agreement.',
+    builds: 'Agent that flags every completed install / one-off repair with no ITM agreement, drafts the recurring-contract offer, and tracks recurring-mix % as the master growth metric.',
+    pillars: ['growth', 'inspections', 'finance'],
+    triggers: ['recurring', 'agreement', 'one.?off', 'project only', 'contract mix', 'monthly revenue', '\\brmr\\b', 'retention', 'churn', 'recurring mix'],
+  },
+  {
+    id: 'acquisition_scout',
+    name: 'Acquisition Scout',
+    what: 'The market is fragmented and consolidating fast — a small shop with an inspection book is a portable recurring-revenue asset. Buy the route before a national does.',
+    builds: 'Uses the SFMO license database to surface small independent fire shops by metro, sizes their likely recurring book, and builds a ranked acquisition-target shortlist.',
+    pillars: ['growth'],
+    triggers: ['acqui', 'buy (a|out)', 'tuck.?in', 'roll.?up', 'consolidat', 'small shop', 'for sale', 'merger'],
+  },
+  {
+    id: 'bid_watcher',
+    name: 'Bid Board Watcher',
+    what: 'School districts and cities must competitively bid fire inspection work — miss the posting and you miss a multi-year contract.',
+    builds: 'Agent that watches ISD / municipal bid boards and the state ESBD for fire inspection & alarm RFPs, and drafts the response scaffold.',
+    pillars: ['growth', 'sales'],
+    triggers: ['\\bbid board\\b', '\\brfp\\b', 'request for proposal', 'school district', '\\bisd\\b', 'municipal', 'city contract', 'government (work|bid)', 'esbd', 'procurement'],
+  },
 ];
 
 export function capabilityById(id: string): CapabilityDef | undefined {

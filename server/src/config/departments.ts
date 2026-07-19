@@ -206,6 +206,27 @@ export const DEPARTMENTS: DepartmentDef[] = [
       { q: 'What happens to a message for someone who is out in the field?', chips: ['Teams ping', 'Sticky note', 'Voicemail roulette'] },
     ],
   },
+  {
+    key: 'growth',
+    name: 'Growth & Market Expansion',
+    wheel: 'Growth',
+    tagline: 'Winning recurring ITM across Texas - permits to pipeline to acquisition',
+    aiRole: 'Hunts future recurring-inspection revenue across Texas: catches new-construction permits before the acceptance test, maps competitor white-space from the state license database, converts installs into recurring agreements, and sources tuck-in shops - density first, San Antonio outward.',
+    agents: [
+      { name: 'Permit Hunter', what: 'Catches new commercial fire-system permits the day they post and times outreach to the acceptance test', capability_id: 'permit_hunter', weeks: 3 },
+      { name: 'Territory Mapper', what: 'Maps every state-licensed competitor and the metros where coverage is thin', capability_id: 'territory_map', weeks: 3 },
+      { name: 'Recurring Capture', what: 'Turns every new install and one-off repair into a recurring ITM agreement', capability_id: 'recurring_capture', weeks: 2 },
+      { name: 'Acquisition Scout', what: 'Surfaces small inspection shops worth acquiring for their recurring book', capability_id: 'acquisition_scout', weeks: 3 },
+      { name: 'Bid Board Watcher', what: 'Watches ISD and municipal bid boards for fire inspection RFPs', capability_id: 'bid_watcher', weeks: 2 },
+    ],
+    connects: ['sales', 'inspections', 'ops'],
+    systems: ['SFMO License DB', 'Permit Portals', 'ISD/Municipal Bid Boards'],
+    questions: [
+      { q: 'What share of your revenue is under a recurring ITM agreement today versus one-off project work?', chips: ['Most of it recurring', 'Roughly half', 'Mostly project work'] },
+      { q: 'When a new building goes up in your metros, how do you find out - and does anyone chase the inspection contract before a competitor does?', chips: ['We hear through relationships', 'The GC tells us', 'We do not systematically track it'] },
+      { q: 'Outside San Antonio, which Texas metro is the biggest opportunity - and would you rather grow there organically or buy a small shop with a book?', chips: ['The Austin corridor', 'Houston or DFW', 'Not sure yet'] },
+    ],
+  },
 ];
 
 export function deptByKey(key: string): DepartmentDef | undefined {

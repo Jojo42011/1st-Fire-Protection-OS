@@ -49,6 +49,7 @@ const PILLAR_HINTS: [string, RegExp][] = [
   ['ops', /complain|escalat|dashboard|kpi|visibility|branch(es)?|location|side.?by.?side|retir|in (his|her|their) head|only one|tribal|veteran|knows every/i],
   ['vendors', /vendor|supplier|procure|purchase|po\b|pricing|material/i],
   ['reception', /front desk|phone|call(s|er)?\b|message|reception|answer|voicemail|sticky|spanish/i],
+  ['growth', /grow(th|ing)?|expand|expansion|market share|new (market|metro|territory)|acqui|recurring|white ?space|take over|competitor|permit|new construction|bid board|\brfp\b|\bisd\b|acceptance test|sfmo|austin|houston|dallas|dfw/i],
 ];
 
 /** Fallback follow-ups per department — the deck's own consulting questions. */
@@ -96,17 +97,17 @@ function rulesAnalysis(text: string, department?: string): Analysis {
   if (!pillars.length) pillars.push('ops');
   const top = pillars.slice(0, 3);
 
-  // capability matching off catalog triggers
-  const caps: { id: string; pitch: string }[] = [];
-  for (const c of CAPABILITIES) {
-    if (caps.length >= 3) break;
-    if (c.triggers.some((t) => new RegExp(t, 'i').test(text))) {
-      caps.push({
-        id: c.id,
-        pitch: `${c.what}${c.live ? ' — already running in this OS.' : ''}`,
-      });
-    }
-  }
+  // capability matching off catalog triggers, preferring builds that belong to the
+  // anchored/top pillar (so a growth observation surfaces a growth build, not an
+  // operational one that happens to share a trigger word like "recurring" or "permit").
+  const matched = CAPABILITIES.filter((c) => c.triggers.some((t) => new RegExp(t, 'i').test(text)));
+  const pillarScore = (c: { pillars: string[] }) =>
+    c.pillars.includes(top[0]) ? 2 : c.pillars.some((p) => top.includes(p)) ? 1 : 0;
+  matched.sort((a, b) => pillarScore(b) - pillarScore(a));
+  const caps = matched.slice(0, 3).map((c) => ({
+    id: c.id,
+    pitch: `${c.what}${c.live ? ' — already running in this OS.' : ''}`,
+  }));
 
   // entities
   const person = sniffPerson(text);
