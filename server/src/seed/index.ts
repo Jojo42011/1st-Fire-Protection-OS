@@ -15,6 +15,7 @@ export function seed(): void {
   seedAudit();
   seedGrowth();
   seedQuestions();
+  seedHarness();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -316,4 +317,32 @@ function seedQuestions(): void {
   }
   setState('seeded_questions', '1');
   console.log('[seed] interview ladder seeded (opening question decks per department).');
+}
+
+/**
+ * Open the Harness alive: pre-approve one already-seeded growth gap (queue_status =
+ * 'approved') so the harness inbox shows a real work order to run on first visit, without
+ * touching the Operator's own proposed feed. Its own flag; idempotent; only acts if it can
+ * find a growth gap with a capability and nothing is approved yet.
+ */
+function seedHarness(): void {
+  if (getState('seeded_harness') === '1') return;
+  const db = getDb();
+  const any = db.prepare(`SELECT id FROM audit_findings WHERE queue_status = 'approved' LIMIT 1`).get();
+  if (!any) {
+    const pick = db
+      .prepare(
+        `SELECT id FROM audit_findings
+         WHERE pillar_key = 'growth' AND capability_id IS NOT NULL AND capability_id <> ''
+         ORDER BY id ASC LIMIT 1`
+      )
+      .get() as { id: number } | undefined;
+    if (pick) {
+      db.prepare(
+        `UPDATE audit_findings SET queue_status = 'approved', value_line = 'recurring ITM revenue' WHERE id = ?`
+      ).run(pick.id);
+      console.log('[seed] harness seeded (one approved growth gap staged in the inbox).');
+    }
+  }
+  setState('seeded_harness', '1');
 }

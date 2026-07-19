@@ -261,6 +261,25 @@ export function initDb(): void {
       facts_learned INTEGER DEFAULT 0,          -- observations captured that day
       coverage_pct  INTEGER DEFAULT 0           -- overall coverage snapshot at day end
     );
+
+    /* THE HARNESS — the execution layer over the Operator's build queue.
+       When a human approves a gap (audit_findings.queue_status='approved'), the
+       harness picks it up, drafts a build order (the plan to fix it), and stages it
+       for a final human ship. This is the OS proposing AND building its own next
+       steps, gated by a person at each hop. */
+    CREATE TABLE IF NOT EXISTS build_orders (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      finding_id    INTEGER,                    -- the approved gap this builds
+      capability_id TEXT,                       -- the matched build from the catalog
+      title         TEXT NOT NULL,
+      plan          TEXT,                       -- JSON array of build steps the harness drafted
+      value_line    TEXT,                       -- the business case, carried from the gap
+      eta_weeks     INTEGER DEFAULT 2,
+      status        TEXT DEFAULT 'staged',      -- staged (drafted, awaiting ship) | shipped
+      engine        TEXT DEFAULT 'harness-rules', -- harness-rules | harness-llm
+      created_at    TEXT DEFAULT (datetime('now')),
+      shipped_at    TEXT
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------

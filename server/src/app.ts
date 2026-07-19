@@ -20,6 +20,7 @@ import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
 import audit from './routes/audit';
+import harness from './routes/harness';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
 
@@ -43,6 +44,7 @@ app.use(callWebhook);
 app.use(integrations);
 app.use(voice);
 app.use(audit);
+app.use(harness);
 app.use(admin);
 app.use(introspect);
 
@@ -56,6 +58,7 @@ app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
 app.get('/audit', page('audit.html'));
+app.get('/harness', page('harness.html'));
 app.get('/integrations', page('integrations.html'));
 
 // static assets (theme.css etc.)
