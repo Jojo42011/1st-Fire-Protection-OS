@@ -38,16 +38,21 @@ export function activeProvider(): Provider {
 }
 
 /**
- * The CODER: which model writes the harness's agent code. Kimi K2 (Moonshot) is preferred
- * when its key is present; otherwise the reasoning provider (Claude/OpenAI) codes as a
- * fallback; with nothing set, the harness emits a real template module. Pluggable and
- * swappable per client (a privacy-sensitive client points this back at Claude or local).
+ * The CODER: which model writes the harness's agent code. Default is Claude (Opus 4.8) when
+ * ANTHROPIC_API_KEY is present, then GPT, then Kimi (Moonshot) only if that is the sole key;
+ * with nothing set, the harness emits a real template module. Set CODER=kimi|anthropic|openai
+ * to force one (Kimi is opt-in now). Pluggable and swappable per client.
  */
 export type Coder = 'kimi' | 'anthropic' | 'openai' | 'none';
 export function activeCoder(): Coder {
-  if (process.env.MOONSHOT_API_KEY) return 'kimi';
+  const pref = (process.env.CODER || '').toLowerCase();
+  if (pref === 'kimi' && process.env.MOONSHOT_API_KEY) return 'kimi';
+  if (pref === 'anthropic' && process.env.ANTHROPIC_API_KEY) return 'anthropic';
+  if (pref === 'openai' && process.env.OPENAI_API_KEY) return 'openai';
+  // Default preference: Claude (Opus 4.8) codes; then GPT; Kimi only if it is the only key set.
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
+  if (process.env.MOONSHOT_API_KEY) return 'kimi';
   return 'none';
 }
 export function coderLabel(): string {
@@ -55,7 +60,7 @@ export function coderLabel(): string {
     case 'kimi':
       return 'Kimi K3';
     case 'anthropic':
-      return 'Claude';
+      return 'Opus 4.8';
     case 'openai':
       return 'GPT';
     default:

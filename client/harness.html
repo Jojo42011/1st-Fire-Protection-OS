@@ -106,9 +106,9 @@
   <div class="lede fadein">
     <h2>The OS builds and codes its own team.</h2>
     <p>The Operator finds the gap and proposes the fix. You approve it. The harness drafts a new
-       AI employee, and a dedicated coder (Kimi K3, escalating to the K3 swarm for the hard ones)
-       writes its real code module. You review the code, then ship it, and it lands on the Roster.
-       Propose, build, code, ship, a person at every gate. Nothing runs until you merge it.</p>
+       AI employee, and a dedicated coder (Opus 4.8) writes its real code module. You review the
+       code, then ship it, and it lands on the Roster. Propose, build, code, ship, a person at
+       every gate. Nothing runs until you merge it.</p>
   </div>
 
   <div class="strip fadein" id="strip"></div>
@@ -171,7 +171,7 @@ function orderCard(o,shipped){
     var eng;
     if(ce.indexOf('swarm')>=0){var m=ce.match(/x(\d+)/);eng='K3 Swarm'+(m?' (x'+m[1]+')':'');}
     else if(ce.indexOf('kimi')>=0)eng='Kimi K3';
-    else if(ce.indexOf('anthropic')>=0)eng='Claude';
+    else if(ce.indexOf('anthropic')>=0)eng='Opus 4.8';
     else if(ce.indexOf('openai')>=0)eng='GPT';
     else eng='template';
     code='<details class="code"><summary>The code '+esc(eng)+' wrote'+(o.code_path?' · <span class="cp">'+esc(o.code_path)+'</span>':'')+'</summary>'+
