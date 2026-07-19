@@ -7,6 +7,8 @@ import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
 import { CAPABILITY_TO_FOUNDING_AGENT, createAgentFromOrder, getAgent, upgradeAgent } from './agentRuntime';
 import { customAgentName } from './auditAgent';
+import { generateAgentModule } from './codegen';
+import { activeCoder, coderLabel } from '../config/models';
 
 interface CapLike {
   id: string | null;
@@ -184,8 +186,8 @@ export async function runHarness(): Promise<{ built: number }> {
     .all() as any[];
 
   const ins = db.prepare(
-    `INSERT INTO build_orders (finding_id, capability_id, title, plan, value_line, eta_weeks, status, engine, mode, target_agent_key)
-     VALUES (?, ?, ?, ?, ?, ?, 'staged', ?, ?, ?)`
+    `INSERT INTO build_orders (finding_id, capability_id, title, plan, value_line, eta_weeks, status, engine, mode, target_agent_key, code, code_path, code_engine)
+     VALUES (?, ?, ?, ?, ?, ?, 'staged', ?, ?, ?, ?, ?, ?)`
   );
   let built = 0;
   for (const f of approved) {
@@ -201,6 +203,16 @@ export async function runHarness(): Promise<{ built: number }> {
       mode === 'new'
         ? `${cap.id ? 'New agent' : 'New custom agent'}: ${draft.spec?.name || cap.name}`
         : `Strengthen: ${targetName || target}`;
+    // For a NEW agent, the coder (Kimi by default) writes a real, reviewable code module.
+    let code: string | null = null,
+      codePath: string | null = null,
+      codeEngine: string | null = null;
+    if (mode === 'new' && draft.spec) {
+      const gen = await generateAgentModule(draft.spec, f, cap.name);
+      code = gen.code;
+      codePath = gen.path;
+      codeEngine = gen.engine;
+    }
     ins.run(
       f.id,
       cap.id,
@@ -210,7 +222,10 @@ export async function runHarness(): Promise<{ built: number }> {
       cap.id ? etaWeeks(cap.id) : 2,
       draft.engine,
       mode,
-      target || null
+      target || null,
+      code,
+      codePath,
+      codeEngine
     );
     db.prepare(`UPDATE audit_findings SET queue_status = 'building' WHERE id = ?`).run(f.id);
     built++;
@@ -333,6 +348,9 @@ export function harnessState() {
       eta_weeks: o.eta_weeks,
       status: o.status,
       engine: o.engine,
+      code: o.code || null, // the real module the coder wrote (reviewable artifact)
+      code_path: o.code_path || null,
+      code_engine: o.code_engine || null,
       shipped_at: o.shipped_at,
     };
   });
@@ -344,6 +362,8 @@ export function harnessState() {
   return {
     company: { name: COMPANY.name },
     brain: activeProvider() !== 'none',
+    coder: coderLabel(), // who writes the code: Kimi K2 | Claude | GPT | template
+    coder_live: activeCoder() !== 'none',
     metrics: {
       pending: inbox.length,
       staged: staged.length,

@@ -74,6 +74,7 @@ Click every tab: all three dashboards render on sample data, the receptionist ch
 | Add key(s) | Lights up |
 |---|---|
 | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | Full conversation + on-brand drafting + memory extraction |
+| `MOONSHOT_API_KEY` | The Harness coder flips to **Kimi K2** (writes each new agent's real code module; without it, Claude/GPT code, then a template) |
 | `OPENAI_API_KEY` | Embeddings → hybrid memory recall |
 | `VAPI_API_KEY` / `TWILIO_*` + `ELEVENLABS_API_KEY` | Call Receptionist flips to **live** |
 | `QUICKBOOKS_ACCESS_TOKEN` / `STRIPE_API_KEY` | Invoice Collector pulls real receivables |

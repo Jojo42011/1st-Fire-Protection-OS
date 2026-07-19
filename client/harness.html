@@ -73,6 +73,14 @@
   .card .plan{margin-top:12px;padding-top:12px;border-top:1px solid var(--hair);display:flex;flex-direction:column;gap:7px}
   .card .plan .step{display:flex;gap:9px;font-size:12px;color:var(--ink-2);line-height:1.45}
   .card .plan .step .k{font-family:var(--mono);font-size:10px;color:var(--gold);flex-shrink:0;padding-top:1px}
+  .card .code{margin-top:12px;border-top:1px solid var(--hair);padding-top:12px}
+  .card .code summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);list-style:none}
+  .card .code summary::-webkit-details-marker{display:none}
+  .card .code summary::before{content:"› ";color:var(--ink-3)}
+  .card .code[open] summary::before{content:"⌄ "}
+  .card .code .cp{color:var(--ink-3);text-transform:none;letter-spacing:0}
+  .card .code pre{margin-top:10px;background:var(--s0);border:1px solid var(--hair);border-radius:8px;padding:12px;overflow-x:auto;font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--ink-2);max-height:340px;overflow-y:auto;white-space:pre}
+  .card .code .cnote{margin-top:8px;font-size:11px;color:var(--ink-3);line-height:1.5;font-style:italic}
   .card .foot{display:flex;align-items:center;gap:10px;margin-top:14px}
   .card .foot .eta{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.1em;text-transform:uppercase}
   .card .foot .eng{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding:3px 8px;border:1px solid var(--hair);border-radius:20px}
@@ -96,10 +104,11 @@
   </div>
 
   <div class="lede fadein">
-    <h2>The OS builds its own team.</h2>
+    <h2>The OS builds and codes its own team.</h2>
     <p>The Operator finds the gap and proposes the fix. You approve it. The harness drafts a new
-       AI employee (or new skills for one you already run) and stages it. Nothing goes live until
-       you ship it, and then it lands on the Roster. Propose, build, ship, a person at every gate.</p>
+       AI employee, and a dedicated coder (Kimi K2 by default) writes its real code module. You
+       review the code, then ship it, and it lands on the Roster. Propose, build, code, ship, a
+       person at every gate. Nothing runs until you merge it.</p>
   </div>
 
   <div class="strip fadein" id="strip"></div>
@@ -156,16 +165,24 @@ function orderCard(o,shipped){
   var foot=shipped
     ? '<div class="foot"><span class="pill '+(live?'live':'')+'">'+(isUp?'Smarter':(live?'Live in the Roster':'Pending'))+'</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
     : '<div class="foot"><button class="btn ship" data-ship="'+o.id+'">Ship it</button><span class="eta">~'+(o.eta_weeks||2)+' wk</span><span class="eng">'+esc(o.engine||'')+'</span></div>';
+  var code='';
+  if(!isUp && o.code){
+    var eng=(o.code_engine||'').indexOf('kimi')>=0?'Kimi K2':((o.code_engine||'').indexOf('anthropic')>=0?'Claude':((o.code_engine||'').indexOf('openai')>=0?'GPT':'template'));
+    code='<details class="code"><summary>The code '+esc(eng)+' wrote'+(o.code_path?' · <span class="cp">'+esc(o.code_path)+'</span>':'')+'</summary>'+
+      '<pre>'+esc(o.code)+'</pre>'+
+      '<div class="cnote">Reviewable artifact. Merge it through the dev pipeline to give this agent hard-coded logic; it never auto-runs.</div></details>';
+  }
   return '<div class="card fadein'+(shipped?' shipped':'')+'"><div class="pk">'+esc(tag)+'</div>'+
     '<div class="ti">'+head+'</div>'+
     (o.role?'<div class="bd">'+esc(o.role)+'</div>':'')+
     (o.value?'<div class="val">'+esc(o.value)+'</div>':'')+
     (know?'<div class="plan">'+know+'</div>':'')+
+    code+
     foot+'</div>';
 }
 function render(s){
   document.getElementById('st').classList.toggle('on',!!s.brain);
-  document.getElementById('stt').textContent=s.brain?'AI engine · live':'Rules engine';
+  document.getElementById('stt').textContent=(s.brain?'Brain live':'Rules engine')+' · Coder: '+esc(s.coder||'template');
   var m=s.metrics||{};
   document.getElementById('strip').innerHTML=
     '<div class="t"><div class="micro">Awaiting a build</div><div class="v red">'+(m.pending||0)+'</div></div>'+

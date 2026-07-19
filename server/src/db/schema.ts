@@ -346,6 +346,12 @@ export function initDb(): void {
    * Columns so dev DBs that already have build_orders upgrade in place. */
   addColumn('build_orders', 'mode', "TEXT DEFAULT 'new'");   // new (build an agent) | upgrade (strengthen one)
   addColumn('build_orders', 'target_agent_key', 'TEXT');     // the agent an upgrade strengthens
+
+  /* ---------- the coder: real code the harness writes for a new agent ----------
+   * A reviewable artifact (a human merges it via the dev pipeline; never hot-loaded). */
+  addColumn('build_orders', 'code', 'TEXT');          // the generated TypeScript module
+  addColumn('build_orders', 'code_path', 'TEXT');     // where it would live in the repo
+  addColumn('build_orders', 'code_engine', 'TEXT');   // coder-kimi | coder-anthropic | template ...
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
