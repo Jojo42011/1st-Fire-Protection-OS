@@ -272,13 +272,44 @@ export function initDb(): void {
       finding_id    INTEGER,                    -- the approved gap this builds
       capability_id TEXT,                       -- the matched build from the catalog
       title         TEXT NOT NULL,
-      plan          TEXT,                       -- JSON array of build steps the harness drafted
+      plan          TEXT,                       -- JSON: the drafted agent spec (persona, skills) or step plan
       value_line    TEXT,                       -- the business case, carried from the gap
       eta_weeks     INTEGER DEFAULT 2,
       status        TEXT DEFAULT 'staged',      -- staged (drafted, awaiting ship) | shipped
       engine        TEXT DEFAULT 'harness-rules', -- harness-rules | harness-llm
       created_at    TEXT DEFAULT (datetime('now')),
       shipped_at    TEXT
+    );
+
+    /* THE ROSTER — every AI employee this OS runs, founding + harness-built.
+       An agent here is data the generic runtime executes: a persona (system_prompt),
+       the pillar it serves, its capability, and a growing knowledge/skill list. The
+       Operator proposes the need; the Harness drafts and (on a human ship) inserts a
+       live agent here; every other tool in the OS can then see and route to it. This
+       is how the OS grows its own team instead of shipping a fixed template. */
+    CREATE TABLE IF NOT EXISTS agents (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      key           TEXT UNIQUE NOT NULL,       -- slug (console id)
+      name          TEXT NOT NULL,
+      role          TEXT,                       -- one-line job
+      pillar_key    TEXT,                       -- the department it serves
+      capability_id TEXT,                       -- the catalog build it embodies
+      system_prompt TEXT,                       -- the drafted persona/instructions the runtime runs
+      knowledge     TEXT,                       -- JSON array of knowledge/skill lines (grows on upgrade)
+      origin        TEXT DEFAULT 'harness',     -- founding | harness
+      status        TEXT DEFAULT 'live',        -- live | draft | retired
+      built_from    INTEGER,                    -- the build_orders.id that created it (harness-built)
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+
+    /* THE STRENGTHEN LOG — every skill the harness has added to an agent (new or
+       existing). Makes "the OS is getting smarter" literal and auditable. */
+    CREATE TABLE IF NOT EXISTS agent_skills (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_key    TEXT NOT NULL,
+      skill        TEXT NOT NULL,
+      source_order INTEGER,                     -- the build_orders.id that added it
+      created_at   TEXT DEFAULT (datetime('now'))
     );
   `);
 
@@ -309,6 +340,12 @@ export function initDb(): void {
    * order the OS can act on. Added as columns so existing brains upgrade in place. */
   addColumn('audit_findings', 'queue_status', "TEXT DEFAULT 'proposed'"); // proposed|approved|building|shipped
   addColumn('audit_findings', 'value_line', 'TEXT');                       // the one-line business case
+
+  /* ---------- the harness -> roster wiring (added after Build C shipped) ----------
+   * A build order now either CREATES a new agent or STRENGTHENS an existing one.
+   * Columns so dev DBs that already have build_orders upgrade in place. */
+  addColumn('build_orders', 'mode', "TEXT DEFAULT 'new'");   // new (build an agent) | upgrade (strengthen one)
+  addColumn('build_orders', 'target_agent_key', 'TEXT');     // the agent an upgrade strengthens
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

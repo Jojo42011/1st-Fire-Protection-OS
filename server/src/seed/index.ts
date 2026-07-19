@@ -15,6 +15,7 @@ export function seed(): void {
   seedAudit();
   seedGrowth();
   seedQuestions();
+  seedAgents();
   seedHarness();
 
   if (getState('seeded') === '1') return;
@@ -317,6 +318,69 @@ function seedQuestions(): void {
   }
   setState('seeded_questions', '1');
   console.log('[seed] interview ladder seeded (opening question decks per department).');
+}
+
+/**
+ * The founding roster - seed the agents this OS shipped with as rows in `agents` so the
+ * roster is one unified team and the harness-built agents sit right alongside them. Each
+ * gets a starter knowledge line; the harness grows the list as it strengthens them. Own
+ * flag so existing brains pick it up on upgrade.
+ */
+function seedAgents(): void {
+  if (getState('seeded_agents') === '1') return;
+  const db = getDb();
+  const founding: {
+    key: string;
+    name: string;
+    role: string;
+    pillar: string;
+    capability_id: string;
+    knowledge: string[];
+  }[] = [
+    {
+      key: 'calls',
+      name: 'Call Receptionist',
+      role: 'Answers every line 24/7, classifies and routes the call, captures the lead',
+      pillar: 'reception',
+      capability_id: 'ai_receptionist',
+      knowledge: ['Answer in the 1st FP voice and never miss an after-hours emergency', 'Route inspections, service, and sales to the right desk'],
+    },
+    {
+      key: 'invoices',
+      name: 'Invoice Collector',
+      role: 'Chases receivables, drafts reminders, tracks aging to paid',
+      pillar: 'finance',
+      capability_id: 'invoice_chaser',
+      knowledge: ['Escalate a reminder cadence until an invoice is paid', 'Know the aging buckets and flag the oldest first'],
+    },
+    {
+      key: 'reviews',
+      name: 'Review Collector',
+      role: 'Requests reviews on job completion, drafts replies, tracks reputation',
+      pillar: 'reception',
+      capability_id: 'review_engine',
+      knowledge: ['Ask for a review the moment a job closes', 'Draft an on-brand reply to every review, good or bad'],
+    },
+    {
+      key: 'audit',
+      name: 'The Operator',
+      role: 'Maps the whole company live, finds the leaks, proposes the AI builds',
+      pillar: 'ops',
+      capability_id: 'operator_brain',
+      knowledge: ['Interview the owner one question at a time and go deeper every session', 'Turn every leak found into a proposed build for the harness'],
+    },
+  ];
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO agents (key, name, role, pillar_key, capability_id, knowledge, origin, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'founding', 'live')`
+  );
+  const skillIns = db.prepare(`INSERT INTO agent_skills (agent_key, skill) VALUES (?, ?)`);
+  for (const a of founding) {
+    const r = ins.run(a.key, a.name, a.role, a.pillar, a.capability_id, JSON.stringify(a.knowledge));
+    if (r.changes) for (const s of a.knowledge) skillIns.run(a.key, s);
+  }
+  setState('seeded_agents', '1');
+  console.log('[seed] founding roster seeded (4 agents live; the harness grows the team from here).');
 }
 
 /**

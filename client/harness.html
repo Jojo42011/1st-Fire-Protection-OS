@@ -6,7 +6,7 @@
 <title>The Harness · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
 <style>
-  /* ── THE HARNESS — the execution layer over the Operator's build queue ─────
+  /* ── THE HARNESS - the execution layer over the Operator's build queue ─────
      The Operator finds the gap and proposes the build; a human approves it; the
      harness picks it up, drafts the plan, and stages it for a final human ship.
      The OS proposes AND builds its own next steps, gated at each hop. Same
@@ -96,10 +96,10 @@
   </div>
 
   <div class="lede fadein">
-    <h2>The OS builds its own next step.</h2>
-    <p>The Operator finds the gap and proposes the build. You approve it. The harness picks it up,
-       drafts the plan, and stages it. Nothing goes live until you ship it. Propose, build, ship,
-       a person at every gate.</p>
+    <h2>The OS builds its own team.</h2>
+    <p>The Operator finds the gap and proposes the fix. You approve it. The harness drafts a new
+       AI employee (or new skills for one you already run) and stages it. Nothing goes live until
+       you ship it, and then it lands on the Roster. Propose, build, ship, a person at every gate.</p>
   </div>
 
   <div class="strip fadein" id="strip"></div>
@@ -140,21 +140,26 @@ async function get(u){var r=await fetch(u);return r.json();}
 async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
 
 function inboxCard(f){
-  return '<div class="card fadein"><div class="pk">'+esc(f.pillar)+' · '+esc(f.severity||'signal')+'</div>'+
+  var tag=f.mode==='upgrade'?'Strengthen':'New agent';
+  return '<div class="card fadein"><div class="pk">'+esc(f.pillar)+' · '+esc(tag)+'</div>'+
     '<div class="ti">'+esc(f.title)+'</div>'+
-    (f.build?'<div class="bd">Build: '+esc(f.build)+'</div>':'')+
+    (f.action?'<div class="bd">'+esc(f.action)+'</div>':'')+
     (f.value?'<div class="val">'+esc(f.value)+'</div>':'')+
     '<div class="foot"><span class="eta">Queued</span></div></div>';
 }
 function orderCard(o,shipped){
-  var plan=(o.plan||[]).map(function(s,i){return '<div class="step"><span class="k">'+(i+1)+'</span><span>'+esc(s)+'</span></div>';}).join('');
+  var isUp=o.mode==='upgrade';
+  var tag=isUp?'Strengthen':'New agent';
+  var know=(o.knowledge||[]).map(function(s,i){return '<div class="step"><span class="k">+</span><span>'+esc(s)+'</span></div>';}).join('');
+  var head=isUp?('Strengthen '+esc(o.agent_name||'')):('Build '+esc(o.agent_name||o.title));
   var foot=shipped
-    ? '<div class="foot"><span class="pill live">Live</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
+    ? '<div class="foot"><span class="pill live">'+(isUp?'Smarter':'Live in the Roster')+'</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
     : '<div class="foot"><button class="btn ship" data-ship="'+o.id+'">Ship it</button><span class="eta">~'+(o.eta_weeks||2)+' wk</span><span class="eng">'+esc(o.engine||'')+'</span></div>';
-  return '<div class="card fadein'+(shipped?' shipped':'')+'"><div class="pk">'+esc(o.pillar||'')+'</div>'+
-    '<div class="ti">'+esc(o.title)+'</div>'+
+  return '<div class="card fadein'+(shipped?' shipped':'')+'"><div class="pk">'+esc(tag)+'</div>'+
+    '<div class="ti">'+head+'</div>'+
+    (o.role?'<div class="bd">'+esc(o.role)+'</div>':'')+
     (o.value?'<div class="val">'+esc(o.value)+'</div>':'')+
-    (plan?'<div class="plan">'+plan+'</div>':'')+
+    (know?'<div class="plan">'+know+'</div>':'')+
     foot+'</div>';
 }
 function render(s){
@@ -162,15 +167,16 @@ function render(s){
   document.getElementById('stt').textContent=s.brain?'AI engine · live':'Rules engine';
   var m=s.metrics||{};
   document.getElementById('strip').innerHTML=
-    '<div class="t"><div class="micro">Awaiting a plan</div><div class="v red">'+(m.pending||0)+'</div></div>'+
+    '<div class="t"><div class="micro">Awaiting a build</div><div class="v red">'+(m.pending||0)+'</div></div>'+
     '<div class="t"><div class="micro">Staged to ship</div><div class="v gold">'+(m.staged||0)+'</div></div>'+
-    '<div class="t"><div class="micro">Shipped live</div><div class="v ok">'+(m.shipped||0)+'</div></div>';
+    '<div class="t"><div class="micro">Shipped</div><div class="v ok">'+(m.shipped||0)+'</div></div>'+
+    '<div class="t"><div class="micro">Agents on the roster</div><div class="v">'+(m.agents_live||0)+'<small style="font-size:15px;color:var(--ink-3);font-weight:400"> · '+(m.agents_built||0)+' built here</small></div></div>';
   document.getElementById('c-inbox').textContent=(s.inbox||[]).length;
   document.getElementById('c-staged').textContent=(s.staged||[]).length;
   document.getElementById('c-shipped').textContent=(s.shipped||[]).length;
   document.getElementById('inbox').innerHTML=(s.inbox||[]).length?s.inbox.map(inboxCard).join(''):'<div class="empty">No approved gaps waiting. Approve a proposed build on the Operator and it lands here.</div>';
-  document.getElementById('staged').innerHTML=(s.staged||[]).length?s.staged.map(function(o){return orderCard(o,false);}).join(''):'<div class="empty">Nothing staged. Run the harness to draft plans for the inbox.</div>';
-  document.getElementById('shipped').innerHTML=(s.shipped||[]).length?s.shipped.map(function(o){return orderCard(o,true);}).join(''):'<div class="empty">Nothing shipped yet.</div>';
+  document.getElementById('staged').innerHTML=(s.staged||[]).length?s.staged.map(function(o){return orderCard(o,false);}).join(''):'<div class="empty">Nothing staged. Run the harness to draft the agents.</div>';
+  document.getElementById('shipped').innerHTML=(s.shipped||[]).length?s.shipped.map(function(o){return orderCard(o,true);}).join(''):'<div class="empty">Nothing shipped yet. Shipped agents land on the Roster.</div>';
   var rb=document.getElementById('runbtn');
   rb.disabled=!(s.inbox||[]).length;
   document.getElementById('runsub').textContent=(s.inbox||[]).length?('Draft build orders for '+s.inbox.length+' approved gap'+(s.inbox.length>1?'s':'')+'.'):'Inbox empty. Approve a gap on the Operator first.';
@@ -186,7 +192,7 @@ document.addEventListener('click',async function(e){
   var b=e.target.closest('[data-ship]');if(!b)return;
   b.disabled=true;b.textContent='Shipping…';
   var r=await post('/api/harness/orders/'+b.getAttribute('data-ship')+'/ship');
-  if(r&&r.ok){toast('Shipped. It\'s live in the OS.');render(r.state);}
+  if(r&&r.ok){toast(r.result?esc(r.result.charAt(0).toUpperCase()+r.result.slice(1))+'.':'Shipped.');render(r.state);}
 });
 
 get('/api/harness').then(render);
