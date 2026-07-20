@@ -482,6 +482,25 @@ export function initDb(): void {
    * these add the decay timestamp and the illustrative-seed flag. */
   addColumn('edges', 'last_reinforced_at', 'TEXT');
   addColumn('edges', 'sample', 'INTEGER DEFAULT 0'); // 1 = illustrative seed edge (labeled in UI)
+
+  /* One-time reconciliation of the license inventory to the corrected vendor set.
+   * The retired 'hydrocad' seats become 'hydracad' (the right product, Hydratec sprinkler
+   * design), and HFSS seats are backfilled onto an inventory that was seeded before HFSS
+   * existed. A fresh database gets both straight from the seed, so this is a no-op there
+   * (it runs before the seat data exists). Idempotent, guarded by a state flag. */
+  if (getState('mig_license_vendors_v2') !== '1') {
+    db.prepare("UPDATE license_seats SET vendor = 'hydracad', product = 'HydraCAD (Hydratec)' WHERE vendor = 'hydrocad'").run();
+    const seatCount = (db.prepare('SELECT COUNT(*) AS c FROM license_seats').get() as { c: number }).c;
+    const hfssCount = (db.prepare("SELECT COUNT(*) AS c FROM license_seats WHERE vendor = 'hfss'").get() as { c: number }).c;
+    if (seatCount > 0 && hfssCount === 0) {
+      const addHfss = db.prepare(
+        "INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source) VALUES ('hfss', 'HFSS', ?, ?, 20, ?, 'seed')"
+      );
+      addHfss.run('victor.delgado@1stfp.example', 'Victor Delgado', '2025-06-01');
+      addHfss.run('jordan.pratt@1stfp.example', 'Jordan Pratt', '2025-02-15');
+    }
+    setState('mig_license_vendors_v2', '1');
+  }
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
