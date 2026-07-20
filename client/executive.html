@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>At a glance</title>
+<style>
+  :root{
+    --canvas:#ffffff;
+    --ink:#111111;
+    --muted:#6b7280;
+    --faint:#9ca3af;
+    --hair:rgba(0,0,0,0.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    line-height:1.4;
+  }
+  .wrap{
+    max-width:560px;
+    margin:0 auto;
+    padding:44px 24px 64px;
+  }
+  .period{
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--faint);
+    margin:0 0 40px;
+  }
+  .stat{
+    padding:30px 0;
+    border-top:1px solid var(--hair);
+  }
+  .stat:first-of-type{border-top:none;padding-top:0;}
+  .stat-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  .label{
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+  .tag{
+    font-size:10px;
+    letter-spacing:.10em;
+    text-transform:uppercase;
+    color:var(--faint);
+    border:1px solid var(--hair);
+    border-radius:999px;
+    padding:2px 8px;
+    white-space:nowrap;
+  }
+  .num{
+    font-size:clamp(52px,15vw,80px);
+    font-weight:600;
+    line-height:1.02;
+    letter-spacing:-0.02em;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    margin:2px 0 8px;
+  }
+  .roi{
+    font-size:15px;
+    color:var(--muted);
+    margin:0;
+  }
+  .sub{
+    font-size:13px;
+    color:var(--faint);
+    margin:6px 0 0;
+  }
+  .foot{
+    margin-top:44px;
+    font-size:11px;
+    letter-spacing:.06em;
+    color:var(--faint);
+  }
+  @media (max-width:400px){
+    .wrap{padding:34px 20px 56px;}
+  }
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <p class="period" id="period">&nbsp;</p>
+    <div id="stats"></div>
+    <p class="foot" id="foot"></p>
+  </main>
+
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function block(a){
+  var tag = a.sample ? '<span class="tag">Sample</span>' : '';
+  return '<section class="stat">'
+    + '<div class="stat-top"><span class="label">'+esc(a.label)+'</span>'+tag+'</div>'
+    + '<div class="num">'+esc(a.headline)+'</div>'
+    + '<p class="roi">'+esc(a.roi)+'</p>'
+    + (a.sub ? '<p class="sub">'+esc(a.sub)+'</p>' : '')
+    + '</section>';
+}
+
+function fmtDate(iso){
+  try{
+    var d = new Date(iso);
+    return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
+  }catch(e){ return ''; }
+}
+
+fetch('/api/impact')
+  .then(function(r){return r.json();})
+  .then(function(d){
+    document.getElementById('period').textContent = d.period || '';
+    document.getElementById('stats').innerHTML = (d.agents||[]).map(block).join('');
+    var when = fmtDate(d.generatedAt);
+    document.getElementById('foot').textContent = when ? ('Updated '+when) : '';
+  })
+  .catch(function(){
+    document.getElementById('stats').innerHTML =
+      '<section class="stat"><p class="roi">Numbers are loading.</p></section>';
+  });
+</script>
+</body>
+</html>
