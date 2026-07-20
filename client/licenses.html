@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>License Reclaim · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* headline card: the one number that matters */
+  .headline{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .headline .big{font-family:var(--display);font-weight:900;font-size:52px;line-height:1;color:var(--accent);letter-spacing:-.02em}
+  .headline .big small{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:10px;font-weight:500}
+  .headline .side{text-align:right;color:var(--muted);font-size:13px;line-height:1.6;max-width:38ch}
+  /* per-vendor grid */
+  .vendors{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:6px}
+  .vend{background:var(--panel);border:1px solid var(--line);padding:16px 18px;position:relative}
+  .vend.hit{border-left:3px solid var(--accent)}
+  .vend .vn{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--navy);font-weight:500}
+  .vend .vv{font-family:var(--display);font-weight:900;font-size:26px;color:var(--navy);margin-top:10px;line-height:1}
+  .vend .vv.accent{color:var(--accent)}
+  .vend .vs{color:var(--muted);font-size:12px;margin-top:6px}
+  .vend .vmeta{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .rk{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--line-2);color:var(--muted)}
+  .reason{color:var(--muted);font-size:12px;line-height:1.5;margin-top:8px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <p class="kicker">Cost Recovery · HR &times; Software Licenses</p>
+      <h1>License Reclaim</h1>
+      <p>Connects the HR roster to your software seats and finds every license still being paid for someone who no longer works here. Flag a seat to draft the offboard task; a human approves it. Nothing gets cancelled automatically.</p>
+    </div>
+    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span>
+  </div>
+
+  <div class="card hot headline" style="margin-top:22px">
+    <div class="big" id="headline-savings">$0<small>Reclaimable per year</small></div>
+    <div class="side" id="headline-side">Reconciling the roster against your license seats&hellip;</div>
+  </div>
+
+  <div class="grid kpis" id="kpis"></div>
+
+  <div class="section-title">By Vendor</div>
+  <div class="vendors" id="vendors"></div>
+
+  <div class="two-col" style="margin-top:6px">
+    <div>
+      <div class="section-title">Reclaimable Seats</div>
+      <div class="card" style="padding:6px 6px 2px">
+        <table><thead><tr><th>Vendor</th><th>Product</th><th>Ex-employee</th><th>Dept</th><th>Left</th><th class="right">Cost/mo</th><th></th></tr></thead>
+        <tbody id="reclaim-rows"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Reclaim Queue</div>
+      <div id="queue"></div>
+      <div class="connect">
+        <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
+        <div id="connect-hint"><b>Connect BambooHR to go live:</b> add <span class="mono">BAMBOO_SUBDOMAIN</span> + <span class="mono">BAMBOO_API_KEY</span> and Sync to pull your real active roster. Vendor seat lists (Adobe, Bluebeam, AutoCAD, HydroCAD, Microsoft 365) load from your inventory today.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Full Seat Inventory</div>
+  <div class="card" style="padding:6px 6px 2px">
+    <table><thead><tr><th>Vendor</th><th>Product</th><th>Assigned to</th><th class="right">Cost/mo</th><th>Status</th></tr></thead>
+    <tbody id="seat-rows"></tbody></table>
+  </div>
+
+<script>
+var money=function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
+function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
+
+function load(){
+  fetch('/api/licenses').then(function(r){return r.json();}).then(function(d){
+    var s=d.summary, t=d.totals;
+    if(d.bamboo&&d.bamboo.connected){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>BambooHR · Connected';}
+
+    document.getElementById('headline-savings').innerHTML=money(s.savingsAnnual)+'<small>Reclaimable per year</small>';
+    document.getElementById('headline-side').innerHTML=
+      '<b style="color:var(--navy)">'+s.reclaimableSeats+'</b> seats are still assigned to people who have left, costing <b style="color:var(--accent)">'+money(s.savingsMonthly)+'/mo</b>. Reconciled '+
+      '<b style="color:var(--navy)">'+s.totalSeats+'</b> seats against '+
+      '<b style="color:var(--navy)">'+s.activeEmployees+'</b> active and '+
+      '<b style="color:var(--navy)">'+s.terminatedEmployees+'</b> terminated employees.';
+
+    document.getElementById('kpis').innerHTML=[
+      kpi('Reclaimable / yr',money(s.savingsAnnual),s.reclaimableSeats+' unused seats',true),
+      kpi('Total Seats',s.totalSeats,s.assignedSeats+' assigned',false),
+      kpi('Under Management',money(s.spendMonthly)+'/mo',money(s.spendAnnual)+'/yr all seats',false),
+      kpi('Reclaimable Seats',s.reclaimableSeats,'from '+s.terminatedEmployees+' people who left',false)
+    ].join('');
+
+    document.getElementById('vendors').innerHTML=(d.byVendor||[]).map(function(v){
+      var hit=v.reclaimable>0;
+      return '<div class="vend'+(hit?' hit':'')+'"><div class="vn">'+esc(v.label)+'</div>'+
+        '<div class="vv'+(hit?' accent':'')+'">'+money(v.savings_annual)+'</div>'+
+        '<div class="vs">'+(hit?('reclaimable / yr'):'nothing to reclaim')+'</div>'+
+        '<div class="vmeta"><span class="rk">'+v.seats+' seat'+(v.seats===1?'':'s')+'</span><span class="rk">'+v.reclaimable+' reclaimable</span></div></div>';
+    }).join('');
+
+    var rec=d.reclaimable||[];
+    document.getElementById('reclaim-rows').innerHTML= rec.length? rec.map(function(x){
+      var left = x.reason_kind==='terminated' ? (x.terminated_at||'terminated') : 'off roster';
+      var act;
+      if(x.reclaim_status==='approved'){act='<span class="pill green">approved</span>';}
+      else if(x.reclaim_status==='proposed'||x.reclaim_status==='reclaimed'){act='<button class="btn primary" onclick="approve('+x.reclaim_id+',this)">Approve</button>';}
+      else{act='<button class="btn" onclick="flag('+x.seat_id+',this)">Flag for reclaim</button>';}
+      var statePill = x.reclaim_status ? '<span class="pill '+(x.reclaim_status==='approved'?'green':'amber')+'" style="margin-right:8px">'+x.reclaim_status+'</span>' : '';
+      return '<tr><td><b>'+esc(x.vendor_label)+'</b></td><td class="muted">'+esc(x.product||'')+'</td>'+
+        '<td>'+esc(x.assignee_name)+'<div class="muted mono" style="font-size:10px">'+esc(x.assignee_email||'')+'</div></td>'+
+        '<td class="muted">'+esc(x.department||'-')+'</td>'+
+        '<td><span class="pill '+(x.reason_kind==='terminated'?'red':'amber')+'">'+esc(left)+'</span></td>'+
+        '<td class="right mono">'+money(x.cost_monthly)+'</td>'+
+        '<td class="right" style="white-space:nowrap">'+statePill+act+'</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">No reclaimable seats - every license is assigned to an active employee.</td></tr>';
+
+    var q=d.reclaims||[];
+    document.getElementById('queue').innerHTML= q.length? q.map(function(x){
+      return '<div class="draft"><div class="meta"><b>'+esc(x.vendor_label)+' · '+esc(x.assignee_name||'')+'</b>'+
+        '<span class="pill '+(x.status==='approved'?'green':'amber')+'">'+x.status+'</span></div>'+
+        '<div class="reason">'+esc(x.reason)+'</div>'+
+        '<div class="actions"><span class="mono muted" style="font-size:11px">'+money(x.savings_monthly*12)+'/yr</span>'+
+        (x.status==='proposed'?'<button class="btn primary" onclick="approve('+x.id+',this)">Approve reclaim</button>':'<span class="pill green">approved ✓</span>')+
+        '</div></div>';
+    }).join('') : '<div class="empty">No reclaims drafted yet. Flag a reclaimable seat →</div>';
+
+    document.getElementById('seat-rows').innerHTML=(d.seats||[]).map(function(x){
+      var vl = (d.vendors||[]).filter(function(v){return v.key===x.vendor;})[0];
+      return '<tr><td><b>'+esc(vl?vl.label:x.vendor)+'</b></td><td class="muted">'+esc(x.product||'')+'</td>'+
+        '<td>'+esc(x.assignee_name||'-')+'<div class="muted mono" style="font-size:10px">'+esc(x.assignee_email||'')+'</div></td>'+
+        '<td class="right mono">'+money(x.cost_monthly)+'</td>'+
+        '<td><span class="pill gray">'+esc(x.source)+'</span></td></tr>';
+    }).join('');
+  });
+}
+function flag(seatId,btn){btn.disabled=true;btn.textContent='Drafting…';fetch('/api/licenses/'+seatId+'/flag',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+function approve(id,btn){btn.disabled=true;btn.textContent='Approving…';fetch('/api/licenses/reclaims/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+load();
+</script>
+</body>
+</html>

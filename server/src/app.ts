@@ -27,6 +27,7 @@ import roster from './routes/roster';
 import department from './routes/department';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
+import licenses from './routes/licenses';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -58,6 +59,7 @@ app.use(roster);
 app.use(department);
 app.use(admin);
 app.use(introspect);
+app.use(licenses);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -75,6 +77,7 @@ app.get('/roster', page('roster.html'));
 app.get('/department', page('department.html'));
 app.get('/agent', page('agent.html'));
 app.get('/integrations', page('integrations.html'));
+app.get('/licenses', page('licenses.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

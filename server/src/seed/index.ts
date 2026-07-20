@@ -21,6 +21,7 @@ export function seed(): void {
   seedHarness();
   seedAssociations();
   seedCalibration();
+  seedLicenses();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -590,4 +591,119 @@ function seedCalibration(): void {
 
   setState('seeded_calibration', '1');
   console.log('[seed] calibration ledger seeded (illustrative predictions: 8 resolved, 2 open).');
+}
+
+/* ─────────────────────── License Reclaim (seed) ───────────────────────
+ * The HR roster (BambooHR, seeded fallback when keyless) plus the software-license seat
+ * inventory across all five vendors (Adobe, Bluebeam, AutoCAD, HydroCAD, Microsoft 365).
+ * Several employees are terminated but still hold seats, so the reclaimable list and a real
+ * annual savings number render on first boot. Deterministic (the FNV-1a -> mulberry32 PRNG for
+ * date jitter, no Math.random). Own flag; idempotent (email + name unique guards). */
+function seedLicenses(): void {
+  if (getState('seeded_licenses') === '1') return;
+  const db = getDb();
+  const r = rngFrom('licenses:1stfp'); // deterministic jitter for hire/assign dates
+  const dateAgo = (n: number) => isoDaysAgo(n).slice(0, 10); // YYYY-MM-DD
+  const jit = (span: number) => Math.round(r() * span); // 0..span days, stable per boot
+
+  const COST: Record<string, number> = { adobe: 60, microsoft: 36, autocad: 200, bluebeam: 22, hydrocad: 25 };
+  const PRODUCT: Record<string, string> = {
+    adobe: 'Creative Cloud All Apps',
+    microsoft: 'Microsoft 365 E3',
+    autocad: 'AutoCAD (Autodesk)',
+    bluebeam: 'Bluebeam Revu',
+    hydrocad: 'HydroCAD',
+  };
+  const emailFor = (name: string) => name.trim().toLowerCase().split(/\s+/).join('.') + '@1stfp.example';
+
+  // roster: [full_name, department, title, terminatedDaysAgo] (0 = active)
+  const roster: [string, string, string, number][] = [
+    ['Mario Salinas', 'Executive', 'President', 0],
+    ['Ida Salinas', 'Executive', 'Co-Founder', 0],
+    ['Chris Holcomb', 'Operations', 'Chief Operating Officer', 0],
+    ['Daniel Rodriguez', 'Operations', 'Operations Manager', 0],
+    ['Kelsey Bovard', 'Inspections', 'Inspections Scheduler', 0],
+    ['Mel Vela', 'Inspections', 'Inspections Coordinator', 0],
+    ['Brandon Vega', 'Inspections', 'Lead Inspector', 0],
+    ['Ronnie Blue', 'Service', 'Sprinkler Service Manager', 0],
+    ['Matt Shaner', 'Service', 'Fire Alarm Service Manager', 0],
+    ['Shawn Tomlin', 'Service', 'Extinguisher Technician', 0],
+    ['Tamara Ruiz', 'Service', 'Extinguisher Technician', 0],
+    ['Clayton Cichon', 'Sales', 'Sprinkler Sales', 0],
+    ['Mike McGuire', 'Sales', 'Fire Alarm Sales', 0],
+    ['Neil Foster', 'Sales', 'Estimator', 0],
+    ['Priya Nair', 'Projects', 'Project Manager', 0],
+    ['Victor Delgado', 'Projects', 'Sprinkler Designer', 0],
+    ['Sofia Marin', 'Projects', 'Sprinkler Designer', 0],
+    ['Raymond Cho', 'Projects', 'Estimator', 0],
+    ['Grace Bennett', 'Finance', 'Controller', 0],
+    ['Hector Ballesteros', 'Finance', 'AR Specialist', 0],
+    ['Aisha Karimi', 'Finance', 'AP Specialist', 0],
+    ['Denise Alvarez', 'Reception', 'Front Desk Coordinator', 0],
+    ['Carla Jimenez', 'Admin', 'HR Coordinator', 0],
+    ['Ed Portillo', 'Vendors', 'Vendor Relations', 0],
+    // terminated, still holding seats -> reclaimable
+    ['Jordan Pratt', 'Projects', 'Sprinkler Designer', 69],
+    ['Marcus Webb', 'Projects', 'Estimator', 108],
+    ['Devin Marsh', 'Projects', 'CAD Designer', 160],
+    ['Elena Vasquez', 'Sales', 'Sales Representative', 49],
+    ['Rebecca Stone', 'Admin', 'Marketing Coordinator', 53],
+    ['Tyler Hoang', 'Service', 'Fire Alarm Technician', 124],
+    ['Omar Haddad', 'Finance', 'Staff Accountant', 35],
+    ['Lauren Kelly', 'Inspections', 'Inspector', 179],
+  ];
+
+  const insEmp = db.prepare(
+    `INSERT OR IGNORE INTO hr_employees (full_name, email, department, title, status, hired_at, terminated_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  for (const [name, dept, title, termDaysAgo] of roster) {
+    const status = termDaysAgo > 0 ? 'terminated' : 'active';
+    const hired = dateAgo(365 * (1 + (jit(6))) + jit(280) + (termDaysAgo || 0)); // hired before any termination
+    const terminated = termDaysAgo > 0 ? dateAgo(termDaysAgo) : null;
+    insEmp.run(name, emailFor(name), dept, title, status, hired, terminated);
+  }
+
+  // seats: everyone (active + terminated) holds a Microsoft 365 seat; the pro/design tools go
+  // to the people who use them. Terminated employees keep every seat until a human reclaims it.
+  const insSeat = db.prepare(
+    `INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  const addSeat = (vendor: string, name: string, email: string) => {
+    insSeat.run(vendor, PRODUCT[vendor], email, name, COST[vendor], dateAgo(120 + jit(600)));
+  };
+
+  // guard against a re-run inserting duplicate seats (own flag already guards, this is belt-and-suspenders)
+  const already = db.prepare(`SELECT COUNT(*) AS c FROM license_seats`).get() as { c: number };
+  if (already.c === 0) {
+    for (const [name] of roster) addSeat('microsoft', name, emailFor(name));
+
+    // extra vendor seats per person (beyond the base Microsoft 365 seat)
+    const extra: [string, string[]][] = [
+      ['Victor Delgado', ['autocad', 'hydrocad', 'bluebeam']],
+      ['Sofia Marin', ['autocad', 'hydrocad', 'bluebeam']],
+      ['Raymond Cho', ['autocad', 'bluebeam']],
+      ['Priya Nair', ['bluebeam']],
+      ['Neil Foster', ['bluebeam']],
+      ['Clayton Cichon', ['bluebeam']],
+      ['Carla Jimenez', ['adobe']],
+      // terminated employees' extra seats (these become reclaimable)
+      ['Jordan Pratt', ['autocad', 'hydrocad', 'bluebeam', 'adobe']],
+      ['Marcus Webb', ['autocad', 'bluebeam']],
+      ['Devin Marsh', ['autocad', 'bluebeam', 'hydrocad']],
+      ['Elena Vasquez', ['adobe']],
+      ['Rebecca Stone', ['adobe']],
+      ['Lauren Kelly', ['bluebeam']],
+    ];
+    for (const [name, vendors] of extra) for (const v of vendors) addSeat(v, name, emailFor(name));
+
+    // a seat assigned to someone NOT on the roster at all (a departed contractor whose seats
+    // were never cleaned up) -> reclaimable via the "off-roster" branch.
+    addSeat('autocad', 'Gil Sandoval', 'gil.sandoval@1stfp.example');
+    addSeat('microsoft', 'Gil Sandoval', 'gil.sandoval@1stfp.example');
+  }
+
+  setState('seeded_licenses', '1');
+  console.log('[seed] license reclaim seeded (roster + 5-vendor seat inventory; several terminated seats reclaimable).');
 }

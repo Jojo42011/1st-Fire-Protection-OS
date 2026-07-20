@@ -334,6 +334,47 @@ export function initDb(): void {
       source_order INTEGER,                     -- the build_orders.id that added it
       created_at   TEXT DEFAULT (datetime('now'))
     );
+
+    /* ---------- license reclaim (HR roster reconciled against software seats) ----------
+     * The active roster (from BambooHR, or the seeded fallback when keyless) is reconciled
+     * against the software-license seat inventory. Any seat assigned to someone who is NOT
+     * on the active roster (terminated, or gone entirely) is a RECLAIMABLE license, and the
+     * per-seat cost is money that can be recovered. Reclaim is human-gated (propose ->
+     * approve); nothing here ever cancels a license automatically. */
+    CREATE TABLE IF NOT EXISTS hr_employees (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      full_name     TEXT NOT NULL,
+      email         TEXT UNIQUE,
+      department    TEXT,
+      title         TEXT,
+      status        TEXT DEFAULT 'active',       -- active|terminated
+      hired_at      TEXT,
+      terminated_at TEXT,
+      source        TEXT DEFAULT 'seed',         -- seed|bamboo
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS license_seats (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor         TEXT NOT NULL,              -- adobe|bluebeam|autocad|hydrocad|microsoft
+      product        TEXT,
+      assignee_email TEXT,
+      assignee_name  TEXT,
+      cost_monthly   REAL DEFAULT 0,
+      assigned_at    TEXT,
+      source         TEXT DEFAULT 'seed',        -- seed|manual|graph|umapi|autodesk|bluebeam|hydrocad
+      created_at     TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS license_reclaims (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      seat_id         INTEGER NOT NULL,
+      status          TEXT DEFAULT 'proposed',   -- proposed|approved|reclaimed
+      reason          TEXT,
+      savings_monthly REAL DEFAULT 0,
+      proposed_at     TEXT DEFAULT (datetime('now')),
+      approved_at     TEXT,
+      reclaimed_at    TEXT,
+      FOREIGN KEY (seat_id) REFERENCES license_seats(id) ON DELETE CASCADE
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
