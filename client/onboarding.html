@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Onboarding · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* owner tag - who a field/section routes to */
+  .tag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--line-2);color:var(--muted);background:#fff;white-space:nowrap}
+  .tag.bamboo{color:var(--ok);border-color:rgba(46,158,91,.5);background:#E9F6EE}
+  .tag.it{color:var(--navy);border-color:var(--line-2);background:var(--bg)}
+  .tag.mario{color:var(--accent);border-color:rgba(229,57,53,.5);background:var(--accent-tint)}
+  .tag.rebecca{color:var(--gold-deep);border-color:rgba(245,184,27,.6);background:#FCF3DC}
+  .tag.sandi{color:#6b3fa0;border-color:rgba(107,63,160,.4);background:#F1ECF9}
+  .tag.safety,.tag.denise,.tag.daniel{color:#0d6a8f;border-color:rgba(13,106,143,.4);background:#E6F4FA}
+
+  /* form layout */
+  .fsec{margin-top:6px}
+  .fsec .head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:22px 0 10px}
+  .fsec .head .st{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--navy);display:flex;align-items:center;gap:10px;font-weight:500}
+  .fsec .head .st::before{content:"";width:18px;height:2px;background:var(--accent)}
+  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .field input,.field select,.field textarea{font-family:var(--font);font-size:13.5px;color:var(--text);background:#fff;border:1px solid var(--line-2);padding:10px 12px;width:100%}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent)}
+  .field textarea{min-height:64px;resize:vertical}
+
+  /* checkbox rows */
+  .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 16px}
+  .chk{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);background:#fff;cursor:pointer;transition:.12s}
+  .chk:hover{border-color:var(--line-2);background:var(--bg)}
+  .chk input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--accent);cursor:pointer}
+  .chk .ct{flex:1;font-size:13px;color:var(--text)}
+  .chk.on{border-color:var(--accent);background:var(--accent-tint)}
+
+  /* radio computer picker */
+  .radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .radio{display:flex;gap:11px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);background:#fff;cursor:pointer;transition:.12s}
+  .radio:hover{border-color:var(--line-2)}
+  .radio.on{border-color:var(--accent);background:var(--accent-tint)}
+  .radio input{margin-top:2px;accent-color:var(--accent);cursor:pointer}
+  .radio .rt{font-size:13.5px;font-weight:700;color:var(--navy)}
+  .radio .rs{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+
+  .grouplabel{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+  .submit-row{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:24px;flex-wrap:wrap}
+  .submit-row .note{color:var(--muted);font-size:12px;margin-right:auto;max-width:52ch;line-height:1.5}
+
+  /* board */
+  .req{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line-2);padding:15px 17px;margin-top:12px;cursor:pointer;transition:.12s}
+  .req:hover{border-left-color:var(--accent)}
+  .req.complete{border-left-color:var(--ok)}
+  .req .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .req .who{font-weight:800;font-size:15px;color:var(--navy)}
+  .req .who small{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--muted);margin-left:8px;text-transform:none;letter-spacing:0}
+  .req .prog{display:flex;align-items:center;gap:10px;margin-top:11px}
+  .req .track{flex:1;height:8px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+  .req .fill{height:100%;background:var(--accent)}
+  .req.complete .fill{background:var(--ok)}
+  .req .pct{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:74px;text-align:right}
+  .req .meta{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+
+  /* detail (grouped by owner) */
+  .detail{background:var(--panel);border:1px solid var(--line);padding:18px 20px;margin-top:12px}
+  .detail .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .detail .dh h2{font-family:var(--display);font-weight:900;font-size:22px;color:var(--navy);letter-spacing:-.01em}
+  .detail .dh .sum{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.5}
+  .ownergrp{border:1px solid var(--line);margin-top:14px}
+  .ownergrp .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--bg);border-bottom:1px solid var(--line)}
+  .ownergrp .gh .gl{display:flex;align-items:center;gap:10px}
+  .ownergrp .gh .gn{font-weight:700;font-size:13.5px;color:var(--navy)}
+  .item{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:13px 14px;border-bottom:1px solid var(--line)}
+  .item:last-child{border-bottom:0}
+  .item .lx{flex:1;min-width:0}
+  .item .il{font-size:13.5px;color:var(--text);font-weight:600}
+  .item .idl{color:var(--muted);font-size:12px;margin-top:5px;line-height:1.5;white-space:pre-wrap}
+  .item .ik{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:6px;display:inline-block}
+  .item .ax{display:flex;gap:7px;align-items:center;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
+  .close-x{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line-2);background:#fff;padding:7px 11px;cursor:pointer}
+  .close-x:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <p class="kicker">People &times; New-Hire Onboarding</p>
+      <h1>Onboarding</h1>
+      <p>One intake form for a new hire. On submit, every field you set is routed to the person who owns it as a task or an approval. Approvals are explicit human clicks, nothing here provisions or approves automatically.</p>
+    </div>
+    <span id="status-badge" class="badge live"><span class="d"></span>Live workflow</span>
+  </div>
+
+  <div class="section-title">New Onboarding Request</div>
+  <div class="card" style="margin-top:0">
+    <form id="onb-form">
+
+      <div class="fsec">
+        <div class="head"><span class="st">New Hire</span><span class="tag bamboo">BambooHR</span></div>
+        <div class="fields">
+          <div class="field"><label>Full name <span class="tag bamboo">BambooHR</span></label><input name="name" required placeholder="Jordan Rivera" /></div>
+          <div class="field"><label>Personal email</label><input name="personal_email" type="email" placeholder="jordan@gmail.com" /></div>
+          <div class="field"><label>Start date</label><input name="start_date" type="date" /></div>
+          <div class="field"><label>Cell phone</label><input name="cell_phone" placeholder="+1 210 555 0100" /></div>
+          <div class="field"><label>Job position</label><input name="job_position" placeholder="Sprinkler Designer" /></div>
+          <div class="field"><label>Salary</label><input name="salary" placeholder="$72,000 / yr" /></div>
+          <div class="field"><label>Manager</label><input name="manager_name" placeholder="Priya Nair" /></div>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <div class="head"><span class="st">Pay + HR Exceptions</span><span class="tag bamboo">BambooHR</span></div>
+        <p class="muted" style="font-size:12px;margin-bottom:10px">Check only what differs from the default. Each becomes a BambooHR task for Sandi.</p>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" name="cell_reimburse"><span class="ct">Cell-phone reimbursement</span></label>
+          <label class="chk"><input type="checkbox" name="pto_plan"><span class="ct">Different PTO plan</span></label>
+          <label class="chk"><input type="checkbox" name="hours_80_40"><span class="ct">80-vs-40 hours approved</span></label>
+          <label class="chk"><input type="checkbox" name="probation_waived"><span class="ct">60-day probation waived</span></label>
+          <label class="chk"><input type="checkbox" name="incentive_plan"><span class="ct">Incentive plan</span></label>
+          <label class="chk"><input type="checkbox" name="vehicle_allowance"><span class="ct">Vehicle allowance (built into pay)</span></label>
+        </div>
+        <div class="field" style="margin-top:12px"><label>Misc pay/HR exceptions (free text)</label><textarea name="misc_exceptions" placeholder="Anything else Sandi should build into the record"></textarea></div>
+      </div>
+
+      <div class="fsec">
+        <div class="head"><span class="st">IT + Access</span><span class="tag it">IT</span></div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" name="company_email"><span class="ct">Company email <span class="tag it">IT</span></span></label>
+          <label class="chk"><input type="checkbox" name="teams_number"><span class="ct">Teams number <span class="tag it">IT</span></span></label>
+        </div>
+
+        <div class="grouplabel">SharePoint groups</div>
+        <div class="checks" id="sharepoint-checks"></div>
+
+        <div class="grouplabel">Printers <span class="tag it">IT</span></div>
+        <div class="checks" id="printer-checks"></div>
+      </div>
+
+      <div class="fsec">
+        <div class="head"><span class="st">Equipment + Software</span></div>
+        <div class="grouplabel">Computer <span class="tag mario">Mario approval</span></div>
+        <div class="radios" id="computer-radios"></div>
+
+        <div class="grouplabel">Software</div>
+        <div class="checks" id="software-checks"></div>
+
+        <div class="grouplabel">Safety-issued equipment <span class="tag safety">Safety</span></div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" name="company_cell"><span class="ct">Company cell phone</span></label>
+          <label class="chk"><input type="checkbox" name="ipad"><span class="ct">Company iPad</span></label>
+          <label class="chk"><input type="checkbox" name="vehicle_transfer"><span class="ct">Company vehicle transfer</span></label>
+          <label class="chk"><input type="checkbox" name="wex_card"><span class="ct">WEX fuel card</span></label>
+        </div>
+      </div>
+
+      <div class="fsec">
+        <div class="head"><span class="st">Vehicle</span><span class="tag safety">Safety + Sandi</span></div>
+        <p class="muted" style="font-size:12px;margin-bottom:10px">A company vehicle fans out to three owners: Sandi (license + MVR), Denise (State Auto policy), Daniel (confirm the vehicle).</p>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" name="company_vehicle"><span class="ct">Company vehicle needed</span></label>
+        </div>
+        <div class="field" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Daniel to confirm"></textarea></div>
+      </div>
+
+      <div class="submit-row">
+        <div class="note">Submitting routes the request. Nothing provisions or approves on its own, each item waits for the owner to act.</div>
+        <button type="submit" class="btn primary" id="submit-btn">Route onboarding</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="section-title">Onboarding Board</div>
+  <div id="detail"></div>
+  <div id="board"></div>
+
+<script>
+var OPTIONS=null, OPEN_ID=null;
+function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
+
+/* ---- render the option-driven parts of the form ---- */
+function renderOptions(o){
+  OPTIONS=o;
+  document.getElementById('sharepoint-checks').innerHTML=o.sharepoint.map(function(g){
+    return '<label class="chk"><input type="checkbox" name="sp" value="'+esc(g.name)+'"><span class="ct">'+esc(g.name)+' <span class="tag '+ownerClass(g.owner)+'">'+(g.kind==='approval'?'Approval':'IT')+'</span></span></label>';
+  }).join('');
+  document.getElementById('printer-checks').innerHTML=o.printers.map(function(p){
+    return '<label class="chk"><input type="checkbox" name="pr" value="'+esc(p)+'"><span class="ct">'+esc(p)+'</span></label>';
+  }).join('');
+  document.getElementById('software-checks').innerHTML=o.software.map(function(s){
+    return '<label class="chk"><input type="checkbox" name="sw" value="'+esc(s.name)+'"><span class="ct">'+esc(s.name)+' <span class="tag '+ownerClass(s.owner)+'">'+(s.kind==='approval'?'Mario':'IT')+'</span></span></label>';
+  }).join('');
+  var radios='<label class="radio on"><input type="radio" name="computer_type" value="none" checked><span><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>';
+  radios+=o.computers.map(function(c){
+    return '<label class="radio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span></label>';
+  }).join('');
+  document.getElementById('computer-radios').innerHTML=radios;
+  wireToggles();
+}
+function wireToggles(){
+  document.querySelectorAll('.chk input[type=checkbox]').forEach(function(cb){
+    var upd=function(){cb.closest('.chk').classList.toggle('on',cb.checked);};
+    cb.addEventListener('change',upd);upd();
+  });
+  document.querySelectorAll('.radio input[type=radio]').forEach(function(rb){
+    rb.addEventListener('change',function(){
+      document.querySelectorAll('.radio').forEach(function(r){r.classList.remove('on');});
+      if(rb.checked)rb.closest('.radio').classList.add('on');
+    });
+  });
+}
+
+/* ---- board ---- */
+function loadBoard(){
+  return fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){
+    if(d.options && !OPTIONS) renderOptions(d.options);
+    var reqs=d.requests||[];
+    document.getElementById('board').innerHTML= reqs.length? reqs.map(function(r){
+      var ru=r.rollup, done=r.status==='complete';
+      var meta='<span class="pill '+(done?'green':'amber')+'">'+(done?'complete':'open')+'</span>'+
+        '<span class="pill gray">'+ru.total+' item'+(ru.total===1?'':'s')+'</span>'+
+        (ru.pendingApprovals>0?'<span class="pill red">'+ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s')+' pending</span>':'')+
+        (ru.pending>0?'<span class="pill gray">'+ru.pending+' pending</span>':'');
+      return '<div class="req'+(done?' complete':'')+'" onclick="openReq('+r.id+')">'+
+        '<div class="top"><div class="who">'+esc(r.name)+(r.job_position?'<small>'+esc(r.job_position)+'</small>':'')+'</div>'+
+        '<span class="tag">'+(r.start_date?('starts '+esc(r.start_date)):'no start date')+'</span></div>'+
+        '<div class="prog"><div class="track"><div class="fill" style="width:'+ru.progress+'%"></div></div><div class="pct">'+ru.done+'/'+ru.total+' done</div></div>'+
+        '<div class="meta">'+meta+'</div></div>';
+    }).join('') : '<div class="empty">No onboarding requests yet. Fill the form above to route your first one.</div>';
+  });
+}
+
+function openReq(id){
+  OPEN_ID=id;
+  fetch('/api/onboarding/'+id).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok)return;
+    var req=d.request, ru=d.rollup;
+    var groups=(d.groups||[]).map(function(g){
+      var items=g.items.map(function(it){return itemRow(it);}).join('');
+      return '<div class="ownergrp"><div class="gh"><div class="gl"><span class="tag '+ownerClass(g.owner)+'">'+ownerTag(g.owner)+'</span>'+
+        '<span class="gn">'+esc(g.owner_label)+'</span></div>'+
+        (g.pending>0?'<span class="pill amber">'+g.pending+' pending</span>':'<span class="pill green">clear</span>')+'</div>'+items+'</div>';
+    }).join('');
+    document.getElementById('detail').innerHTML=
+      '<div class="detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
+      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+
+      ' · <b style="color:var(--navy)">'+ru.done+'/'+ru.total+'</b> done · <b style="color:var(--accent)">'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
+      '<button class="close-x" onclick="closeReq()">Close</button></div>'+groups+'</div>';
+    document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+}
+function closeReq(){OPEN_ID=null;document.getElementById('detail').innerHTML='';}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Mario',rebecca:'Rebecca',sandi:'Sandi',denise:'Safety',daniel:'Safety'};return m[o]||o;}
+
+function itemRow(it){
+  var st, act='';
+  if(it.status==='pending'){
+    st='<span class="pill gray">pending</span>';
+    if(it.kind==='task'){act='<button class="btn primary" onclick="act(event,'+it.id+',\'complete\')">Complete</button>';}
+    else{act='<button class="btn primary" onclick="act(event,'+it.id+',\'approve\')">Approve</button><button class="btn" onclick="act(event,'+it.id+',\'reject\')">Reject</button>';}
+  } else if(it.status==='done'){st='<span class="pill green">done</span>';}
+  else if(it.status==='approved'){st='<span class="pill green">approved</span>';}
+  else{st='<span class="pill red">rejected</span>';}
+  return '<div class="item"><div class="lx"><div class="il">'+esc(it.label)+'</div>'+
+    (it.detail?'<div class="idl">'+esc(it.detail)+'</div>':'')+
+    '<span class="ik">'+it.kind+(it.decided_by&&it.status!=='pending'?(' · '+it.status+' by '+esc(it.decided_by)):'')+'</span></div>'+
+    '<div class="ax">'+st+act+'</div></div>';
+}
+function act(ev,id,verb){
+  ev.stopPropagation();
+  var btn=ev.target; btn.disabled=true; btn.textContent='...';
+  fetch('/api/onboarding/items/'+id+'/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+    .then(function(r){return r.json();}).then(function(){ loadBoard().then(function(){ if(OPEN_ID)openReq(OPEN_ID); }); });
+}
+
+/* ---- submit ---- */
+document.getElementById('onb-form').addEventListener('submit',function(e){
+  e.preventDefault();
+  var f=e.target, btn=document.getElementById('submit-btn');
+  var checked=function(n){var el=f.querySelector('input[name="'+n+'"]');return el?el.checked:false;};
+  var multi=function(n){return Array.prototype.slice.call(f.querySelectorAll('input[name="'+n+'"]:checked')).map(function(x){return x.value;});};
+  var payload={
+    name:f.name.value.trim(),
+    personal_email:f.personal_email.value.trim(),
+    start_date:f.start_date.value,
+    cell_phone:f.cell_phone.value.trim(),
+    job_position:f.job_position.value.trim(),
+    salary:f.salary.value.trim(),
+    manager_name:f.manager_name.value.trim(),
+    company_email:checked('company_email'), teams_number:checked('teams_number'),
+    cell_reimburse:checked('cell_reimburse'), pto_plan:checked('pto_plan'), hours_80_40:checked('hours_80_40'),
+    probation_waived:checked('probation_waived'), incentive_plan:checked('incentive_plan'), vehicle_allowance:checked('vehicle_allowance'),
+    misc_exceptions:f.misc_exceptions.value.trim(),
+    company_cell:checked('company_cell'), ipad:checked('ipad'),
+    company_vehicle:checked('company_vehicle'), vehicle_details:f.vehicle_details.value.trim(),
+    vehicle_transfer:checked('vehicle_transfer'), wex_card:checked('wex_card'),
+    computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',
+    software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr')
+  };
+  if(!payload.name){f.name.focus();return;}
+  btn.disabled=true; btn.textContent='Routing...';
+  fetch('/api/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false; btn.textContent='Route onboarding';
+      if(d.ok){
+        f.reset(); wireToggles();
+        loadBoard().then(function(){ if(d.request)openReq(d.request.id); });
+      }
+    }).catch(function(){ btn.disabled=false; btn.textContent='Route onboarding'; });
+});
+
+loadBoard();
+</script>
+</body>
+</html>

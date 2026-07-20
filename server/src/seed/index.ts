@@ -1,5 +1,11 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
+import {
+  createRequest,
+  completeItem,
+  approveItem,
+  type OnboardingPayload,
+} from '../services/onboardingAgent';
 import { upsertNode } from '../db/memory';
 import { PILLARS } from '../config/auditor';
 import { DEPARTMENTS } from '../config/departments';
@@ -22,6 +28,7 @@ export function seed(): void {
   seedAssociations();
   seedCalibration();
   seedLicenses();
+  seedOnboarding();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -706,4 +713,120 @@ function seedLicenses(): void {
 
   setState('seeded_licenses', '1');
   console.log('[seed] license reclaim seeded (roster + 5-vendor seat inventory; several terminated seats reclaimable).');
+}
+
+/* ─────────────────────── New-hire Onboarding (seed) ───────────────────────
+ * Three onboarding requests at different stages so the board and the grouped-items view
+ * render on first boot: one fresh (everything pending), one partway (about half settled),
+ * one complete (every item done/approved). Each is routed through the real onboardingAgent
+ * so the seeded items match the live routing map exactly. Advancement is deterministic (a
+ * fixed cadence over the item list, no Math.random). Own flag; idempotent. */
+function seedOnboarding(): void {
+  if (getState('seeded_onboarding') === '1') return;
+  const db = getDb();
+
+  // guard: if any request already exists, do not double-seed
+  const already = db.prepare(`SELECT COUNT(*) AS c FROM onboarding_requests`).get() as { c: number };
+  if (already.c > 0) {
+    setState('seeded_onboarding', '1');
+    return;
+  }
+
+  const isoDay = (n: number) => isoDaysAgo(n).slice(0, 10);
+
+  // A CAD designer: CAD laptop + Bluebeam/AutoCAD/HydraCAD (Mario approvals), design SharePoint,
+  // full IT provisioning. Left fully pending so the board opens with real approvals to work.
+  const fresh: OnboardingPayload = {
+    name: 'Sofia Ramos',
+    personal_email: 'sofia.ramos@gmail.example',
+    start_date: isoDay(-10),
+    cell_phone: '+1 210 555 0611',
+    job_position: 'CAD Designer',
+    salary: '$78,000 / yr',
+    manager_name: 'Priya Nair',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'cad',
+    software: ['Microsoft 365 desktop apps', 'Adobe Acrobat', 'HFSS', 'Bluebeam', 'AutoCAD', 'HydraCAD'],
+    sharepoint: ['San Antonio (FPS)', 'FIRCON', 'MGMT'],
+    printers: ['San Antonio Regular', 'San Antonio Plotter'],
+    company_cell: true,
+    ipad: true,
+    probation_waived: true,
+  };
+
+  // A San Antonio field hire: company vehicle (fans to Sandi/Denise/Daniel) + WEX + iPad, a
+  // couple of pay exceptions. Partway: about half the items settled.
+  const partway: OnboardingPayload = {
+    name: 'Marcus Bell',
+    personal_email: 'marcus.bell@gmail.example',
+    start_date: isoDay(-3),
+    cell_phone: '+1 210 555 0642',
+    job_position: 'Fire Alarm Technician',
+    salary: '$64,000 / yr',
+    manager_name: 'Matt Shaner',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'standard',
+    software: ['Microsoft 365 desktop apps'],
+    sharepoint: ['San Antonio (FPS)', 'SAFETY'],
+    printers: ['San Antonio Regular'],
+    company_cell: true,
+    ipad: true,
+    company_vehicle: true,
+    vehicle_details: 'Ford Transit 250 - unit SA-14 (transfer from the retiring tech)',
+    wex_card: true,
+    cell_reimburse: true,
+    hours_80_40: true,
+  };
+
+  // An office hire, fully onboarded: everything done/approved so a complete card renders.
+  const done: OnboardingPayload = {
+    name: 'Grace Okoro',
+    personal_email: 'grace.okoro@gmail.example',
+    start_date: isoDay(21),
+    cell_phone: '+1 210 555 0658',
+    job_position: 'AP Specialist',
+    salary: '$56,000 / yr',
+    manager_name: 'Grace Bennett',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'business',
+    software: ['Microsoft 365 desktop apps', 'Adobe Acrobat'],
+    sharepoint: ['San Antonio (FPS)', 'ACCT', 'Payroll'],
+    printers: ['San Antonio Accounting'],
+    incentive_plan: true,
+  };
+
+  const settleAll = (id: number) => {
+    const items = db.prepare(`SELECT id, kind FROM onboarding_items WHERE request_id = ?`).all(id) as {
+      id: number;
+      kind: string;
+    }[];
+    for (const it of items) {
+      if (it.kind === 'approval') approveItem(it.id, 'Devon');
+      else completeItem(it.id, 'operator');
+    }
+  };
+  // deterministic partial settle: settle every other item (by position), no Math.random
+  const settleHalf = (id: number) => {
+    const items = db.prepare(`SELECT id, kind FROM onboarding_items WHERE request_id = ? ORDER BY id ASC`).all(id) as {
+      id: number;
+      kind: string;
+    }[];
+    items.forEach((it, i) => {
+      if (i % 2 !== 0) return; // leave the odd-indexed items pending
+      if (it.kind === 'approval') approveItem(it.id, 'Devon');
+      else completeItem(it.id, 'operator');
+    });
+  };
+
+  createRequest(fresh); // stays fully pending
+  const p = createRequest(partway);
+  settleHalf(p.request.id);
+  const c = createRequest(done);
+  settleAll(c.request.id);
+
+  setState('seeded_onboarding', '1');
+  console.log('[seed] onboarding seeded (3 requests: one fresh, one partway, one complete; routed through the live map).');
 }

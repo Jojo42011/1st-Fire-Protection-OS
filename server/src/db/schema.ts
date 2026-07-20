@@ -375,6 +375,59 @@ export function initDb(): void {
       reclaimed_at    TEXT,
       FOREIGN KEY (seat_id) REFERENCES license_seats(id) ON DELETE CASCADE
     );
+
+    /* ---------- new-hire onboarding (intake -> auto-routed, human-gated work) ----------
+     * One intake form captures every onboarding field for a new employee. On submit the
+     * router fans the SET/CHECKED fields out into onboarding_items, each addressed to the
+     * right owner as either a task (do it) or an approval (a human must say yes). Nothing
+     * here calls an external system: the BambooHR items are routed tasks a person acts on,
+     * and every approval is an explicit human click. A request completes when no item is
+     * still pending. */
+    CREATE TABLE IF NOT EXISTS onboarding_requests (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      name              TEXT NOT NULL,
+      personal_email    TEXT,
+      start_date        TEXT,
+      cell_phone        TEXT,
+      job_position      TEXT,
+      salary            TEXT,
+      manager_name      TEXT,
+      company_email     INTEGER DEFAULT 0,   -- IT: provision a company email
+      teams_number      INTEGER DEFAULT 0,   -- IT: provision a Teams number
+      cell_reimburse    INTEGER DEFAULT 0,   -- BambooHR: cell-phone reimbursement
+      pto_plan          INTEGER DEFAULT 0,   -- BambooHR: a different PTO plan
+      hours_80_40       INTEGER DEFAULT 0,   -- BambooHR: 80-vs-40 hours approved
+      probation_waived  INTEGER DEFAULT 0,   -- BambooHR: 60-day probation waived
+      incentive_plan    INTEGER DEFAULT 0,   -- BambooHR: incentive plan
+      vehicle_allowance INTEGER DEFAULT 0,   -- BambooHR: vehicle allowance (Sandi builds into pay)
+      misc_exceptions   TEXT,                -- BambooHR: free-text pay/HR exception
+      company_cell      INTEGER DEFAULT 0,   -- Safety (Denise): company cell phone
+      ipad              INTEGER DEFAULT 0,   -- Safety (Denise): company iPad
+      company_vehicle   INTEGER DEFAULT 0,   -- fans out to Sandi + Denise + Daniel
+      vehicle_details   TEXT,                -- the vehicle / new-vehicle details
+      vehicle_transfer  INTEGER DEFAULT 0,   -- Safety (Denise): company vehicle transfer
+      wex_card          INTEGER DEFAULT 0,   -- Safety (Denise): WEX fuel card
+      computer_type     TEXT DEFAULT 'none', -- none|standard|business|cad (Mario approval when not none)
+      software_json     TEXT DEFAULT '[]',   -- selected software (routed per item: IT or Mario)
+      sharepoint_json   TEXT DEFAULT '[]',   -- selected SharePoint groups (routed per group)
+      printers_json     TEXT DEFAULT '[]',   -- selected printers (IT)
+      status            TEXT DEFAULT 'open', -- open|complete
+      created_at        TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS onboarding_items (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id  INTEGER NOT NULL,
+      owner       TEXT NOT NULL,               -- bamboo|it|mario|rebecca|sandi|denise|daniel
+      owner_label TEXT NOT NULL,               -- display name for the owner
+      kind        TEXT NOT NULL,               -- task|approval
+      label       TEXT NOT NULL,               -- what needs doing
+      detail      TEXT,                        -- the specifics carried from the form
+      status      TEXT DEFAULT 'pending',      -- pending|done|approved|rejected
+      decided_by  TEXT,                        -- who completed/approved/rejected it
+      decided_at  TEXT,
+      created_at  TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (request_id) REFERENCES onboarding_requests(id) ON DELETE CASCADE
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
