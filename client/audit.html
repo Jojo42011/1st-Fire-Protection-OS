@@ -199,6 +199,35 @@
   .buildline .n{font-size:22px;font-weight:800}
   .buildline .n small{font-size:12px;color:var(--ink-3);font-weight:400}
 
+  /* ── polish: hover motion + glowing borders (instrument light, never decoration) ── */
+  .seg-g{transition:filter .25s}
+  .seg-g:hover{filter:drop-shadow(0 0 10px rgba(229,57,53,.22))}
+  .seg-cov{transition:stroke-dashoffset .8s ease,stroke-width .25s}
+  .seg-g:hover .seg-cov{stroke-width:3.4}
+  .hub-ring{filter:drop-shadow(0 0 16px rgba(229,57,53,.07))}
+  .strip .t{transition:transform .22s}
+  .strip .t:hover{transform:translateY(-2px)}
+  .strip .t:hover .v{text-shadow:0 0 22px rgba(233,238,245,.22)}
+  .leak{transition:background .18s,box-shadow .18s,padding-left .18s}
+  .leak:hover{background:var(--s1);box-shadow:inset 2px 0 0 var(--red),0 0 26px rgba(229,57,53,.06);padding-left:12px}
+  .gap{transition:background .18s,box-shadow .18s}
+  .gap:hover{background:var(--s1);box-shadow:inset 2px 0 0 var(--hair-2)}
+  .band,.pred,.assoc,.reslog{transition:background .18s,box-shadow .18s}
+  .band:hover,.pred:hover,.assoc:hover,.reslog:hover{background:var(--s1)}
+  /* glowing borders on the standing panels: subtle at rest, brighter on focus/hover */
+  .qcard{transition:border-color .25s,box-shadow .3s;box-shadow:0 0 26px rgba(229,57,53,.05)}
+  .qcard:hover{box-shadow:0 0 40px rgba(229,57,53,.09)}
+  .readout{transition:box-shadow .3s}
+  .readout:hover{box-shadow:0 0 34px rgba(233,238,245,.035)}
+  .chip{transition:border-color .15s,color .15s,box-shadow .15s,transform .12s}
+  .chip:hover{box-shadow:0 0 16px rgba(245,184,27,.14);transform:translateY(-1px)}
+  .ghost{transition:border-color .2s,background .2s,box-shadow .25s}
+  .ghost:hover{box-shadow:0 0 30px rgba(229,57,53,.16)}
+  .gap .approve,.pred .rb button{transition:.15s}
+  .gap .approve:hover{box-shadow:0 0 18px rgba(46,158,91,.16)}
+  .more:hover,.skip:hover{text-shadow:0 0 12px rgba(233,238,245,.15)}
+  .back{transition:.2s} .back:hover{box-shadow:0 0 20px rgba(229,57,53,.12)}
+
   @media (max-width:900px){
     .wrap{padding:28px 20px 70px}
     .split{grid-template-columns:1fr;gap:34px}
@@ -219,7 +248,6 @@
   <!-- ══ HOME ══ -->
   <div id="home">
     <div class="wheel-zone"><svg id="wheel" viewBox="0 0 720 720"></svg></div>
-    <div class="wheel-hint"><span class="micro">Select a department to begin the audit</span></div>
 
     <div class="strip" id="strip"></div>
 
@@ -324,7 +352,21 @@
 
 <script>
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-var STATE=null,BRIEF_RAW='',SHOW_ALL=false;
+/* slow count-up for the hero numbers on first load; instant when reduced-motion is set */
+function countUp(el,to,dur){
+  if(!el)return; to=Math.round(Number(to)||0);
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(reduce||to<=0){el.textContent=to;return;}
+  var start=null,d=dur||1300;
+  function step(ts){
+    if(start===null)start=ts;
+    var p=Math.min(1,(ts-start)/d), e=1-Math.pow(1-p,3); // easeOutCubic
+    el.textContent=Math.round(e*to);
+    if(p<1)requestAnimationFrame(step); else el.textContent=to;
+  }
+  el.textContent='0'; requestAnimationFrame(step);
+}
+var STATE=null,BRIEF_RAW='',SHOW_ALL=false,FIRST_RENDER=true;
 var CUR=null;        // current department key
 var DECK=[],QI=0;    // the department's OPEN questions (from persisted state) + index
 // The interview, coverage, and assembly are all derived from persisted server state now,
@@ -386,7 +428,7 @@ function renderWheel(){
   html+='<circle class="hub-ring" cx="'+cx+'" cy="'+cy+'" r="'+(R0-14)+'"/>'+
     '<text class="hub-t2" x="'+cx+'" y="'+(cy-34)+'">1ST FIRE PROTECTION</text>'+
     '<text class="hub-t1" x="'+cx+'" y="'+(cy-2)+'">AI OS</text>'+
-    '<text class="hub-t3" x="'+cx+'" y="'+(cy+44)+'">'+STATE.metrics.coverage+'<tspan>%</tspan></text>'+
+    '<text class="hub-t3" x="'+cx+'" y="'+(cy+44)+'"><tspan class="hub-num">'+STATE.metrics.coverage+'</tspan><tspan>%</tspan></text>'+
     '<text class="hub-t2" x="'+cx+'" y="'+(cy+66)+'">MAPPED</text>';
   svg.innerHTML=html;
   svg.querySelectorAll('.seg-g').forEach(function(g){
@@ -403,12 +445,20 @@ function renderHome(){
   document.getElementById('strip').innerHTML=[
     ['Leaks found',m.leaks,''],['Builds queued',m.buildsApproved||0,''],['Answered',m.questionsAnswered||0,''],
     ['Sites',m.locationsMapped,'/'+m.locationsTotal]
-  ].map(function(x){return '<div class="t"><span class="micro">'+x[0]+'</span><div class="v">'+x[1]+'<small>'+x[2]+'</small></div></div>';}).join('');
+  ].map(function(x){return '<div class="t"><span class="micro">'+x[0]+'</span><div class="v"><span class="num">'+x[1]+'</span><small>'+x[2]+'</small></div></div>';}).join('');
   renderLeaks();
   renderQueue();
   renderTrend();
   renderCalibration();
   renderAssociations();
+  if(FIRST_RENDER){
+    FIRST_RENDER=false;
+    // slow count-up of the hero numbers on first load (the wheel center + the stats strip)
+    countUp(document.querySelector('.hub-num'), STATE.metrics.coverage, 1500);
+    document.querySelectorAll('#strip .num').forEach(function(el,i){
+      countUp(el, el.textContent, 1200 + i*120);
+    });
+  }
 }
 /* ── the build queue: the Operator's proposed builds, human-approved into work orders ── */
 function renderQueue(){
