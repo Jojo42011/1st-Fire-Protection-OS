@@ -26,6 +26,14 @@
   .in input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);font-family:var(--font);font-size:14px;padding:11px 14px;outline:none}
   .in input:focus{border-color:var(--accent)}
   .miss{color:var(--muted);font-size:14px;padding:40px 0}
+  /* sample-data markers: every fabricated number/row is visibly flagged, never shown as live */
+  .card.kpi{position:relative}
+  .kpi .samp{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-deep);border:1px solid rgba(245,184,27,.6);background:var(--gold-tint,#FCF3DC);padding:2px 6px}
+  .section-title .stag{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-deep);border:1px solid rgba(245,184,27,.6);background:var(--gold-tint,#FCF3DC);padding:2px 6px;margin-left:2px}
+  .feed td .when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+  .feed .ic{color:var(--accent);font-weight:800;padding-right:0}
+  .samplenote{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:8px}
+  .samplenote .dot{width:7px;height:7px;background:var(--gold);border:1px solid var(--gold-deep);flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -39,17 +47,40 @@ var DEPT=params.get('dept')||'';
 var DEPT_NAME=params.get('name')||'';
 async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
 
-function render(a){
+function render(a,sampleMetrics,sampleFeed){
   var built=a.origin==='harness';
   var badge=built?'<span class="badge demo"><span class="d"></span>Harness-built</span>':'<span class="badge live"><span class="d"></span>Founding</span>';
   var dept=DEPT_NAME||a.pillar||'';
   var back=DEPT?'<button class="back" id="back">&larr; '+esc(dept||'Department')+'</button>':'';
   var know=(a.knowledge||[]).map(function(k){return '<div class="s"><span class="k">+</span><span>'+esc(k)+'</span></div>';}).join('');
 
+  // Real, honest facts (no fabricated numbers on these three).
   var kpis=''+
     '<div class="card kpi"><div class="label">Skills</div><div class="value">'+(a.skill_count||0)+'</div></div>'+
     '<div class="card kpi"><div class="label">Origin</div><div class="value">'+(built?'New':'Core')+'</div></div>'+
     '<div class="card kpi"><div class="label">Status</div><div class="value accent">Live</div></div>';
+
+  // Illustrative sample metric strip, every card flagged Sample.
+  var sm=(sampleMetrics||[]).map(function(m){
+    return '<div class="card kpi"><span class="samp">Sample</span><div class="label">'+esc(m.label)+'</div>'+
+      '<div class="value'+(m.accent?' accent':'')+'">'+esc(m.value)+'</div></div>';
+  }).join('');
+  var sampleStrip=sm?
+    ('<div class="section-title">Illustrative metrics<span class="stag">Sample</span></div>'+
+     '<div class="grid kpis">'+sm+'</div>'+
+     '<div class="samplenote"><span class="dot"></span><span>Sample data, fills in once this agent is connected to its source.</span></div>'):'';
+
+  // Work feed: a short sample activity log (flagged), replacing the teaching empty-state.
+  var rows=(sampleFeed||[]).map(function(f){
+    return '<tr><td class="ic">&rsaquo;</td><td>'+esc(f.action)+'</td><td class="right"><span class="when">'+esc(f.when)+'</span></td></tr>';
+  }).join('');
+  var feedBlock=rows?
+    ('<div class="section-title">Work feed<span class="stag">Sample</span></div>'+
+     '<div class="card feed"><table><thead><tr><th></th><th>Recent activity</th><th class="right">When</th></tr></thead>'+
+     '<tbody>'+rows+'</tbody></table></div>'+
+     '<div class="samplenote"><span class="dot"></span><span>Sample activity for illustration. Real work logs here once '+esc(a.name)+' is connected to its data source.</span></div>'):
+    ('<div class="section-title">Work feed</div>'+
+     '<div class="card"><div class="empty">No activity yet. This is where '+esc(a.name)+' logs the work it handles once it is connected to its data source. Until then, put it to work below.</div></div>');
 
   document.getElementById('wrap').innerHTML=
     back+
@@ -59,9 +90,9 @@ function render(a){
       '<p>'+esc(a.role||'')+'</p></div>'+badge+'</div>'+
     '<div class="signal"></div>'+
     '<div class="grid kpis">'+kpis+'</div>'+
+    sampleStrip+
     (know?'<div class="section-title">What it knows</div><div class="card know"><div class="list">'+know+'</div></div>':'')+
-    '<div class="section-title">Work feed</div>'+
-    '<div class="card"><div class="empty">No activity yet. This is where '+esc(a.name)+' logs the work it handles once it is connected to its data source. Until then, put it to work below.</div></div>'+
+    feedBlock+
     '<div class="section-title">Put it to work</div>'+
     '<div class="con"><div class="body" id="body">'+
       '<div class="msg hint">'+esc(a.name)+' is live. Ask it to handle something.</div></div>'+
@@ -83,11 +114,11 @@ async function send(e){
 (async function(){
   var key=qkey();
   if(!key){document.getElementById('miss').textContent='No agent specified.';return;}
-  var d=await (await fetch('/api/roster')).json();
-  var a=(d.agents||[]).filter(function(x){return x.key===key;})[0];
+  var d=await (await fetch('/api/agent/'+encodeURIComponent(key))).json();
+  var a=d&&d.agent;
   if(!a){document.getElementById('miss').textContent='Agent not found.';return;}
   document.title=a.name+' · 1st FP';
-  render(a);
+  render(a,d.sampleMetrics||[],d.sampleFeed||[]);
 })();
 </script>
 </body>
