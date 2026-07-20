@@ -1,15 +1,15 @@
 /**
  * Software-license seat sources (rent-the-pipes, simulation fallback).
  *
- * Five INDEPENDENT vendors, each its own adapter seam: Adobe, Bluebeam, AutoCAD (Autodesk),
- * HydroCAD, and Microsoft 365. Each function is env-gated and returns null when unkeyed, so
+ * Six INDEPENDENT vendors, each its own adapter seam: Adobe, Bluebeam, AutoCAD (Autodesk),
+ * HydraCAD, HFSS, and Microsoft 365. Each function is env-gated and returns null when unkeyed, so
  * the whole ingest degrades to the seeded seat inventory already in the database. Only the
  * shapes and the seams are wired here; the live vendor pulls are deliberately left as TODOs
  * (Bamboo is the one adapter wired for real, in bamboo.ts). A CSV / admin manual inventory
  * can populate license_seats via the same SeatRecord shape (source='manual').
  */
 
-export type Vendor = 'adobe' | 'bluebeam' | 'autocad' | 'hydrocad' | 'microsoft';
+export type Vendor = 'adobe' | 'bluebeam' | 'autocad' | 'hydracad' | 'hfss' | 'microsoft';
 
 export interface SeatRecord {
   vendor: Vendor;
@@ -52,7 +52,7 @@ export async function fetchAutocadSeats(): Promise<SeatRecord[] | null> {
   return [];
 }
 
-/* ── Bluebeam (Revu / Studio admin - separate product from HydroCAD) ── */
+/* ── Bluebeam (Revu / Studio admin - separate product from HydraCAD) ── */
 export function bluebeamConfigured(): boolean {
   return !!process.env.BLUEBEAM_API_KEY;
 }
@@ -62,24 +62,36 @@ export async function fetchBluebeamSeats(): Promise<SeatRecord[] | null> {
   return [];
 }
 
-/* ── HydroCAD (stormwater design license - separate product from Bluebeam) ── */
-export function hydrocadConfigured(): boolean {
-  return !!process.env.HYDROCAD_API_KEY;
+/* ── HydraCAD (Hydratec sprinkler-hydraulic design - separate product from Bluebeam) ── */
+export function hydracadConfigured(): boolean {
+  return !!process.env.HYDRACAD_API_KEY;
 }
-export async function fetchHydrocadSeats(): Promise<SeatRecord[] | null> {
-  if (!hydrocadConfigured()) return null;
-  // TODO: HydroCAD license roster (vendor has no public API today; a manual/CSV inventory
+export async function fetchHydracadSeats(): Promise<SeatRecord[] | null> {
+  if (!hydracadConfigured()) return null;
+  // TODO: HydraCAD license roster (vendor has no public API today; a manual/CSV inventory
   //       feeds these seats via source='manual' until then).
   return [];
 }
 
-/** Which of the five vendor adapters currently have a key present. */
+/* ── HFSS (sprinkler hydraulic-calc license - separate product) ── */
+export function hfssConfigured(): boolean {
+  return !!process.env.HFSS_API_KEY;
+}
+export async function fetchHfssSeats(): Promise<SeatRecord[] | null> {
+  if (!hfssConfigured()) return null;
+  // TODO: HFSS license roster (vendor has no public API today; a manual/CSV inventory
+  //       feeds these seats via source='manual' until then).
+  return [];
+}
+
+/** Which of the six vendor adapters currently have a key present. */
 export function configuredVendors(): Vendor[] {
   const out: Vendor[] = [];
   if (adobeConfigured()) out.push('adobe');
   if (bluebeamConfigured()) out.push('bluebeam');
   if (autodeskConfigured()) out.push('autocad');
-  if (hydrocadConfigured()) out.push('hydrocad');
+  if (hydracadConfigured()) out.push('hydracad');
+  if (hfssConfigured()) out.push('hfss');
   if (microsoftConfigured()) out.push('microsoft');
   return out;
 }
@@ -95,7 +107,8 @@ export async function fetchAllVendorSeats(): Promise<SeatRecord[]> {
     fetchAdobeSeats,
     fetchAutocadSeats,
     fetchBluebeamSeats,
-    fetchHydrocadSeats,
+    fetchHydracadSeats,
+    fetchHfssSeats,
   ];
   const out: SeatRecord[] = [];
   for (const a of adapters) {

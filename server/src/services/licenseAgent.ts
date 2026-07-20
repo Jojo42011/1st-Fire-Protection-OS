@@ -11,12 +11,13 @@ import type { Vendor } from './licenseSources';
  * authorizes the offboard/deprovision task. Nothing here ever cancels a license automatically.
  */
 
-/** The five independent vendors, with display labels and the default product line. */
+/** The six independent vendors, with display labels and the default product line. */
 export const VENDORS: { key: Vendor; label: string; product: string }[] = [
   { key: 'adobe', label: 'Adobe', product: 'Creative Cloud All Apps' },
   { key: 'bluebeam', label: 'Bluebeam', product: 'Bluebeam Revu' },
   { key: 'autocad', label: 'AutoCAD', product: 'AutoCAD (Autodesk)' },
-  { key: 'hydrocad', label: 'HydroCAD', product: 'HydroCAD' },
+  { key: 'hydracad', label: 'HydraCAD', product: 'HydraCAD (Hydratec)' },
+  { key: 'hfss', label: 'HFSS', product: 'HFSS' },
   { key: 'microsoft', label: 'Microsoft 365', product: 'Microsoft 365 E3' },
 ];
 
@@ -120,7 +121,7 @@ export function reconcile(): {
   const openReclaims = reclaimsBySeat();
 
   const reclaimable: ReclaimableSeat[] = [];
-  // seed the per-vendor tallies for all five vendors so every vendor renders even at zero
+  // seed the per-vendor tallies for all six vendors so every vendor renders even at zero
   const vb = new Map<string, VendorBreakdown>();
   for (const v of VENDORS)
     vb.set(v.key, {
@@ -184,7 +185,7 @@ export function reconcile(): {
 
   const savingsMonthly = reclaimable.reduce((s, r) => s + r.cost_monthly, 0);
   const byVendor = VENDORS.map((v) => vb.get(v.key)!).concat(
-    // any non-standard vendor rows that somehow exist, appended after the five
+    // any non-standard vendor rows that somehow exist, appended after the six
     [...vb.values()].filter((r) => !VENDORS.some((v) => v.key === r.vendor))
   );
 

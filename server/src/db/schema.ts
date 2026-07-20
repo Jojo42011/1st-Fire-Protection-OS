@@ -355,13 +355,13 @@ export function initDb(): void {
     );
     CREATE TABLE IF NOT EXISTS license_seats (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      vendor         TEXT NOT NULL,              -- adobe|bluebeam|autocad|hydrocad|microsoft
+      vendor         TEXT NOT NULL,              -- adobe|bluebeam|autocad|hydracad|hfss|microsoft
       product        TEXT,
       assignee_email TEXT,
       assignee_name  TEXT,
       cost_monthly   REAL DEFAULT 0,
       assigned_at    TEXT,
-      source         TEXT DEFAULT 'seed',        -- seed|manual|graph|umapi|autodesk|bluebeam|hydrocad
+      source         TEXT DEFAULT 'seed',        -- seed|manual|graph|umapi|autodesk|bluebeam|hydracad|hfss
       created_at     TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS license_reclaims (

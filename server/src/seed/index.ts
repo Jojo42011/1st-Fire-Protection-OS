@@ -602,7 +602,7 @@ function seedCalibration(): void {
 
 /* ─────────────────────── License Reclaim (seed) ───────────────────────
  * The HR roster (BambooHR, seeded fallback when keyless) plus the software-license seat
- * inventory across all five vendors (Adobe, Bluebeam, AutoCAD, HydroCAD, Microsoft 365).
+ * inventory across all six vendors (Adobe, Bluebeam, AutoCAD, HydraCAD, HFSS, Microsoft 365).
  * Several employees are terminated but still hold seats, so the reclaimable list and a real
  * annual savings number render on first boot. Deterministic (the FNV-1a -> mulberry32 PRNG for
  * date jitter, no Math.random). Own flag; idempotent (email + name unique guards). */
@@ -613,13 +613,14 @@ function seedLicenses(): void {
   const dateAgo = (n: number) => isoDaysAgo(n).slice(0, 10); // YYYY-MM-DD
   const jit = (span: number) => Math.round(r() * span); // 0..span days, stable per boot
 
-  const COST: Record<string, number> = { adobe: 60, microsoft: 36, autocad: 200, bluebeam: 22, hydrocad: 25 };
+  const COST: Record<string, number> = { adobe: 60, microsoft: 36, autocad: 200, bluebeam: 22, hydracad: 25, hfss: 20 };
   const PRODUCT: Record<string, string> = {
     adobe: 'Creative Cloud All Apps',
     microsoft: 'Microsoft 365 E3',
     autocad: 'AutoCAD (Autodesk)',
     bluebeam: 'Bluebeam Revu',
-    hydrocad: 'HydroCAD',
+    hydracad: 'HydraCAD (Hydratec)',
+    hfss: 'HFSS',
   };
   const emailFor = (name: string) => name.trim().toLowerCase().split(/\s+/).join('.') + '@1stfp.example';
 
@@ -688,17 +689,17 @@ function seedLicenses(): void {
 
     // extra vendor seats per person (beyond the base Microsoft 365 seat)
     const extra: [string, string[]][] = [
-      ['Victor Delgado', ['autocad', 'hydrocad', 'bluebeam']],
-      ['Sofia Marin', ['autocad', 'hydrocad', 'bluebeam']],
+      ['Victor Delgado', ['autocad', 'hydracad', 'bluebeam', 'hfss']],
+      ['Sofia Marin', ['autocad', 'hydracad', 'bluebeam']],
       ['Raymond Cho', ['autocad', 'bluebeam']],
       ['Priya Nair', ['bluebeam']],
       ['Neil Foster', ['bluebeam']],
       ['Clayton Cichon', ['bluebeam']],
       ['Carla Jimenez', ['adobe']],
       // terminated employees' extra seats (these become reclaimable)
-      ['Jordan Pratt', ['autocad', 'hydrocad', 'bluebeam', 'adobe']],
+      ['Jordan Pratt', ['autocad', 'hydracad', 'bluebeam', 'adobe', 'hfss']],
       ['Marcus Webb', ['autocad', 'bluebeam']],
-      ['Devin Marsh', ['autocad', 'bluebeam', 'hydrocad']],
+      ['Devin Marsh', ['autocad', 'bluebeam', 'hydracad']],
       ['Elena Vasquez', ['adobe']],
       ['Rebecca Stone', ['adobe']],
       ['Lauren Kelly', ['bluebeam']],
@@ -712,7 +713,7 @@ function seedLicenses(): void {
   }
 
   setState('seeded_licenses', '1');
-  console.log('[seed] license reclaim seeded (roster + 5-vendor seat inventory; several terminated seats reclaimable).');
+  console.log('[seed] license reclaim seeded (roster + 6-vendor seat inventory; several terminated seats reclaimable).');
 }
 
 /* ─────────────────────── New-hire Onboarding (seed) ───────────────────────
