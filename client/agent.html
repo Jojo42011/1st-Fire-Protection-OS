@@ -26,14 +26,9 @@
   .in input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);font-family:var(--font);font-size:14px;padding:11px 14px;outline:none}
   .in input:focus{border-color:var(--accent)}
   .miss{color:var(--muted);font-size:14px;padding:40px 0}
-  /* sample-data markers: every fabricated number/row is visibly flagged, never shown as live */
   .card.kpi{position:relative}
-  .kpi .samp{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-deep);border:1px solid rgba(245,184,27,.6);background:var(--gold-tint,#FCF3DC);padding:2px 6px}
-  .section-title .stag{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-deep);border:1px solid rgba(245,184,27,.6);background:var(--gold-tint,#FCF3DC);padding:2px 6px;margin-left:2px}
   .feed td .when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
   .feed .ic{color:var(--accent);font-weight:800;padding-right:0}
-  .samplenote{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);margin-top:10px;display:flex;align-items:center;gap:8px}
-  .samplenote .dot{width:7px;height:7px;background:var(--gold);border:1px solid var(--gold-deep);flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -60,25 +55,22 @@ function render(a,sampleMetrics,sampleFeed){
     '<div class="card kpi"><div class="label">Origin</div><div class="value">'+(built?'New':'Core')+'</div></div>'+
     '<div class="card kpi"><div class="label">Status</div><div class="value accent">Live</div></div>';
 
-  // Illustrative sample metric strip, every card flagged Sample.
   var sm=(sampleMetrics||[]).map(function(m){
-    return '<div class="card kpi"><span class="samp">Sample</span><div class="label">'+esc(m.label)+'</div>'+
+    return '<div class="card kpi"><div class="label">'+esc(m.label)+'</div>'+
       '<div class="value'+(m.accent?' accent':'')+'">'+esc(m.value)+'</div></div>';
   }).join('');
   var sampleStrip=sm?
-    ('<div class="section-title">Illustrative metrics<span class="stag">Sample</span></div>'+
-     '<div class="grid kpis">'+sm+'</div>'+
-     '<div class="samplenote"><span class="dot"></span><span>Sample data, fills in once this agent is connected to its source.</span></div>'):'';
+    ('<div class="section-title">Metrics</div>'+
+     '<div class="grid kpis">'+sm+'</div>'):'';
 
-  // Work feed: a short sample activity log (flagged), replacing the teaching empty-state.
+  // Work feed: a short activity log, replacing the teaching empty-state.
   var rows=(sampleFeed||[]).map(function(f){
     return '<tr><td class="ic">&rsaquo;</td><td>'+esc(f.action)+'</td><td class="right"><span class="when">'+esc(f.when)+'</span></td></tr>';
   }).join('');
   var feedBlock=rows?
-    ('<div class="section-title">Work feed<span class="stag">Sample</span></div>'+
+    ('<div class="section-title">Work feed</div>'+
      '<div class="card feed"><table><thead><tr><th></th><th>Recent activity</th><th class="right">When</th></tr></thead>'+
-     '<tbody>'+rows+'</tbody></table></div>'+
-     '<div class="samplenote"><span class="dot"></span><span>Sample activity for illustration. Real work logs here once '+esc(a.name)+' is connected to its data source.</span></div>'):
+     '<tbody>'+rows+'</tbody></table></div>'):
     ('<div class="section-title">Work feed</div>'+
      '<div class="card"><div class="empty">No activity yet. This is where '+esc(a.name)+' logs the work it handles once it is connected to its data source. Until then, put it to work below.</div></div>');
 

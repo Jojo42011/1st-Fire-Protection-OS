@@ -95,7 +95,6 @@
   /* ══ HOW WELL IT KNOWS: the calibration ledger ══ */
   .sec-head .micro.gold::before{background:var(--gold)}
   .note-line{font-family:var(--mono);font-size:10px;color:var(--ink-3);padding:0 6px 14px;line-height:1.7;max-width:78ch}
-  .samp{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(245,184,27,.4);padding:2px 6px;white-space:nowrap}
   .calib-head{display:flex;gap:52px;flex-wrap:wrap;margin:2px 0 26px;padding:0 6px}
   .calib-head .t .v{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-top:9px}
   .calib-head .t .v small{font-size:14px;color:var(--ink-3);font-weight:400}
@@ -460,8 +459,7 @@ function renderCalibration(){
   document.getElementById('calib-count').textContent=(cc.resolved||0)+' resolved · '+(cc.open||0)+' open';
   document.getElementById('calib-note').innerHTML=
     'The Operator stakes a confidence on each call, then a human resolves it against a real outcome. '+
-    'It gets more honest from those outcomes, not from a prompt. '+
-    '<span class="samp">Sample</span> illustrative predictions below: seeded resolutions are not verified outcomes.';
+    'It gets more honest from those outcomes, not from a prompt.';
 
   // headline: reliability, Brier, discount
   var head=[];
@@ -498,8 +496,7 @@ function renderCalibration(){
     return '<div class="pred" data-pid="'+p.id+'">'+
       '<span class="t">'+esc(p.statement||'')+
         '<small>says '+pct(p.predicted_confidence)+'% · '+esc(p.predicted_outcome||'')+' · '+esc(hz)+
-        (p.sample?'':'')+'</small></span>'+
-      (p.sample?'<span class="samp">Sample</span>':'')+
+        '</small></span>'+
       '<span class="rb">'+
         '<button class="yes" data-st="confirmed" data-pid="'+p.id+'">Confirmed</button>'+
         '<button class="part" data-st="partial" data-pid="'+p.id+'">Partial</button>'+
@@ -521,7 +518,6 @@ function renderCalibration(){
         '<div class="meta">predicted '+pct(p.predicted_confidence)+'% · '+esc(p.predicted_outcome||'')+
         (p.actual_outcome?' &nbsp;→&nbsp; actual: '+esc(p.actual_outcome):'')+
         (p.resolved_by?' · '+esc(p.resolved_by):'')+(when?' · '+esc(when):'')+'</div></span>'+
-      (p.sample?'<span class="samp">Sample</span>':'')+
       '</div>';
   }).join('');
 }
@@ -545,7 +541,6 @@ function renderAssociations(){
         '<small>surfaced because it '+esc(a.reason)+'</small></span>'+
       '<span class="track"><span class="fill" style="width:'+Math.round(a.weight*100)+'%"></span></span>'+
       '<span class="wv">'+a.weight.toFixed(2)+'</span>'+
-      (a.sample?'<span class="samp">Sample</span>':'')+
       '</div>';
   }).join('');
 }

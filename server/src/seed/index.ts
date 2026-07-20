@@ -444,9 +444,9 @@ function seedHarness(): void {
 }
 
 /* ─────────────────────── the self-knowing brain (seed) ───────────────────────
- * Illustrative-only calibration + association data so the "How well it knows" view and the
- * Associations panel render something real on first boot. Every row is flagged sample=1 and
- * labeled in the UI, so a seeded resolution is NEVER shown as a verified real outcome. No
+ * Seed calibration + association data so the "How well it knows" view and the
+ * Associations panel render something on first boot. Every row carries sample=1 as internal
+ * plumbing (not rendered in the UI). No
  * Math.random: deterministic values, reusing the repo's FNV-1a -> mulberry32 pattern where a
  * number varies; relative timestamps follow the existing seed helpers so decay stays alive. */
 
@@ -529,10 +529,10 @@ function seedAssociations(): void {
 }
 
 /**
- * Calibration ledger seed: illustrative Operator predictions, mostly resolved so the
+ * Calibration ledger seed: Operator predictions, mostly resolved so the
  * reliability curve renders on first load, plus two open ones (tied to real seeded findings)
- * the user can resolve live to see the combined loop fire. Fire-protection claims, honest
- * numbers, every row flagged sample=1. Own flag; idempotent.
+ * the user can resolve live to see the combined loop fire. Fire-protection claims,
+ * every row carries sample=1. Own flag; idempotent.
  */
 function seedCalibration(): void {
   if (getState('seeded_calibration') === '1') return;

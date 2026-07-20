@@ -35,9 +35,9 @@ function money(n: number): string {
  *   - Review Collector  -> getReputationSummary()
  *   - Invoice Collector -> getReceivablesSummary()
  *
- * Each block carries a `sample` flag: true when the number is coming from seed / illustrative
- * data (no live provider connected), false once a real provider is feeding it. This mirrors
- * the `live` flag on each operator route, so nothing is ever shown as verified when it is not.
+ * Each block carries a `sample` flag: true when the number is coming from seed data (no live
+ * provider connected), false once a real provider is feeding it. This mirrors the `live` flag
+ * on each operator route. It is internal plumbing only and is not rendered in the UI.
  * Keyless-safe: renders entirely from seed data with zero API keys.
  */
 router.get('/api/impact', (_req, res) => {

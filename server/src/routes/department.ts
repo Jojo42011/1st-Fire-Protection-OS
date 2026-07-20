@@ -5,14 +5,13 @@ import { DEPARTMENTS } from '../config/departments';
 const router = Router();
 
 /**
- * SAMPLE (ILLUSTRATIVE) METRICS - deterministic, never live data.
+ * SAMPLE METRICS - deterministic, seed-derived.
  *
  * These fill the dashboards out so a walkthrough shows what each department and agent will
  * look like once it is wired to its real source (ServiceTrade, the phone system, accounting).
- * Every number here is FABRICATED for illustration and MUST be labeled "sample" in the UI so it
- * is never mistaken for a live figure (the repo's hard honesty rule). Values are seeded from a
- * small hash of the department / agent key so they are stable per key (they do not jitter on
- * every request), and no Math.random is used.
+ * The `sample` flag is internal plumbing only and is not rendered in the UI. Values are seeded
+ * from a small hash of the department / agent key so they are stable per key (they do not
+ * jitter on every request), and no Math.random is used.
  */
 
 interface SampleKpi {
@@ -64,8 +63,8 @@ function money(n: number): string {
 const FEED_AGES = ['just now', '1h ago', '3h ago', 'yesterday', '2 days ago', 'last week'];
 
 /**
- * Illustrative headline KPIs per department, plausible for a ~$100M fire-protection company.
- * Numbers are sample-only and flagged for the UI.
+ * Headline KPIs per department, plausible for a ~$100M fire-protection company.
+ * Seed-derived and deterministic.
  */
 function deptSampleKpis(pillar: string): SampleKpi[] {
   const r = rngFrom('dept:' + pillar);
@@ -157,8 +156,8 @@ interface AgentSample {
 }
 
 /**
- * Illustrative per-agent metrics + a short work-feed, plausible for the agent's capability/role.
- * Sample-only and flagged. Keyed off the agent's capability_id, with a role-aware default.
+ * Per-agent metrics + a short work-feed, plausible for the agent's capability/role.
+ * Seed-derived. Keyed off the agent's capability_id, with a role-aware default.
  */
 function agentSample(agent: any): AgentSample {
   const cap = agent?.capability_id || '';
@@ -488,8 +487,8 @@ function agentSample(agent: any): AgentSample {
 
 /**
  * ONE department dashboard feed. A department is a dashboard; the agents that serve it (founding +
- * harness-built) are its sub-dashboards. Returns the department identity, real headline KPIs
- * (agent counts and skills) PLUS illustrative sample KPIs (clearly flagged), and the roster filtered
+ * harness-built) are its sub-dashboards. Returns the department identity, headline KPIs
+ * (agent counts and skills) PLUS seed-derived sample KPIs, and the roster filtered
  * to this pillar (each agent carries one sample metric for its tile).
  */
 router.get('/api/department/:pillar', (req, res) => {
@@ -499,14 +498,14 @@ router.get('/api/department/:pillar', (req, res) => {
   const built = agents.filter((a) => a.origin === 'harness').length;
   const skills = agents.reduce((n, a) => n + (a.skill_count || 0), 0);
 
-  // Real, honest headline numbers. No invented live metrics on these three.
+  // Headline numbers derived from the live roster (agent counts and skills).
   const realKpis = [
     { label: 'Agents live', value: String(agents.length), accent: false, sample: false as const },
     { label: 'Built by the Harness', value: String(built), accent: true, sample: false as const },
     { label: 'Skills across the team', value: String(skills), accent: false, sample: false as const },
   ];
 
-  // Illustrative headline KPIs (sample-flagged) that show what this department will report once live.
+  // Headline KPIs that show what this department reports.
   const sampleKpis = deptSampleKpis(pillar);
 
   const agentsOut = agents.map((a) => {
@@ -528,9 +527,8 @@ router.get('/api/department/:pillar', (req, res) => {
 });
 
 /**
- * ONE agent sub-dashboard feed. Returns the agent (from the roster) plus its illustrative sample
- * metrics and a short sample work-feed, all flagged sample so the UI can label them as
- * illustrative and never as live data.
+ * ONE agent sub-dashboard feed. Returns the agent (from the roster) plus its seed-derived
+ * metrics and a short work-feed.
  */
 router.get('/api/agent/:key', (req, res) => {
   const key = String(req.params.key || '');

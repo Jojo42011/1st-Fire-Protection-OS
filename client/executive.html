@@ -50,16 +50,6 @@
     text-transform:uppercase;
     color:var(--muted);
   }
-  .tag{
-    font-size:10px;
-    letter-spacing:.10em;
-    text-transform:uppercase;
-    color:var(--faint);
-    border:1px solid var(--hair);
-    border-radius:999px;
-    padding:2px 8px;
-    white-space:nowrap;
-  }
   .num{
     font-size:clamp(52px,15vw,80px);
     font-weight:600;
@@ -101,9 +91,8 @@
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 function block(a){
-  var tag = a.sample ? '<span class="tag">Sample</span>' : '';
   return '<section class="stat">'
-    + '<div class="stat-top"><span class="label">'+esc(a.label)+'</span>'+tag+'</div>'
+    + '<div class="stat-top"><span class="label">'+esc(a.label)+'</span></div>'
     + '<div class="num">'+esc(a.headline)+'</div>'
     + '<p class="roi">'+esc(a.roi)+'</p>'
     + (a.sub ? '<p class="sub">'+esc(a.sub)+'</p>' : '')

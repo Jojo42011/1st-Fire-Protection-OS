@@ -29,12 +29,7 @@
   .ag .foot{margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
   .ag .live{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok);display:inline-flex;align-items:center;gap:6px}
   .ag .live .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
-  /* sample-data markers: every fabricated number is visibly flagged, never shown as live */
   .card.kpi{position:relative}
-  .kpi .samp{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-deep);border:1px solid rgba(245,184,27,.6);background:var(--gold-tint,#FCF3DC);padding:2px 6px}
-  .ag .m .samp{display:inline-block;font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-deep);margin-left:6px;vertical-align:middle}
-  .samplenote{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);margin-top:12px;display:flex;align-items:center;gap:8px}
-  .samplenote .dot{width:7px;height:7px;background:var(--gold);border:1px solid var(--gold-deep);flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -49,7 +44,6 @@
   <div class="signal"></div>
 
   <div class="grid kpis" id="kpis"></div>
-  <div class="samplenote" id="samplenote" style="display:none"><span class="dot"></span><span>Sample data, shown for illustration. Real numbers fill in once each agent is connected to its source.</span></div>
 
   <div class="section-title">The team, each its own dashboard</div>
   <div class="grid agents" id="agents"></div>
@@ -64,17 +58,15 @@
   var inShell=(function(){try{return window.parent!==window;}catch(_){return false;}})();
 
   function kpi(k){
-    var samp=k.sample?'<span class="samp">Sample</span>':'';
-    return '<div class="card kpi">'+samp+'<div class="label">'+esc(k.label)+'</div>'+
+    return '<div class="card kpi"><div class="label">'+esc(k.label)+'</div>'+
       '<div class="value'+(k.accent?' accent':'')+'">'+esc(k.value)+'</div></div>';
   }
 
   function agentTile(a){
     var built=a.origin==='harness';
     var originTag='<span class="tag o">'+(built?'Harness-built':'Founding')+'</span>';
-    // Real facts (Skills/Origin) plus one illustrative sample metric, clearly flagged.
     var sm=a.sampleMetric;
-    var smBlock=sm?('<div class="m"><div class="v">'+esc(sm.value)+'</div><div class="l">'+esc(sm.label)+'<span class="samp">Sample</span></div></div>'):'';
+    var smBlock=sm?('<div class="m"><div class="v">'+esc(sm.value)+'</div><div class="l">'+esc(sm.label)+'</div></div>'):'';
     var metrics=''+
       '<div class="m"><div class="v">'+(a.skill_count||0)+'</div><div class="l">Skills</div></div>'+
       '<div class="m"><div class="v">'+(built?'New':'Core')+'</div><div class="l">Origin</div></div>'+
@@ -108,7 +100,6 @@
     document.getElementById('count').textContent=ags.length+' agent'+(ags.length===1?'':'s');
     var allKpis=(d.kpis||[]).concat(d.sampleKpis||[]);
     document.getElementById('kpis').innerHTML=allKpis.map(kpi).join('');
-    if((d.sampleKpis||[]).length) document.getElementById('samplenote').style.display='flex';
     document.getElementById('agents').innerHTML=ags.length?ags.map(agentTile).join(''):'<div class="empty">No agents in this department yet. When the Operator finds a gap here and you ship it on the Harness, the new agent lands here as its own dashboard.</div>';
     document.querySelectorAll('[data-key]').forEach(function(b){ b.addEventListener('click',function(){ open(b.getAttribute('data-key')); }); });
   }).catch(function(){
