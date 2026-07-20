@@ -5,30 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Agent · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/theme.css" />
+<link rel="stylesheet" href="/command.css" />
 <style>
   /* ── AN AGENT SUB-DASHBOARD ─────────────────────────────────────────────────
      One built agent, nested under its department dashboard. It runs its own dashboard
      (identity, real capability facts, a work feed, and the console), not just a chat box. */
-  .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;margin-bottom:16px}
-  .back:hover{color:var(--accent)}
+  .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:0;margin-bottom:16px;transition:color .15s}
+  .back:hover{color:var(--ink)}
   .know .list{display:flex;flex-direction:column;gap:0}
-  .know .s{display:flex;gap:12px;font-size:13.5px;color:var(--text);line-height:1.5;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .know .s{display:flex;gap:12px;font-size:13.5px;color:var(--ink);line-height:1.5;padding:11px 2px;border-bottom:1px solid var(--hair)}
   .know .s:last-child{border-bottom:none}
-  .know .s .k{color:var(--accent);flex:0 0 auto;font-weight:800}
-  .con{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--navy);margin-top:16px}
+  .know .s .k{color:var(--ok);flex:0 0 auto;font-weight:800}
+  .con{background:var(--s1);border:1px solid var(--hair);border-radius:14px;margin-top:16px;overflow:hidden}
   .con .body{padding:18px;display:flex;flex-direction:column;gap:12px;min-height:150px;max-height:50vh;overflow-y:auto}
-  .msg{max-width:86%;padding:11px 14px;font-size:13.5px;line-height:1.5}
-  .msg.me{align-self:flex-end;background:var(--navy);color:#fff}
-  .msg.ag{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--text)}
-  .msg.hint{align-self:center;color:var(--muted);font-size:12.5px;font-style:italic;background:none}
-  .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--line)}
-  .in input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);font-family:var(--font);font-size:14px;padding:11px 14px;outline:none}
-  .in input:focus{border-color:var(--accent)}
-  .miss{color:var(--muted);font-size:14px;padding:40px 0}
+  .msg{max-width:86%;padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.5}
+  .msg.me{align-self:flex-end;background:var(--s3);color:var(--ink)}
+  .msg.ag{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
+  .msg.hint{align-self:center;color:var(--ink-3);font-size:12.5px;font-style:italic;background:none}
+  .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--hair)}
+  .in input{flex:1;background:var(--s2);border:1px solid var(--hair-2);border-radius:9px;color:var(--ink);font-family:var(--sans);font-size:14px;padding:11px 14px;outline:none}
+  .in input:focus{border-color:var(--red)}
+  .miss{color:var(--ink-2);font-size:14px;padding:40px 0}
   .card.kpi{position:relative}
-  .feed td .when{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
-  .feed .ic{color:var(--accent);font-weight:800;padding-right:0}
+  .feed td .when{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap}
+  .feed .ic{color:var(--red);font-weight:800;padding-right:0}
 </style>
 </head>
 <body>

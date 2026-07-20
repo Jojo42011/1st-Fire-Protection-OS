@@ -5,30 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Department · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/theme.css" />
+<link rel="stylesheet" href="/command.css" />
 <style>
   /* ── A DEPARTMENT DASHBOARD ────────────────────────────────────────────────
-     One dashboard per department. The agents that serve it (founding + harness-built)
+     One dashboard per department. The agents that serve it (built-in + harness-built)
      are its SUB-DASHBOARDS: each tile opens into that agent's own dashboard. This keeps
      the OS one clean system instead of a separate nav page per agent. */
   .agents{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
-  .ag{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--navy);padding:18px 20px;display:flex;flex-direction:column;transition:.14s}
-  .ag:hover{border-left-color:var(--accent)}
-  .ag.built{border-left-color:var(--gold)}
+  .ag{background:var(--s1);border:1px solid var(--hair);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;transition:border-color .14s}
+  .ag:hover{border-color:var(--hair-2)}
+  .ag.built{border-color:rgba(245,184,27,.24)}
   .ag .h{display:flex;align-items:flex-start;gap:12px}
-  .ag .av{width:40px;height:40px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
-  .ag.built .av{background:var(--gold);color:var(--navy)}
+  .ag .av{width:40px;height:40px;border-radius:10px;background:var(--s3);color:var(--ink);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
+  .ag.built .av{background:rgba(245,184,27,.16);color:var(--gold)}
   .ag .hn{flex:1;min-width:0}
-  .ag .nm{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.01em;color:var(--navy)}
-  .ag .rl{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:3px}
-  .ag .tag{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--line-2);color:var(--muted);white-space:nowrap}
-  .ag.built .tag.o{color:var(--gold-deep);border-color:rgba(245,184,27,.6)}
-  .ag .metrics{display:flex;gap:22px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-  .ag .m .v{font-family:var(--display);font-weight:900;font-size:22px;color:var(--navy);line-height:1}
-  .ag .m .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+  .ag .nm{font-weight:800;font-size:16px;letter-spacing:-.01em;color:var(--ink)}
+  .ag .rl{color:var(--ink-2);font-size:12.5px;line-height:1.45;margin-top:3px}
+  .ag .tag{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:20px;border:1px solid var(--hair-2);color:var(--ink-3);white-space:nowrap}
+  .ag.built .tag.o{color:var(--gold);border-color:rgba(245,184,27,.4)}
+  .ag .metrics{display:flex;gap:22px;margin-top:14px;padding-top:14px;border-top:1px solid var(--hair)}
+  .ag .m .v{font-weight:700;font-size:22px;color:var(--ink);line-height:1;letter-spacing:-.02em}
+  .ag .m .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-top:5px}
   .ag .foot{margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
   .ag .live{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok);display:inline-flex;align-items:center;gap:6px}
-  .ag .live .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .ag .live .d{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 7px rgba(46,158,91,.5)}
   .card.kpi{position:relative}
 </style>
 </head>
@@ -83,7 +83,7 @@
   }
 
   function open(key){
-    // Founding agents have their own rich dashboards: hop to that tab in the shell.
+    // Built-in agents have their own rich dashboards: hop to that tab in the shell.
     if(FOUNDING[key]&&inShell){ window.parent.postMessage({type:'app-navigate',tab:key},'*'); return; }
     // Built agents open their own sub-dashboard, in place, with a back link to this department.
     var url='/agent?key='+encodeURIComponent(key)+'&dept='+encodeURIComponent(DEPT)+'&name='+encodeURIComponent(DEPT_NAME);
