@@ -352,6 +352,11 @@ export function initDb(): void {
   addColumn('build_orders', 'code', 'TEXT');          // the generated TypeScript module
   addColumn('build_orders', 'code_path', 'TEXT');     // where it would live in the repo
   addColumn('build_orders', 'code_engine', 'TEXT');   // coder-kimi | coder-anthropic | template ...
+
+  // Every harness-built agent runs its own sub-dashboard (nested under its department dashboard),
+  // not just a chat console. 'console' keeps any pre-existing built agents as-is; new builds set
+  // 'dashboard' at creation. Founding agents keep their own bespoke dashboards regardless.
+  addColumn('agents', 'dashboard_kind', "TEXT DEFAULT 'console'");
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

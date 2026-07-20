@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Department · 1st FP</title>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  /* ── A DEPARTMENT DASHBOARD ────────────────────────────────────────────────
+     One dashboard per department. The agents that serve it (founding + harness-built)
+     are its SUB-DASHBOARDS: each tile opens into that agent's own dashboard. This keeps
+     the OS one clean system instead of a separate nav page per agent. */
+  .agents{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .ag{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--navy);padding:18px 20px;display:flex;flex-direction:column;transition:.14s}
+  .ag:hover{border-left-color:var(--accent)}
+  .ag.built{border-left-color:var(--gold)}
+  .ag .h{display:flex;align-items:flex-start;gap:12px}
+  .ag .av{width:40px;height:40px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
+  .ag.built .av{background:var(--gold);color:var(--navy)}
+  .ag .hn{flex:1;min-width:0}
+  .ag .nm{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:-.01em;color:var(--navy)}
+  .ag .rl{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:3px}
+  .ag .tag{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border:1px solid var(--line-2);color:var(--muted);white-space:nowrap}
+  .ag.built .tag.o{color:var(--gold-deep);border-color:rgba(245,184,27,.6)}
+  .ag .metrics{display:flex;gap:22px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .ag .m .v{font-family:var(--display);font-weight:900;font-size:22px;color:var(--navy);line-height:1}
+  .ag .m .l{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-top:5px}
+  .ag .foot{margin-top:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .ag .live{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ok);display:inline-flex;align-items:center;gap:6px}
+  .ag .live .d{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="titles">
+      <p class="kicker" id="kicker">Department</p>
+      <h1 id="title">Department</h1>
+      <p id="role">Every agent working this department, each running its own dashboard under one roof.</p>
+    </div>
+    <span class="badge live"><span class="d"></span><span id="count">0 agents</span></span>
+  </div>
+  <div class="signal"></div>
+
+  <div class="grid kpis" id="kpis"></div>
+
+  <div class="section-title">The team, each its own dashboard</div>
+  <div class="grid agents" id="agents"></div>
+
+<script>
+  var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var initials=function(n){return String(n||'?').split(/\s+/).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase();};
+  var params=new URLSearchParams(location.search);
+  var DEPT=params.get('dept')||'';
+  var DEPT_NAME=params.get('name')||'';
+  var FOUNDING={calls:1,invoices:1,reviews:1};
+  var inShell=(function(){try{return window.parent!==window;}catch(_){return false;}})();
+
+  function kpi(k){
+    return '<div class="card kpi"><div class="label">'+esc(k.label)+'</div>'+
+      '<div class="value'+(k.accent?' accent':'')+'">'+esc(k.value)+'</div></div>';
+  }
+
+  function agentTile(a){
+    var built=a.origin==='harness';
+    var originTag='<span class="tag o">'+(built?'Harness-built':'Founding')+'</span>';
+    // Real facts only. No fabricated live volume.
+    var metrics=''+
+      '<div class="m"><div class="v">'+(a.skill_count||0)+'</div><div class="l">Skills</div></div>'+
+      '<div class="m"><div class="v">'+(built?'New':'Core')+'</div><div class="l">Origin</div></div>';
+    var cta=(FOUNDING[a.key])?'Open dashboard':'Open dashboard';
+    return '<div class="ag'+(built?' built':'')+'">'+
+      '<div class="h"><div class="av">'+esc(initials(a.name))+'</div>'+
+        '<div class="hn"><div class="nm">'+esc(a.name)+'</div><div class="rl">'+esc(a.role||'')+'</div></div>'+
+        originTag+'</div>'+
+      '<div class="metrics">'+metrics+'</div>'+
+      '<div class="foot"><span class="live"><span class="d"></span>Live</span>'+
+        '<button class="btn primary" data-key="'+esc(a.key)+'">'+cta+' &rarr;</button></div>'+
+      '</div>';
+  }
+
+  function open(key){
+    // Founding agents have their own rich dashboards: hop to that tab in the shell.
+    if(FOUNDING[key]&&inShell){ window.parent.postMessage({type:'app-navigate',tab:key},'*'); return; }
+    // Built agents open their own sub-dashboard, in place, with a back link to this department.
+    var url='/agent?key='+encodeURIComponent(key)+'&dept='+encodeURIComponent(DEPT)+'&name='+encodeURIComponent(DEPT_NAME);
+    location.href=url;
+  }
+
+  fetch('/api/department/'+encodeURIComponent(DEPT)).then(function(r){return r.json();}).then(function(d){
+    var name=d.name||DEPT_NAME||'Department';
+    document.title=name+' · 1st FP';
+    document.getElementById('title').textContent=name;
+    document.getElementById('kicker').textContent='Department';
+    document.getElementById('role').textContent=d.aiRole||'';
+    var ags=d.agents||[];
+    document.getElementById('count').textContent=ags.length+' agent'+(ags.length===1?'':'s');
+    document.getElementById('kpis').innerHTML=(d.kpis||[]).map(kpi).join('');
+    document.getElementById('agents').innerHTML=ags.length?ags.map(agentTile).join(''):'<div class="empty">No agents in this department yet. When the Operator finds a gap here and you ship it on the Harness, the new agent lands here as its own dashboard.</div>';
+    document.querySelectorAll('[data-key]').forEach(function(b){ b.addEventListener('click',function(){ open(b.getAttribute('data-key')); }); });
+  }).catch(function(){
+    document.getElementById('agents').innerHTML='<div class="empty">Could not load this department.</div>';
+  });
+</script>
+</body>
+</html>

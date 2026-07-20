@@ -31,6 +31,7 @@ export interface AgentRow {
   origin: string;
   status: string;
   built_from: number | null;
+  dashboard_kind: string | null; // 'dashboard' (built agents own a sub-dashboard) | 'console'
   created_at: string;
 }
 
@@ -73,6 +74,7 @@ export function listAgents(): any[] {
       origin: r.origin, // founding | harness
       status: r.status,
       built_from: r.built_from,
+      dashboard_kind: r.dashboard_kind || (r.origin === 'harness' ? 'dashboard' : 'console'),
       created_at: r.created_at,
       knowledge: parseKnowledge(r),
       skills: skills.map((s) => s.skill),
@@ -150,8 +152,8 @@ export function createAgentFromOrder(order: {
   while (db.prepare(`SELECT 1 FROM agents WHERE key = ?`).get(key)) key = `${order.spec.key}-${n++}`;
 
   db.prepare(
-    `INSERT INTO agents (key, name, role, pillar_key, capability_id, system_prompt, knowledge, origin, status, built_from)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'harness', 'live', ?)`
+    `INSERT INTO agents (key, name, role, pillar_key, capability_id, system_prompt, knowledge, origin, status, built_from, dashboard_kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'harness', 'live', ?, 'dashboard')`
   ).run(
     key,
     order.spec.name,

@@ -165,7 +165,7 @@ function departmentTabs(agents){
       key:"dept-"+pk,
       label:g.name,
       sub:g.count+" agent"+(g.count===1?"":"s"),
-      src:"/roster?dept="+encodeURIComponent(pk)+"&name="+encodeURIComponent(g.name),
+      src:"/department?dept="+encodeURIComponent(pk)+"&name="+encodeURIComponent(g.name),
       sep: i===0 ? "Departments" : undefined,
       icon: DEPT_ICON
     };

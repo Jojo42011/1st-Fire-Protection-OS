@@ -23,6 +23,7 @@ import audit from './routes/audit';
 import harness from './routes/harness';
 import { healRoster } from './services/harness';
 import roster from './routes/roster';
+import department from './routes/department';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
 
@@ -52,6 +53,7 @@ app.use(voice);
 app.use(audit);
 app.use(harness);
 app.use(roster);
+app.use(department);
 app.use(admin);
 app.use(introspect);
 
@@ -67,6 +69,7 @@ app.get('/reviews', page('reviews.html'));
 app.get('/audit', page('audit.html'));
 app.get('/harness', page('harness.html'));
 app.get('/roster', page('roster.html'));
+app.get('/department', page('department.html'));
 app.get('/agent', page('agent.html'));
 app.get('/integrations', page('integrations.html'));
 

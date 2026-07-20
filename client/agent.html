@@ -5,80 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Agent · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/theme.css" />
 <style>
-  /* ── A SINGLE AGENT - the console for one worker on the roster ──────────
-     Opened from the left pane under its department. Same command-room language. */
-  :root{
-    --s0:#0C131D; --s1:#101927; --s2:#152134; --s3:#1B2A42;
-    --ink:#E9EEF5; --ink-2:#8FA0B4; --ink-3:#5C6B7D;
-    --hair:rgba(233,238,245,.08); --hair-2:rgba(233,238,245,.16);
-    --gold:#F5B81B; --ok:#2E9E5B;
-    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-    --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scrollbar-color:var(--s2) var(--s0)}
-  body{background:var(--s0);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
-    background-image:radial-gradient(1000px 480px at 50% -100px,rgba(46,158,91,.05),transparent 70%)}
-  .wrap{max-width:820px;margin:0 auto;padding:40px 40px 90px}
-  .micro{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
-  .fadein{animation:rise .45s cubic-bezier(.2,.7,.3,1)}
-  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-
-  .top{display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:1px solid var(--hair)}
-  .av{width:46px;height:46px;border-radius:12px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;flex-shrink:0}
-  .hn{flex:1;min-width:0}
-  .nm{font-size:18px;font-weight:900;letter-spacing:-.01em}
-  .rl{color:var(--ink-2);font-size:13px;line-height:1.4;margin-top:3px}
-  .badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:4px 9px;border-radius:20px;white-space:nowrap}
-  .badge.built{background:rgba(245,184,27,.14);color:var(--gold)}
-  .badge.found{background:rgba(143,160,180,.12);color:var(--ink-2)}
-  .meta{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-  .chip{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--hair);border-radius:6px;padding:4px 8px}
-  .chip .live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px;box-shadow:0 0 8px rgba(46,158,91,.6)}
-
-  .know{margin-top:24px}
-  .know h3{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3);padding-bottom:10px;border-bottom:1px solid var(--hair)}
-  .know .list{margin-top:14px;display:flex;flex-direction:column;gap:9px}
-  .know .s{display:flex;gap:10px;font-size:13px;color:var(--ink-2);line-height:1.5}
-  .know .s .k{color:var(--ok);flex-shrink:0}
-
-  .con{margin-top:28px;background:var(--s1);border:1px solid var(--hair);border-radius:14px;overflow:hidden}
-  .con h3{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3);padding:16px 18px;border-bottom:1px solid var(--hair)}
-  .body{padding:18px;display:flex;flex-direction:column;gap:12px;min-height:150px;max-height:52vh;overflow-y:auto}
-  .msg{max-width:86%;padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.5}
-  .msg.me{align-self:flex-end;background:var(--s3);color:var(--ink)}
-  .msg.ag{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
-  .msg.hint{align-self:center;color:var(--ink-3);font-size:12.5px;font-style:italic;background:none}
-  .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--hair)}
-  .in input{flex:1;background:var(--s2);border:1px solid var(--hair);border-radius:9px;color:var(--ink);font-family:var(--sans);font-size:13.5px;padding:11px 14px;outline:none}
-  .in input:focus{border-color:var(--hair-2)}
-  .btn{font-family:var(--sans);font-weight:700;font-size:13px;border:none;border-radius:9px;padding:11px 18px;cursor:pointer;background:var(--ink);color:var(--s0)}
-  .miss{color:var(--ink-3);font-size:14px;padding:40px 0}
+  /* ── AN AGENT SUB-DASHBOARD ─────────────────────────────────────────────────
+     One built agent, nested under its department dashboard. It runs its own dashboard
+     (identity, real capability facts, a work feed, and the console), not just a chat box. */
+  .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;margin-bottom:16px}
+  .back:hover{color:var(--accent)}
+  .know .list{display:flex;flex-direction:column;gap:0}
+  .know .s{display:flex;gap:12px;font-size:13.5px;color:var(--text);line-height:1.5;padding:11px 2px;border-bottom:1px solid var(--line)}
+  .know .s:last-child{border-bottom:none}
+  .know .s .k{color:var(--accent);flex:0 0 auto;font-weight:800}
+  .con{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--navy);margin-top:16px}
+  .con .body{padding:18px;display:flex;flex-direction:column;gap:12px;min-height:150px;max-height:50vh;overflow-y:auto}
+  .msg{max-width:86%;padding:11px 14px;font-size:13.5px;line-height:1.5}
+  .msg.me{align-self:flex-end;background:var(--navy);color:#fff}
+  .msg.ag{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--text)}
+  .msg.hint{align-self:center;color:var(--muted);font-size:12.5px;font-style:italic;background:none}
+  .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--line)}
+  .in input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);font-family:var(--font);font-size:14px;padding:11px 14px;outline:none}
+  .in input:focus{border-color:var(--accent)}
+  .miss{color:var(--muted);font-size:14px;padding:40px 0}
 </style>
 </head>
 <body>
-<div class="wrap" id="wrap"><div class="miss" id="miss">Loading agent…</div></div>
+<div id="wrap"><div class="miss" id="miss">Loading agent…</div></div>
 
 <script>
 var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
-var initials=function(n){return String(n||'?').split(/\s+/).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase();};
-function qkey(){return new URLSearchParams(location.search).get('key');}
+var params=new URLSearchParams(location.search);
+function qkey(){return params.get('key');}
+var DEPT=params.get('dept')||'';
+var DEPT_NAME=params.get('name')||'';
 async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
 
 function render(a){
-  var badge=a.origin==='harness'?'<span class="badge built">Built by the Harness</span>':'<span class="badge found">Founding</span>';
+  var built=a.origin==='harness';
+  var badge=built?'<span class="badge demo"><span class="d"></span>Harness-built</span>':'<span class="badge live"><span class="d"></span>Founding</span>';
+  var dept=DEPT_NAME||a.pillar||'';
+  var back=DEPT?'<button class="back" id="back">&larr; '+esc(dept||'Department')+'</button>':'';
   var know=(a.knowledge||[]).map(function(k){return '<div class="s"><span class="k">+</span><span>'+esc(k)+'</span></div>';}).join('');
+
+  var kpis=''+
+    '<div class="card kpi"><div class="label">Skills</div><div class="value">'+(a.skill_count||0)+'</div></div>'+
+    '<div class="card kpi"><div class="label">Origin</div><div class="value">'+(built?'New':'Core')+'</div></div>'+
+    '<div class="card kpi"><div class="label">Status</div><div class="value accent">Live</div></div>';
+
   document.getElementById('wrap').innerHTML=
-    '<div class="top fadein"><div class="av">'+esc(initials(a.name))+'</div>'+
-      '<div class="hn"><div class="nm">'+esc(a.name)+'</div><div class="rl">'+esc(a.role||'')+'</div></div>'+badge+'</div>'+
-    '<div class="meta fadein">'+(a.pillar?'<span class="chip">'+esc(a.pillar)+'</span>':'')+
-      '<span class="chip">'+(a.skill_count||0)+' skill'+((a.skill_count===1)?'':'s')+'</span>'+
-      '<span class="chip"><span class="live-dot"></span>Live</span></div>'+
-    (know?'<div class="know fadein"><h3>What it knows</h3><div class="list">'+know+'</div></div>':'')+
-    '<div class="con fadein"><h3>Put it to work</h3><div class="body" id="body">'+
+    back+
+    '<div class="page-head"><div class="titles">'+
+      '<p class="kicker">'+esc(dept||'Agent')+'</p>'+
+      '<h1>'+esc(a.name)+'</h1>'+
+      '<p>'+esc(a.role||'')+'</p></div>'+badge+'</div>'+
+    '<div class="signal"></div>'+
+    '<div class="grid kpis">'+kpis+'</div>'+
+    (know?'<div class="section-title">What it knows</div><div class="card know"><div class="list">'+know+'</div></div>':'')+
+    '<div class="section-title">Work feed</div>'+
+    '<div class="card"><div class="empty">No activity yet. This is where '+esc(a.name)+' logs the work it handles once it is connected to its data source. Until then, put it to work below.</div></div>'+
+    '<div class="section-title">Put it to work</div>'+
+    '<div class="con"><div class="body" id="body">'+
       '<div class="msg hint">'+esc(a.name)+' is live. Ask it to handle something.</div></div>'+
-      '<form class="in" id="form"><input id="input" placeholder="Ask '+esc(a.name)+' to do something…" autocomplete="off" /><button class="btn" type="submit">Send</button></form></div>';
+      '<form class="in" id="form"><input id="input" placeholder="Ask '+esc(a.name)+' to do something…" autocomplete="off" /><button class="btn primary" type="submit">Send</button></form></div>';
+
+  var b=document.getElementById('back');
+  if(b) b.addEventListener('click',function(){ location.href='/department?dept='+encodeURIComponent(DEPT)+'&name='+encodeURIComponent(DEPT_NAME); });
   document.getElementById('form').addEventListener('submit',send);
 }
 function bubble(cls,txt){var b=document.getElementById('body');var d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;b.appendChild(d);b.scrollTop=b.scrollHeight;return d;}
