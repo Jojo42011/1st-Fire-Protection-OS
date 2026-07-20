@@ -227,6 +227,16 @@
   .gap .approve:hover{box-shadow:0 0 18px rgba(46,158,91,.16)}
   .more:hover,.skip:hover{text-shadow:0 0 12px rgba(233,238,245,.15)}
   .back{transition:.2s} .back:hover{box-shadow:0 0 20px rgba(229,57,53,.12)}
+  /* the wheel is alive: assemble on load, spotlight the segment under the cursor, breathe at the core */
+  #wheel.anim{animation:wheelIn .65s cubic-bezier(.2,.7,.3,1) both;transform-origin:center}
+  @keyframes wheelIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+  #wheel .seg-g{transition:opacity .22s,filter .25s}
+  #wheel:hover .seg-g:not(:hover){opacity:.38}
+  #wheel:hover .seg-g:not(:hover) .seg-cov{opacity:.5}
+  .seg-dot{transition:r .2s} .seg-g:hover .seg-dot{r:3.6}
+  .hub-ring{animation:breathe 4.5s ease-in-out infinite}
+  @keyframes breathe{0%,100%{filter:drop-shadow(0 0 14px rgba(229,57,53,.05))}50%{filter:drop-shadow(0 0 24px rgba(229,57,53,.12))}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
   @media (max-width:900px){
     .wrap{padding:28px 20px 70px}
@@ -453,11 +463,34 @@ function renderHome(){
   renderAssociations();
   if(FIRST_RENDER){
     FIRST_RENDER=false;
+    var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
     // slow count-up of the hero numbers on first load (the wheel center + the stats strip)
     countUp(document.querySelector('.hub-num'), STATE.metrics.coverage, 1500);
     document.querySelectorAll('#strip .num').forEach(function(el,i){
       countUp(el, el.textContent, 1200 + i*120);
     });
+    if(!reduce){
+      var wheel=document.getElementById('wheel');
+      if(wheel){
+        wheel.classList.add('anim');
+        // each coverage arc draws itself in, staggered, so the wheel measures the company on load
+        wheel.querySelectorAll('.seg-cov').forEach(function(c,i){
+          var len; try{len=c.getTotalLength();}catch(e){return;}
+          if(!len)return;
+          c.style.transition='none';
+          c.style.strokeDasharray=len; c.style.strokeDashoffset=len;
+          c.getBoundingClientRect(); // force reflow so the offset starts hidden
+          c.style.transition='stroke-dashoffset .9s cubic-bezier(.3,.7,.3,1)';
+          c.style.transitionDelay=(0.2+i*0.055)+'s';
+          c.style.strokeDashoffset='0';
+        });
+      }
+      // the home sections rise in sequence, top to bottom
+      document.querySelectorAll('#home .sec').forEach(function(s,i){
+        s.style.animation='rise .5s cubic-bezier(.2,.7,.3,1) both';
+        s.style.animationDelay=(0.12+i*0.08)+'s';
+      });
+    }
   }
 }
 /* ── the build queue: the Operator's proposed builds, human-approved into work orders ── */
