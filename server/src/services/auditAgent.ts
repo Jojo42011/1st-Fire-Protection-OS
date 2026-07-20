@@ -58,7 +58,7 @@ const PILLAR_QUESTIONS: Record<string, string[]> = Object.fromEntries(
 );
 
 /** Detect the person named in "X is the only one who..." style observations. */
-function sniffPerson(text: string): { name: string; carries: string } | null {
+export function sniffPerson(text: string): { name: string; carries: string } | null {
   const m = text.match(
     /([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(?:is the only|is our only|holds|knows|handles all|runs all|does all|keeps)/
   );
@@ -67,7 +67,7 @@ function sniffPerson(text: string): { name: string; carries: string } | null {
 }
 
 /** Detect a named software system in the observation. */
-const KNOWN_SYSTEMS: [RegExp, string, string][] = [
+export const KNOWN_SYSTEMS: [RegExp, string, string][] = [
   [/servicetrade/i, 'ServiceTrade', 'field-service'],
   [/inspect ?point/i, 'Inspect Point', 'field-service'],
   [/buildops/i, 'BuildOps', 'field-service'],
@@ -294,15 +294,21 @@ export function auditState() {
     .all() as any[];
   const notes = db.prepare(`SELECT id, text, location, created_at FROM audit_notes ORDER BY id DESC LIMIT 12`).all();
   const locations = db.prepare(`SELECT * FROM audit_locations ORDER BY id`).all() as any[];
+  const nodes = (db.prepare(`SELECT * FROM audit_nodes ORDER BY id`).all() as any[]).map((n) => ({
+    ...n,
+    connects: (() => { try { return JSON.parse(n.connects || '[]'); } catch { return []; } })(),
+    live: n.capability_id ? !!capabilityById(n.capability_id)?.live : false,
+  }));
 
   const pillars = PILLARS.map((p) => {
     const sys = systems.filter((s) => s.pillar_key === p.key).length;
     const ppl = people.filter((s) => s.pillar_key === p.key).length;
     const wf = workflows.filter((s) => s.pillar_key === p.key).length;
+    const nd = nodes.filter((n) => n.pillar_key === p.key).length;
     const fnd = findings.filter((s) => s.pillar_key === p.key);
     const capIds = Array.from(new Set(fnd.map((f) => f.capability_id).filter(Boolean))) as string[];
-    // coverage: how mapped is this pillar (entities + evidence, capped)
-    const coverage = Math.min(100, sys * 18 + ppl * 15 + wf * 22 + fnd.length * 12);
+    // coverage: how mapped is this pillar (entities + evidence + born agents, capped)
+    const coverage = Math.min(100, sys * 18 + ppl * 15 + wf * 22 + fnd.length * 12 + nd * 14);
     return {
       ...p,
       counts: { systems: sys, people: ppl, workflows: wf, findings: fnd.length },
@@ -341,6 +347,7 @@ export function auditState() {
       capability_live: f.capability_id ? !!capabilityById(f.capability_id)?.live : false,
     })),
     notes,
+    nodes,
     catalog: CAPABILITIES.map((c) => ({ id: c.id, name: c.name, what: c.what, live: !!c.live })),
     departments: DEPARTMENTS.map((d) => ({
       ...d,

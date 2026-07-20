@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { auditState, capture, generateBrief } from '../services/auditAgent';
+import { consult } from '../services/consultAgent';
 
 const router = Router();
 
@@ -18,6 +19,27 @@ router.post('/api/audit/capture', async (req, res) => {
   try {
     const analysis = await capture(text, location, department);
     res.json({ ok: true, analysis, state: auditState() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/**
+ * THE CONSULT LOOP: the CEO's answer in → reaction + next question + chips + spawned node out.
+ * Runs live in the meeting — one fast model call (or the rules engine, keyless).
+ */
+router.post('/api/audit/consult', async (req, res) => {
+  const answer = String(req.body?.answer || '').trim();
+  const department = String(req.body?.department || '').trim();
+  if (!answer || !department) return res.status(400).json({ ok: false, error: 'answer + department required' });
+  try {
+    const turn = await consult({
+      department,
+      answer,
+      question: req.body?.question ? String(req.body.question) : undefined,
+      location: req.body?.location ? String(req.body.location) : undefined,
+    });
+    res.json({ ok: true, ...turn, state: auditState() });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });
   }
