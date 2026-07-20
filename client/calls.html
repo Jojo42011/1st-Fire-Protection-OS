@@ -9,7 +9,7 @@
 <style>
   /* command-room hero: a hairline card, not a navy slab */
   .hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:22px;
-    background:var(--s1);border:1px solid var(--hair);border-radius:14px;padding:26px 28px;margin-top:22px;position:relative;
+    background:var(--s1);border:1px solid var(--hair);padding:26px 28px;margin-top:22px;position:relative;
     background-image:radial-gradient(120% 140% at 100% 0%,rgba(229,57,53,.06),transparent 55%)}
   .hero h2{font-size:19px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;line-height:1.2;color:var(--ink)}
   .hero p{color:var(--ink-2);margin-top:11px;font-size:13.5px;max-width:54ch;line-height:1.6}
@@ -20,7 +20,7 @@
   @keyframes ring{0%{box-shadow:0 0 0 0 rgba(229,57,53,.5)}100%{box-shadow:0 0 0 22px rgba(229,57,53,0)}}
   .talk .hint{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
   #convo{margin-top:16px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
-  .msg{padding:10px 13px;border-radius:12px;font-size:13.5px;max-width:80%;line-height:1.5}
+  .msg{padding:10px 13px;font-size:13.5px;max-width:80%;line-height:1.5}
   .msg.you{align-self:flex-end;background:var(--s3);color:var(--ink)}
   .msg.bot{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
   .composer{display:flex;gap:8px;margin-top:12px}
@@ -30,21 +30,21 @@
   tr.call-row .chev{display:inline-block;transition:transform .15s;color:var(--ink-3);font-size:10px}
   tr.call-row.open .chev{transform:rotate(90deg)}
   td.detail-cell{padding:0!important;background:var(--s2);border-bottom:1px solid var(--hair)}
-  .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+  .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px;animation:rise .3s cubic-bezier(.2,.7,.3,1)}
   .detail .row1{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .detail audio{height:34px;max-width:100%}
-  .detail .summary{font-size:13.5px;line-height:1.6;color:var(--ink);padding:12px 14px;background:var(--s1);border:1px solid var(--hair);border-radius:10px}
+  .detail .summary{font-size:13.5px;line-height:1.6;color:var(--ink);padding:12px 14px;background:var(--s1);border:1px solid var(--hair)}
   .detail .costs{display:flex;flex-wrap:wrap;gap:6px}
-  .detail .cbit{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;background:var(--s1);border:1px solid var(--hair);border-radius:7px;padding:4px 8px;color:var(--ink-3)}
+  .detail .cbit{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;background:var(--s1);border:1px solid var(--hair);padding:4px 8px;color:var(--ink-3)}
   .detail .cbit b{color:var(--ink)}
   .detail .label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
-  .detail .transcript{max-height:280px;overflow-y:auto;background:var(--s1);border:1px solid var(--hair);border-radius:10px;padding:10px 12px}
+  .detail .transcript{max-height:280px;overflow-y:auto;background:var(--s1);border:1px solid var(--hair);padding:10px 12px}
   .detail .turn{font-size:13px;line-height:1.5;margin-bottom:7px;color:var(--ink-2)}
   .detail .turn .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);display:block}
   .detail .turn.bot .who{color:var(--red)}
   .detail .none{font-size:12.5px;color:var(--ink-3)}
   .syncbtn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:transparent;
-    color:var(--ink-2);border:1px solid var(--hair-2);border-radius:8px;padding:7px 12px;cursor:pointer;transition:.15s}
+    color:var(--ink-2);border:1px solid var(--hair-2);padding:7px 12px;cursor:pointer;transition:.15s}
   .syncbtn:hover{border-color:var(--red);color:var(--ink)} .syncbtn[disabled]{opacity:.5;cursor:default}
   @media (max-width:640px){
     .hero{padding:20px 18px;gap:16px;margin-top:16px}

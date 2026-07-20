@@ -8,13 +8,15 @@
 <link rel="stylesheet" href="/command.css" />
 <style>
   /* owner tag - who a field/section routes to. Meaning-only color, calm. */
-  .tag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:20px;border:1px solid var(--hair-2);color:var(--ink-3);background:var(--s2);white-space:nowrap}
+  /* owner tags stay inside the three meanings: green=owned/HR-of-record, red=approval,
+     gold=build. Every other owner is neutral ink (no fourth or fifth accent). */
+  .tag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border:1px solid var(--hair-2);color:var(--ink-3);background:var(--s2);white-space:nowrap}
   .tag.bamboo{color:var(--ok);border-color:rgba(46,158,91,.4);background:rgba(46,158,91,.1)}
   .tag.it{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
   .tag.mario{color:var(--red);border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.1)}
   .tag.rebecca{color:var(--gold);border-color:rgba(245,184,27,.4);background:rgba(245,184,27,.1)}
-  .tag.sandi{color:#B79BE0;border-color:rgba(140,105,190,.4);background:rgba(140,105,190,.14)}
-  .tag.safety,.tag.denise,.tag.daniel{color:#5FBEE0;border-color:rgba(60,150,190,.4);background:rgba(60,150,190,.14)}
+  .tag.sandi{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
+  .tag.safety,.tag.denise,.tag.daniel{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
 
   /* form layout */
   .fsec{margin-top:6px}
@@ -24,13 +26,13 @@
   .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
   .field{display:flex;flex-direction:column;gap:6px}
   .field label{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .field input,.field select,.field textarea{font-family:var(--sans);font-size:13.5px;color:var(--ink);background:var(--s2);border:1px solid var(--hair-2);border-radius:9px;padding:10px 12px;width:100%}
+  .field input,.field select,.field textarea{font-family:var(--sans);font-size:13.5px;color:var(--ink);background:var(--s2);border:1px solid var(--hair-2);padding:10px 12px;width:100%}
   .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--red)}
   .field textarea{min-height:64px;resize:vertical}
 
   /* checkbox rows */
   .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 16px}
-  .chk{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);border-radius:9px;background:var(--s1);cursor:pointer;transition:.14s}
+  .chk{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);background:var(--s1);cursor:pointer;transition:.14s}
   .chk:hover{border-color:var(--hair-2);background:var(--s2)}
   .chk input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--red);cursor:pointer}
   .chk .ct{flex:1;font-size:13px;color:var(--ink)}
@@ -38,7 +40,7 @@
 
   /* radio computer picker */
   .radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-  .radio{display:flex;gap:11px;align-items:flex-start;padding:12px 14px;border:1px solid var(--hair);border-radius:9px;background:var(--s1);cursor:pointer;transition:.14s}
+  .radio{display:flex;gap:11px;align-items:flex-start;padding:12px 14px;border:1px solid var(--hair);background:var(--s1);cursor:pointer;transition:.14s}
   .radio:hover{border-color:var(--hair-2);background:var(--s2)}
   .radio.on{border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.08)}
   .radio input{margin-top:2px;accent-color:var(--red);cursor:pointer}
@@ -50,25 +52,25 @@
   .submit-row .note{color:var(--ink-3);font-size:12px;margin-right:auto;max-width:52ch;line-height:1.55}
 
   /* board - full hairline card, status shown by dot + pills (no side stripe) */
-  .req{background:var(--s1);border:1px solid var(--hair);border-radius:12px;padding:15px 17px;margin-top:12px;cursor:pointer;transition:border-color .14s}
+  .req{background:var(--s1);border:1px solid var(--hair);padding:15px 17px;margin-top:12px;cursor:pointer;transition:border-color .14s}
   .req:hover{border-color:var(--hair-2)}
   .req.complete{border-color:rgba(46,158,91,.32)}
   .req .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .req .who{font-weight:800;font-size:15px;color:var(--ink)}
   .req .who small{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--ink-3);margin-left:8px;text-transform:none;letter-spacing:0}
   .req .prog{display:flex;align-items:center;gap:10px;margin-top:11px}
-  .req .track{flex:1;height:8px;background:var(--s2);border-radius:20px;overflow:hidden}
-  .req .fill{height:100%;background:var(--red);border-radius:20px}
+  .req .track{flex:1;height:8px;background:var(--s2);overflow:hidden}
+  .req .fill{height:100%;background:var(--red)}
   .req.complete .fill{background:var(--ok)}
   .req .pct{font-family:var(--mono);font-size:11px;color:var(--ink-3);min-width:74px;text-align:right}
   .req .meta{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
 
   /* detail (grouped by owner) */
-  .detail{background:var(--s1);border:1px solid var(--hair);border-radius:14px;padding:18px 20px;margin-top:12px}
+  .detail{background:var(--s1);border:1px solid var(--hair);padding:18px 20px;margin-top:12px;animation:rise .3s cubic-bezier(.2,.7,.3,1)}
   .detail .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
   .detail .dh h2{font-weight:800;font-size:20px;color:var(--ink);letter-spacing:-.01em}
   .detail .dh .sum{color:var(--ink-2);font-size:12.5px;margin-top:6px;line-height:1.5}
-  .ownergrp{border:1px solid var(--hair);border-radius:12px;margin-top:14px;overflow:hidden}
+  .ownergrp{border:1px solid var(--hair);margin-top:14px;overflow:hidden}
   .ownergrp .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--s2);border-bottom:1px solid var(--hair)}
   .ownergrp .gh .gl{display:flex;align-items:center;gap:10px}
   .ownergrp .gh .gn{font-weight:700;font-size:13.5px;color:var(--ink)}
@@ -79,7 +81,7 @@
   .item .idl{color:var(--ink-2);font-size:12px;margin-top:5px;line-height:1.5;white-space:pre-wrap}
   .item .ik{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:6px;display:inline-block}
   .item .ax{display:flex;gap:7px;align-items:center;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
-  .close-x{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--hair-2);border-radius:8px;background:transparent;padding:7px 11px;cursor:pointer;transition:.15s}
+  .close-x{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--hair-2);background:transparent;padding:7px 11px;cursor:pointer;transition:.15s}
   .close-x:hover{border-color:var(--red);color:var(--ink)}
 </style>
 </head>

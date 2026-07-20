@@ -13,8 +13,11 @@
   --ink:#E9EEF5; --ink-2:#8FA0B4; --ink-3:#5C6B7D;
   --hair:rgba(233,238,245,.08); --hair-2:rgba(233,238,245,.16);
 
-  /* meaning-only color - never decoration */
+  /* meaning-only color - never decoration. Exactly three: signal / build / live. */
   --red:#E53935; --gold:#F5B81B; --ok:#2E9E5B;
+  /* spec-named aliases (both names stay live) */
+  --signal:var(--red); --build:var(--gold); --live:var(--ok);
+  --signal-soft:rgba(229,57,53,.5); --build-soft:rgba(245,184,27,.5); --live-soft:rgba(46,158,91,.5);
 
   /* type */
   --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
@@ -45,9 +48,11 @@ body{
   /* one subtle body glow, calm */
   background-image:radial-gradient(1100px 520px at 50% -120px,rgba(229,57,53,.045),transparent 70%);
   background-attachment:fixed;
+  /* view enter: the whole surface rises in on load */
+  animation:rise .45s cubic-bezier(.2,.7,.3,1);
 }
 ::-webkit-scrollbar{width:10px;height:10px}
-::-webkit-scrollbar-thumb{background:var(--s2);border-radius:6px}
+::-webkit-scrollbar-thumb{background:var(--s2)}
 ::-webkit-scrollbar-thumb:hover{background:var(--s3)}
 
 /* micro label - the command-room signature: mono, tiny, tracked */
@@ -58,10 +63,10 @@ body{
 
 /* rise-in animation (respects reduced motion) */
 .fadein{animation:rise .45s cubic-bezier(.2,.7,.3,1)}
+.rise-row{animation:rise .3s cubic-bezier(.2,.7,.3,1)}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
-  .fadein{animation:none}
-  *{scroll-behavior:auto !important}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
 }
 
 /* ---- page header (the .top bar look, aliased onto .page-head) ----
@@ -82,7 +87,7 @@ body{
 
 /* ---- status badge pill ---- */
 .badge{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:9.5px;font-weight:500;
-  letter-spacing:.14em;text-transform:uppercase;padding:6px 11px;border-radius:20px;white-space:nowrap;
+  letter-spacing:.14em;text-transform:uppercase;padding:6px 11px;white-space:nowrap;
   border:1px solid var(--hair-2);color:var(--ink-2);background:var(--s1)}
 .badge .d{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
 .badge.live{color:var(--ok);border-color:rgba(46,158,91,.35);background:rgba(46,158,91,.08)}
@@ -92,18 +97,20 @@ body{
 .badge.demo{color:var(--ink-2);border-color:var(--hair-2);background:var(--s1)}
 .badge.demo .d{background:var(--ink-3)}
 
-/* ---- grids + cards ---- */
+/* ---- grids + cards (square, hairline, no decorative shadow) ---- */
 .grid{display:grid;gap:16px;margin-top:22px}
-.kpis{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
-.card{background:var(--s1);border:1px solid var(--hair);border-radius:14px;padding:18px 20px;position:relative;
+.card{background:var(--s1);border:1px solid var(--hair);padding:18px 20px;position:relative;
   transition:border-color .15s}
 /* "hot" card: a faint red-tinted hairline, no side stripe, no heavy box */
 .card.hot{border-color:rgba(229,57,53,.28);background:linear-gradient(var(--s1),var(--s1)) padding-box,
   radial-gradient(120% 140% at 0% 0%,rgba(229,57,53,.06),transparent 60%)}
 
-/* KPI block */
-.kpi .label{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-.kpi .value{font-size:32px;font-weight:700;margin-top:10px;line-height:1;color:var(--ink);letter-spacing:-.02em}
+/* KPIs = a boxless stats strip: centered row, wide gaps, micro label over a big number */
+.kpis{display:flex;flex-wrap:wrap;justify-content:center;gap:22px 64px;margin-top:26px}
+.kpi.card{background:none;border:0;padding:0;text-align:center;min-width:84px}
+.kpi.card.hot{background:none;border:0}
+.kpi .label{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+.kpi .value{font-size:34px;font-weight:800;margin-top:8px;line-height:1;color:var(--ink);letter-spacing:-.02em}
 .kpi .value.accent{color:var(--red)}
 .kpi .sub{color:var(--ink-3);font-size:12px;margin-top:7px;line-height:1.4}
 
@@ -124,24 +131,31 @@ th.right,td.right{text-align:right}
 
 /* ---- pills (small status tags) ---- */
 .pill{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
-  padding:4px 9px;border-radius:20px;border:1px solid var(--hair-2);color:var(--ink-2);background:var(--s2)}
+  padding:4px 9px;border:1px solid var(--hair-2);color:var(--ink-2);background:var(--s2)}
 .pill.red{color:var(--red);border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.1)}
 .pill.green{color:var(--ok);border-color:rgba(46,158,91,.4);background:rgba(46,158,91,.1)}
 .pill.amber{color:var(--gold);border-color:rgba(245,184,27,.4);background:rgba(245,184,27,.1)}
 .pill.gray{color:var(--ink-3);border-color:var(--hair);background:var(--s2)}
 
-/* ---- buttons ---- */
-.btn{font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.02em;
-  padding:9px 15px;border-radius:9px;border:1px solid var(--hair-2);background:transparent;color:var(--ink);
+/* ---- buttons: ghost is the only button ----
+   transparent, hairline, uppercase; hover flips the border to signal and fills an
+   8% signal tint. No filled buttons anywhere. .btn is the compact (dense/table)
+   size; .btn.lg is the one-per-screen hero ghost; .btn.primary marks the lead
+   action with a signal-colored border (still transparent, never inked). */
+.btn{font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  padding:9px 16px;border:1px solid var(--hair-2);background:transparent;color:var(--ink-2);
   cursor:pointer;transition:border-color .15s,background .15s,color .15s,transform .1s}
-.btn:hover{border-color:var(--hair-2);background:var(--s2)}
+.btn:hover{border-color:var(--red);background:rgba(229,57,53,.08);color:var(--ink)}
 .btn:active{transform:translateY(1px)}
-.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--s0)}
-.btn.primary:hover{background:#fff;border-color:#fff}
+.btn.lg{font-size:12px;letter-spacing:.18em;padding:16px 40px}
+.btn.primary{border-color:rgba(229,57,53,.55);color:var(--ink)}
+.btn.primary:hover{border-color:var(--red);background:rgba(229,57,53,.08)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:disabled:hover{border-color:var(--hair-2);background:transparent;color:var(--ink-2)}
+.btn.primary:disabled:hover{border-color:rgba(229,57,53,.55);background:transparent;color:var(--ink)}
 
 /* ---- draft / callout card ---- */
-.draft{background:var(--s1);border:1px solid var(--hair);border-radius:12px;padding:14px 16px;margin-top:10px}
+.draft{background:var(--s1);border:1px solid var(--hair);padding:14px 16px;margin-top:10px}
 .draft .meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .draft .meta b{color:var(--ink);font-weight:700;font-size:13.5px}
 .draft .body{white-space:pre-wrap;color:var(--ink-2);font-size:13px;line-height:1.6}
@@ -151,13 +165,13 @@ th.right,td.right{text-align:right}
 .bars{display:flex;flex-direction:column;gap:9px;margin-top:4px}
 .bar-row{display:flex;align-items:center;gap:12px;font-size:12px}
 .bar-row .lab{width:52px;color:var(--ink-3);font-family:var(--mono);font-size:11px;flex:none}
-.bar-track{flex:1;height:8px;background:var(--s2);border-radius:20px;overflow:hidden}
-.bar-fill{height:100%;background:var(--red);border-radius:20px}
+.bar-track{flex:1;height:8px;background:var(--s2);overflow:hidden}
+.bar-fill{height:100%;background:var(--red)}
 
 /* ---- connect hint (dashed "go live" note) ---- */
-.connect{margin-top:14px;border:1px dashed var(--hair-2);border-radius:12px;padding:16px 18px;
+.connect{margin-top:14px;border:1px dashed var(--hair-2);padding:16px 18px;
   display:flex;align-items:center;gap:14px;color:var(--ink-2);font-size:13px;line-height:1.55;background:var(--s1)}
-.connect .ic{width:38px;height:38px;border:1px solid var(--hair-2);border-radius:10px;display:flex;
+.connect .ic{width:38px;height:38px;border:1px solid var(--hair-2);display:flex;
   align-items:center;justify-content:center;color:var(--red);flex:0 0 auto}
 .connect b{color:var(--ink)}
 
@@ -172,7 +186,7 @@ th.right,td.right{text-align:right}
 /* ---- form controls baseline (dark) ---- */
 input:not([type=checkbox]):not([type=radio]),textarea,select{
   font-family:var(--sans);font-size:13.5px;color:var(--ink);background:var(--s2);
-  border:1px solid var(--hair-2);border-radius:9px;padding:10px 12px}
+  border:1px solid var(--hair-2);padding:10px 12px}
 input::placeholder,textarea::placeholder{color:var(--ink-3)}
 input:not([type=checkbox]):not([type=radio]):focus,textarea:focus,select:focus{outline:none;border-color:var(--red)}
 input[type=checkbox],input[type=radio]{accent-color:var(--red);cursor:pointer}
@@ -194,8 +208,9 @@ select option{background:var(--s2);color:var(--ink)}
   body{padding:60px 16px 48px}
   .page-head .titles .kicker{letter-spacing:.18em}
   .grid{gap:12px;margin-top:16px}
-  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .kpis{gap:18px 32px;margin-top:18px}
   .card{padding:15px 16px}
+  .kpi.card{padding:0}
   .kpi .value{font-size:26px}
   .section-title{margin:24px 0 10px}
   /* wide tables scroll inside their card rather than break the layout */
