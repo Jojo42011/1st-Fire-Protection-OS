@@ -136,13 +136,15 @@ var SYSTEM_TABS = [
   { key:"integrations", label:"Integrations", sub:"The hands", src:"/integrations", sep:"System",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' }
 ];
-/* Founding agents keep their rich dedicated dashboards. These live as HIDDEN tabs (present as
-   frames, not shown in the nav) so a department page can open them via app-navigate. */
+/* The founding agents (the real, built-in tools), shown directly in the nav under Agents. */
 var FOUNDING_PAGES = { calls:"/calls", invoices:"/invoices", reviews:"/reviews" };
-var HIDDEN_TABS = [
-  { key:"calls",    label:"Call Receptionist", src:"/calls",    hidden:true },
-  { key:"invoices", label:"Invoice Collector", src:"/invoices", hidden:true },
-  { key:"reviews",  label:"Review Collector",  src:"/reviews",  hidden:true }
+var AGENT_TABS = [
+  { key:"calls",    label:"Call Receptionist", sub:"Answers and books calls", src:"/calls", sep:"Agents",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h3l2 5-2.2 1.1a11 11 0 0 0 5.1 5.1L15 13l5 2v3a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>' },
+  { key:"invoices", label:"Invoice Collector", sub:"Chases receivables", src:"/invoices",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 8h6M9 12h6"/></svg>' },
+  { key:"reviews",  label:"Review Collector",  sub:"Requests and replies", src:"/reviews",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/></svg>' }
 ];
 /* Department display order (Devon's org): the rest fall in after, by roster order. */
 var DEPT_ORDER = ["growth","inspections","service","sales","projects","reception","finance","hr","ops","vendors"];
@@ -179,7 +181,9 @@ function departmentTabs(agents){
 }
 
 function bootShell(agents){
-  var TABS = CONTROL_TABS.concat(departmentTabs(agents||[]), TOOL_TABS, HIDDEN_TABS, SYSTEM_TABS);
+  /* Harness-created department tools are intentionally not in the nav; the nav shows the
+     real, built-in tools only. departmentTabs remains defined for the /department route. */
+  var TABS = CONTROL_TABS.concat(AGENT_TABS, TOOL_TABS, SYSTEM_TABS);
   initShell(TABS);
 }
 /* Fetch the roster, then build the nav. If it fails, the control + system tabs still work. */
