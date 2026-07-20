@@ -4,7 +4,8 @@ import { activeProvider } from '../config/models';
 import { OPERATOR_SYSTEM_PROMPT, PILLARS, pillarByKey } from '../config/auditor';
 import { CAPABILITIES, capabilityById } from '../config/capabilities';
 import { COMPANY } from '../config/constants';
-import { rememberFact, rememberEpisode } from '../db/memory';
+import { rememberFact, rememberEpisode, upsertNode, reinforceCoActivation, topAssociations } from '../db/memory';
+import { createPredictionForFinding, calibration } from './calibration';
 
 /**
  * THE OPERATOR — audit engine.
@@ -369,6 +370,22 @@ export async function capture(
     /* memory is best-effort; never block the capture */
   }
 
+  // ── associative memory: the entities named together in ONE observation genuinely
+  // co-occur, so reinforce their pairwise associations (real co-activation, not invented). ──
+  try {
+    const at = new Date().toISOString();
+    const nodeIds: number[] = [];
+    const pillarName = pillarByKey(followPillar)?.name || followPillar;
+    nodeIds.push(upsertNode(pillarName, 'pillar'));
+    for (const s of analysis.systems) if (s?.name) nodeIds.push(upsertNode(s.name, 'system'));
+    for (const p of analysis.people) if (p?.name) nodeIds.push(upsertNode(p.name, 'person'));
+    const firstFinding = analysis.findings[0]?.title;
+    if (firstFinding) nodeIds.push(upsertNode(firstFinding, 'finding'));
+    reinforceCoActivation(nodeIds, at);
+  } catch {
+    /* association is a recall aid; never block the capture */
+  }
+
   // ── daily "getting smarter" log ──
   const today = new Date().toISOString().slice(0, 10);
   db.prepare(
@@ -379,9 +396,17 @@ export async function capture(
   return { ...analysis, noteId };
 }
 
-/** Approve a proposed build — the human gate that turns a gap into a work order. */
-export function approveGap(id: number): { ok: boolean } {
+/** Approve a proposed build: the human gate that turns a gap into a work order. This is also
+ *  the moment the Operator has STAKED something, so it auto-logs one open prediction from the
+ *  finding into the calibration ledger. `at` is the request-handler timestamp (no argless clock). */
+export function approveGap(id: number, at?: string): { ok: boolean } {
+  const now = at || new Date().toISOString();
   getDb().prepare(`UPDATE audit_findings SET queue_status = 'approved', status = 'building' WHERE id = ?`).run(id);
+  try {
+    createPredictionForFinding(id, now);
+  } catch {
+    /* the prediction is a ledger entry; never fail the approval on it */
+  }
   return { ok: true };
 }
 
@@ -487,6 +512,11 @@ export function auditState() {
   const todayKey = new Date().toISOString().slice(0, 10);
   db.prepare(`UPDATE audit_days SET coverage_pct = ? WHERE day = ?`).run(coverageAvg, todayKey);
 
+  // the self-knowing brain: how well it knows (calibration) + what it remembers goes
+  // together (associations). Both computed on read; nothing scheduled.
+  const calib = calibration();
+  const associations = topAssociations(8);
+
   return {
     brain: activeProvider() !== 'none',
     company: { name: COMPANY.name, locations: COMPANY.locations },
@@ -499,7 +529,11 @@ export function auditState() {
       locationsTotal: locations.length,
       questionsAnswered,
       buildsApproved,
+      predictionsOpen: calib.counts.open,
+      predictionsResolved: calib.counts.resolved,
     },
+    calibration: calib,
+    associations,
     gapFeed,
     days,
     pillars,

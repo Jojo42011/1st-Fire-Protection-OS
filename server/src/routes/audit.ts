@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { auditState, capture, generateBrief, approveGap } from '../services/auditAgent';
+import { calibration, resolvePrediction, PredStatus } from '../services/calibration';
 
 const router = Router();
 
@@ -72,6 +73,22 @@ router.post('/api/audit/locations/:id/mapped', (req, res) => {
   const mapped = req.body?.mapped ? 1 : 0;
   getDb().prepare(`UPDATE audit_locations SET mapped = ? WHERE id = ?`).run(mapped, Number(req.params.id));
   res.json({ ok: true });
+});
+
+/** How well it knows: the calibration ledger (reliability curve, Brier, discount, log). */
+router.get('/api/audit/calibration', (_req, res) => {
+  res.json({ ok: true, calibration: calibration() });
+});
+
+/** Resolve an open prediction: the human gate that closes a call with a real outcome. */
+router.post('/api/audit/predictions/:id/resolve', (req, res) => {
+  const status = String(req.body?.status || '') as PredStatus;
+  const actual = req.body?.actual_outcome ? String(req.body.actual_outcome) : undefined;
+  const resolvedBy = req.body?.resolved_by ? String(req.body.resolved_by) : 'Devon';
+  const at = new Date().toISOString();
+  const r = resolvePrediction(Number(req.params.id), status, actual, resolvedBy, at);
+  if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+  res.json({ ok: true, state: auditState() });
 });
 
 /** The deliverable: executive brief assembled live from the audit data. */

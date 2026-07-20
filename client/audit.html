@@ -91,6 +91,46 @@
   .trend-bars{display:flex;align-items:flex-end;gap:6px;height:64px;padding:6px}
   .trend-bars .tb{flex:1;max-width:30px;background:linear-gradient(180deg,var(--red),rgba(229,57,53,.22));min-height:3px}
   .trend-note{font-family:var(--mono);font-size:10px;color:var(--ink-3);padding:8px 6px 0}
+
+  /* ══ HOW WELL IT KNOWS: the calibration ledger ══ */
+  .sec-head .micro.gold::before{background:var(--gold)}
+  .note-line{font-family:var(--mono);font-size:10px;color:var(--ink-3);padding:0 6px 14px;line-height:1.7;max-width:78ch}
+  .samp{font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(245,184,27,.4);padding:2px 6px;white-space:nowrap}
+  .calib-head{display:flex;gap:52px;flex-wrap:wrap;margin:2px 0 26px;padding:0 6px}
+  .calib-head .t .v{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-top:9px}
+  .calib-head .t .v small{font-size:14px;color:var(--ink-3);font-weight:400}
+  .band{display:flex;align-items:center;gap:16px;padding:12px 6px;border-bottom:1px solid var(--hair)}
+  .band .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink-2);width:118px;flex:none}
+  .band .track{flex:1;height:6px;background:var(--s2);position:relative;min-width:80px}
+  .band .fill{position:absolute;left:0;top:0;bottom:0;background:var(--ok);transition:width .5s ease}
+  .band .stated{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--gold)}
+  .band .rt{font-family:var(--mono);font-size:10px;color:var(--ink-2);width:190px;flex:none;text-align:right}
+  .band.low .fill{background:var(--ink-3)} .band.low .rt{color:var(--ink-3)}
+  .subhead{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin:26px 6px 6px}
+  .pred{display:flex;align-items:center;gap:16px;padding:14px 6px;border-bottom:1px solid var(--hair)}
+  .pred .t{flex:1;font-size:13.5px;line-height:1.5;min-width:0}
+  .pred .t small{color:var(--ink-3);font-size:11.5px;display:block;margin-top:4px}
+  .pred .rb{display:flex;gap:6px;flex:none;align-items:center}
+  .pred .rb button{background:transparent;border:1px solid var(--hair-2);color:var(--ink-2);font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:8px 11px;cursor:pointer;transition:.15s}
+  .pred .rb button.yes:hover{border-color:var(--ok);background:rgba(46,158,91,.1);color:#fff}
+  .pred .rb button.part:hover{border-color:var(--gold);background:rgba(245,184,27,.1);color:#fff}
+  .pred .rb button.no:hover{border-color:var(--red);background:rgba(229,57,53,.1);color:#fff}
+  .reslog{display:flex;gap:14px;padding:12px 6px;border-bottom:1px solid var(--hair);font-size:12.5px;line-height:1.55}
+  .reslog .o{width:78px;flex:none;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px}
+  .reslog .o.confirmed{color:var(--ok)} .reslog .o.refuted{color:var(--red)} .reslog .o.partial{color:var(--gold)}
+  .reslog .body{flex:1;color:var(--ink-2);min-width:0} .reslog .body b{color:var(--ink);font-weight:600}
+  .reslog .body .meta{color:var(--ink-3);font-size:11px;margin-top:3px}
+
+  /* ══ ASSOCIATIONS: the decaying association graph ══ */
+  .assoc{display:flex;align-items:center;gap:16px;padding:13px 6px;border-bottom:1px solid var(--hair)}
+  .assoc .pair{flex:1;font-size:13.5px;min-width:0;line-height:1.4}
+  .assoc .pair b{color:var(--ink);font-weight:600}
+  .assoc .pair .lnk{color:var(--ink-3);margin:0 7px}
+  .assoc .pair small{display:block;color:var(--ink-3);font-size:11.5px;margin-top:4px}
+  .assoc .track{width:130px;height:6px;background:var(--s2);flex:none;position:relative}
+  .assoc .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(245,184,27,.3),var(--gold));transition:width .5s ease}
+  .assoc .wv{font-family:var(--mono);font-size:10px;color:var(--ink-2);width:44px;flex:none;text-align:right}
+
   .foot-act{margin-top:70px;display:flex;justify-content:center}
   .ghost{background:transparent;border:1px solid var(--hair-2);color:var(--ink);font-family:var(--sans);font-weight:700;
     font-size:12px;letter-spacing:.18em;text-transform:uppercase;padding:16px 40px;cursor:pointer;transition:.2s}
@@ -200,6 +240,25 @@
     <section class="sec" id="trend-sec" style="display:none">
       <div class="sec-head"><span class="micro">Getting smarter</span></div>
       <div id="trend"></div>
+    </section>
+
+    <!-- HOW WELL IT KNOWS: the calibration ledger (metacognition, receipts on screen) -->
+    <section class="sec" id="calib-sec" style="display:none">
+      <div class="sec-head"><span class="micro gold">How well it knows</span><span class="micro" id="calib-count" style="color:var(--ink-3)"></span></div>
+      <div id="calib-note" class="note-line"></div>
+      <div class="calib-head" id="calib-head"></div>
+      <div id="calib-bands"></div>
+      <div class="subhead" id="open-head" style="display:none">Open predictions · we will know by the horizon</div>
+      <div id="calib-open"></div>
+      <div class="subhead" id="reslog-head" style="display:none">Resolved · predicted vs actual</div>
+      <div id="calib-reslog"></div>
+    </section>
+
+    <!-- ASSOCIATIONS: the decaying association graph (it remembers what goes together) -->
+    <section class="sec" id="assoc-sec" style="display:none">
+      <div class="sec-head"><span class="micro gold">Associations</span><span class="micro" id="assoc-count" style="color:var(--ink-3)"></span></div>
+      <div class="note-line">The company remembers what keeps coming up together. These are the strongest current links, decayed by time. They surface candidates for recall, they do not assert facts.</div>
+      <div id="assoc-list"></div>
     </section>
 
     <div class="foot-act"><button class="ghost" id="brief-btn">Executive Brief</button></div>
@@ -349,6 +408,8 @@ function renderHome(){
   renderLeaks();
   renderQueue();
   renderTrend();
+  renderCalibration();
+  renderAssociations();
 }
 /* ── the build queue: the Operator's proposed builds, human-approved into work orders ── */
 function renderQueue(){
@@ -387,6 +448,106 @@ function renderTrend(){
   var latest=days[days.length-1];
   document.getElementById('trend').innerHTML='<div class="trend-bars">'+bars+'</div>'+
     '<div class="trend-note">'+days.length+' day'+(days.length>1?'s':'')+' of learning · '+(latest.coverage_pct||0)+'% of the company mapped and climbing</div>';
+}
+/* ── how well it knows: the calibration ledger ── */
+function pct(x){return Math.round(x*100);}
+function renderCalibration(){
+  var c=STATE.calibration;
+  var sec=document.getElementById('calib-sec');
+  if(!c){sec.style.display='none';return;}
+  sec.style.display='';
+  var cc=c.counts||{open:0,resolved:0};
+  document.getElementById('calib-count').textContent=(cc.resolved||0)+' resolved · '+(cc.open||0)+' open';
+  document.getElementById('calib-note').innerHTML=
+    'The Operator stakes a confidence on each call, then a human resolves it against a real outcome. '+
+    'It gets more honest from those outcomes, not from a prompt. '+
+    '<span class="samp">Sample</span> illustrative predictions below: seeded resolutions are not verified outcomes.';
+
+  // headline: reliability, Brier, discount
+  var head=[];
+  var resolved=cc.resolved||0;
+  if(resolved){
+    head.push(['Brier score',(c.brier==null?'-':c.brier.toFixed(2)),'lower is sharper']);
+    head.push(['Confidence discount',(c.discount).toFixed(2)+'x',c.discount<1?'pulled down from real misses':(c.discount>1?'pulled up':'well calibrated')]);
+    head.push(['Calls resolved',String(resolved),'of '+((cc.total)||resolved)+' staked']);
+  }
+  document.getElementById('calib-head').innerHTML=resolved?head.map(function(h){
+    return '<div class="t"><span class="micro">'+esc(h[0])+'</span><div class="v">'+esc(h[1])+'<small> '+esc(h[2])+'</small></div></div>';
+  }).join(''):'';
+
+  // reliability bands (only bands with resolved data)
+  var bands=(c.bands||[]).filter(function(b){return b.n>0;});
+  document.getElementById('calib-bands').innerHTML=bands.length?bands.map(function(b){
+    var hr=b.hit_rate==null?0:b.hit_rate;
+    var right=b.hit_rate==null?'-':pct(b.hit_rate)+'%';
+    var says=pct(b.lo)+'-'+pct(b.hi)+'%';
+    var rt=b.lowSample?('n='+b.n+' · not enough data yet'):('right '+right+' of the time (n='+b.n+')');
+    return '<div class="band'+(b.lowSample?' low':'')+'">'+
+      '<span class="lbl">Says '+says+'</span>'+
+      '<span class="track"><span class="fill" style="width:'+Math.round(hr*100)+'%"></span>'+
+        '<span class="stated" style="left:'+Math.round(b.mid*100)+'%"></span></span>'+
+      '<span class="rt">'+esc(rt)+'</span>'+
+      '</div>';
+  }).join(''):'<div class="note-line">No resolved predictions yet: resolve an open one below and the reliability curve builds itself.</div>';
+
+  // open predictions with horizons + human resolve gate
+  var open=(c.open||[]);
+  document.getElementById('open-head').style.display=open.length?'':'none';
+  document.getElementById('calib-open').innerHTML=open.map(function(p){
+    var hz=p.horizon_at?('horizon '+p.horizon_at.slice(0,10)):'no horizon set';
+    return '<div class="pred" data-pid="'+p.id+'">'+
+      '<span class="t">'+esc(p.statement||'')+
+        '<small>says '+pct(p.predicted_confidence)+'% · '+esc(p.predicted_outcome||'')+' · '+esc(hz)+
+        (p.sample?'':'')+'</small></span>'+
+      (p.sample?'<span class="samp">Sample</span>':'')+
+      '<span class="rb">'+
+        '<button class="yes" data-st="confirmed" data-pid="'+p.id+'">Confirmed</button>'+
+        '<button class="part" data-st="partial" data-pid="'+p.id+'">Partial</button>'+
+        '<button class="no" data-st="refuted" data-pid="'+p.id+'">Refuted</button>'+
+      '</span></div>';
+  }).join('');
+  document.querySelectorAll('#calib-open .rb button').forEach(function(b){
+    b.addEventListener('click',function(){resolvePrediction(b.getAttribute('data-pid'),b.getAttribute('data-st'),b);});
+  });
+
+  // resolved log: predicted vs actual
+  var log=(c.resolved||[]);
+  document.getElementById('reslog-head').style.display=log.length?'':'none';
+  document.getElementById('calib-reslog').innerHTML=log.map(function(p){
+    var when=p.resolved_at?p.resolved_at.slice(0,10):'';
+    return '<div class="reslog">'+
+      '<span class="o '+esc(p.status)+'">'+esc(p.status)+'</span>'+
+      '<span class="body"><b>'+esc(p.statement||'')+'</b>'+
+        '<div class="meta">predicted '+pct(p.predicted_confidence)+'% · '+esc(p.predicted_outcome||'')+
+        (p.actual_outcome?' &nbsp;→&nbsp; actual: '+esc(p.actual_outcome):'')+
+        (p.resolved_by?' · '+esc(p.resolved_by):'')+(when?' · '+esc(when):'')+'</div></span>'+
+      (p.sample?'<span class="samp">Sample</span>':'')+
+      '</div>';
+  }).join('');
+}
+function resolvePrediction(id,status,btn){
+  if(btn){var row=btn.closest('.pred');if(row)row.style.opacity='.5';btn.textContent='…';}
+  fetch('/api/audit/predictions/'+id+'/resolve',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({status:status})})
+  .then(function(r){return r.json();})
+  .then(function(d){if(d&&d.ok){STATE=d.state;renderHome();}});
+}
+/* ── associations: the decaying association graph ── */
+function renderAssociations(){
+  var list=(STATE.associations||[]);
+  var sec=document.getElementById('assoc-sec');
+  if(!list.length){sec.style.display='none';return;}
+  sec.style.display='';
+  document.getElementById('assoc-count').textContent=list.length+' live link'+(list.length>1?'s':'');
+  document.getElementById('assoc-list').innerHTML=list.map(function(a){
+    return '<div class="assoc">'+
+      '<span class="pair"><b>'+esc(a.a)+'</b><span class="lnk">↔</span><b>'+esc(a.b)+'</b>'+
+        '<small>surfaced because it '+esc(a.reason)+'</small></span>'+
+      '<span class="track"><span class="fill" style="width:'+Math.round(a.weight*100)+'%"></span></span>'+
+      '<span class="wv">'+a.weight.toFixed(2)+'</span>'+
+      (a.sample?'<span class="samp">Sample</span>':'')+
+      '</div>';
+  }).join('');
 }
 function renderLeaks(){
   var rows=STATE.findings.filter(function(f){return f.kind!=='strength';});

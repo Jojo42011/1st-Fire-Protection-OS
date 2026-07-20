@@ -63,6 +63,29 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    /* ---------- the calibration ledger (the Operator's metacognition) ----------
+     * Every stake-worthy claim the Operator makes (a gap, a value line, a forecast) is
+     * logged here with a stated confidence and a measurable predicted outcome. When the
+     * outcome becomes knowable a human resolves it; calibration is then computed on read
+     * from RESOLVED rows only (confirmed=1, partial=0.5, refuted=0). Nothing here is a
+     * background job. 'sample' flags illustrative seed rows so the UI never shows a
+     * seeded resolution as a verified real one. */
+    CREATE TABLE IF NOT EXISTS predictions (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      claim_kind           TEXT,                       -- gap|value|forecast
+      ref_id               TEXT,                       -- audit_findings.id when applicable
+      statement            TEXT,
+      predicted_confidence REAL,                       -- 0..1 (as stated, before the discount)
+      predicted_outcome    TEXT,
+      horizon_at           TEXT,                       -- when we expect to know
+      status               TEXT DEFAULT 'open',        -- open|confirmed|refuted|partial
+      actual_outcome       TEXT,
+      resolved_by          TEXT,
+      resolved_at          TEXT,
+      sample               INTEGER DEFAULT 0,          -- 1 = illustrative seed row (labeled in UI)
+      created_at           TEXT DEFAULT (datetime('now'))
+    );
+
     /* ---------- invoice collector ---------- */
     CREATE TABLE IF NOT EXISTS invoices (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -357,6 +380,14 @@ export function initDb(): void {
   // not just a chat console. 'console' keeps any pre-existing built agents as-is; new builds set
   // 'dashboard' at creation. Founding agents keep their own bespoke dashboards regardless.
   addColumn('agents', 'dashboard_kind', "TEXT DEFAULT 'console'");
+
+  /* ---------- the associative memory layer (decaying association graph) ----------
+   * The existing typed edges (relation != 'assoc') are untouched. Associative edges
+   * (relation = 'assoc') carry a weight that is reinforced on real co-activation and
+   * decayed lazily at read from last_reinforced_at. 'weight' already exists on edges;
+   * these add the decay timestamp and the illustrative-seed flag. */
+  addColumn('edges', 'last_reinforced_at', 'TEXT');
+  addColumn('edges', 'sample', 'INTEGER DEFAULT 0'); // 1 = illustrative seed edge (labeled in UI)
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

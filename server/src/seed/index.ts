@@ -1,5 +1,6 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
+import { upsertNode } from '../db/memory';
 import { PILLARS } from '../config/auditor';
 import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
@@ -18,6 +19,8 @@ export function seed(): void {
   seedQuestions();
   seedAgents();
   seedHarness();
+  seedAssociations();
+  seedCalibration();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -438,4 +441,153 @@ function seedHarness(): void {
     }
   }
   setState('seeded_harness', '1');
+}
+
+/* ─────────────────────── the self-knowing brain (seed) ───────────────────────
+ * Illustrative-only calibration + association data so the "How well it knows" view and the
+ * Associations panel render something real on first boot. Every row is flagged sample=1 and
+ * labeled in the UI, so a seeded resolution is NEVER shown as a verified real outcome. No
+ * Math.random: deterministic values, reusing the repo's FNV-1a -> mulberry32 pattern where a
+ * number varies; relative timestamps follow the existing seed helpers so decay stays alive. */
+
+/** FNV-1a hash of a key -> unsigned 32-bit seed (same pattern as routes/department.ts). */
+function seedFrom(key: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+/** mulberry32: a tiny deterministic PRNG. Same key, same sequence, always. No Math.random. */
+function rngFrom(key: string): () => number {
+  let a = seedFrom(key) >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** ISO timestamp N days ago (positive = past, negative = future). Mirrors the seed helpers. */
+function isoDaysAgo(n: number): string {
+  return new Date(Date.now() - n * 86400000).toISOString();
+}
+
+/**
+ * Associative memory seed: real 1st FP entities that genuinely go together (the deficiency
+ * pipeline lives in ServiceTrade, Kelsey holds inspections, spreadsheets drive receivables),
+ * wired as decaying associations. A couple are older so the panel visibly shows decay. The two
+ * finding nodes here match seeded findings by title so the combined loop has real nodes to
+ * reinforce when their predictions resolve. Own flag; idempotent.
+ */
+function seedAssociations(): void {
+  if (getState('seeded_assoc') === '1') return;
+  const db = getDb();
+
+  const seedAssoc = (
+    aLabel: string,
+    aKind: string,
+    bLabel: string,
+    bKind: string,
+    weight: number,
+    daysAgo: number
+  ) => {
+    const a = upsertNode(aLabel, aKind);
+    const b = upsertNode(bLabel, bKind);
+    const src = Math.min(a, b);
+    const dst = Math.max(a, b);
+    const dup = db.prepare(`SELECT id FROM edges WHERE src = ? AND dst = ? AND relation = 'assoc'`).get(src, dst);
+    if (!dup) {
+      db.prepare(
+        `INSERT INTO edges (src, dst, relation, weight, last_reinforced_at, sample) VALUES (?, ?, 'assoc', ?, ?, 1)`
+      ).run(src, dst, weight, isoDaysAgo(daysAgo));
+    }
+  };
+
+  const DEF = 'Deficiency findings are managed informally, not as a pipeline';
+  const QUOTES = 'Repair quotes take days to go out after an inspection';
+  const RECV = 'Receivables chased by hand, invoices go out late';
+  const NINE = 'Nine locations, no side-by-side view of the same numbers';
+
+  // [aLabel, aKind, bLabel, bKind, weight, daysAgoReinforced]
+  const links: [string, string, string, string, number, number][] = [
+    ['ServiceTrade', 'system', DEF, 'finding', 0.82, 3],
+    ['ServiceTrade', 'system', QUOTES, 'finding', 0.7, 6],
+    [DEF, 'finding', QUOTES, 'finding', 0.64, 5],
+    ['Kelsey Bovard', 'person', DEF, 'finding', 0.58, 9],
+    ['Spreadsheets', 'system', RECV, 'finding', 0.75, 4],
+    ['ServiceTrade', 'system', 'Spreadsheets', 'system', 0.5, 20],
+    ['Spreadsheets', 'system', NINE, 'finding', 0.55, 12],
+    ['Daniel Rodriguez', 'person', QUOTES, 'finding', 0.3, 42], // old + weak: shows decay in the panel
+  ];
+  for (const [al, ak, bl, bk, w, d] of links) seedAssoc(al, ak, bl, bk, w, d);
+
+  setState('seeded_assoc', '1');
+  console.log('[seed] associations seeded (decaying association graph, illustrative edges).');
+}
+
+/**
+ * Calibration ledger seed: illustrative Operator predictions, mostly resolved so the
+ * reliability curve renders on first load, plus two open ones (tied to real seeded findings)
+ * the user can resolve live to see the combined loop fire. Fire-protection claims, honest
+ * numbers, every row flagged sample=1. Own flag; idempotent.
+ */
+function seedCalibration(): void {
+  if (getState('seeded_calibration') === '1') return;
+  const db = getDb();
+  const r = rngFrom('calibration:1stfp'); // deterministic jitter for created/horizon offsets
+
+  const findingIdByTitle = (title: string): string | null => {
+    const row = db.prepare(`SELECT id FROM audit_findings WHERE title = ? ORDER BY id ASC LIMIT 1`).get(title) as
+      | { id: number }
+      | undefined;
+    return row ? String(row.id) : null;
+  };
+
+  const ins = db.prepare(
+    `INSERT INTO predictions
+       (claim_kind, ref_id, statement, predicted_confidence, predicted_outcome, horizon_at, status, actual_outcome, resolved_by, resolved_at, sample, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+  );
+
+  // Resolved predictions: [kind, statement, conf, outcome, status, actual, resolvedBy, createdDaysAgo, horizonDaysAgo]
+  const resolved: [string, string, number, string, string, string, string, number, number][] = [
+    ['value', 'Recurring ITM capture on the new-construction permit cohort adds durable inspection revenue', 0.8,
+      'future recurring ITM', 'confirmed', '3 permit accounts converted to annual ITM agreements', 'Devon', 66, 34],
+    ['value', '24-hour quote turnaround lifts deficiency-to-repair conversion', 0.85,
+      '2-3x conversion delta', 'confirmed', 'repair close rate rose on same-week quotes', 'Devon', 58, 27],
+    ['gap', 'Consolidating nine branches onto one dashboard surfaces branch variance', 0.7,
+      'variance visible across sites', 'confirmed', 'two outlier branches identified in week one', 'Devon', 50, 20],
+    ['value', 'Daily receivables dunning cuts DSO on the aging bucket', 0.75,
+      '15-30 days of DSO', 'confirmed', 'DSO down on the enrolled invoices', 'Devon', 47, 16],
+    ['forecast', 'Backflow retrofit renewals close before quarter end', 0.65,
+      'renewals signed', 'partial', 'about half signed on time, rest slipped a cycle', 'Devon', 44, 13],
+    ['gap', 'The SFMO license map reveals tuck-in acquisition targets in South Texas', 0.6,
+      'route-dense targets found', 'partial', 'targets surfaced, none actionable this quarter', 'Devon', 40, 11],
+    ['forecast', 'The ISD bid-board watcher lands a multi-year district contract this cycle', 0.8,
+      'multi-year contract', 'refuted', 'no award this cycle; the timeline was overconfident', 'Devon', 70, 30],
+    ['value', 'One-off repair jobs convert to recurring agreements without a nudge', 0.7,
+      'recurring conversion', 'refuted', 'conversions needed the agreement offer, not automatic', 'Devon', 55, 25],
+  ];
+  for (const [kind, statement, conf, outcome, status, actual, by, cd, hd] of resolved) {
+    // horizon and resolution land around hd days ago, nudged deterministically (no Math.random)
+    const jitter = Math.round(r() * 3); // 0..3 days, stable per boot sequence
+    ins.run(kind, null, statement, conf, outcome, isoDaysAgo(hd + jitter), status, actual, by, isoDaysAgo(hd), isoDaysAgo(cd));
+  }
+
+  // Open predictions tied to REAL seeded findings, so resolving one live fires the combined
+  // loop against real association nodes (never invented).
+  const open: [string, string, number, string, number, number][] = [
+    // [kind, findingTitle, conf, outcome, createdDaysAgo, horizonDaysAhead]
+    ['value', 'Deficiency findings are managed informally, not as a pipeline', 0.8, '30-50% of repair revenue', 8, 22],
+    ['gap', 'Nine locations, no side-by-side view of the same numbers', 0.7, 'consolidated branch visibility', 6, 24],
+  ];
+  for (const [kind, title, conf, outcome, cd, ha] of open) {
+    ins.run(kind, findingIdByTitle(title), title, conf, outcome, isoDaysAgo(-ha), 'open', null, null, null, isoDaysAgo(cd));
+  }
+
+  setState('seeded_calibration', '1');
+  console.log('[seed] calibration ledger seeded (illustrative predictions: 8 resolved, 2 open).');
 }
