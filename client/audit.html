@@ -50,8 +50,9 @@
   .hub-ring{fill:var(--s1);stroke:var(--hair-2);stroke-width:1}
   .hub-t1{fill:var(--ink);font-family:var(--sans);font-weight:900;font-size:26px;letter-spacing:.04em;text-anchor:middle}
   .hub-t2{fill:var(--ink-3);font-family:var(--mono);font-size:8.5px;letter-spacing:.3em;text-anchor:middle}
-  .hub-t3{fill:var(--ink);font-family:var(--sans);font-weight:800;font-size:30px;text-anchor:middle}
-  .hub-t3 tspan{fill:var(--ink-2);font-size:15px;font-weight:700}
+  .hub-t3{fill:var(--ink);font-family:var(--sans);font-weight:900;font-size:64px;letter-spacing:-.03em;text-anchor:middle}
+  .hub-t3 .hub-pct{fill:var(--ink-2);font-size:26px;font-weight:700}
+  .hub-lbl{fill:var(--ink-3);font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;text-anchor:middle}
   .wheel-hint{text-align:center;margin-top:18px}
 
   /* home stats strip */
@@ -415,34 +416,32 @@ function renderWheel(){
     var p=d.pillars.find(function(x){return x.key===dep.key;})||{coverage:0,capabilities:[]};
     var a0=start+i*span, a1=a0+span, mid=(a0+a1)/2;
     var lp=P(cx,cy,(R0+R)/2+4,mid);
-    var lines=splitName(dep.wheel.toUpperCase());
-    var yTop=lp[1]-(lines.length>1?16:8);
-    var label=lines.map(function(ln,li){
-      return '<text class="seg-name" x="'+lp[0]+'" y="'+(yTop+li*17)+'">'+esc(ln)+'</text>';
-    }).join('');
-    var yPct=yTop+lines.length*17+4;
+    // slices carry no text now: just the segment, its coverage arc, and its capability dots.
     var caps=p.capabilities||[],dots='';
     caps.slice(0,4).forEach(function(c,ci){
-      var dx=lp[0]-((Math.min(caps.length,4)-1)*10)/2+ci*10;
-      dots+='<circle class="seg-dot'+(c.live?' lv':'')+'" cx="'+dx+'" cy="'+(yPct+15)+'" r="3"><title>'+esc(c.name)+'</title></circle>';
+      var dx=lp[0]-((Math.min(caps.length,4)-1)*11)/2+ci*11;
+      dots+='<circle class="seg-dot'+(c.live?' lv':'')+'" cx="'+dx+'" cy="'+lp[1]+'" r="3.2"><title>'+esc(c.name)+'</title></circle>';
     });
-    html+='<g class="seg-g" data-key="'+dep.key+'">'+
+    html+='<g class="seg-g" data-key="'+dep.key+'" data-name="'+esc(dep.name)+'" data-cov="'+(p.coverage||0)+'">'+
       '<path class="seg" d="'+arcPath(cx,cy,R0,R,a0,a1)+'"><title>'+esc(dep.name)+'</title></path>'+
       '<path class="seg-cov" d="'+covArc(cx,cy,R-6,a0+.03,a1-.03,(p.coverage||0)/100)+'"/>'+
-      label+
-      '<text class="seg-pct" x="'+lp[0]+'" y="'+yPct+'">'+(p.coverage||0)+'%</text>'+
       dots+
       '</g>';
   });
-  // hub
+  // hub: just the big number by default; hovering a slice shows that department name + its coverage
   html+='<circle class="hub-ring" cx="'+cx+'" cy="'+cy+'" r="'+(R0-14)+'"/>'+
-    '<text class="hub-t2" x="'+cx+'" y="'+(cy-34)+'">1ST FIRE PROTECTION</text>'+
-    '<text class="hub-t1" x="'+cx+'" y="'+(cy-2)+'">AI OS</text>'+
-    '<text class="hub-t3" x="'+cx+'" y="'+(cy+44)+'"><tspan class="hub-num">'+STATE.metrics.coverage+'</tspan><tspan>%</tspan></text>'+
-    '<text class="hub-t2" x="'+cx+'" y="'+(cy+66)+'">MAPPED</text>';
+    '<text class="hub-t3" x="'+cx+'" y="'+(cy+20)+'"><tspan class="hub-num">'+STATE.metrics.coverage+'</tspan><tspan class="hub-pct">%</tspan></text>'+
+    '<text class="hub-lbl" id="hub-lbl" x="'+cx+'" y="'+(cy+52)+'"></text>';
   svg.innerHTML=html;
+  function hubReset(){var num=svg.querySelector('.hub-num'),lbl=svg.querySelector('#hub-lbl');if(num)num.textContent=STATE.metrics.coverage;if(lbl)lbl.textContent='';}
   svg.querySelectorAll('.seg-g').forEach(function(g){
     g.addEventListener('click',function(){openDept(g.getAttribute('data-key'));});
+    g.addEventListener('mouseenter',function(){
+      var num=svg.querySelector('.hub-num'),lbl=svg.querySelector('#hub-lbl');
+      if(num)num.textContent=g.getAttribute('data-cov');
+      if(lbl)lbl.textContent=g.getAttribute('data-name');
+    });
+    g.addEventListener('mouseleave',hubReset);
   });
 }
 function renderHome(){
