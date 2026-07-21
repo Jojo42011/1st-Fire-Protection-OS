@@ -68,6 +68,35 @@ router.get('/api/calls/:id/recording', async (req, res) => {
   return res.status(404).json({ ok: false, reason: 'no-recording' });
 });
 
+/** TEMP DIAGNOSTIC — dump what Vapi actually returns for one call's recording fields. */
+router.get('/api/calls/:id/recording-debug', async (req, res) => {
+  const key = process.env.VAPI_API_KEY;
+  if (!key) return res.json({ ok: false, reason: 'no-key' });
+  const row = getDb().prepare(`SELECT vapi_call_id FROM calls WHERE id = ?`).get(Number(req.params.id)) as
+    | { vapi_call_id: string | null }
+    | undefined;
+  if (!row?.vapi_call_id) return res.json({ ok: false, reason: 'no-vapi-id' });
+  try {
+    const r = await fetch(`https://api.vapi.ai/call/${encodeURIComponent(row.vapi_call_id)}`, {
+      headers: { authorization: `Bearer ${key}` },
+    });
+    const j: any = await r.json();
+    const art = j?.artifact || {};
+    res.json({
+      status: r.status,
+      recordingUrl: j?.recordingUrl,
+      stereoRecordingUrl: j?.stereoRecordingUrl,
+      artifact_recordingUrl: art?.recordingUrl,
+      artifact_stereoRecordingUrl: art?.stereoRecordingUrl,
+      artifact_recording: art?.recording,
+      artifactPlan: j?.artifactPlan,
+      artifact_keys: Object.keys(art),
+    });
+  } catch (e) {
+    res.json({ ok: false, error: (e as Error).message });
+  }
+});
+
 /** Update a lead's status (in-house / reversible). */
 router.post('/api/calls/leads/:id/status', (req, res) => {
   const status = String(req.body?.status || 'new');
