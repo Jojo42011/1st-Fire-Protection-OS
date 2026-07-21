@@ -253,6 +253,16 @@ export function initDb(): void {
       source_note_id INTEGER,
       created_at    TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS audit_nodes (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      pillar_key    TEXT NOT NULL,
+      name          TEXT NOT NULL,
+      caption       TEXT,                       -- one plain line: what this agent does for THEM
+      connects      TEXT,                       -- JSON array: systems/people this node wires to
+      capability_id TEXT,
+      created_at    TEXT DEFAULT (datetime('now')),
+      UNIQUE(pillar_key, name)
+    );
     CREATE TABLE IF NOT EXISTS audit_notes (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       text       TEXT NOT NULL,                -- what the CEO/staff actually said

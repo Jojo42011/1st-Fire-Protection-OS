@@ -94,7 +94,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     what: 'Every jurisdiction has its own rules — this agent knows each AHJ\'s quirks so compliance stops living in one person\'s head.',
     builds: 'Per-jurisdiction knowledge base (permit rules, inspector preferences, code cycles) + deadline watcher across all locations.',
     pillars: ['projects'],
-    triggers: ['ahj', 'jurisdiction', 'city', 'county', 'fire marshal', 'permit', 'code', 'nfpa', 'inspector prefer'],
+    triggers: ['ahj', 'jurisdiction', 'city', 'county', 'fire marshal', 'permit', 'code', 'nfpa', 'inspector prefer', 'deadline'],
   },
   {
     id: 'data_bridge',

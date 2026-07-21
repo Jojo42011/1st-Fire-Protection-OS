@@ -8,6 +8,8 @@ export const MODELS = {
   anthropic: {
     chat: process.env.ANTHROPIC_MODEL || 'claude-opus-4-8',
     fast: process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001',
+    // The live-meeting facilitation loop: Sonnet — sharp enough to consult, fast enough for the room.
+    consult: process.env.ANTHROPIC_CONSULT_MODEL || 'claude-sonnet-5',
   },
   // OpenAI (brain + embeddings for memory)
   openai: {

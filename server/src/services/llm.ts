@@ -25,7 +25,7 @@ export interface LlmResult {
 /** Non-streaming chat completion. Returns null when no provider is configured. */
 export async function chat(
   messages: ChatMessage[],
-  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number } = {}
+  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number; model?: string } = {}
 ): Promise<LlmResult | null> {
   const provider = activeProvider();
   if (provider === 'none') return null;
@@ -41,7 +41,7 @@ export async function chat(
 
 async function anthropicChat(
   messages: ChatMessage[],
-  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number }
+  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number; model?: string }
 ): Promise<LlmResult> {
   const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
   const convo = messages
@@ -49,7 +49,7 @@ async function anthropicChat(
     .map((m) => ({ role: m.role, content: m.content }));
 
   const body: Record<string, unknown> = {
-    model: opts.fast ? MODELS.anthropic.fast : MODELS.anthropic.chat,
+    model: opts.model || (opts.fast ? MODELS.anthropic.fast : MODELS.anthropic.chat),
     max_tokens: opts.maxTokens || 1024,
     system,
     messages: convo,
@@ -85,10 +85,10 @@ async function anthropicChat(
 
 async function openaiChat(
   messages: ChatMessage[],
-  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number }
+  opts: { tools?: ToolDef[]; fast?: boolean; maxTokens?: number; model?: string }
 ): Promise<LlmResult> {
   const body: Record<string, unknown> = {
-    model: MODELS.openai.chat,
+    model: opts.model && !opts.model.startsWith('claude') ? opts.model : MODELS.openai.chat,
     max_tokens: opts.maxTokens || 1024,
     messages,
   };
