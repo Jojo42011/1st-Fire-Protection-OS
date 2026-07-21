@@ -252,13 +252,18 @@ select option{background:var(--s2);color:var(--ink)}
    ============================================================ */
 :root{ --r-lg:18px; --r-md:14px; --r-sm:11px; --r-pill:999px; }
 
-/* the whole surface rises in a touch slower and gentler */
-body{animation:rise .6s cubic-bezier(.2,.7,.3,1)}
+/* the entrance is owned by motion.js (staggered section rise-in) */
+body{animation:none}
 
-/* cards: rounded, more air, a whisper of resting depth (premium, not loud) */
+/* aligned, tabular figures everywhere numbers live (premium data-UI feel) */
+.kpi .value,.value,.big,.vend .vv,.mono,td,.pill,.badge,.bar-row,.kpi .sub{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+
+/* cards: rounded, more air, a whisper of resting depth, a gentle lift on hover */
 .card{border-radius:var(--r-lg);padding:22px 24px;box-shadow:0 1px 2px rgba(0,0,0,.16);
-  transition:border-color .25s,box-shadow .3s}
-.card:hover{box-shadow:0 6px 24px rgba(0,0,0,.22)}
+  transition:border-color .25s,box-shadow .3s,transform .3s}
+.card:hover{box-shadow:0 10px 30px rgba(0,0,0,.26);transform:translateY(-2px)}
+/* containers and the boxless KPI strip do not lift (only content cards react) */
+.kpi.card,.kpi.card:hover,.card:has(> table),.card:has(> table):hover{transform:none}
 /* the boxless KPI strip stays boxless - no card shadow bleed */
 .kpi.card,.kpi.card:hover{box-shadow:none}
 .grid{gap:18px;margin-top:26px}
