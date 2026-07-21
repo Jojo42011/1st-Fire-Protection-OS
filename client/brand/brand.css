@@ -1,5 +1,5 @@
 /* ============================================================
-   1st Fire Protection — Brand stylesheet
+   1st Fire Protection, Brand stylesheet
    Authoritative · industrial · urgent. A fire-station command
    center: red = the fire, navy = the uniform, off-white = the
    blueprint, gold = the badge.
@@ -8,7 +8,7 @@
      <link rel="stylesheet" href="/brand/brand.css">
    Fonts load relative to this file (brand/fonts/*.woff2). For a
    single self-contained file (e.g. an emailed HTML export), inline
-   the @font-face src as base64 data URIs instead — see brand/README.md.
+   the @font-face src as base64 data URIs instead, see brand/README.md.
    ============================================================ */
 
 /* ---- Typefaces ---- */
@@ -21,23 +21,34 @@
 @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;
   src:url('fonts/JetBrainsMono-Medium.woff2') format('woff2');}
 
+/* Geist + Geist Mono (Vercel) - the premium command-room type system. One cohesive
+   family: Geist for headline/body sans, Geist Mono for the micro-labels. Retires
+   Inter + JetBrains Mono as the operator faces (the old files stay for legacy surfaces). */
+@font-face{font-family:'Geist';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/Geist-Regular.woff2') format('woff2');}
+@font-face{font-family:'Geist';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/Geist-Medium.woff2') format('woff2');}
+@font-face{font-family:'Geist';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Geist-SemiBold.woff2') format('woff2');}
+@font-face{font-family:'Geist';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/Geist-Bold.woff2') format('woff2');}
+@font-face{font-family:'Geist';font-style:normal;font-weight:800;font-display:swap;src:url('fonts/Geist-ExtraBold.woff2') format('woff2');}
+@font-face{font-family:'Geist';font-style:normal;font-weight:900;font-display:swap;src:url('fonts/Geist-Black.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
+
 /* ---- Design tokens ---- */
 :root{
-  /* Primary red — the fire. CTAs, icons, borders, signal lines. */
+  /* Primary red, the fire. CTAs, icons, borders, signal lines. */
   --fp-red:#E53935;
   --fp-red-deep:#C62828;
   --fp-red-tint:#FCE9E8;
 
-  /* Secondary navy — the uniform. Dark sections, nav, footer. */
+  /* Secondary navy, the uniform. Dark sections, nav, footer. */
   --fp-navy:#1E2D40;
   --fp-navy-2:#26384f;
   --fp-navy-line:#34465d;
 
-  /* Off-white — the blueprint paper. */
+  /* Off-white, the blueprint paper. */
   --fp-paper:#F5F7F9;
   --fp-panel:#FFFFFF;
 
-  /* Accent gold — the badge. Certification, excellence. */
+  /* Accent gold, the badge. Certification, excellence. */
   --fp-gold:#F5B81B;
   --fp-gold-deep:#B9860C;
   --fp-gold-tint:#FCF3DC;

@@ -4,62 +4,69 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Receptionist · 1st FP</title>
+<script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/theme.css" />
+<link rel="stylesheet" href="/command.css" />
 <style>
-  .hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:18px;background:var(--navy);color:#fff;border-left:3px solid var(--accent);padding:28px 30px;margin-top:20px;position:relative}
-  .hero h2{font-family:var(--display);font-weight:900;font-size:38px;text-transform:uppercase;letter-spacing:-.02em;line-height:1;color:#fff}
-  .hero p{color:#B9C4CF;margin-top:12px;font-size:13.5px;max-width:54ch;line-height:1.55}
+  /* command-room hero: a hairline card, not a navy slab */
+  .hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:22px;
+    background:var(--s1);border:1px solid var(--hair);padding:26px 28px;margin-top:22px;position:relative;
+    background-image:radial-gradient(120% 140% at 100% 0%,rgba(229,57,53,.06),transparent 55%)}
+  .hero h2{font-size:19px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;line-height:1.2;color:var(--ink)}
+  .hero p{color:var(--ink-2);margin-top:11px;font-size:13.5px;max-width:54ch;line-height:1.6}
   .talk{display:flex;flex-direction:column;align-items:center;gap:12px}
-  .mic{width:78px;height:78px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;box-shadow:0 0 0 0 rgba(229,57,53,.5)}
-  .mic:hover{background:var(--accent-2)} .mic.listening{animation:ring 1.4s infinite}
+  .mic{width:76px;height:76px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:.15s;box-shadow:0 0 0 0 rgba(229,57,53,.5)}
+  .mic:hover{background:#C62828} .mic.listening{animation:ring 1.4s infinite}
   @keyframes ring{0%{box-shadow:0 0 0 0 rgba(229,57,53,.5)}100%{box-shadow:0 0 0 22px rgba(229,57,53,0)}}
-  .talk .hint{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#B9C4CF}
+  .talk .hint{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
   #convo{margin-top:16px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
-  .msg{padding:9px 13px;font-size:13.5px;max-width:80%;line-height:1.5}
-  .msg.you{align-self:flex-end;background:var(--accent);color:#fff}
-  .msg.bot{align-self:flex-start;background:var(--bg);border:1px solid var(--line);color:var(--text)}
+  .msg{padding:10px 13px;font-size:13.5px;max-width:80%;line-height:1.5}
+  .msg.you{align-self:flex-end;background:var(--s3);color:var(--ink)}
+  .msg.bot{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
   .composer{display:flex;gap:8px;margin-top:12px}
-  .composer input{flex:1;background:#fff;border:1px solid var(--line-2);color:var(--text);padding:11px 14px;font-family:var(--font);font-size:14px}
-  .composer input:focus{outline:none;border-color:var(--accent)}
+  .composer input{flex:1;min-width:0}
   /* call log detail */
-  tr.call-row{cursor:pointer} tr.call-row:hover{background:var(--bg)}
-  tr.call-row .chev{display:inline-block;transition:transform .15s;color:var(--muted);font-size:10px}
+  tr.call-row{cursor:pointer} tr.call-row:hover td{background:var(--s2)}
+  tr.call-row .chev{display:inline-block;transition:transform .15s;color:var(--ink-3);font-size:10px}
   tr.call-row.open .chev{transform:rotate(90deg)}
-  td.detail-cell{padding:0!important;background:var(--bg);border-bottom:1px solid var(--line)}
-  .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+  td.detail-cell{padding:0!important;background:var(--s2);border-bottom:1px solid var(--hair)}
+  .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px;animation:rise .3s cubic-bezier(.2,.7,.3,1)}
   .detail .row1{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .detail audio{height:34px;max-width:100%}
-  .detail .summary{font-size:13.5px;line-height:1.55;color:var(--text);border-left:3px solid var(--accent);padding:6px 0 6px 12px;background:#fff}
+  .detail .summary{font-size:13.5px;line-height:1.6;color:var(--ink);padding:12px 14px;background:var(--s1);border:1px solid var(--hair)}
   .detail .costs{display:flex;flex-wrap:wrap;gap:6px}
-  .detail .cbit{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;background:#fff;border:1px solid var(--line);padding:4px 8px;color:var(--muted)}
-  .detail .cbit b{color:var(--text)}
-  .detail .label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-  .detail .transcript{max-height:280px;overflow-y:auto;background:#fff;border:1px solid var(--line);padding:10px 12px}
-  .detail .turn{font-size:13px;line-height:1.5;margin-bottom:7px}
-  .detail .turn .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block}
-  .detail .turn.bot .who{color:var(--accent)}
-  .detail .none{font-size:12.5px;color:var(--muted)}
-  .syncbtn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:var(--navy);color:#fff;border:none;padding:7px 12px;cursor:pointer}
-  .syncbtn:hover{background:var(--accent)} .syncbtn[disabled]{opacity:.5;cursor:default}
+  .detail .cbit{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;background:var(--s1);border:1px solid var(--hair);padding:4px 8px;color:var(--ink-3)}
+  .detail .cbit b{color:var(--ink)}
+  .detail .label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+  .detail .transcript{max-height:280px;overflow-y:auto;background:var(--s1);border:1px solid var(--hair);padding:10px 12px}
+  .detail .turn{font-size:13px;line-height:1.5;margin-bottom:7px;color:var(--ink-2)}
+  .detail .turn .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);display:block}
+  .detail .turn.bot .who{color:var(--red)}
+  .detail .none{font-size:12.5px;color:var(--ink-3)}
+  .syncbtn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:transparent;
+    color:var(--ink-2);border:1px solid var(--hair-2);padding:7px 12px;cursor:pointer;transition:.15s}
+  .syncbtn:hover{border-color:var(--red);color:var(--ink)} .syncbtn[disabled]{opacity:.5;cursor:default}
   @media (max-width:640px){
-    .hero{padding:20px 18px;gap:14px;margin-top:16px}
-    .hero h2{font-size:25px}
+    .hero{padding:20px 18px;gap:16px;margin-top:16px}
+    .hero h2{font-size:17px}
     .hero p{font-size:13px}
     .hero .talk{flex-direction:row;align-items:center;gap:14px;align-self:stretch;justify-content:center}
     .mic{width:60px;height:60px}
     #convo{max-height:46vh}
     .msg{max-width:88%}
-    .composer input{font-size:16px;min-width:0}   /* 16px stops iOS from zooming on focus; min-width:0 lets it shrink */
+    .composer input{font-size:16px}   /* 16px stops iOS from zooming on focus */
   }
 </style>
+  <script src="/count.js" defer></script>
+  <script src="/motion.js" defer></script>
 </head>
 <body>
   <div class="page-head">
     <div class="titles">
       <p class="kicker">San Antonio Line · 210-377-FIRE</p>
       <h1>Call Receptionist</h1>
-      <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams — inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
+      <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams, inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
     </div>
     <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
   </div>
@@ -67,7 +74,7 @@
   <div class="hero">
     <div>
       <h2>Single-Source Life Safety</h2>
-      <p>Talk to the receptionist right now — ask it to route an inspection, or say "show me the invoices" and watch it drive the screen.</p>
+      <p>Talk to the receptionist right now, ask it to route an inspection, or say "show me the invoices" and watch it drive the screen.</p>
     </div>
     <div class="talk">
       <button class="mic" id="mic" title="Hold to talk"><svg width="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
@@ -164,7 +171,7 @@ function callDetail(c){
   if(c.ended_reason)r1.push('<span class="cbit">ended <b>'+esc(c.ended_reason)+'</b></span>');
   if(c.success_evaluation)r1.push('<span class="cbit">success <b>'+esc(c.success_evaluation)+'</b></span>');
   if(c.vapi_call_id)r1.push('<span class="cbit">id <b>'+esc(String(c.vapi_call_id).slice(0,8))+'</b></span>');
-  parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call — connect Vapi and enable recording to capture audio.</span>')+'</div>');
+  parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call, connect Vapi and enable recording to capture audio.</span>')+'</div>');
   if(c.summary)parts.push('<div class="summary">'+esc(c.summary)+'</div>');
   var cb=c.cost_breakdown;
   if(cb&&typeof cb==='object'){
@@ -197,7 +204,7 @@ function ask(text){
   es.addEventListener('navigate',function(e){var d=JSON.parse(e.data);if(d.tab){window.parent.postMessage({type:'app-navigate',tab:d.tab},'*');}});
   es.addEventListener('token',function(e){acc+=JSON.parse(e.data).text;bot.textContent=acc;convo.scrollTop=convo.scrollHeight;});
   es.addEventListener('done',function(e){var d=JSON.parse(e.data);bot.textContent=d.text||acc;speak(bot.textContent);es.close();load();});
-  es.addEventListener('error',function(){bot.textContent=acc||'(offline — add an LLM key for full conversation)';es.close();});
+  es.addEventListener('error',function(){bot.textContent=acc||'(offline, add an LLM key for full conversation)';es.close();});
 }
 function speak(text){
   // Prefer server TTS; fall back to browser speech. Never blocks.
@@ -215,7 +222,7 @@ document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='
 var mic=document.getElementById('mic'),hint=document.getElementById('mic-hint'),rec=null,listening=false;
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 mic.onclick=function(){
-  if(!SR){hint.textContent='Voice unavailable — type instead';return;}
+  if(!SR){hint.textContent='Voice unavailable, type instead';return;}
   if(listening){rec&&rec.stop();return;}
   rec=new SR();rec.lang='en-US';rec.interimResults=false;
   rec.onstart=function(){listening=true;mic.classList.add('listening');hint.textContent='Listening…';};

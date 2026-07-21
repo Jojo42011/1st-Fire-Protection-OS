@@ -4,17 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Invoice Collector · 1st FP</title>
+<script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/theme.css" />
+<link rel="stylesheet" href="/command.css" />
+  <script src="/count.js" defer></script>
+  <script src="/motion.js" defer></script>
 </head>
 <body>
   <div class="page-head">
     <div class="titles">
       <p class="kicker">Receivables · Aging & Collections</p>
       <h1>Invoice Collector</h1>
-      <p>Chases receivables so you don't have to — tracks aging, drafts friendly→firm reminders, surfaces the cash that's stuck. Nothing sends without your approval.</p>
+      <p>Chases receivables so you don't have to: tracks aging, drafts friendly to firm reminders, surfaces the cash that's stuck. Nothing sends without your approval.</p>
     </div>
-    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone · Sample Data</span>
+    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span>
   </div>
 
   <div class="grid kpis" id="kpis"></div>
@@ -43,7 +46,7 @@
   <div class="section-title">Collection Workflow · Daily Until Paid</div>
   <div class="card hot" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
     <div style="max-width:62ch;color:var(--muted);font-size:13px;line-height:1.55">
-      Enroll an overdue invoice and it goes on <b style="color:var(--navy)">autopilot</b> — an outstanding-balance
+      Enroll an overdue invoice and it goes on <b style="color:var(--navy)">autopilot</b>, an outstanding-balance
       <b style="color:var(--navy)">email + text every day</b> until it's marked paid, escalating friendly → firm → final
       as it ages. The moment it's paid, the chase stops automatically.
       <span id="wf-mode"></span>
@@ -93,7 +96,7 @@ function load(){
       if(i.status==='paid'){act='';}
       else if(enrolledIds[i.id]){act='<span class="pill red">on autopilot</span>';}
       else{act='<button class="btn" onclick="draft('+i.id+')">Draft</button> <button class="btn primary" onclick="enroll('+i.id+',this)">Enroll</button>';}
-      return '<tr><td>'+i.customer+'</td><td class="right mono">'+fmt(i.amount)+'</td><td class="muted mono">'+(i.due_at||'')+'</td><td class="right">'+(i.status==='paid'?'—':(od>0?od:'—'))+'</td><td><span class="pill '+(i.status==='paid'?'green':'gray')+'">'+i.status+'</span></td><td class="right">'+act+'</td></tr>';
+      return '<tr><td>'+i.customer+'</td><td class="right mono">'+fmt(i.amount)+'</td><td class="muted mono">'+(i.due_at||'')+'</td><td class="right">'+(i.status==='paid'?'-':(od>0?od:'-'))+'</td><td><span class="pill '+(i.status==='paid'?'green':'gray')+'">'+i.status+'</span></td><td class="right">'+act+'</td></tr>';
     }).join('');
     renderWorkflow(wf);
     var rq=d.reminders||[];
@@ -108,11 +111,11 @@ function draft(id){fetch('/api/invoices/'+id+'/draft-reminder',{method:'POST'}).
 function approve(id,btn){btn.disabled=true;fetch('/api/invoices/reminders/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 
 var TIER_PILL={final:'red',firm:'amber',friendly:'gray'};
-function shortTime(t){if(!t)return '—';var s=String(t).replace('T',' ').replace('Z','');return s.slice(5,16);}
+function shortTime(t){if(!t)return '-';var s=String(t).replace('T',' ').replace('Z','');return s.slice(5,16);}
 function renderWorkflow(wf){
   var mode=document.getElementById('wf-mode');
-  if(wf.live){mode.innerHTML=' <b style="color:var(--ok)">Live</b> — approved sends go out over '+(wf.emailLive?'Email':'')+(wf.emailLive&&wf.smsLive?' + ':'')+(wf.smsLive?'SMS':'')+'.';}
-  else{mode.innerHTML=' Sends are <b style="color:var(--accent)">simulated</b> (drafted &amp; logged) until Email (M365/Gmail) or SMS (Twilio) is connected — then the same cycle sends for real.';}
+  if(wf.live){mode.innerHTML=' <b style="color:var(--ok)">Live</b>, approved sends go out over '+(wf.emailLive?'Email':'')+(wf.emailLive&&wf.smsLive?' + ':'')+(wf.smsLive?'SMS':'')+'.';}
+  else{mode.innerHTML=' Sends are <b style="color:var(--accent)">simulated</b> (drafted &amp; logged) until Email (M365/Gmail) or SMS (Twilio) is connected, then the same cycle sends for real.';}
   var rows=(wf.enrolled||[]);
   document.getElementById('wf-rows').innerHTML= rows.length? rows.map(function(w){
     var st=w.status, stPill= st==='active'?'<span class="pill green">active</span>': st==='paused'?'<span class="pill amber">paused</span>': st==='done'?'<span class="pill green">paid ✓</span>':'<span class="pill gray">'+st+'</span>';
@@ -120,13 +123,13 @@ function renderWorkflow(wf){
     var act='';
     if(st==='active')act='<button class="btn" onclick="wfAct('+w.id+',\'pause\')">Pause</button> <button class="btn" onclick="wfAct('+w.id+',\'stop\')">Stop</button>';
     else if(st==='paused')act='<button class="btn primary" onclick="wfAct('+w.id+',\'resume\')">Resume</button> <button class="btn" onclick="wfAct('+w.id+',\'stop\')">Stop</button>';
-    return '<tr><td>'+w.customer+'<div class="muted mono" style="font-size:10px">'+w.days_overdue+'d overdue</div></td><td class="right mono">'+fmt(w.amount)+'</td><td class="mono">'+(w.day_count||0)+'</td><td>'+ch+'</td><td class="muted mono" style="font-size:11px">'+(st==='active'?shortTime(w.next_run_at):'—')+'</td><td>'+stPill+'</td><td class="right">'+act+'</td></tr>';
+    return '<tr><td>'+w.customer+'<div class="muted mono" style="font-size:10px">'+w.days_overdue+'d overdue</div></td><td class="right mono">'+fmt(w.amount)+'</td><td class="mono">'+(w.day_count||0)+'</td><td>'+ch+'</td><td class="muted mono" style="font-size:11px">'+(st==='active'?shortTime(w.next_run_at):'-')+'</td><td>'+stPill+'</td><td class="right">'+act+'</td></tr>';
   }).join('') : '<tr><td colspan="7" class="empty">Nothing on autopilot yet. Enroll an overdue invoice above →</td></tr>';
   var act=(wf.activity||[]);
   document.getElementById('wf-activity').innerHTML= act.length? act.map(function(a){
     var sp= a.status==='sent'?'green': a.status==='simulated'?'amber': a.status==='skipped'?'gray':'red';
     return '<tr><td>'+a.customer+'</td><td><span class="pill '+(TIER_PILL[a.tier]||'gray')+'">'+a.channel+'</span></td><td class="mono">'+(a.day||'')+'</td><td><span class="pill '+sp+'">'+a.status+'</span></td></tr>';
-  }).join('') : '<tr><td colspan="4" class="empty">No sends yet — run today\'s cycle.</td></tr>';
+  }).join('') : '<tr><td colspan="4" class="empty">No sends yet, run today\'s cycle.</td></tr>';
 }
 function enroll(id,btn){btn.disabled=true;fetch('/api/invoices/'+id+'/enroll',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({channels:['email','sms']})}).then(function(r){return r.json();}).then(load);}
 function wfAct(id,action){fetch('/api/invoices/workflow/'+id+'/'+action,{method:'POST'}).then(function(r){return r.json();}).then(load);}

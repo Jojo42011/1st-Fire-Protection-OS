@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { auditState, capture, generateBrief } from '../services/auditAgent';
-import { consult } from '../services/consultAgent';
+import { auditState, capture, generateBrief, approveGap } from '../services/auditAgent';
+import { calibration, resolvePrediction, PredStatus } from '../services/calibration';
 
 const router = Router();
 
@@ -16,30 +16,10 @@ router.post('/api/audit/capture', async (req, res) => {
   if (!text) return res.status(400).json({ ok: false, error: 'text required' });
   const location = req.body?.location ? String(req.body.location) : undefined;
   const department = req.body?.department ? String(req.body.department) : undefined;
+  const questionId = req.body?.questionId ? Number(req.body.questionId) : undefined;
   try {
-    const analysis = await capture(text, location, department);
+    const analysis = await capture(text, location, department, questionId);
     res.json({ ok: true, analysis, state: auditState() });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: (err as Error).message });
-  }
-});
-
-/**
- * THE CONSULT LOOP: the CEO's answer in → reaction + next question + chips + spawned node out.
- * Runs live in the meeting — one fast model call (or the rules engine, keyless).
- */
-router.post('/api/audit/consult', async (req, res) => {
-  const answer = String(req.body?.answer || '').trim();
-  const department = String(req.body?.department || '').trim();
-  if (!answer || !department) return res.status(400).json({ ok: false, error: 'answer + department required' });
-  try {
-    const turn = await consult({
-      department,
-      answer,
-      question: req.body?.question ? String(req.body.question) : undefined,
-      location: req.body?.location ? String(req.body.location) : undefined,
-    });
-    res.json({ ok: true, ...turn, state: auditState() });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });
   }
@@ -78,11 +58,37 @@ router.post('/api/audit/findings/:id/status', (req, res) => {
   res.json({ ok: true });
 });
 
+/** Approve a proposed build — the human gate that moves a gap into the build queue. */
+router.post('/api/audit/findings/:id/approve', (req, res) => {
+  try {
+    approveGap(Number(req.params.id));
+    res.json({ ok: true, state: auditState() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 /** Mark a location mapped/unmapped while walking the sites. */
 router.post('/api/audit/locations/:id/mapped', (req, res) => {
   const mapped = req.body?.mapped ? 1 : 0;
   getDb().prepare(`UPDATE audit_locations SET mapped = ? WHERE id = ?`).run(mapped, Number(req.params.id));
   res.json({ ok: true });
+});
+
+/** How well it knows: the calibration ledger (reliability curve, Brier, discount, log). */
+router.get('/api/audit/calibration', (_req, res) => {
+  res.json({ ok: true, calibration: calibration() });
+});
+
+/** Resolve an open prediction: the human gate that closes a call with a real outcome. */
+router.post('/api/audit/predictions/:id/resolve', (req, res) => {
+  const status = String(req.body?.status || '') as PredStatus;
+  const actual = req.body?.actual_outcome ? String(req.body.actual_outcome) : undefined;
+  const resolvedBy = req.body?.resolved_by ? String(req.body.resolved_by) : 'Devon';
+  const at = new Date().toISOString();
+  const r = resolvePrediction(Number(req.params.id), status, actual, resolvedBy, at);
+  if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+  res.json({ ok: true, state: auditState() });
 });
 
 /** The deliverable: executive brief assembled live from the audit data. */

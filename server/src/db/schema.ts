@@ -63,6 +63,29 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    /* ---------- the calibration ledger (the Operator's metacognition) ----------
+     * Every stake-worthy claim the Operator makes (a gap, a value line, a forecast) is
+     * logged here with a stated confidence and a measurable predicted outcome. When the
+     * outcome becomes knowable a human resolves it; calibration is then computed on read
+     * from RESOLVED rows only (confirmed=1, partial=0.5, refuted=0). Nothing here is a
+     * background job. 'sample' flags illustrative seed rows so the UI never shows a
+     * seeded resolution as a verified real one. */
+    CREATE TABLE IF NOT EXISTS predictions (
+      id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+      claim_kind           TEXT,                       -- gap|value|forecast
+      ref_id               TEXT,                       -- audit_findings.id when applicable
+      statement            TEXT,
+      predicted_confidence REAL,                       -- 0..1 (as stated, before the discount)
+      predicted_outcome    TEXT,
+      horizon_at           TEXT,                       -- when we expect to know
+      status               TEXT DEFAULT 'open',        -- open|confirmed|refuted|partial
+      actual_outcome       TEXT,
+      resolved_by          TEXT,
+      resolved_at          TEXT,
+      sample               INTEGER DEFAULT 0,          -- 1 = illustrative seed row (labeled in UI)
+      created_at           TEXT DEFAULT (datetime('now'))
+    );
+
     /* ---------- invoice collector ---------- */
     CREATE TABLE IF NOT EXISTS invoices (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,6 +270,174 @@ export function initDb(): void {
       analysis   TEXT,                         -- JSON: the operator's full read
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    /* The interview ladder — persisted so the audit RESUMES and DEEPENS across
+       sessions instead of living in browser memory. Each answer stores here and
+       queues a sharper follow-up one depth level down. */
+    CREATE TABLE IF NOT EXISTS audit_questions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      question       TEXT NOT NULL,
+      pillar_key     TEXT,
+      depth_level    INTEGER DEFAULT 0,         -- 0 = opening deck; +1 per follow-up
+      asked_of       TEXT,                      -- role/person the question targets (optional)
+      status         TEXT DEFAULT 'open',       -- open | answered
+      answer         TEXT,
+      source_note_id INTEGER,                   -- the note this question's answer created
+      created_at     TEXT DEFAULT (datetime('now')),
+      answered_at    TEXT
+    );
+
+    /* Daily "getting smarter" log — one row per day, so the OS can show that the
+       longer it runs, the more of the company lives inside it. */
+    CREATE TABLE IF NOT EXISTS audit_days (
+      day           TEXT PRIMARY KEY,           -- YYYY-MM-DD
+      facts_learned INTEGER DEFAULT 0,          -- observations captured that day
+      coverage_pct  INTEGER DEFAULT 0           -- overall coverage snapshot at day end
+    );
+
+    /* THE HARNESS — the execution layer over the Operator's build queue.
+       When a human approves a gap (audit_findings.queue_status='approved'), the
+       harness picks it up, drafts a build order (the plan to fix it), and stages it
+       for a final human ship. This is the OS proposing AND building its own next
+       steps, gated by a person at each hop. */
+    CREATE TABLE IF NOT EXISTS build_orders (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      finding_id    INTEGER,                    -- the approved gap this builds
+      capability_id TEXT,                       -- the matched build from the catalog
+      title         TEXT NOT NULL,
+      plan          TEXT,                       -- JSON: the drafted agent spec (persona, skills) or step plan
+      value_line    TEXT,                       -- the business case, carried from the gap
+      eta_weeks     INTEGER DEFAULT 2,
+      status        TEXT DEFAULT 'staged',      -- staged (drafted, awaiting ship) | shipped
+      engine        TEXT DEFAULT 'harness-rules', -- harness-rules | harness-llm
+      created_at    TEXT DEFAULT (datetime('now')),
+      shipped_at    TEXT
+    );
+
+    /* THE ROSTER — every AI employee this OS runs, founding + harness-built.
+       An agent here is data the generic runtime executes: a persona (system_prompt),
+       the pillar it serves, its capability, and a growing knowledge/skill list. The
+       Operator proposes the need; the Harness drafts and (on a human ship) inserts a
+       live agent here; every other tool in the OS can then see and route to it. This
+       is how the OS grows its own team instead of shipping a fixed template. */
+    CREATE TABLE IF NOT EXISTS agents (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      key           TEXT UNIQUE NOT NULL,       -- slug (console id)
+      name          TEXT NOT NULL,
+      role          TEXT,                       -- one-line job
+      pillar_key    TEXT,                       -- the department it serves
+      capability_id TEXT,                       -- the catalog build it embodies
+      system_prompt TEXT,                       -- the drafted persona/instructions the runtime runs
+      knowledge     TEXT,                       -- JSON array of knowledge/skill lines (grows on upgrade)
+      origin        TEXT DEFAULT 'harness',     -- founding | harness
+      status        TEXT DEFAULT 'live',        -- live | draft | retired
+      built_from    INTEGER,                    -- the build_orders.id that created it (harness-built)
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+
+    /* THE STRENGTHEN LOG — every skill the harness has added to an agent (new or
+       existing). Makes "the OS is getting smarter" literal and auditable. */
+    CREATE TABLE IF NOT EXISTS agent_skills (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_key    TEXT NOT NULL,
+      skill        TEXT NOT NULL,
+      source_order INTEGER,                     -- the build_orders.id that added it
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+
+    /* ---------- license reclaim (HR roster reconciled against software seats) ----------
+     * The active roster (from BambooHR, or the seeded fallback when keyless) is reconciled
+     * against the software-license seat inventory. Any seat assigned to someone who is NOT
+     * on the active roster (terminated, or gone entirely) is a RECLAIMABLE license, and the
+     * per-seat cost is money that can be recovered. Reclaim is human-gated (propose ->
+     * approve); nothing here ever cancels a license automatically. */
+    CREATE TABLE IF NOT EXISTS hr_employees (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      full_name     TEXT NOT NULL,
+      email         TEXT UNIQUE,
+      department    TEXT,
+      title         TEXT,
+      status        TEXT DEFAULT 'active',       -- active|terminated
+      hired_at      TEXT,
+      terminated_at TEXT,
+      source        TEXT DEFAULT 'seed',         -- seed|bamboo
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS license_seats (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor         TEXT NOT NULL,              -- adobe|bluebeam|autocad|hydracad|hfss|microsoft
+      product        TEXT,
+      assignee_email TEXT,
+      assignee_name  TEXT,
+      cost_monthly   REAL DEFAULT 0,
+      assigned_at    TEXT,
+      source         TEXT DEFAULT 'seed',        -- seed|manual|graph|umapi|autodesk|bluebeam|hydracad|hfss
+      created_at     TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS license_reclaims (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      seat_id         INTEGER NOT NULL,
+      status          TEXT DEFAULT 'proposed',   -- proposed|approved|reclaimed
+      reason          TEXT,
+      savings_monthly REAL DEFAULT 0,
+      proposed_at     TEXT DEFAULT (datetime('now')),
+      approved_at     TEXT,
+      reclaimed_at    TEXT,
+      FOREIGN KEY (seat_id) REFERENCES license_seats(id) ON DELETE CASCADE
+    );
+
+    /* ---------- new-hire onboarding (intake -> auto-routed, human-gated work) ----------
+     * One intake form captures every onboarding field for a new employee. On submit the
+     * router fans the SET/CHECKED fields out into onboarding_items, each addressed to the
+     * right owner as either a task (do it) or an approval (a human must say yes). Nothing
+     * here calls an external system: the BambooHR items are routed tasks a person acts on,
+     * and every approval is an explicit human click. A request completes when no item is
+     * still pending. */
+    CREATE TABLE IF NOT EXISTS onboarding_requests (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      name              TEXT NOT NULL,
+      personal_email    TEXT,
+      start_date        TEXT,
+      cell_phone        TEXT,
+      job_position      TEXT,
+      salary            TEXT,
+      manager_name      TEXT,
+      company_email     INTEGER DEFAULT 0,   -- IT: provision a company email
+      teams_number      INTEGER DEFAULT 0,   -- IT: provision a Teams number
+      cell_reimburse    INTEGER DEFAULT 0,   -- BambooHR: cell-phone reimbursement
+      pto_plan          INTEGER DEFAULT 0,   -- BambooHR: a different PTO plan
+      hours_80_40       INTEGER DEFAULT 0,   -- BambooHR: 80-vs-40 hours approved
+      probation_waived  INTEGER DEFAULT 0,   -- BambooHR: 60-day probation waived
+      incentive_plan    INTEGER DEFAULT 0,   -- BambooHR: incentive plan
+      vehicle_allowance INTEGER DEFAULT 0,   -- BambooHR: vehicle allowance (Sandi builds into pay)
+      misc_exceptions   TEXT,                -- BambooHR: free-text pay/HR exception
+      company_cell      INTEGER DEFAULT 0,   -- Safety (Denise): company cell phone
+      ipad              INTEGER DEFAULT 0,   -- Safety (Denise): company iPad
+      company_vehicle   INTEGER DEFAULT 0,   -- fans out to Sandi + Denise + Daniel
+      vehicle_details   TEXT,                -- the vehicle / new-vehicle details
+      vehicle_transfer  INTEGER DEFAULT 0,   -- Safety (Denise): company vehicle transfer
+      wex_card          INTEGER DEFAULT 0,   -- Safety (Denise): WEX fuel card
+      computer_type     TEXT DEFAULT 'none', -- none|standard|business|cad (Mario approval when not none)
+      software_json     TEXT DEFAULT '[]',   -- selected software (routed per item: IT or Mario)
+      sharepoint_json   TEXT DEFAULT '[]',   -- selected SharePoint groups (routed per group)
+      printers_json     TEXT DEFAULT '[]',   -- selected printers (IT)
+      status            TEXT DEFAULT 'open', -- open|complete
+      created_at        TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS onboarding_items (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id  INTEGER NOT NULL,
+      owner       TEXT NOT NULL,               -- bamboo|it|mario|rebecca|sandi|denise|daniel
+      owner_label TEXT NOT NULL,               -- display name for the owner
+      kind        TEXT NOT NULL,               -- task|approval
+      label       TEXT NOT NULL,               -- what needs doing
+      detail      TEXT,                        -- the specifics carried from the form
+      status      TEXT DEFAULT 'pending',      -- pending|done|approved|rejected
+      decided_by  TEXT,                        -- who completed/approved/rejected it
+      decided_at  TEXT,
+      created_at  TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (request_id) REFERENCES onboarding_requests(id) ON DELETE CASCADE
+    );
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
@@ -270,6 +461,69 @@ export function initDb(): void {
     `CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_vapi_id
        ON calls(vapi_call_id) WHERE vapi_call_id IS NOT NULL;`
   );
+
+  /* ---------- the gap feed / build queue (the seed of the in-OS harness) ----------
+   * A matched finding is a PROPOSED build. A human approves it -> it becomes a work
+   * order the OS can act on. Added as columns so existing brains upgrade in place. */
+  addColumn('audit_findings', 'queue_status', "TEXT DEFAULT 'proposed'"); // proposed|approved|building|shipped
+  addColumn('audit_findings', 'value_line', 'TEXT');                       // the one-line business case
+
+  /* ---------- the harness -> roster wiring (added after Build C shipped) ----------
+   * A build order now either CREATES a new agent or STRENGTHENS an existing one.
+   * Columns so dev DBs that already have build_orders upgrade in place. */
+  addColumn('build_orders', 'mode', "TEXT DEFAULT 'new'");   // new (build an agent) | upgrade (strengthen one)
+  addColumn('build_orders', 'target_agent_key', 'TEXT');     // the agent an upgrade strengthens
+
+  /* ---------- the coder: real code the harness writes for a new agent ----------
+   * A reviewable artifact (a human merges it via the dev pipeline; never hot-loaded). */
+  addColumn('build_orders', 'code', 'TEXT');          // the generated TypeScript module
+  addColumn('build_orders', 'code_path', 'TEXT');     // where it would live in the repo
+  addColumn('build_orders', 'code_engine', 'TEXT');   // coder-kimi | coder-anthropic | template ...
+
+  // Every harness-built agent runs its own sub-dashboard (nested under its department dashboard),
+  // not just a chat console. 'console' keeps any pre-existing built agents as-is; new builds set
+  // 'dashboard' at creation. Founding agents keep their own bespoke dashboards regardless.
+  addColumn('agents', 'dashboard_kind', "TEXT DEFAULT 'console'");
+
+  /* ---------- the associative memory layer (decaying association graph) ----------
+   * The existing typed edges (relation != 'assoc') are untouched. Associative edges
+   * (relation = 'assoc') carry a weight that is reinforced on real co-activation and
+   * decayed lazily at read from last_reinforced_at. 'weight' already exists on edges;
+   * these add the decay timestamp and the illustrative-seed flag. */
+  addColumn('edges', 'last_reinforced_at', 'TEXT');
+  addColumn('edges', 'sample', 'INTEGER DEFAULT 0'); // 1 = illustrative seed edge (labeled in UI)
+
+  /* One-time reconciliation of the license inventory to the corrected vendor set.
+   * The retired 'hydrocad' seats become 'hydracad' (the right product, Hydratec sprinkler
+   * design), and HFSS seats are backfilled onto an inventory that was seeded before HFSS
+   * existed. A fresh database gets both straight from the seed, so this is a no-op there
+   * (it runs before the seat data exists). Idempotent, guarded by a state flag. */
+  if (getState('mig_license_vendors_v2') !== '1') {
+    db.prepare("UPDATE license_seats SET vendor = 'hydracad', product = 'HydraCAD (Hydratec)' WHERE vendor = 'hydrocad'").run();
+    const seatCount = (db.prepare('SELECT COUNT(*) AS c FROM license_seats').get() as { c: number }).c;
+    const hfssCount = (db.prepare("SELECT COUNT(*) AS c FROM license_seats WHERE vendor = 'hfss'").get() as { c: number }).c;
+    if (seatCount > 0 && hfssCount === 0) {
+      const addHfss = db.prepare(
+        "INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source) VALUES ('hfss', 'HFSS', ?, ?, 20, ?, 'seed')"
+      );
+      addHfss.run('victor.delgado@1stfp.example', 'Victor Delgado', '2025-06-01');
+      addHfss.run('jordan.pratt@1stfp.example', 'Jordan Pratt', '2025-02-15');
+    }
+    setState('mig_license_vendors_v2', '1');
+  }
+
+  /* One-time cleanup of dash punctuation in the persisted consult questions. The deck was
+   * seeded before the no-dash rule was applied to the department copy, so already-seeded
+   * question rows still carry an em dash (' — ') or an en dash ('–'). The chips are matched
+   * to a question by its exact text at render time, so a stale dash both shows on screen and
+   * breaks the chip lookup against the corrected config. This rewrites the persisted text to
+   * match. A fresh database seeds the clean text directly, so this is a harmless no-op there.
+   * Idempotent, guarded by a state flag. */
+  if (getState('mig_dash_strip_v1') !== '1') {
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, ' — ', ', ')").run();
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, '–', '-')").run();
+    setState('mig_dash_strip_v1', '1');
+  }
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

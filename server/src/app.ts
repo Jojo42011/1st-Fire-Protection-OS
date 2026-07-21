@@ -16,12 +16,19 @@ import brain from './routes/brain';
 import invoices from './routes/invoices';
 import reviews from './routes/reviews';
 import calls from './routes/calls';
+import impact from './routes/impact';
 import callWebhook from './routes/callWebhook';
 import integrations from './routes/integrations';
 import voice from './routes/voice';
 import audit from './routes/audit';
+import harness from './routes/harness';
+import { healRoster } from './services/harness';
+import roster from './routes/roster';
+import department from './routes/department';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
+import licenses from './routes/licenses';
+import onboarding from './routes/onboarding';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -29,6 +36,10 @@ const CLIENT_DIR = path.resolve(__dirname, '../../client');
 // ---- boot the brain ----
 initDb();
 seed();
+// Backfill agents for any build order that shipped before the roster existed, so a shipped
+// card never claims "live in the roster" without a real agent behind it.
+const healed = healRoster();
+if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into live agents`);
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -39,12 +50,18 @@ app.use(brain);
 app.use(invoices);
 app.use(reviews);
 app.use(calls);
+app.use(impact);
 app.use(callWebhook);
 app.use(integrations);
 app.use(voice);
 app.use(audit);
+app.use(harness);
+app.use(roster);
+app.use(department);
 app.use(admin);
 app.use(introspect);
+app.use(licenses);
+app.use(onboarding);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -55,8 +72,15 @@ app.get('/shell', page('shell.html'));
 app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
+app.get('/executive', page('executive.html'));
 app.get('/audit', page('audit.html'));
+app.get('/harness', page('harness.html'));
+app.get('/roster', page('roster.html'));
+app.get('/department', page('department.html'));
+app.get('/agent', page('agent.html'));
 app.get('/integrations', page('integrations.html'));
+app.get('/licenses', page('licenses.html'));
+app.get('/onboarding', page('onboarding.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

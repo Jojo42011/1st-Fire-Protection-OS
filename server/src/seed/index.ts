@@ -1,6 +1,14 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
+import {
+  createRequest,
+  completeItem,
+  approveItem,
+  type OnboardingPayload,
+} from '../services/onboardingAgent';
+import { upsertNode } from '../db/memory';
 import { PILLARS } from '../config/auditor';
+import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
 
 /**
@@ -12,6 +20,15 @@ export function seed(): void {
   // (already seeded) still pick them up on upgrade.
   ensureAuditFoundation();
   seedAudit();
+  seedGrowth();
+  seedOffCatalog();
+  seedQuestions();
+  seedAgents();
+  seedHarness();
+  seedAssociations();
+  seedCalibration();
+  seedLicenses();
+  seedOnboarding();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -145,11 +162,12 @@ function ensureAuditFoundation(): void {
 
   // Migrate rows recorded under the original 8-pillar model onto the real
   // 9-department model. Idempotent: once remapped there is nothing left to touch.
+  // NOTE: 'growth' is now a real, current pillar (Growth & Market Expansion), so it is
+  // deliberately NOT remapped/deleted here anymore.
   const REMAP: [string, string][] = [
     ['dispatch', 'service'],
     ['compliance', 'projects'],
     ['people', 'ops'],
-    ['growth', 'ops'],
   ];
   for (const table of ['audit_systems', 'audit_people', 'audit_workflows', 'audit_findings']) {
     for (const [oldKey, newKey] of REMAP) {
@@ -158,7 +176,7 @@ function ensureAuditFoundation(): void {
   }
   // Ed Portillo is Vendor Relations — was filed under sales before vendors existed.
   db.prepare(`UPDATE audit_people SET pillar_key = 'vendors' WHERE name = 'Ed Portillo'`).run();
-  db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people','growth')`).run();
+  db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people')`).run();
 
   const insPillar = db.prepare(
     `INSERT OR IGNORE INTO audit_pillars (key, name, tagline, sort) VALUES (?, ?, ?, ?)`
@@ -241,4 +259,575 @@ function seedAudit(): void {
 
   setState('seeded_audit', '1');
   console.log('[seed] audit foundation loaded (pillars, locations, known systems, veterans, benchmark leaks).');
+}
+
+/**
+ * Growth intelligence — context fed in from Booker Growth's Texas fire-protection market
+ * research so The Operator walks in already seeing the GROWTH gaps, not just operational
+ * leaks. Illustrative/benchmark findings (no invented accounts); the real targets come
+ * from the public feeds (SFMO license DB, permits, bid boards) when connected. Own flag so
+ * existing brains pick it up on upgrade.
+ */
+function seedGrowth(): void {
+  if (getState('seeded_growth') === '1') return;
+  const db = getDb();
+
+  // the public feeds that power expansion — a "system of record" the OS should mine
+  db.prepare(
+    `INSERT INTO audit_systems (name, category, truth_for, gaps, pillar_key) VALUES (?, ?, ?, ?, ?)`
+  ).run(
+    'SFMO License DB + Permit Portals + Bid Boards',
+    'public-data',
+    'Texas competitor map, new-construction signal, and competitively-bid contracts',
+    'All public and free, none of it mined today — competitor/white-space map, acquisition targets, permit-to-ITM signal, and ISD/municipal RFPs are unused',
+    'growth'
+  );
+
+  const findings: [string, string, string, string, string, string, string][] = [
+    // pillar, kind, title, detail, severity, cost_hint, capability
+    ['growth', 'gap', 'New-construction permits that become ITM accounts are not captured systematically',
+      'Every new commercial building is a code-mandated future inspection account. Catching the permit and timing outreach to the acceptance test converts installs into decades of recurring ITM; today it is relationship-driven, not systematic.',
+      'high', 'future recurring ITM', 'permit_hunter'],
+    ['growth', 'leak', 'Installs and one-off repairs are not converted into recurring agreements',
+      'Recurring ITM mix is the master value driver — operators at 40%+ recurring trade 2–3 EBITDA turns higher. Every completed install/one-off without an agreement is recurring revenue left on the table.',
+      'high', '2–3 EBITDA turns', 'recurring_capture'],
+    ['growth', 'gap', 'Competitor and white-space map lives in people\'s heads, not on a board',
+      'The Texas SFMO publishes every licensed fire contractor. Mapped by metro it shows where coverage is thin (expansion white space) and which small shops are acquisition targets — density-first from San Antonio outward.',
+      'medium', '', 'territory_map'],
+    ['growth', 'gap', 'Small independent shops are being consolidated by nationals, not sourced here first',
+      'The market is fragmented and consolidating fast; a small shop with an inspection book is a portable recurring-revenue asset. The SFMO DB surfaces tuck-in targets in your own metros before a national buys the route.',
+      'medium', 'route density', 'acquisition_scout'],
+    ['growth', 'gap', 'ISD and municipal fire-inspection RFPs are not systematically watched',
+      'School districts and cities must competitively bid inspection work; a missed posting is a missed multi-year contract. District bid boards and the state ESBD are public and watchable.',
+      'medium', 'multi-year contracts', 'bid_watcher'],
+  ];
+  const insFnd = db.prepare(
+    `INSERT INTO audit_findings (pillar_key, kind, title, detail, severity, cost_hint, capability_id) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  for (const f of findings) insFnd.run(...f);
+
+  setState('seeded_growth', '1');
+  console.log('[seed] growth intelligence loaded (SFMO/permit/bid feeds + 5 growth gaps on the Growth pillar).');
+}
+
+/**
+ * The interview ladder — seed each department's opening question deck (depth 0) so the
+ * Operator has somewhere to start. Every answer then persists a sharper follow-up one
+ * level deeper (auditAgent.capture), so the interview resumes and gets sharper across
+ * sessions instead of resetting each visit. Own flag so existing brains pick it up.
+ */
+function seedQuestions(): void {
+  if (getState('seeded_questions') === '1') return;
+  const db = getDb();
+  const ins = db.prepare(
+    `INSERT INTO audit_questions (question, pillar_key, depth_level, status) VALUES (?, ?, 0, 'open')`
+  );
+  for (const d of DEPARTMENTS) {
+    for (const q of d.questions) {
+      const dup = db.prepare(`SELECT id FROM audit_questions WHERE lower(question) = lower(?)`).get(q.q);
+      if (!dup) ins.run(q.q, d.key);
+    }
+  }
+  setState('seeded_questions', '1');
+  console.log('[seed] interview ladder seeded (opening question decks per department).');
+}
+
+/**
+ * An OFF-CATALOG gap: nothing in the build catalog covers fleet maintenance, but a
+ * 9-location field-service company lives and dies by its trucks. The Operator proposes a
+ * CUSTOM agent for it, so the harness can grow the team beyond the preset builds. Own flag
+ * so brains already seeded before this existed still pick it up on upgrade.
+ */
+function seedOffCatalog(): void {
+  if (getState('seeded_offcatalog') === '1') return;
+  const db = getDb();
+  const dup = db
+    .prepare(`SELECT id FROM audit_findings WHERE lower(title) LIKE 'fleet vehicle maintenance%'`)
+    .get();
+  if (!dup) {
+    db.prepare(
+      `INSERT INTO audit_findings (pillar_key, kind, title, detail, severity, cost_hint, capability_id) VALUES (?, ?, ?, ?, ?, ?, NULL)`
+    ).run(
+      'ops',
+      'gap',
+      'Fleet vehicle maintenance is reactive, trucks fail in the field',
+      'Nine locations run on service trucks, but preventive maintenance is ad hoc: a truck down mid-route means missed inspections and emergency-rate rentals. No catalog build covers this, so it needs a custom agent that tracks each vehicle, schedules PM by mileage/hours, and flags a truck before it strands a crew.',
+      'medium',
+      'missed routes + rental cost'
+    );
+    console.log('[seed] off-catalog gap seeded (fleet maintenance -> a custom agent the catalog does not cover).');
+  }
+  setState('seeded_offcatalog', '1');
+}
+
+/**
+ * The founding roster - seed the agents this OS shipped with as rows in `agents` so the
+ * roster is one unified team and the harness-built agents sit right alongside them. Each
+ * gets a starter knowledge line; the harness grows the list as it strengthens them. Own
+ * flag so existing brains pick it up on upgrade.
+ */
+function seedAgents(): void {
+  if (getState('seeded_agents') === '1') return;
+  const db = getDb();
+  const founding: {
+    key: string;
+    name: string;
+    role: string;
+    pillar: string;
+    capability_id: string;
+    knowledge: string[];
+  }[] = [
+    {
+      key: 'calls',
+      name: 'Call Receptionist',
+      role: 'Answers every line 24/7, classifies and routes the call, captures the lead',
+      pillar: 'reception',
+      capability_id: 'ai_receptionist',
+      knowledge: ['Answer in the 1st FP voice and never miss an after-hours emergency', 'Route inspections, service, and sales to the right desk'],
+    },
+    {
+      key: 'invoices',
+      name: 'Invoice Collector',
+      role: 'Chases receivables, drafts reminders, tracks aging to paid',
+      pillar: 'finance',
+      capability_id: 'invoice_chaser',
+      knowledge: ['Escalate a reminder cadence until an invoice is paid', 'Know the aging buckets and flag the oldest first'],
+    },
+    {
+      key: 'reviews',
+      name: 'Review Collector',
+      role: 'Requests reviews on job completion, drafts replies, tracks reputation',
+      pillar: 'reception',
+      capability_id: 'review_engine',
+      knowledge: ['Ask for a review the moment a job closes', 'Draft an on-brand reply to every review, good or bad'],
+    },
+    {
+      key: 'audit',
+      name: 'The Operator',
+      role: 'Maps the whole company live, finds the leaks, proposes the AI builds',
+      pillar: 'ops',
+      capability_id: 'operator_brain',
+      knowledge: ['Interview the owner one question at a time and go deeper every session', 'Turn every leak found into a proposed build for the harness'],
+    },
+  ];
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO agents (key, name, role, pillar_key, capability_id, knowledge, origin, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'founding', 'live')`
+  );
+  const skillIns = db.prepare(`INSERT INTO agent_skills (agent_key, skill) VALUES (?, ?)`);
+  for (const a of founding) {
+    const r = ins.run(a.key, a.name, a.role, a.pillar, a.capability_id, JSON.stringify(a.knowledge));
+    if (r.changes) for (const s of a.knowledge) skillIns.run(a.key, s);
+  }
+  setState('seeded_agents', '1');
+  console.log('[seed] founding roster seeded (4 agents live; the harness grows the team from here).');
+}
+
+/**
+ * Open the Harness alive: pre-approve one already-seeded growth gap (queue_status =
+ * 'approved') so the harness inbox shows a real work order to run on first visit, without
+ * touching the Operator's own proposed feed. Its own flag; idempotent; only acts if it can
+ * find a growth gap with a capability and nothing is approved yet.
+ */
+function seedHarness(): void {
+  if (getState('seeded_harness') === '1') return;
+  const db = getDb();
+  const any = db.prepare(`SELECT id FROM audit_findings WHERE queue_status = 'approved' LIMIT 1`).get();
+  if (!any) {
+    const pick = db
+      .prepare(
+        `SELECT id FROM audit_findings
+         WHERE pillar_key = 'growth' AND capability_id IS NOT NULL AND capability_id <> ''
+         ORDER BY id ASC LIMIT 1`
+      )
+      .get() as { id: number } | undefined;
+    if (pick) {
+      db.prepare(
+        `UPDATE audit_findings SET queue_status = 'approved', value_line = 'recurring ITM revenue' WHERE id = ?`
+      ).run(pick.id);
+      console.log('[seed] harness seeded (one approved growth gap staged in the inbox).');
+    }
+  }
+  setState('seeded_harness', '1');
+}
+
+/* ─────────────────────── the self-knowing brain (seed) ───────────────────────
+ * Seed calibration + association data so the "How well it knows" view and the
+ * Associations panel render something on first boot. Every row carries sample=1 as internal
+ * plumbing (not rendered in the UI). No
+ * Math.random: deterministic values, reusing the repo's FNV-1a -> mulberry32 pattern where a
+ * number varies; relative timestamps follow the existing seed helpers so decay stays alive. */
+
+/** FNV-1a hash of a key -> unsigned 32-bit seed (same pattern as routes/department.ts). */
+function seedFrom(key: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+/** mulberry32: a tiny deterministic PRNG. Same key, same sequence, always. No Math.random. */
+function rngFrom(key: string): () => number {
+  let a = seedFrom(key) >>> 0;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** ISO timestamp N days ago (positive = past, negative = future). Mirrors the seed helpers. */
+function isoDaysAgo(n: number): string {
+  return new Date(Date.now() - n * 86400000).toISOString();
+}
+
+/**
+ * Associative memory seed: real 1st FP entities that genuinely go together (the deficiency
+ * pipeline lives in ServiceTrade, Kelsey holds inspections, spreadsheets drive receivables),
+ * wired as decaying associations. A couple are older so the panel visibly shows decay. The two
+ * finding nodes here match seeded findings by title so the combined loop has real nodes to
+ * reinforce when their predictions resolve. Own flag; idempotent.
+ */
+function seedAssociations(): void {
+  if (getState('seeded_assoc') === '1') return;
+  const db = getDb();
+
+  const seedAssoc = (
+    aLabel: string,
+    aKind: string,
+    bLabel: string,
+    bKind: string,
+    weight: number,
+    daysAgo: number
+  ) => {
+    const a = upsertNode(aLabel, aKind);
+    const b = upsertNode(bLabel, bKind);
+    const src = Math.min(a, b);
+    const dst = Math.max(a, b);
+    const dup = db.prepare(`SELECT id FROM edges WHERE src = ? AND dst = ? AND relation = 'assoc'`).get(src, dst);
+    if (!dup) {
+      db.prepare(
+        `INSERT INTO edges (src, dst, relation, weight, last_reinforced_at, sample) VALUES (?, ?, 'assoc', ?, ?, 1)`
+      ).run(src, dst, weight, isoDaysAgo(daysAgo));
+    }
+  };
+
+  const DEF = 'Deficiency findings are managed informally, not as a pipeline';
+  const QUOTES = 'Repair quotes take days to go out after an inspection';
+  const RECV = 'Receivables chased by hand, invoices go out late';
+  const NINE = 'Nine locations, no side-by-side view of the same numbers';
+
+  // [aLabel, aKind, bLabel, bKind, weight, daysAgoReinforced]
+  const links: [string, string, string, string, number, number][] = [
+    ['ServiceTrade', 'system', DEF, 'finding', 0.82, 3],
+    ['ServiceTrade', 'system', QUOTES, 'finding', 0.7, 6],
+    [DEF, 'finding', QUOTES, 'finding', 0.64, 5],
+    ['Kelsey Bovard', 'person', DEF, 'finding', 0.58, 9],
+    ['Spreadsheets', 'system', RECV, 'finding', 0.75, 4],
+    ['ServiceTrade', 'system', 'Spreadsheets', 'system', 0.5, 20],
+    ['Spreadsheets', 'system', NINE, 'finding', 0.55, 12],
+    ['Daniel Rodriguez', 'person', QUOTES, 'finding', 0.3, 42], // old + weak: shows decay in the panel
+  ];
+  for (const [al, ak, bl, bk, w, d] of links) seedAssoc(al, ak, bl, bk, w, d);
+
+  setState('seeded_assoc', '1');
+  console.log('[seed] associations seeded (decaying association graph, illustrative edges).');
+}
+
+/**
+ * Calibration ledger seed: Operator predictions, mostly resolved so the
+ * reliability curve renders on first load, plus two open ones (tied to real seeded findings)
+ * the user can resolve live to see the combined loop fire. Fire-protection claims,
+ * every row carries sample=1. Own flag; idempotent.
+ */
+function seedCalibration(): void {
+  if (getState('seeded_calibration') === '1') return;
+  const db = getDb();
+  const r = rngFrom('calibration:1stfp'); // deterministic jitter for created/horizon offsets
+
+  const findingIdByTitle = (title: string): string | null => {
+    const row = db.prepare(`SELECT id FROM audit_findings WHERE title = ? ORDER BY id ASC LIMIT 1`).get(title) as
+      | { id: number }
+      | undefined;
+    return row ? String(row.id) : null;
+  };
+
+  const ins = db.prepare(
+    `INSERT INTO predictions
+       (claim_kind, ref_id, statement, predicted_confidence, predicted_outcome, horizon_at, status, actual_outcome, resolved_by, resolved_at, sample, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
+  );
+
+  // Resolved predictions: [kind, statement, conf, outcome, status, actual, resolvedBy, createdDaysAgo, horizonDaysAgo]
+  const resolved: [string, string, number, string, string, string, string, number, number][] = [
+    ['value', 'Recurring ITM capture on the new-construction permit cohort adds durable inspection revenue', 0.8,
+      'future recurring ITM', 'confirmed', '3 permit accounts converted to annual ITM agreements', 'Devon', 66, 34],
+    ['value', '24-hour quote turnaround lifts deficiency-to-repair conversion', 0.85,
+      '2-3x conversion delta', 'confirmed', 'repair close rate rose on same-week quotes', 'Devon', 58, 27],
+    ['gap', 'Consolidating nine branches onto one dashboard surfaces branch variance', 0.7,
+      'variance visible across sites', 'confirmed', 'two outlier branches identified in week one', 'Devon', 50, 20],
+    ['value', 'Daily receivables dunning cuts DSO on the aging bucket', 0.75,
+      '15-30 days of DSO', 'confirmed', 'DSO down on the enrolled invoices', 'Devon', 47, 16],
+    ['forecast', 'Backflow retrofit renewals close before quarter end', 0.65,
+      'renewals signed', 'partial', 'about half signed on time, rest slipped a cycle', 'Devon', 44, 13],
+    ['gap', 'The SFMO license map reveals tuck-in acquisition targets in South Texas', 0.6,
+      'route-dense targets found', 'partial', 'targets surfaced, none actionable this quarter', 'Devon', 40, 11],
+    ['forecast', 'The ISD bid-board watcher lands a multi-year district contract this cycle', 0.8,
+      'multi-year contract', 'refuted', 'no award this cycle; the timeline was overconfident', 'Devon', 70, 30],
+    ['value', 'One-off repair jobs convert to recurring agreements without a nudge', 0.7,
+      'recurring conversion', 'refuted', 'conversions needed the agreement offer, not automatic', 'Devon', 55, 25],
+  ];
+  for (const [kind, statement, conf, outcome, status, actual, by, cd, hd] of resolved) {
+    // horizon and resolution land around hd days ago, nudged deterministically (no Math.random)
+    const jitter = Math.round(r() * 3); // 0..3 days, stable per boot sequence
+    ins.run(kind, null, statement, conf, outcome, isoDaysAgo(hd + jitter), status, actual, by, isoDaysAgo(hd), isoDaysAgo(cd));
+  }
+
+  // Open predictions tied to REAL seeded findings, so resolving one live fires the combined
+  // loop against real association nodes (never invented).
+  const open: [string, string, number, string, number, number][] = [
+    // [kind, findingTitle, conf, outcome, createdDaysAgo, horizonDaysAhead]
+    ['value', 'Deficiency findings are managed informally, not as a pipeline', 0.8, '30-50% of repair revenue', 8, 22],
+    ['gap', 'Nine locations, no side-by-side view of the same numbers', 0.7, 'consolidated branch visibility', 6, 24],
+  ];
+  for (const [kind, title, conf, outcome, cd, ha] of open) {
+    ins.run(kind, findingIdByTitle(title), title, conf, outcome, isoDaysAgo(-ha), 'open', null, null, null, isoDaysAgo(cd));
+  }
+
+  setState('seeded_calibration', '1');
+  console.log('[seed] calibration ledger seeded (illustrative predictions: 8 resolved, 2 open).');
+}
+
+/* ─────────────────────── License Reclaim (seed) ───────────────────────
+ * The HR roster (BambooHR, seeded fallback when keyless) plus the software-license seat
+ * inventory across all six vendors (Adobe, Bluebeam, AutoCAD, HydraCAD, HFSS, Microsoft 365).
+ * Several employees are terminated but still hold seats, so the reclaimable list and a real
+ * annual savings number render on first boot. Deterministic (the FNV-1a -> mulberry32 PRNG for
+ * date jitter, no Math.random). Own flag; idempotent (email + name unique guards). */
+function seedLicenses(): void {
+  if (getState('seeded_licenses') === '1') return;
+  const db = getDb();
+  const r = rngFrom('licenses:1stfp'); // deterministic jitter for hire/assign dates
+  const dateAgo = (n: number) => isoDaysAgo(n).slice(0, 10); // YYYY-MM-DD
+  const jit = (span: number) => Math.round(r() * span); // 0..span days, stable per boot
+
+  const COST: Record<string, number> = { adobe: 60, microsoft: 36, autocad: 200, bluebeam: 22, hydracad: 25, hfss: 20 };
+  const PRODUCT: Record<string, string> = {
+    adobe: 'Creative Cloud All Apps',
+    microsoft: 'Microsoft 365 E3',
+    autocad: 'AutoCAD (Autodesk)',
+    bluebeam: 'Bluebeam Revu',
+    hydracad: 'HydraCAD (Hydratec)',
+    hfss: 'HFSS',
+  };
+  const emailFor = (name: string) => name.trim().toLowerCase().split(/\s+/).join('.') + '@1stfp.example';
+
+  // roster: [full_name, department, title, terminatedDaysAgo] (0 = active)
+  const roster: [string, string, string, number][] = [
+    ['Mario Salinas', 'Executive', 'President', 0],
+    ['Ida Salinas', 'Executive', 'Co-Founder', 0],
+    ['Chris Holcomb', 'Operations', 'Chief Operating Officer', 0],
+    ['Daniel Rodriguez', 'Operations', 'Operations Manager', 0],
+    ['Kelsey Bovard', 'Inspections', 'Inspections Scheduler', 0],
+    ['Mel Vela', 'Inspections', 'Inspections Coordinator', 0],
+    ['Brandon Vega', 'Inspections', 'Lead Inspector', 0],
+    ['Ronnie Blue', 'Service', 'Sprinkler Service Manager', 0],
+    ['Matt Shaner', 'Service', 'Fire Alarm Service Manager', 0],
+    ['Shawn Tomlin', 'Service', 'Extinguisher Technician', 0],
+    ['Tamara Ruiz', 'Service', 'Extinguisher Technician', 0],
+    ['Clayton Cichon', 'Sales', 'Sprinkler Sales', 0],
+    ['Mike McGuire', 'Sales', 'Fire Alarm Sales', 0],
+    ['Neil Foster', 'Sales', 'Estimator', 0],
+    ['Priya Nair', 'Projects', 'Project Manager', 0],
+    ['Victor Delgado', 'Projects', 'Sprinkler Designer', 0],
+    ['Sofia Marin', 'Projects', 'Sprinkler Designer', 0],
+    ['Raymond Cho', 'Projects', 'Estimator', 0],
+    ['Grace Bennett', 'Finance', 'Controller', 0],
+    ['Hector Ballesteros', 'Finance', 'AR Specialist', 0],
+    ['Aisha Karimi', 'Finance', 'AP Specialist', 0],
+    ['Denise Alvarez', 'Reception', 'Front Desk Coordinator', 0],
+    ['Carla Jimenez', 'Admin', 'HR Coordinator', 0],
+    ['Ed Portillo', 'Vendors', 'Vendor Relations', 0],
+    // terminated, still holding seats -> reclaimable
+    ['Jordan Pratt', 'Projects', 'Sprinkler Designer', 69],
+    ['Marcus Webb', 'Projects', 'Estimator', 108],
+    ['Devin Marsh', 'Projects', 'CAD Designer', 160],
+    ['Elena Vasquez', 'Sales', 'Sales Representative', 49],
+    ['Rebecca Stone', 'Admin', 'Marketing Coordinator', 53],
+    ['Tyler Hoang', 'Service', 'Fire Alarm Technician', 124],
+    ['Omar Haddad', 'Finance', 'Staff Accountant', 35],
+    ['Lauren Kelly', 'Inspections', 'Inspector', 179],
+  ];
+
+  const insEmp = db.prepare(
+    `INSERT OR IGNORE INTO hr_employees (full_name, email, department, title, status, hired_at, terminated_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  for (const [name, dept, title, termDaysAgo] of roster) {
+    const status = termDaysAgo > 0 ? 'terminated' : 'active';
+    const hired = dateAgo(365 * (1 + (jit(6))) + jit(280) + (termDaysAgo || 0)); // hired before any termination
+    const terminated = termDaysAgo > 0 ? dateAgo(termDaysAgo) : null;
+    insEmp.run(name, emailFor(name), dept, title, status, hired, terminated);
+  }
+
+  // seats: everyone (active + terminated) holds a Microsoft 365 seat; the pro/design tools go
+  // to the people who use them. Terminated employees keep every seat until a human reclaims it.
+  const insSeat = db.prepare(
+    `INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, 'seed')`
+  );
+  const addSeat = (vendor: string, name: string, email: string) => {
+    insSeat.run(vendor, PRODUCT[vendor], email, name, COST[vendor], dateAgo(120 + jit(600)));
+  };
+
+  // guard against a re-run inserting duplicate seats (own flag already guards, this is belt-and-suspenders)
+  const already = db.prepare(`SELECT COUNT(*) AS c FROM license_seats`).get() as { c: number };
+  if (already.c === 0) {
+    for (const [name] of roster) addSeat('microsoft', name, emailFor(name));
+
+    // extra vendor seats per person (beyond the base Microsoft 365 seat)
+    const extra: [string, string[]][] = [
+      ['Victor Delgado', ['autocad', 'hydracad', 'bluebeam', 'hfss']],
+      ['Sofia Marin', ['autocad', 'hydracad', 'bluebeam']],
+      ['Raymond Cho', ['autocad', 'bluebeam']],
+      ['Priya Nair', ['bluebeam']],
+      ['Neil Foster', ['bluebeam']],
+      ['Clayton Cichon', ['bluebeam']],
+      ['Carla Jimenez', ['adobe']],
+      // terminated employees' extra seats (these become reclaimable)
+      ['Jordan Pratt', ['autocad', 'hydracad', 'bluebeam', 'adobe', 'hfss']],
+      ['Marcus Webb', ['autocad', 'bluebeam']],
+      ['Devin Marsh', ['autocad', 'bluebeam', 'hydracad']],
+      ['Elena Vasquez', ['adobe']],
+      ['Rebecca Stone', ['adobe']],
+      ['Lauren Kelly', ['bluebeam']],
+    ];
+    for (const [name, vendors] of extra) for (const v of vendors) addSeat(v, name, emailFor(name));
+
+    // a seat assigned to someone NOT on the roster at all (a departed contractor whose seats
+    // were never cleaned up) -> reclaimable via the "off-roster" branch.
+    addSeat('autocad', 'Gil Sandoval', 'gil.sandoval@1stfp.example');
+    addSeat('microsoft', 'Gil Sandoval', 'gil.sandoval@1stfp.example');
+  }
+
+  setState('seeded_licenses', '1');
+  console.log('[seed] license reclaim seeded (roster + 6-vendor seat inventory; several terminated seats reclaimable).');
+}
+
+/* ─────────────────────── New-hire Onboarding (seed) ───────────────────────
+ * Three onboarding requests at different stages so the board and the grouped-items view
+ * render on first boot: one fresh (everything pending), one partway (about half settled),
+ * one complete (every item done/approved). Each is routed through the real onboardingAgent
+ * so the seeded items match the live routing map exactly. Advancement is deterministic (a
+ * fixed cadence over the item list, no Math.random). Own flag; idempotent. */
+function seedOnboarding(): void {
+  if (getState('seeded_onboarding') === '1') return;
+  const db = getDb();
+
+  // guard: if any request already exists, do not double-seed
+  const already = db.prepare(`SELECT COUNT(*) AS c FROM onboarding_requests`).get() as { c: number };
+  if (already.c > 0) {
+    setState('seeded_onboarding', '1');
+    return;
+  }
+
+  const isoDay = (n: number) => isoDaysAgo(n).slice(0, 10);
+
+  // A CAD designer: CAD laptop + Bluebeam/AutoCAD/HydraCAD (Mario approvals), design SharePoint,
+  // full IT provisioning. Left fully pending so the board opens with real approvals to work.
+  const fresh: OnboardingPayload = {
+    name: 'Sofia Ramos',
+    personal_email: 'sofia.ramos@gmail.example',
+    start_date: isoDay(-10),
+    cell_phone: '+1 210 555 0611',
+    job_position: 'CAD Designer',
+    salary: '$78,000 / yr',
+    manager_name: 'Priya Nair',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'cad',
+    software: ['Microsoft 365 desktop apps', 'Adobe Acrobat', 'HFSS', 'Bluebeam', 'AutoCAD', 'HydraCAD'],
+    sharepoint: ['San Antonio (FPS)', 'FIRCON', 'MGMT'],
+    printers: ['San Antonio Regular', 'San Antonio Plotter'],
+    company_cell: true,
+    ipad: true,
+    probation_waived: true,
+  };
+
+  // A San Antonio field hire: company vehicle (fans to Sandi/Denise/Daniel) + WEX + iPad, a
+  // couple of pay exceptions. Partway: about half the items settled.
+  const partway: OnboardingPayload = {
+    name: 'Marcus Bell',
+    personal_email: 'marcus.bell@gmail.example',
+    start_date: isoDay(-3),
+    cell_phone: '+1 210 555 0642',
+    job_position: 'Fire Alarm Technician',
+    salary: '$64,000 / yr',
+    manager_name: 'Matt Shaner',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'standard',
+    software: ['Microsoft 365 desktop apps'],
+    sharepoint: ['San Antonio (FPS)', 'SAFETY'],
+    printers: ['San Antonio Regular'],
+    company_cell: true,
+    ipad: true,
+    company_vehicle: true,
+    vehicle_details: 'Ford Transit 250 - unit SA-14 (transfer from the retiring tech)',
+    wex_card: true,
+    cell_reimburse: true,
+    hours_80_40: true,
+  };
+
+  // An office hire, fully onboarded: everything done/approved so a complete card renders.
+  const done: OnboardingPayload = {
+    name: 'Grace Okoro',
+    personal_email: 'grace.okoro@gmail.example',
+    start_date: isoDay(21),
+    cell_phone: '+1 210 555 0658',
+    job_position: 'AP Specialist',
+    salary: '$56,000 / yr',
+    manager_name: 'Grace Bennett',
+    company_email: true,
+    teams_number: true,
+    computer_type: 'business',
+    software: ['Microsoft 365 desktop apps', 'Adobe Acrobat'],
+    sharepoint: ['San Antonio (FPS)', 'ACCT', 'Payroll'],
+    printers: ['San Antonio Accounting'],
+    incentive_plan: true,
+  };
+
+  const settleAll = (id: number) => {
+    const items = db.prepare(`SELECT id, kind FROM onboarding_items WHERE request_id = ?`).all(id) as {
+      id: number;
+      kind: string;
+    }[];
+    for (const it of items) {
+      if (it.kind === 'approval') approveItem(it.id, 'Devon');
+      else completeItem(it.id, 'operator');
+    }
+  };
+  // deterministic partial settle: settle every other item (by position), no Math.random
+  const settleHalf = (id: number) => {
+    const items = db.prepare(`SELECT id, kind FROM onboarding_items WHERE request_id = ? ORDER BY id ASC`).all(id) as {
+      id: number;
+      kind: string;
+    }[];
+    items.forEach((it, i) => {
+      if (i % 2 !== 0) return; // leave the odd-indexed items pending
+      if (it.kind === 'approval') approveItem(it.id, 'Devon');
+      else completeItem(it.id, 'operator');
+    });
+  };
+
+  createRequest(fresh); // stays fully pending
+  const p = createRequest(partway);
+  settleHalf(p.request.id);
+  const c = createRequest(done);
+  settleAll(c.request.id);
+
+  setState('seeded_onboarding', '1');
+  console.log('[seed] onboarding seeded (3 requests: one fresh, one partway, one complete; routed through the live map).');
 }

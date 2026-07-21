@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/command.css" />
+<style>
+  /* ── AN AGENT SUB-DASHBOARD ─────────────────────────────────────────────────
+     One built agent, nested under its department dashboard. It runs its own dashboard
+     (identity, real capability facts, a work feed, and the console), not just a chat box. */
+  .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:0;margin-bottom:16px;transition:color .15s}
+  .back:hover{color:var(--ink)}
+  .know .list{display:flex;flex-direction:column;gap:0}
+  .know .s{display:flex;gap:12px;font-size:13.5px;color:var(--ink);line-height:1.5;padding:11px 2px;border-bottom:1px solid var(--hair)}
+  .know .s:last-child{border-bottom:none}
+  .know .s .k{color:var(--ok);flex:0 0 auto;font-weight:800}
+  .con{background:var(--s1);border:1px solid var(--hair);border-radius:16px;margin-top:16px;overflow:hidden}
+  .con .body{padding:18px;display:flex;flex-direction:column;gap:12px;min-height:150px;max-height:50vh;overflow-y:auto}
+  .msg{max-width:86%;padding:11px 14px;font-size:13.5px;line-height:1.5}
+  .msg.me{align-self:flex-end;background:var(--s3);color:var(--ink)}
+  .msg.ag{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
+  .msg.hint{align-self:center;color:var(--ink-3);font-size:12.5px;font-style:italic;background:none}
+  .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--hair)}
+  .in input{flex:1;background:var(--s2);border:1px solid var(--hair-2);color:var(--ink);font-family:var(--sans);font-size:14px;padding:11px 14px;outline:none}
+  .in input:focus{border-color:var(--red)}
+  .miss{color:var(--ink-2);font-size:14px;padding:40px 0}
+  .card.kpi{position:relative}
+  .feed td .when{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap}
+  .feed .ic{color:var(--red);font-weight:800;padding-right:0}
+</style>
+  <script src="/count.js" defer></script>
+  <script src="/motion.js" defer></script>
+</head>
+<body>
+<div id="wrap"><div class="miss" id="miss">Loading agent…</div></div>
+
+<script>
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+var params=new URLSearchParams(location.search);
+function qkey(){return params.get('key');}
+var DEPT=params.get('dept')||'';
+var DEPT_NAME=params.get('name')||'';
+async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
+
+function render(a,sampleMetrics,sampleFeed){
+  var built=a.origin==='harness';
+  var badge=built?'<span class="badge demo"><span class="d"></span>Harness-built</span>':'<span class="badge live"><span class="d"></span>Founding</span>';
+  var dept=DEPT_NAME||a.pillar||'';
+  var back=DEPT?'<button class="back" id="back">&larr; '+esc(dept||'Department')+'</button>':'';
+  var know=(a.knowledge||[]).map(function(k){return '<div class="s"><span class="k">+</span><span>'+esc(k)+'</span></div>';}).join('');
+
+  // Real, honest facts (no fabricated numbers on these three).
+  var kpis=''+
+    '<div class="card kpi"><div class="label">Skills</div><div class="value">'+(a.skill_count||0)+'</div></div>'+
+    '<div class="card kpi"><div class="label">Origin</div><div class="value">'+(built?'New':'Core')+'</div></div>'+
+    '<div class="card kpi"><div class="label">Status</div><div class="value accent">Live</div></div>';
+
+  var sm=(sampleMetrics||[]).map(function(m){
+    return '<div class="card kpi"><div class="label">'+esc(m.label)+'</div>'+
+      '<div class="value'+(m.accent?' accent':'')+'">'+esc(m.value)+'</div></div>';
+  }).join('');
+  var sampleStrip=sm?
+    ('<div class="section-title">Metrics</div>'+
+     '<div class="grid kpis">'+sm+'</div>'):'';
+
+  // Work feed: a short activity log, replacing the teaching empty-state.
+  var rows=(sampleFeed||[]).map(function(f){
+    return '<tr><td class="ic">&rsaquo;</td><td>'+esc(f.action)+'</td><td class="right"><span class="when">'+esc(f.when)+'</span></td></tr>';
+  }).join('');
+  var feedBlock=rows?
+    ('<div class="section-title">Work feed</div>'+
+     '<div class="card feed"><table><thead><tr><th></th><th>Recent activity</th><th class="right">When</th></tr></thead>'+
+     '<tbody>'+rows+'</tbody></table></div>'):
+    ('<div class="section-title">Work feed</div>'+
+     '<div class="card"><div class="empty">No activity yet. This is where '+esc(a.name)+' logs the work it handles once it is connected to its data source. Until then, put it to work below.</div></div>');
+
+  document.getElementById('wrap').innerHTML=
+    back+
+    '<div class="page-head"><div class="titles">'+
+      '<p class="kicker">'+esc(dept||'Agent')+'</p>'+
+      '<h1>'+esc(a.name)+'</h1>'+
+      '<p>'+esc(a.role||'')+'</p></div>'+badge+'</div>'+
+    '<div class="signal"></div>'+
+    '<div class="grid kpis">'+kpis+'</div>'+
+    sampleStrip+
+    (know?'<div class="section-title">What it knows</div><div class="card know"><div class="list">'+know+'</div></div>':'')+
+    feedBlock+
+    '<div class="section-title">Put it to work</div>'+
+    '<div class="con"><div class="body" id="body">'+
+      '<div class="msg hint">'+esc(a.name)+' is live. Ask it to handle something.</div></div>'+
+      '<form class="in" id="form"><input id="input" placeholder="Ask '+esc(a.name)+' to do something…" autocomplete="off" /><button class="btn primary" type="submit">Send</button></form></div>';
+
+  var b=document.getElementById('back');
+  if(b) b.addEventListener('click',function(){ location.href='/department?dept='+encodeURIComponent(DEPT)+'&name='+encodeURIComponent(DEPT_NAME); });
+  document.getElementById('form').addEventListener('submit',send);
+}
+function bubble(cls,txt){var b=document.getElementById('body');var d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;b.appendChild(d);b.scrollTop=b.scrollHeight;return d;}
+async function send(e){
+  e.preventDefault();
+  var inp=document.getElementById('input');var text=inp.value.trim();if(!text)return;
+  inp.value='';bubble('me',text);var w=bubble('ag','…');
+  var r=await post('/api/roster/'+encodeURIComponent(qkey())+'/chat',{text:text});
+  w.textContent=(r&&r.text)?r.text:'(no reply)';
+}
+
+(async function(){
+  var key=qkey();
+  if(!key){document.getElementById('miss').textContent='No agent specified.';return;}
+  var d=await (await fetch('/api/agent/'+encodeURIComponent(key))).json();
+  var a=d&&d.agent;
+  if(!a){document.getElementById('miss').textContent='Agent not found.';return;}
+  document.title=a.name+' · 1st FP';
+  render(a,d.sampleMetrics||[],d.sampleFeed||[]);
+})();
+</script>
+</body>
+</html>

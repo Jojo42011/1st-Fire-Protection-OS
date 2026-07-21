@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Roster · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<style>
+  /* ── THE ROSTER - every AI employee this OS runs ──────────────────────
+     Founding agents the OS shipped with, and every agent the Harness has built,
+     one unified team. Open any of them and talk. Same command-room language. */
+  :root{
+    --s0:#0C131D; --s1:#101927; --s2:#152134; --s3:#1B2A42;
+    --ink:#E9EEF5; --ink-2:#8FA0B4; --ink-3:#5C6B7D;
+    --hair:rgba(233,238,245,.08); --hair-2:rgba(233,238,245,.16);
+    --red:#E53935; --gold:#F5B81B; --ok:#2E9E5B;
+    --sans:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  :root[data-theme="light"]{
+    --s0:#E9EEF6; --s1:#FFFFFF; --s2:#F1F5FA; --s3:#E3EAF3;
+    --ink:#151E2B; --ink-2:#48586E; --ink-3:#7E8DA2;
+    --hair:rgba(20,34,54,.10); --hair-2:rgba(20,34,54,.17);
+    --gold:#B07D08; --ok:#1F8A50;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scrollbar-color:var(--s2) var(--s0)}
+  body{background:var(--s0);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(1000px 480px at 50% -100px,rgba(46,158,91,.05),transparent 70%)}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 40px 90px}
+  .micro{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
+  .fadein{animation:rise .45s cubic-bezier(.2,.7,.3,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .top{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--hair);padding-right:58px}
+  .top .id{display:flex;align-items:baseline;gap:14px}
+  .top h1{font-size:15px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+
+  .lede{margin-top:26px;max-width:680px}
+  .lede h2{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+  .lede p{color:var(--ink-2);font-size:14px;line-height:1.6;margin-top:12px}
+
+  .strip{display:flex;gap:56px;margin-top:30px;flex-wrap:wrap}
+  .strip .t .v{font-size:38px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+  .strip .t .v.ok{color:var(--ok)} .strip .t .v.gold{color:var(--gold)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:36px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--s1);border:1px solid var(--hair);border-radius:18px;padding:22px 22px 18px;box-shadow:0 1px 2px rgba(0,0,0,.16);transition:border-color .25s,box-shadow .3s}
+  .card:hover{border-color:var(--hair-2);box-shadow:0 6px 24px rgba(0,0,0,.22)}
+  .card .h{display:flex;align-items:flex-start;gap:12px}
+  .card .av{width:38px;height:38px;border-radius:11px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:var(--ink);flex-shrink:0}
+  .card .hn{flex:1;min-width:0}
+  .card .nm{font-size:15px;font-weight:800;letter-spacing:-.01em}
+  .card .rl{color:var(--ink-2);font-size:12.5px;line-height:1.45;margin-top:3px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .badge.found{background:rgba(143,160,180,.12);color:var(--ink-2)}
+  .badge.built{background:rgba(245,184,27,.14);color:var(--gold)}
+  .meta{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--hair);border-radius:999px;padding:4px 10px}
+  .know{margin-top:13px;padding-top:13px;border-top:1px solid var(--hair);display:flex;flex-direction:column;gap:6px}
+  .know .s{display:flex;gap:8px;font-size:12px;color:var(--ink-2);line-height:1.45}
+  .know .s .k{color:var(--ok);flex-shrink:0}
+  .card .foot{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .btn{font-family:var(--sans);font-weight:700;font-size:12.5px;border:none;border-radius:12px;padding:10px 18px;cursor:pointer;transition:transform .1s,opacity .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn.pri{background:var(--ink);color:var(--s0)} .btn.ghost{background:var(--s2);color:var(--ink)}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px rgba(46,158,91,.6)}
+
+  /* console */
+  .scrim{position:fixed;inset:0;background:rgba(6,10,16,.72);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:20;padding:20px}
+  .scrim.show{display:flex}
+  .con{width:min(560px,96vw);max-height:86vh;background:var(--s1);border:1px solid var(--hair-2);border-radius:16px;display:flex;flex-direction:column;overflow:hidden}
+  .con .ch{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--hair)}
+  .con .ch .av{width:34px;height:34px;border-radius:9px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-weight:800}
+  .con .ch .nm{font-weight:800;font-size:14px} .con .ch .rl{color:var(--ink-3);font-size:11.5px;margin-top:2px}
+  .con .ch .x{margin-left:auto;background:none;border:none;color:var(--ink-3);font-size:22px;cursor:pointer;line-height:1}
+  .con .body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:12px;min-height:180px}
+  .msg{max-width:85%;padding:10px 13px;border-radius:12px;font-size:13.5px;line-height:1.5}
+  .msg.me{align-self:flex-end;background:var(--s3);color:var(--ink)}
+  .msg.ag{align-self:flex-start;background:var(--s2);color:var(--ink-2)}
+  .msg.hint{align-self:center;color:var(--ink-3);font-size:12px;font-style:italic;background:none}
+  .con .in{display:flex;gap:10px;padding:14px 16px;border-top:1px solid var(--hair)}
+  .con .in input{flex:1;background:var(--s2);border:1px solid var(--hair);border-radius:9px;color:var(--ink);font-family:var(--sans);font-size:13.5px;padding:10px 13px;outline:none}
+  .con .in input:focus{border-color:var(--hair-2)}
+  .empty{color:var(--ink-3);font-size:13px;padding:20px 0}
+</style>
+  <script src="/count.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="id"><h1>The Roster</h1><span class="micro">The whole team</span></div>
+    <div class="micro" id="tagline">Founding + harness-built</div>
+  </div>
+
+  <div class="lede fadein">
+    <h2>Every AI employee this OS runs.</h2>
+    <p>The agents the OS shipped with, and every agent the Harness has built since, one team.
+       The Operator finds the need, the Harness builds the agent, and it lands here, live. Open
+       any of them and put it to work.</p>
+  </div>
+
+  <div class="strip fadein" id="strip"></div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="scrim" id="scrim">
+  <div class="con">
+    <div class="ch">
+      <div class="av" id="c-av"></div>
+      <div><div class="nm" id="c-nm"></div><div class="rl" id="c-rl"></div></div>
+      <button class="x" id="c-x">&times;</button>
+    </div>
+    <div class="body" id="c-body"></div>
+    <form class="in" id="c-form"><input id="c-input" placeholder="Ask this agent to do something…" autocomplete="off" /><button class="btn pri" type="submit">Send</button></form>
+  </div>
+</div>
+
+<script>
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+var initials=function(n){return String(n||'?').split(/\s+/).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase();};
+async function get(u){var r=await fetch(u);return r.json();}
+async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
+var AGENTS={};
+/* Department view: /roster?dept=<pillar_key>&name=<display>. Absent -> the whole team. */
+var DEPT=new URLSearchParams(location.search).get('dept');
+var DEPT_NAME=new URLSearchParams(location.search).get('name');
+/* Founding agents have rich dashboards; inside the shell their card opens the dashboard, not the console. */
+var FOUNDING={calls:1,invoices:1,reviews:1};
+var inShell=(function(){try{return window.parent!==window;}catch(_){return false;}})();
+
+function card(a){
+  var badge=a.origin==='harness'?'<span class="badge built">Built by the Harness</span>':'<span class="badge found">Founding</span>';
+  var know=(a.knowledge||[]).slice(0,4).map(function(k){return '<div class="s"><span class="k">+</span><span>'+esc(k)+'</span></div>';}).join('');
+  var cta=(FOUNDING[a.key]&&inShell)?'Open dashboard →':'Put it to work →';
+  return '<div class="card fadein">'+
+    '<div class="h"><div class="av">'+esc(initials(a.name))+'</div>'+
+      '<div class="hn"><div class="nm">'+esc(a.name)+'</div><div class="rl">'+esc(a.role||'')+'</div></div>'+badge+'</div>'+
+    '<div class="meta">'+(a.pillar?'<span class="chip">'+esc(a.pillar)+'</span>':'')+
+      '<span class="chip">'+(a.skill_count||0)+' skill'+((a.skill_count===1)?'':'s')+'</span>'+
+      '<span class="chip"><span class="live-dot" style="display:inline-block;margin-right:5px"></span>Live</span></div>'+
+    (know?'<div class="know">'+know+'</div>':'')+
+    '<div class="foot"><button class="btn ghost" data-talk="'+esc(a.key)+'">'+cta+'</button></div></div>';
+}
+
+function render(d){
+  var all=d.agents||[];
+  all.forEach(function(a){AGENTS[a.key]=a;});
+  var ags = DEPT ? all.filter(function(a){return (a.pillar_key||'')===DEPT;}) : all;
+  var built=ags.filter(function(a){return a.origin==='harness';}).length;
+  if(DEPT){
+    var nm = DEPT_NAME || (ags[0]&&ags[0].pillar) || 'Department';
+    document.title = nm+' · 1st FP';
+    var h1=document.querySelector('.top .id h1'); if(h1) h1.textContent=nm;
+    var mc=document.querySelector('.top .id .micro'); if(mc) mc.textContent='Department';
+    var tg=document.getElementById('tagline'); if(tg) tg.textContent=nm;
+    var lh=document.querySelector('.lede h2'); if(lh) lh.textContent='The '+nm+' team.';
+    var lp=document.querySelector('.lede p'); if(lp) lp.textContent='Every agent working '+nm+' in this OS. Open any of them and put it to work.';
+  }
+  document.getElementById('strip').innerHTML=
+    '<div class="t"><div class="micro">Agents live</div><div class="v ok">'+ags.length+'</div></div>'+
+    '<div class="t"><div class="micro">Built by the Harness</div><div class="v gold">'+built+'</div></div>';
+  document.getElementById('grid').innerHTML=ags.length?ags.map(card).join(''):'<div class="empty">No agents in this department yet.</div>';
+}
+
+// console
+var cur=null;
+function openCon(key){
+  var a=AGENTS[key];if(!a)return;cur=key;
+  document.getElementById('c-av').textContent=initials(a.name);
+  document.getElementById('c-nm').textContent=a.name;
+  document.getElementById('c-rl').textContent=a.role||'';
+  document.getElementById('c-body').innerHTML='<div class="msg hint">'+esc(a.name)+' is live. Ask it to handle something.</div>';
+  document.getElementById('scrim').classList.add('show');
+  setTimeout(function(){document.getElementById('c-input').focus();},50);
+}
+function closeCon(){document.getElementById('scrim').classList.remove('show');cur=null;}
+function bubble(cls,txt){var b=document.getElementById('c-body');var d=document.createElement('div');d.className='msg '+cls;d.textContent=txt;b.appendChild(d);b.scrollTop=b.scrollHeight;return d;}
+
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-talk]');if(!t)return;
+  var key=t.getAttribute('data-talk');
+  // Founding agents have rich dashboards: inside the shell, hop to that tab instead of the console.
+  if(FOUNDING[key]&&inShell){ window.parent.postMessage({type:'app-navigate',tab:key},'*'); return; }
+  openCon(key);
+});
+document.getElementById('c-x').addEventListener('click',closeCon);
+document.getElementById('scrim').addEventListener('click',function(e){if(e.target===this)closeCon();});
+document.getElementById('c-form').addEventListener('submit',async function(e){
+  e.preventDefault();
+  var inp=document.getElementById('c-input');var text=inp.value.trim();if(!text||!cur)return;
+  inp.value='';bubble('me',text);
+  var w=bubble('ag','…');
+  var r=await post('/api/roster/'+cur+'/chat',{text:text});
+  w.textContent=(r&&r.text)?r.text:'(no reply)';
+});
+
+get('/api/roster').then(render);
+</script>
+</body>
+</html>

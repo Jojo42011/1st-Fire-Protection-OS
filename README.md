@@ -73,7 +73,8 @@ Click every tab: all three dashboards render on sample data, the receptionist ch
 
 | Add key(s) | Lights up |
 |---|---|
-| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | Full conversation + on-brand drafting + memory extraction |
+| `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | Full conversation + on-brand drafting + memory extraction, **and the Harness coder** (Claude/**Opus 4.8** by default writes each new agent's real code module; without any key, a template) |
+| `MOONSHOT_API_KEY` + `CODER=kimi` | Opt in to **Kimi K3** as the coder instead of Opus (escalates to the **K3 swarm** on complex builds via `MOONSHOT_SWARM`). Off by default. |
 | `OPENAI_API_KEY` | Embeddings → hybrid memory recall |
 | `VAPI_API_KEY` / `TWILIO_*` + `ELEVENLABS_API_KEY` | Call Receptionist flips to **live** |
 | `QUICKBOOKS_ACCESS_TOKEN` / `STRIPE_API_KEY` | Invoice Collector pulls real receivables |
