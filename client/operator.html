@@ -11,8 +11,9 @@
   /* ── THE OPERATOR — one conversation over the whole company ──────────
      Enterprise-calm chat: generous space, one accent, no chrome. The orb
      (Jarvis mode) is the same intelligence with the interface removed. */
-  html,body{height:100%;height:100dvh}
-  body{display:flex;flex-direction:column;overflow:hidden;
+  html{height:100%}
+  /* pinned like the Jarvis overlay - the dock always sits on the true bottom edge */
+  body{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden;
     background-image:radial-gradient(900px 400px at 50% -120px,rgba(229,57,53,.05),transparent 70%)}
 
   /* top bar */
