@@ -27,22 +27,24 @@
   .jarvis-btn:hover{border-color:rgba(229,57,53,.5);box-shadow:0 0 18px rgba(229,57,53,.15)}
 
   /* conversation */
-  #scroll{flex:1;overflow-y:auto;scrollbar-width:thin}
-  .col{max-width:none;margin:0 auto;padding:38px clamp(26px,5vw,72px) 20px}
-  .hero{text-align:center;padding:14vh 10px 30px}
-  .hero h2{font-size:23px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
-  .hero p{font-size:13.5px;color:var(--ink-2);margin-top:10px;line-height:1.6;max-width:52ch;margin-left:auto;margin-right:auto}
-  .starters{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:26px}
+  #scroll{flex:1;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column}
+  .col{width:100%;max-width:880px;margin:0 auto;padding:44px 28px 24px;flex:1;display:flex;flex-direction:column}
+  .col.empty{justify-content:center}
+  .msgs{width:100%}
+  .hero{text-align:center;padding:20px 10px 8vh}
+  .hero h2{font-size:34px;font-weight:700;letter-spacing:-.015em;color:var(--ink)}
+  .hero p{font-size:15px;color:var(--ink-2);margin-top:16px;line-height:1.7;max-width:46ch;margin-left:auto;margin-right:auto}
+  .starters{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:38px}
   .starter{background:var(--s1);border:1px solid var(--hair);border-radius:999px;color:var(--ink-2);
-    font-family:var(--sans);font-size:12.5px;padding:10px 17px;cursor:pointer;transition:.18s}
+    font-family:var(--sans);font-size:13.5px;padding:12px 20px;cursor:pointer;transition:.18s}
   .starter:hover{color:var(--ink);border-color:rgba(229,57,53,.4);box-shadow:0 0 14px rgba(229,57,53,.12)}
 
-  .msg{margin:0 0 26px;animation:up .3s ease}
+  .msg{margin:0 0 36px;animation:up .3s ease}
   @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   .msg.you{display:flex;justify-content:flex-end}
   .msg.you .b{background:var(--s2);border:1px solid var(--hair);border-radius:18px 18px 4px 18px;
-    padding:12px 18px;max-width:56ch;font-size:14.5px;line-height:1.55;color:var(--ink)}
-  .msg.op .b{font-size:15px;line-height:1.7;color:var(--ink);max-width:75ch;min-width:0}
+    padding:14px 20px;max-width:56ch;font-size:15px;line-height:1.6;color:var(--ink)}
+  .msg.op .b{font-size:15.5px;line-height:1.75;color:var(--ink);max-width:100%;min-width:0}
   .msg.op .b strong{font-weight:700}
   .msg.op .b li{margin:4px 0 4px 18px}
   .caret{display:inline-block;width:2px;height:1em;background:var(--red);vertical-align:-2px;
@@ -54,20 +56,20 @@
   @keyframes tp{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
 
   /* composer */
-  .dock{flex:none;padding:14px clamp(26px,5vw,72px) 24px}
-  .comp{max-width:none;margin:0 auto;display:flex;align-items:center;gap:6px;background:var(--s1);
-    border:1px solid var(--hair-2);border-radius:999px;padding:6px 8px 6px 22px;
+  .dock{flex:none;padding:14px 28px 32px}
+  .comp{width:100%;max-width:880px;margin:0 auto;display:flex;align-items:center;gap:8px;background:var(--s1);
+    border:1px solid var(--hair-2);border-radius:999px;padding:9px 10px 9px 26px;
     box-shadow:0 14px 40px rgba(0,0,0,.25);transition:border-color .25s,box-shadow .25s}
   :root[data-theme="light"] .comp{box-shadow:0 14px 34px rgba(21,30,43,.10)}
   .comp:focus-within{border-color:rgba(229,57,53,.45);box-shadow:0 0 0 3px rgba(229,57,53,.08),0 14px 40px rgba(0,0,0,.25)}
-  #q{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:15px;
-    padding:10px 0;min-width:0}
+  #q{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:16px;
+    padding:12px 0;min-width:0}
   #q::placeholder{color:var(--ink-3)} #q:focus{outline:none}
-  .send{width:40px;height:40px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;
+  .send{width:46px;height:46px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;
     display:flex;align-items:center;justify-content:center;transition:.18s;flex:none}
   .send:hover{background:#C62828}.send:disabled{opacity:.35}
   .send svg{width:18px;height:18px}
-  .foot{max-width:none;margin:10px auto 0;text-align:center}
+  .foot{margin:12px auto 0;text-align:center}
   .foot span{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
 
   /* ── JARVIS MODE ── */
@@ -103,11 +105,11 @@
     .bar h1{font-size:13px}
     .jarvis-btn{padding:8px 14px;font-size:10.5px}
     .col{padding:18px 14px 10px}
-    .hero{padding:4vh 4px 22px}
-    .hero h2{font-size:19px}
-    .hero p{font-size:12.5px}
-    .starter{font-size:12px;padding:9px 13px}
-    .msg{margin-bottom:20px}
+    .hero{padding:10px 4px 4vh}
+    .hero h2{font-size:26px}
+    .hero p{font-size:13.5px}
+    .starter{font-size:12.5px;padding:10px 15px}
+    .msg{margin-bottom:26px}
     .msg.you .b{max-width:86%;font-size:14px}
     .msg.op .b{max-width:100%;font-size:14.5px}
     .dock{padding:8px 12px calc(12px + env(safe-area-inset-bottom))}
@@ -134,7 +136,7 @@
     <button class="jarvis-btn" id="jarvis-open"><span class="t">Jarvis Mode</span></button>
   </header>
 
-  <div id="scroll"><div class="col" id="col">
+  <div id="scroll"><div class="col empty" id="col">
     <div class="hero" id="hero">
       <h2 id="greet">The Operator</h2>
       <p>One conversation over the whole company — money, calls, reputation, the map, every agent. Ask anything.</p>
@@ -227,7 +229,7 @@ function addOp(){
   col.appendChild(el);toBottom();
   return el.querySelector('.b');
 }
-function hideHero(){var h=document.getElementById('hero');if(h)h.remove();}
+function hideHero(){var h=document.getElementById('hero');if(h)h.remove();document.getElementById('col').classList.remove('empty');}
 function toBottom(){scrollEl.scrollTop=scrollEl.scrollHeight;}
 
 /* typewriter over SSE sentence tokens */
