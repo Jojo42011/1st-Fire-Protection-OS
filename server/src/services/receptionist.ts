@@ -162,7 +162,12 @@ export function normalizeVapiCall(src: any): CallRecord {
     transcript: firstStr(src?.transcript, artifact?.transcript) || '',
     summary: firstStr(src?.summary, analysis?.summary, artifact?.summary),
     messages: src?.messages || artifact?.messages || undefined,
+    // Vapi returns BOTH a bare storage path (recordingUrl — not directly readable, 400)
+    // and short-lived PRESIGNED URLs. Prefer the presigned ones; the play-time proxy
+    // re-pulls a fresh call so these never serve stale/expired.
     recording_url: firstStr(
+      artifact?.presignedMonoUrl,
+      artifact?.presignedUrl,
       src?.recordingUrl,
       artifact?.recordingUrl,
       recording?.mono?.combinedUrl,
@@ -170,6 +175,7 @@ export function normalizeVapiCall(src: any): CallRecord {
       recording?.url
     ),
     stereo_recording_url: firstStr(
+      artifact?.presignedStereoUrl,
       src?.stereoRecordingUrl,
       artifact?.stereoRecordingUrl,
       recording?.stereoUrl
