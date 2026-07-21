@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { getCallMetrics, syncFromVapi } from '../services/receptionist';
+import { getCallMetrics, syncFromVapi, getFreshRecording } from '../services/receptionist';
 import { telephonyEnabled } from '../config/voice';
 
 const router = Router();
@@ -40,6 +40,32 @@ router.post('/api/calls/sync', async (req, res) => {
   const limit = Number(req.body?.limit) || 100;
   const result = await syncFromVapi(limit);
   res.json({ ok: !result.error, ...result });
+});
+
+/**
+ * Recording proxy — the audio player points here, not at the raw stored URL.
+ * Re-pulls the freshest URL from Vapi at play time and 302s to it when it's readable,
+ * so links never go stale. Returns 409 with a reason when the recording is locked in
+ * Vapi's private (HIPAA) storage, which the UI turns into a clear note.
+ */
+router.get('/api/calls/:id/recording', async (req, res) => {
+  const row = getDb().prepare(`SELECT vapi_call_id, recording_url FROM calls WHERE id = ?`).get(Number(req.params.id)) as
+    | { vapi_call_id: string | null; recording_url: string | null }
+    | undefined;
+  if (!row) return res.status(404).json({ ok: false, reason: 'not-found' });
+  const stereo = String(req.query.stereo || '') === '1';
+
+  // Live path: re-pull a fresh URL and verify it's readable.
+  if (row.vapi_call_id) {
+    const fresh = await getFreshRecording(row.vapi_call_id, stereo);
+    if (fresh.ok && fresh.url) return res.redirect(302, fresh.url);
+    if (fresh.reason === 'locked')
+      return res.status(409).json({ ok: false, reason: 'locked', message: 'Recording is in Vapi private (HIPAA) storage — enable public/BYO storage in Vapi to play it here.' });
+    // no key / not-found → fall through to whatever we stored
+  }
+  // Fallback: the stored URL (works for seeded/demo rows and non-HIPAA public URLs).
+  if (row.recording_url) return res.redirect(302, row.recording_url);
+  return res.status(404).json({ ok: false, reason: 'no-recording' });
 });
 
 /** Update a lead's status (in-house / reversible). */

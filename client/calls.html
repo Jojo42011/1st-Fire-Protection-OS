@@ -167,7 +167,12 @@ function transcriptHtml(c){
 }
 function callDetail(c){
   var parts=[],r1=[];
-  if(c.recording_url)r1.push('<audio controls preload="none" src="'+esc(c.recording_url)+'"></audio>');
+  // Play through the server proxy: it re-pulls a fresh URL from Vapi at play time so links
+  // never go stale, and reports when a recording is locked in Vapi private (HIPAA) storage.
+  if(c.recording_url||c.vapi_call_id){
+    r1.push('<audio controls preload="none" src="/api/calls/'+c.id+'/recording" '+
+      'onerror="this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;none&quot;>Recording locked in Vapi private (HIPAA) storage — turn HIPAA off (or set BYO storage) in Vapi to play here.</span>\');this.remove();"></audio>');
+  }
   if(c.ended_reason)r1.push('<span class="cbit">ended <b>'+esc(c.ended_reason)+'</b></span>');
   if(c.success_evaluation)r1.push('<span class="cbit">success <b>'+esc(c.success_evaluation)+'</b></span>');
   if(c.vapi_call_id)r1.push('<span class="cbit">id <b>'+esc(String(c.vapi_call_id).slice(0,8))+'</b></span>');
