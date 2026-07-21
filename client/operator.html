@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Operator · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/command.css" />
+<style>
+  /* ── THE OPERATOR — one conversation over the whole company ──────────
+     Enterprise-calm chat: generous space, one accent, no chrome. The orb
+     (Jarvis mode) is the same intelligence with the interface removed. */
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;overflow:hidden;
+    background-image:radial-gradient(900px 400px at 50% -120px,rgba(229,57,53,.05),transparent 70%)}
+
+  /* top bar */
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:18px 28px;border-bottom:1px solid var(--hair);flex:none}
+  .bar .id{display:flex;align-items:center;gap:12px}
+  .mark{width:26px;height:26px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 34% 30%,rgba(229,57,53,.95),rgba(229,57,53,.28) 58%,transparent 74%);
+    box-shadow:0 0 14px rgba(229,57,53,.35)}
+  .bar h1{font-size:14px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--ink)}
+  .bar .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
+  .jarvis-btn{display:flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--hair-2);
+    border-radius:999px;color:var(--ink);font-family:var(--sans);font-weight:700;font-size:11.5px;
+    letter-spacing:.12em;text-transform:uppercase;padding:9px 18px 9px 12px;cursor:pointer;transition:.2s}
+  .jarvis-btn .d{width:12px;height:12px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,rgba(229,57,53,1),rgba(229,57,53,.3) 62%,transparent 78%)}
+  .jarvis-btn:hover{border-color:rgba(229,57,53,.5);box-shadow:0 0 18px rgba(229,57,53,.15)}
+
+  /* conversation */
+  #scroll{flex:1;overflow-y:auto;scrollbar-width:thin}
+  .col{max-width:740px;margin:0 auto;padding:34px 26px 20px}
+  .hero{text-align:center;padding:9vh 10px 30px}
+  .hero .orb{width:74px;height:74px;border-radius:50%;margin:0 auto 26px;
+    background:radial-gradient(circle at 34% 30%,rgba(229,57,53,.9),rgba(229,57,53,.22) 58%,transparent 75%);
+    box-shadow:0 0 44px rgba(229,57,53,.28);animation:heroBreathe 4.5s ease-in-out infinite}
+  @keyframes heroBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  .hero h2{font-size:23px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+  .hero p{font-size:13.5px;color:var(--ink-2);margin-top:10px;line-height:1.6;max-width:52ch;margin-left:auto;margin-right:auto}
+  .starters{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:26px}
+  .starter{background:var(--s1);border:1px solid var(--hair);border-radius:999px;color:var(--ink-2);
+    font-family:var(--sans);font-size:12.5px;padding:10px 17px;cursor:pointer;transition:.18s}
+  .starter:hover{color:var(--ink);border-color:rgba(229,57,53,.4);box-shadow:0 0 14px rgba(229,57,53,.12)}
+
+  .msg{margin:0 0 26px;animation:up .3s ease}
+  @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.you{display:flex;justify-content:flex-end}
+  .msg.you .b{background:var(--s2);border:1px solid var(--hair);border-radius:18px 18px 4px 18px;
+    padding:12px 17px;max-width:76%;font-size:14.5px;line-height:1.55;color:var(--ink)}
+  .msg.op{display:flex;gap:14px}
+  .msg.op .md{width:8px;height:8px;border-radius:50%;flex:none;margin-top:8px;
+    background:radial-gradient(circle at 35% 30%,rgba(229,57,53,1),rgba(229,57,53,.35) 65%,transparent 80%)}
+  .msg.op .b{font-size:15px;line-height:1.7;color:var(--ink);max-width:88%;min-width:0}
+  .msg.op .b strong{font-weight:700}
+  .msg.op .b li{margin:4px 0 4px 18px}
+  .caret{display:inline-block;width:2px;height:1em;background:var(--red);vertical-align:-2px;
+    animation:blink 1s steps(2) infinite;margin-left:1px}
+  @keyframes blink{50%{opacity:0}}
+  .think{display:inline-flex;gap:5px;padding:6px 0}
+  .think i{width:5px;height:5px;border-radius:50%;background:var(--ink-3);animation:tp 1.2s ease-in-out infinite}
+  .think i:nth-child(2){animation-delay:.15s}.think i:nth-child(3){animation-delay:.3s}
+  @keyframes tp{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+
+  /* composer */
+  .dock{flex:none;padding:14px 26px 24px}
+  .comp{max-width:740px;margin:0 auto;display:flex;align-items:center;gap:6px;background:var(--s1);
+    border:1px solid var(--hair-2);border-radius:999px;padding:6px 8px 6px 22px;
+    box-shadow:0 14px 40px rgba(0,0,0,.25);transition:border-color .25s,box-shadow .25s}
+  :root[data-theme="light"] .comp{box-shadow:0 14px 34px rgba(21,30,43,.10)}
+  .comp:focus-within{border-color:rgba(229,57,53,.45);box-shadow:0 0 0 3px rgba(229,57,53,.08),0 14px 40px rgba(0,0,0,.25)}
+  #q{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:15px;
+    padding:10px 0;min-width:0}
+  #q::placeholder{color:var(--ink-3)} #q:focus{outline:none}
+  .send{width:40px;height:40px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:.18s;flex:none}
+  .send:hover{background:#C62828}.send:disabled{opacity:.35}
+  .send svg{width:18px;height:18px}
+  .foot{max-width:740px;margin:10px auto 0;text-align:center}
+  .foot span{font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* ── JARVIS MODE ── */
+  #jarvis{position:fixed;inset:0;z-index:60;background:var(--s0);display:none;flex-direction:column;
+    background-image:radial-gradient(700px 700px at 50% 42%,rgba(229,57,53,.06),transparent 70%)}
+  #jarvis.on{display:flex;animation:up .35s ease}
+  .j-bar{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;flex:none}
+  .j-exit{background:transparent;border:1px solid var(--hair-2);border-radius:999px;color:var(--ink-2);
+    font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    padding:9px 18px;cursor:pointer;transition:.2s}
+  .j-exit:hover{border-color:rgba(229,57,53,.5);color:var(--ink)}
+  .j-state{font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-3)}
+  .j-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;padding:0 24px}
+  #orb{width:min(58vh,520px);height:min(58vh,520px);max-width:88vw;max-height:50vh}
+  .j-caption{max-width:62ch;text-align:center;font-size:15.5px;line-height:1.7;color:var(--ink-2);
+    min-height:56px;margin-top:26px;transition:opacity .3s}
+  .j-dock{flex:none;padding:10px 26px 30px}
+  .j-comp{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:6px;background:var(--s1);
+    border:1px solid var(--hair-2);border-radius:999px;padding:5px 7px 5px 20px}
+  .j-comp:focus-within{border-color:rgba(229,57,53,.45)}
+  #jq{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:14px;padding:9px 0;min-width:0}
+  #jq::placeholder{color:var(--ink-3)} #jq:focus{outline:none}
+  .j-mic{width:38px;height:38px;border-radius:50%;border:1px solid var(--hair-2);background:transparent;
+    color:var(--ink-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;flex:none}
+  .j-mic:hover{color:var(--ink);border-color:rgba(229,57,53,.5)}
+  .j-mic.rec{color:#fff;background:var(--red);border-color:var(--red);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .j-mic svg{width:17px;height:17px}
+
+  @media (max-width:640px){
+    .bar{padding:14px 16px}.col{padding:22px 16px 12px}.dock{padding:10px 14px 18px}
+    .jarvis-btn span.t{display:none}
+    .hero{padding-top:5vh}
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+
+  <header class="bar">
+    <div class="id"><span class="mark"></span><div><h1>The Operator</h1></div><span class="sub" id="st">The digital twin</span></div>
+    <button class="jarvis-btn" id="jarvis-open"><span class="d"></span><span class="t">Jarvis Mode</span></button>
+  </header>
+
+  <div id="scroll"><div class="col" id="col">
+    <div class="hero" id="hero">
+      <div class="orb"></div>
+      <h2 id="greet">The Operator</h2>
+      <p>One conversation over the whole company — money, calls, reputation, the map, every agent. Ask anything.</p>
+      <div class="starters" id="starters"></div>
+    </div>
+  </div></div>
+
+  <div class="dock">
+    <div class="comp">
+      <input id="q" placeholder="Ask the Operator anything…" autocomplete="off" />
+      <button class="send" id="send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    </div>
+    <div class="foot"><span id="foot-t">Connected to the company brain</span></div>
+  </div>
+
+  <!-- JARVIS -->
+  <div id="jarvis">
+    <div class="j-bar">
+      <button class="j-exit" id="jarvis-exit">‹ Chat</button>
+      <span class="j-state" id="j-state">Listening for you</span>
+      <span style="width:74px"></span>
+    </div>
+    <div class="j-stage">
+      <canvas id="orb"></canvas>
+      <div class="j-caption" id="j-caption">Ask me anything — speak or type.</div>
+    </div>
+    <div class="j-dock">
+      <div class="j-comp">
+        <input id="jq" placeholder="Speak or type…" autocomplete="off" />
+        <button class="j-mic" id="j-mic" title="Speak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function md(t){
+  var h=esc(t);
+  h=h.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  h=h.replace(/^- (.*)$/gm,'<li>$1</li>');
+  return h.replace(/\n/g,'<br>');
+}
+var col=document.getElementById('col'),scrollEl=document.getElementById('scroll'),BUSY=false;
+
+/* status + greeting */
+fetch('/api/operator').then(function(r){return r.json();}).then(function(d){
+  document.getElementById('foot-t').textContent=d.brain?'Connected to the company brain':'Live data mode — add an LLM key for full conversation';
+  var h=new Date().getHours();
+  document.getElementById('greet').textContent=(h<12?'Good morning.':h<17?'Good afternoon.':'Good evening.');
+});
+var STARTERS=['How are we doing today?','How much is outstanding?','What gaps are still open?','How did the front desk do?'];
+document.getElementById('starters').innerHTML=STARTERS.map(function(s){return '<button class="starter">'+esc(s)+'</button>';}).join('');
+document.querySelectorAll('.starter').forEach(function(b){b.addEventListener('click',function(){ask(b.textContent);});});
+
+/* chat */
+function addYou(text){
+  hideHero();
+  col.insertAdjacentHTML('beforeend','<div class="msg you"><div class="b">'+esc(text)+'</div></div>');
+  toBottom();
+}
+function addOp(){
+  var el=document.createElement('div');el.className='msg op';
+  el.innerHTML='<span class="md"></span><div class="b"><span class="think"><i></i><i></i><i></i></span></div>';
+  col.appendChild(el);toBottom();
+  return el.querySelector('.b');
+}
+function hideHero(){var h=document.getElementById('hero');if(h)h.remove();}
+function toBottom(){scrollEl.scrollTop=scrollEl.scrollHeight;}
+
+/* typewriter over SSE sentence tokens */
+function typewrite(el,getTarget,onDone){
+  var shown=0,done=false;
+  function tick(){
+    var target=getTarget();
+    if(shown<target.length){
+      shown=Math.min(target.length,shown+3);
+      el.innerHTML=md(target.slice(0,shown))+'<span class="caret"></span>';
+      toBottom();
+    }else if(done){el.innerHTML=md(target);toBottom();if(onDone)onDone(target);return;}
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+  return function finish(){done=true;};
+}
+function ask(text){
+  if(BUSY||!text.trim())return;BUSY=true;
+  addYou(text);
+  var b=addOp(),acc='',finish=null;
+  var es=new EventSource('/api/operator/stream?text='+encodeURIComponent(text));
+  es.addEventListener('navigate',function(e){var d=JSON.parse(e.data);if(d.tab)window.parent.postMessage({type:'app-navigate',tab:d.tab},'*');});
+  es.addEventListener('token',function(e){
+    if(!finish)finish=typewrite(b,function(){return acc;},null);
+    acc+=JSON.parse(e.data).text;
+  });
+  es.addEventListener('done',function(e){
+    var d=JSON.parse(e.data);acc=d.text||acc;
+    if(!finish)b.innerHTML=md(acc);else finish();
+    es.close();BUSY=false;
+  });
+  es.addEventListener('error',function(){
+    if(!acc)b.innerHTML='<span style="color:var(--ink-3)">Connection dropped — try again.</span>';
+    else if(finish)finish();
+    es.close();BUSY=false;
+  });
+}
+document.getElementById('send').onclick=function(){var i=document.getElementById('q');ask(i.value);i.value='';};
+document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Enter'){document.getElementById('send').click();}});
+
+/* ── JARVIS MODE ── */
+var J={on:false,state:'idle',amp:0};
+document.getElementById('jarvis-open').onclick=function(){J.on=true;document.getElementById('jarvis').classList.add('on');startOrb();};
+document.getElementById('jarvis-exit').onclick=function(){J.on=false;document.getElementById('jarvis').classList.remove('on');try{speechSynthesis.cancel();}catch(e){}};
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&J.on)document.getElementById('jarvis-exit').click();});
+function jState(s,label){J.state=s;document.getElementById('j-state').textContent=label;}
+
+function jAsk(text){
+  if(!text.trim())return;
+  jState('thinking','Thinking');
+  document.getElementById('j-caption').style.opacity=.35;
+  fetch('/api/operator/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:text})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    var cap=document.getElementById('j-caption');
+    cap.style.opacity=1;cap.textContent=d.text||'…';
+    if(d.navigate)window.parent.postMessage({type:'app-navigate',tab:d.navigate},'*');
+    speak(d.text||'');
+  })
+  .catch(function(){jState('idle','Listening for you');});
+}
+document.getElementById('jq').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){jAsk(e.target.value);e.target.value='';}
+});
+/* voice in */
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition,jrec=null;
+document.getElementById('j-mic').onclick=function(){
+  var btn=this;
+  if(!SR){document.getElementById('jq').focus();return;}
+  if(jrec){jrec.stop();return;}
+  jrec=new SR();jrec.lang='en-US';jrec.interimResults=false;
+  jrec.onstart=function(){btn.classList.add('rec');jState('listening','Listening');};
+  jrec.onresult=function(e){jAsk(e.results[0][0].transcript);};
+  jrec.onend=function(){btn.classList.remove('rec');jrec=null;if(J.state==='listening')jState('idle','Listening for you');};
+  jrec.start();
+};
+/* voice out — server TTS, browser fallback */
+function speak(text){
+  jState('speaking','Speaking');
+  var end=function(){jState('idle','Listening for you');};
+  fetch('/api/voice/tts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:text})})
+  .then(function(r){if(r.status===204){bSpeak(text,end);return null;}return r.blob();})
+  .then(function(b){if(b){var a=new Audio(URL.createObjectURL(b));a.onended=end;a.play().catch(end);}})
+  .catch(function(){bSpeak(text,end);});
+}
+function bSpeak(text,end){
+  try{var u=new SpeechSynthesisUtterance(text);u.rate=1.02;u.onend=end;speechSynthesis.speak(u);}catch(e){end();}
+}
+
+/* ── the orb: a particle sphere, alive but calm ── */
+var orbStarted=false;
+function cssColor(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
+function startOrb(){
+  if(orbStarted)return;orbStarted=true;
+  var cv=document.getElementById('orb'),ctx=cv.getContext('2d');
+  var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var N=1300,pts=[];
+  for(var i=0;i<N;i++){ // fibonacci sphere — even, organic
+    var y=1-(i/(N-1))*2, r=Math.sqrt(1-y*y), th=i*2.39996323;
+    pts.push([Math.cos(th)*r,y,Math.sin(th)*r]);
+  }
+  var rot=0,t=0;
+  function frame(){
+    var dpr=window.devicePixelRatio||1;
+    var w=cv.clientWidth,h=cv.clientHeight;
+    if(cv.width!==w*dpr){cv.width=w*dpr;cv.height=h*dpr;}
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+    t+=1/60;
+    var speed=J.state==='thinking'?2.6:J.state==='listening'?1.3:1;
+    if(!reduced)rot+=0.0035*speed;
+    var breathe=1+(reduced?0:Math.sin(t*(J.state==='speaking'?5:0.9))*(J.state==='speaking'?0.035:J.state==='listening'?0.02:0.012));
+    var R=Math.min(w,h)*0.40*breathe*(J.state==='listening'?1.05:1);
+    var cx=w/2,cy=h/2;
+    var light=document.documentElement.getAttribute('data-theme')==='light';
+    var tilt=0.35;
+    for(var i=0;i<N;i++){
+      var p=pts[i];
+      var x=p[0]*Math.cos(rot)+p[2]*Math.sin(rot);
+      var z=-p[0]*Math.sin(rot)+p[2]*Math.cos(rot);
+      var y=p[1]*Math.cos(tilt)-z*Math.sin(tilt);
+      var z2=p[1]*Math.sin(tilt)+z*Math.cos(tilt);
+      var depth=(z2+1)/2; // 0 back → 1 front
+      var a=(light?0.16:0.10)+depth*(light?0.7:0.85);
+      var size=0.7+depth*1.5;
+      ctx.beginPath();
+      ctx.fillStyle='rgba(229,57,53,'+a.toFixed(3)+')';
+      ctx.arc(cx+x*R,cy+y*R,size,0,6.2832);
+      ctx.fill();
+    }
+    if(J.on)requestAnimationFrame(frame);else orbStarted=false;
+  }
+  requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>

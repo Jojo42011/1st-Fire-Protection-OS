@@ -27,6 +27,7 @@ import roster from './routes/roster';
 import department from './routes/department';
 import admin from './routes/admin';
 import introspect from './routes/introspect';
+import operator from './routes/operator';
 import licenses from './routes/licenses';
 import onboarding from './routes/onboarding';
 
@@ -60,6 +61,7 @@ app.use(roster);
 app.use(department);
 app.use(admin);
 app.use(introspect);
+app.use(operator);
 app.use(licenses);
 app.use(onboarding);
 
@@ -69,6 +71,7 @@ const page = (name: string) => (_req: express.Request, res: express.Response) =>
 
 app.get('/', page('shell.html'));
 app.get('/shell', page('shell.html'));
+app.get('/operator', page('operator.html'));
 app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
