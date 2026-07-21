@@ -229,14 +229,25 @@
   .more:hover,.skip:hover{text-shadow:0 0 12px rgba(233,238,245,.15)}
   .back{transition:.2s} .back:hover{box-shadow:0 0 20px rgba(229,57,53,.12)}
   /* the wheel is alive: assemble on load, spotlight the segment under the cursor, breathe at the core */
-  #wheel.anim{animation:wheelIn .65s cubic-bezier(.2,.7,.3,1) both;transform-origin:center}
-  @keyframes wheelIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
-  #wheel .seg-g{transition:opacity .22s,filter .25s}
+  #wheel.anim{animation:wheelIn 1s cubic-bezier(.22,.65,.3,1) both;transform-origin:center}
+  @keyframes wheelIn{from{opacity:0;transform:scale(.975)}to{opacity:1;transform:none}}
+  #wheel .seg-g{transition:opacity .3s ease,filter .35s ease}
   #wheel:hover .seg-g:not(:hover){opacity:.38}
   #wheel:hover .seg-g:not(:hover) .seg-cov{opacity:.5}
-  .seg-dot{transition:r .2s} .seg-g:hover .seg-dot{r:3.6}
-  .hub-ring{animation:breathe 4.5s ease-in-out infinite}
+  .seg{stroke-linejoin:round}
+  .seg-dot{transition:r .25s} .seg-g:hover .seg-dot{r:3.6}
+  .hub-ring{animation:breathe 5s ease-in-out infinite}
   @keyframes breathe{0%,100%{filter:drop-shadow(0 0 14px rgba(229,57,53,.05))}50%{filter:drop-shadow(0 0 24px rgba(229,57,53,.12))}}
+
+  /* SaaS-clean: rounded, softer edges (owner preference, overrides the square-corner spec) */
+  .qcard{border-radius:18px}
+  .readout{border-radius:18px}
+  .chip{border-radius:12px;transition:border-color .18s,color .18s,box-shadow .2s,transform .16s}
+  .ghost{border-radius:14px}
+  .back{border-radius:12px}
+  .n-node{rx:9px}
+  .pred .rb button,.gap .approve,.gap .gt,.band .track,.assoc .track,.bar-track,.bar-fill{border-radius:9px}
+  .qcard,.readout{transition:border-color .3s,box-shadow .35s,transform .3s}
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
   @media (max-width:900px){
@@ -259,47 +270,6 @@
   <!-- ══ HOME ══ -->
   <div id="home">
     <div class="wheel-zone"><svg id="wheel" viewBox="0 0 720 720"></svg></div>
-
-    <div class="strip" id="strip"></div>
-
-    <section class="sec">
-      <div class="sec-head"><span class="micro">The leak table</span></div>
-      <div id="leaks"></div>
-      <button class="more" id="more" style="display:none">Show all</button>
-    </section>
-
-    <!-- THE BUILD QUEUE — the Operator proposes; a human approves; it becomes a work order -->
-    <section class="sec" id="queue-sec">
-      <div class="sec-head"><span class="micro">The build queue</span><span class="micro" id="queue-note" style="color:var(--ink-3)"></span></div>
-      <div id="queue"></div>
-    </section>
-
-    <!-- GETTING SMARTER — the longer it runs, the more of the company lives inside it -->
-    <section class="sec" id="trend-sec" style="display:none">
-      <div class="sec-head"><span class="micro">Getting smarter</span></div>
-      <div id="trend"></div>
-    </section>
-
-    <!-- HOW WELL IT KNOWS: the calibration ledger (metacognition, receipts on screen) -->
-    <section class="sec" id="calib-sec" style="display:none">
-      <div class="sec-head"><span class="micro gold">How well it knows</span><span class="micro" id="calib-count" style="color:var(--ink-3)"></span></div>
-      <div id="calib-note" class="note-line"></div>
-      <div class="calib-head" id="calib-head"></div>
-      <div id="calib-bands"></div>
-      <div class="subhead" id="open-head" style="display:none">Open predictions · we will know by the horizon</div>
-      <div id="calib-open"></div>
-      <div class="subhead" id="reslog-head" style="display:none">Resolved · predicted vs actual</div>
-      <div id="calib-reslog"></div>
-    </section>
-
-    <!-- ASSOCIATIONS: the decaying association graph (it remembers what goes together) -->
-    <section class="sec" id="assoc-sec" style="display:none">
-      <div class="sec-head"><span class="micro gold">Associations</span><span class="micro" id="assoc-count" style="color:var(--ink-3)"></span></div>
-      <div class="note-line">The company remembers what keeps coming up together. These are the strongest current links, decayed by time. They surface candidates for recall, they do not assert facts.</div>
-      <div id="assoc-list"></div>
-    </section>
-
-    <div class="foot-act"><button class="ghost" id="brief-btn">Executive Brief</button></div>
   </div>
 
   <!-- ══ DEPARTMENT ══ -->
@@ -450,45 +420,27 @@ function renderHome(){
   if(d.brain){st.classList.add('on');document.getElementById('st-t').textContent='Operator Brain';}
   else{st.classList.remove('on');document.getElementById('st-t').textContent='Rules Engine';}
   renderWheel();
-  var m=d.metrics;
-  document.getElementById('strip').innerHTML=[
-    ['Leaks found',m.leaks,''],['Builds queued',m.buildsApproved||0,''],['Answered',m.questionsAnswered||0,''],
-    ['Sites',m.locationsMapped,'/'+m.locationsTotal]
-  ].map(function(x){return '<div class="t"><span class="micro">'+x[0]+'</span><div class="v"><span class="num">'+x[1]+'</span><small>'+x[2]+'</small></div></div>';}).join('');
-  renderLeaks();
-  renderQueue();
-  renderTrend();
-  renderCalibration();
-  renderAssociations();
   if(FIRST_RENDER){
     FIRST_RENDER=false;
     var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-    // slow count-up of the hero numbers on first load (the wheel center + the stats strip)
-    countUp(document.querySelector('.hub-num'), STATE.metrics.coverage, 1500);
-    document.querySelectorAll('#strip .num').forEach(function(el,i){
-      countUp(el, el.textContent, 1200 + i*120);
-    });
+    // slow, smooth count-up of the center number on first load
+    countUp(document.querySelector('.hub-num'), STATE.metrics.coverage, 2000);
     if(!reduce){
       var wheel=document.getElementById('wheel');
       if(wheel){
         wheel.classList.add('anim');
-        // each coverage arc draws itself in, staggered, so the wheel measures the company on load
+        // each coverage arc draws itself in, gently staggered, so the wheel measures the company on load
         wheel.querySelectorAll('.seg-cov').forEach(function(c,i){
           var len; try{len=c.getTotalLength();}catch(e){return;}
           if(!len)return;
           c.style.transition='none';
           c.style.strokeDasharray=len; c.style.strokeDashoffset=len;
           c.getBoundingClientRect(); // force reflow so the offset starts hidden
-          c.style.transition='stroke-dashoffset .9s cubic-bezier(.3,.7,.3,1)';
-          c.style.transitionDelay=(0.2+i*0.055)+'s';
+          c.style.transition='stroke-dashoffset 1.3s cubic-bezier(.3,.7,.3,1)';
+          c.style.transitionDelay=(0.35+i*0.08)+'s';
           c.style.strokeDashoffset='0';
         });
       }
-      // the home sections rise in sequence, top to bottom
-      document.querySelectorAll('#home .sec').forEach(function(s,i){
-        s.style.animation='rise .5s cubic-bezier(.2,.7,.3,1) both';
-        s.style.animationDelay=(0.12+i*0.08)+'s';
-      });
     }
   }
 }
@@ -641,7 +593,7 @@ function renderLeaks(){
   more.textContent=SHOW_ALL?'Show less':'Show all '+rows.length;
 }
 function toggleLeak(id){var el=document.getElementById('ld-'+id);if(el)el.classList.toggle('show');}
-document.getElementById('more').onclick=function(){SHOW_ALL=!SHOW_ALL;renderLeaks();};
+var _more=document.getElementById('more');if(_more)_more.onclick=function(){SHOW_ALL=!SHOW_ALL;renderLeaks();};
 
 /* ───────── department view ───────── */
 function dep(){return STATE.departments.find(function(x){return x.key===CUR;});}
@@ -796,7 +748,7 @@ function renderAssembly(){
 }
 
 /* ───────── brief ───────── */
-document.getElementById('brief-btn').onclick=function(){
+var _briefBtn=document.getElementById('brief-btn');if(_briefBtn)_briefBtn.onclick=function(){
   var btn=this;btn.disabled=true;btn.textContent='Assembling…';
   fetch('/api/audit/brief',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
     btn.disabled=false;btn.textContent='Executive Brief';
