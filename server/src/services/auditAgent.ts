@@ -61,7 +61,7 @@ const PILLAR_QUESTIONS: Record<string, string[]> = Object.fromEntries(
 );
 
 /** Detect the person named in "X is the only one who..." style observations. */
-function sniffPerson(text: string): { name: string; carries: string } | null {
+export function sniffPerson(text: string): { name: string; carries: string } | null {
   const m = text.match(
     /([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s+(?:is the only|is our only|holds|knows|handles all|runs all|does all|keeps)/
   );
@@ -70,7 +70,7 @@ function sniffPerson(text: string): { name: string; carries: string } | null {
 }
 
 /** Detect a named software system in the observation. */
-const KNOWN_SYSTEMS: [RegExp, string, string][] = [
+export const KNOWN_SYSTEMS: [RegExp, string, string][] = [
   [/servicetrade/i, 'ServiceTrade', 'field-service'],
   [/inspect ?point/i, 'Inspect Point', 'field-service'],
   [/buildops/i, 'BuildOps', 'field-service'],
