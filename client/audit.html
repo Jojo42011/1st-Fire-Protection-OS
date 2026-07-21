@@ -6,7 +6,7 @@
 <title>The Operator · 1st FP</title>
 <link rel="stylesheet" href="/brand/brand.css" />
 <style>
-  /* ── THE COMMAND ROOM — the business as one radial system ─────────────
+  /* ── THE COMMAND ROOM: the business as one radial system ─────────────
      Home: the wheel (his whole company at a glance). Click a department:
      left = the consult (one question at a time), right = the AI department
      assembling as he answers. Color is meaning: red signal, gold build, green live. */
@@ -139,34 +139,34 @@
 
   /* ══ DEPARTMENT VIEW ══ */
   #dept{display:none}
-  .d-head{display:flex;align-items:center;gap:20px;margin-top:30px}
+  .d-head{display:flex;align-items:center;gap:20px;margin-top:38px}
   .back{background:transparent;border:1px solid var(--hair-2);color:var(--ink-2);width:40px;height:40px;cursor:pointer;font-size:17px;transition:.2s;flex:none}
   .back:hover{border-color:var(--red);color:var(--ink)}
   .d-head .nm{font-size:24px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
   .d-head .tg{font-size:13px;color:var(--ink-2);margin-top:5px;max-width:60ch}
   .d-head .pc{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
-  .split{display:grid;grid-template-columns:1fr 1.1fr;gap:44px;margin-top:40px;align-items:start}
+  .split{display:grid;grid-template-columns:1fr 1.1fr;gap:52px;margin-top:46px;align-items:start}
 
   /* left: the consult */
   .consult .micro{color:var(--red)}
-  .qcard{background:var(--s1);border:1px solid var(--hair);border-left:2px solid var(--red);padding:26px 28px;margin-top:16px}
-  .qcard .q{font-size:18px;font-weight:400;line-height:1.55}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+  .qcard{background:var(--s1);border:1px solid var(--hair);padding:30px 32px;margin-top:18px}
+  .qcard .q{font-size:18.5px;font-weight:400;line-height:1.6}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:24px}
   .chip{background:transparent;border:1px solid var(--hair-2);color:var(--ink-2);font-family:var(--sans);font-size:12.5px;
     padding:9px 14px;cursor:pointer;transition:.15s}
   .chip:hover{border-color:var(--gold);color:var(--ink)}
-  .ansrow{display:flex;align-items:center;margin-top:18px;border-bottom:1px solid var(--hair-2);transition:border-color .25s}
-  .ansrow:focus-within{border-color:var(--red)}
-  #ans{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:15.5px;padding:13px 4px;min-width:0}
+  .ansrow{display:flex;align-items:center;gap:2px;margin-top:22px;background:var(--s2);border:1px solid var(--hair);border-radius:16px;padding:5px 10px 5px 18px;transition:border-color .25s,box-shadow .25s}
+  .ansrow:focus-within{border-color:rgba(229,57,53,.5);box-shadow:0 0 0 3px rgba(229,57,53,.08)}
+  #ans{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:15px;padding:13px 4px;min-width:0}
   #ans::placeholder{color:var(--ink-3)} #ans:focus{outline:none}
-  .icon-btn{background:transparent;border:none;color:var(--ink-3);cursor:pointer;padding:8px;display:flex}
-  .icon-btn:hover{color:var(--ink)} .icon-btn.rec{color:var(--red);animation:pulse 1.4s infinite}
+  .icon-btn{background:transparent;border:none;color:var(--ink-3);cursor:pointer;padding:9px;display:flex;border-radius:10px;transition:color .15s,background .15s}
+  .icon-btn:hover{color:var(--ink);background:var(--s3)} .icon-btn.rec{color:var(--red);animation:pulse 1.4s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
   .icon-btn svg{width:19px;height:19px}
   #send-a{color:var(--red)}
-  .qlog{margin-top:26px}
-  .qlog .item{padding:10px 0;border-bottom:1px solid var(--hair);font-size:12.5px;color:var(--ink-3);line-height:1.5}
-  .qlog .item b{color:var(--ink-2);font-weight:600;display:block;font-size:12px}
+  .qlog{margin-top:30px}
+  .qlog .item{padding:13px 0;border-bottom:1px solid var(--hair);font-size:13px;color:var(--ink-2);line-height:1.55}
+  .qlog .item b{color:var(--ink-3);font-weight:500;display:block;font-size:10px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-bottom:4px}
   .skip{background:transparent;border:none;color:var(--ink-3);font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;margin-top:14px;padding:4px 0}
   .skip:hover{color:var(--ink-2)}
 
@@ -185,8 +185,8 @@
   .n-nt.on{fill:var(--ink)}
   .n-dot{fill:var(--ink-3);transition:fill .4s} .n-dot.on{fill:var(--gold)} .n-dot.lvd{fill:var(--ok)}
   .n-sys{fill:var(--ink-3);font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;text-anchor:middle}
-  .readout{border:1px solid var(--hair);background:var(--s1);padding:20px 24px;margin-top:18px}
-  .readout .role{font-size:13.5px;color:var(--ink-2);line-height:1.6;padding-bottom:16px;border-bottom:1px solid var(--hair)}
+  .readout{border:1px solid var(--hair);background:var(--s1);padding:24px 28px;margin-top:20px}
+  .readout .role{font-size:13.5px;color:var(--ink-2);line-height:1.65;padding-bottom:18px;border-bottom:1px solid var(--hair)}
   .agent-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--hair)}
   .agent-row:last-of-type{border-bottom:none}
   .agent-row .ad{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none;transition:background .4s}
@@ -287,7 +287,7 @@
           <div class="chips" id="q-chips"></div>
         </div>
         <div class="ansrow">
-          <input id="ans" placeholder="Answer in his words — or tap an option above" autocomplete="off" />
+          <input id="ans" placeholder="Answer in his words, or tap an option" autocomplete="off" />
           <button class="icon-btn" id="mic" title="Dictate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
           <button class="icon-btn" id="send-a" title="Log answer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
         </div>
@@ -458,7 +458,7 @@ function renderQueue(){
       (approved?'<span class="qs">In build queue</span>'
                :'<button class="approve" data-gid="'+g.id+'">Approve ›</button>')+
       '</div>';
-  }).join('') : '<div style="color:var(--ink-3);font-size:13px;padding:14px 6px">No proposed builds yet — answer the Operator\'s questions and it will surface the gaps worth building.</div>';
+  }).join('') : '<div style="color:var(--ink-3);font-size:13px;padding:14px 6px">No proposed builds yet. Answer the Operator\'s questions and it will surface the gaps worth building.</div>';
   document.querySelectorAll('#queue .approve').forEach(function(b){
     b.addEventListener('click',function(){
       var id=b.getAttribute('data-gid');b.disabled=true;b.textContent='…';
@@ -587,7 +587,7 @@ function renderLeaks(){
       '<span class="t">'+esc(f.title)+'</span>'+
       (f.capability?'<span class="bld"><span class="dot'+(f.capability_live?' lv':'')+'"></span><span class="n">'+esc(f.capability)+'</span></span>':'')+
       '</div><div class="leak-detail" id="ld-'+f.id+'">'+esc(f.detail||'')+'</div>';
-  }).join('')||'<div style="color:var(--ink-3);font-size:13px;padding:14px 6px">No findings yet — open a department and start the consult.</div>';
+  }).join('')||'<div style="color:var(--ink-3);font-size:13px;padding:14px 6px">No findings yet. Open a department and start the consult.</div>';
   var more=document.getElementById('more');
   more.style.display=rows.length>5?'':'none';
   more.textContent=SHOW_ALL?'Show less':'Show all '+rows.length;
@@ -650,7 +650,7 @@ function sendAnswer(){
   var inp=document.getElementById('ans'),text=inp.value.trim();
   if(!text)return;
   var cq=QI<DECK.length?DECK[QI]:null;
-  var payload=cq?(cq.q+' — '+text):text;
+  var payload=cq?(cq.q+' - '+text):text;
   inp.value='';
   var log=document.getElementById('qlog');
   log.insertAdjacentHTML('afterbegin','<div class="item"><b>'+esc(text)+'</b>'+esc(cq?cq.q:'(open note)')+'</div>');

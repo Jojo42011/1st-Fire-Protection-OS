@@ -37,7 +37,7 @@ export const AGENTS: AgentDef[] = [
   {
     key: 'audit',
     name: 'The Operator',
-    role: 'Enterprise audit brain — maps the operation live, finds the leaks, matches the AI builds',
+    role: 'Enterprise audit brain, maps the operation live, finds the leaks, matches the AI builds',
     status: 'standalone',
     connectVia: ['anthropic', 'openai'],
   },
