@@ -11,7 +11,7 @@
   /* ── THE OPERATOR — one conversation over the whole company ──────────
      Enterprise-calm chat: generous space, one accent, no chrome. The orb
      (Jarvis mode) is the same intelligence with the interface removed. */
-  html,body{height:100%}
+  html,body{height:100%;height:100dvh}
   body{display:flex;flex-direction:column;overflow:hidden;
     background-image:radial-gradient(900px 400px at 50% -120px,rgba(229,57,53,.05),transparent 70%)}
 
@@ -110,9 +110,34 @@
   .j-mic svg{width:17px;height:17px}
 
   @media (max-width:640px){
-    .bar{padding:14px 16px}.col{padding:22px 16px 12px}.dock{padding:10px 14px 18px}
+    .bar{padding:12px 14px}
+    .bar .sub{display:none}
+    .bar h1{font-size:13px}
     .jarvis-btn span.t{display:none}
-    .hero{padding-top:5vh}
+    .jarvis-btn{padding:9px 12px}
+    .col{padding:18px 14px 10px}
+    .hero{padding:4vh 4px 22px}
+    .hero .orb{width:58px;height:58px;margin-bottom:18px}
+    .hero h2{font-size:19px}
+    .hero p{font-size:12.5px}
+    .starter{font-size:12px;padding:9px 13px}
+    .msg{margin-bottom:20px}
+    .msg.you .b{max-width:86%;font-size:14px}
+    .msg.op .b{max-width:100%;font-size:14.5px}
+    .msg.op .md{margin-top:7px}
+    .dock{padding:8px 12px calc(12px + env(safe-area-inset-bottom))}
+    .comp{padding-left:16px}
+    #q{font-size:16px}          /* 16px stops iOS zoom-on-focus */
+    .send{width:44px;height:44px}
+    /* jarvis on a phone — clear the shell's floating Menu + theme buttons */
+    .j-bar{padding:64px 14px 0}
+    .j-bar span[style]{display:none}
+    .j-state{font-size:8.5px;letter-spacing:.2em}
+    #orb{width:min(80vw,340px);height:min(80vw,340px);max-height:40vh}
+    .j-caption{font-size:14px;line-height:1.6;margin-top:16px;min-height:44px;padding:0 6px}
+    .j-dock{padding:8px 14px calc(16px + env(safe-area-inset-bottom))}
+    #jq{font-size:16px}
+    .j-mic{width:44px;height:44px}
   }
   @media (prefers-reduced-motion: reduce){*{animation:none!important}}
 </style>
@@ -169,6 +194,32 @@ function md(t){
   return h.replace(/\n/g,'<br>');
 }
 var col=document.getElementById('col'),scrollEl=document.getElementById('scroll'),BUSY=false;
+
+/* Mobile-in-shell: the shell sizes this iframe to content height, so give the
+   document an explicit height = the parent viewport. Standalone mobile uses dvh. */
+function fitMobile(){
+  try{
+    var inShell=window.parent&&window.parent!==window;
+    if(inShell&&window.matchMedia('(max-width:820px)').matches){
+      var h=window.parent.innerHeight;
+      document.documentElement.style.height=h+'px';
+      document.body.style.height=h+'px';
+    }else{
+      document.documentElement.style.height='';
+      document.body.style.height='';
+    }
+  }catch(e){}
+}
+fitMobile();
+window.addEventListener('resize',fitMobile);
+try{window.parent.addEventListener('resize',fitMobile);}catch(e){}
+try{window.parent.addEventListener('orientationchange',function(){setTimeout(fitMobile,250);});}catch(e){}
+/* keyboard: keep the newest message visible when the composer takes focus */
+['q','jq'].forEach(function(id){
+  var el=document.getElementById(id);
+  if(el)el.addEventListener('focus',function(){setTimeout(toBottom,300);});
+});
+if(window.visualViewport)window.visualViewport.addEventListener('resize',function(){setTimeout(toBottom,120);});
 
 /* status + greeting */
 fetch('/api/operator').then(function(r){return r.json();}).then(function(d){
