@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>At a glance</title>
 <style>
+  /* Geist - the premium type system, loaded locally (this page is standalone). */
+  @font-face{font-family:'Geist';font-weight:400;font-display:swap;src:url('/brand/fonts/Geist-Regular.woff2') format('woff2');}
+  @font-face{font-family:'Geist';font-weight:500;font-display:swap;src:url('/brand/fonts/Geist-Medium.woff2') format('woff2');}
+  @font-face{font-family:'Geist';font-weight:600;font-display:swap;src:url('/brand/fonts/Geist-SemiBold.woff2') format('woff2');}
+  @font-face{font-family:'Geist';font-weight:700;font-display:swap;src:url('/brand/fonts/Geist-Bold.woff2') format('woff2');}
+  @font-face{font-family:'Geist';font-weight:800;font-display:swap;src:url('/brand/fonts/Geist-ExtraBold.woff2') format('woff2');}
   :root{
     --canvas:#ffffff;
     --ink:#111111;
@@ -15,7 +21,7 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);}
   body{
-    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-family:'Geist',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
     text-rendering:optimizeLegibility;
     line-height:1.4;

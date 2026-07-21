@@ -20,8 +20,8 @@
   --signal-soft:rgba(229,57,53,.5); --build-soft:rgba(245,184,27,.5); --live-soft:rgba(46,158,91,.5);
 
   /* type */
-  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  --sans:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
 
   /* ---- compatibility aliases ----
      Older markup + inline styles reference the retired light-theme token
@@ -218,4 +218,62 @@ select option{background:var(--s2);color:var(--ink)}
   .card > table{min-width:540px}
   th,td{padding:10px}
   .btn{padding:9px 13px}
+}
+
+/* ============================================================
+   PREMIUM PASS - rounded, calmer, more air (owner direction:
+   less is more, premium software feel). This reverses the
+   square-corner command-room spec into a luxury product surface
+   and is appended last so it wins on the shared components.
+   ============================================================ */
+:root{ --r-lg:18px; --r-md:14px; --r-sm:11px; --r-pill:999px; }
+
+/* the whole surface rises in a touch slower and gentler */
+body{animation:rise .6s cubic-bezier(.2,.7,.3,1)}
+
+/* cards: rounded, more air, a whisper of resting depth (premium, not loud) */
+.card{border-radius:var(--r-lg);padding:22px 24px;box-shadow:0 1px 2px rgba(0,0,0,.16);
+  transition:border-color .25s,box-shadow .3s}
+.card:hover{box-shadow:0 6px 24px rgba(0,0,0,.22)}
+/* the boxless KPI strip stays boxless - no card shadow bleed */
+.kpi.card,.kpi.card:hover{box-shadow:none}
+.grid{gap:18px;margin-top:26px}
+/* table cards clip to the rounded corner so header/last rows sit cleanly */
+.card:has(> table){overflow:hidden}
+
+/* KPI numbers a hair larger, more breathing room */
+.kpis{gap:24px 68px;margin-top:30px}
+.kpi .value{font-size:36px}
+
+/* rounded LED tags */
+.badge{border-radius:var(--r-pill)}
+.badge .d{box-shadow:none}
+.badge.live .d{box-shadow:0 0 7px rgba(46,158,91,.6)}
+.pill{border-radius:var(--r-pill);padding:5px 11px}
+
+/* buttons: rounded, a soft signal glow on hover */
+.btn{border-radius:var(--r-md);transition:border-color .2s,background .2s,color .2s,box-shadow .25s,transform .12s}
+.btn:hover{box-shadow:0 0 22px rgba(229,57,53,.14)}
+.btn.lg{border-radius:16px}
+
+/* inputs: rounded field, soft focus ring instead of a hard red edge */
+input:not([type=checkbox]):not([type=radio]),textarea,select{
+  border-radius:var(--r-md);padding:12px 14px;
+  transition:border-color .2s,box-shadow .2s}
+input:not([type=checkbox]):not([type=radio]):focus,textarea:focus,select:focus{
+  border-color:rgba(229,57,53,.5);box-shadow:0 0 0 3px rgba(229,57,53,.08)}
+
+/* rounded accents on the small pieces */
+.draft{border-radius:var(--r-md);padding:16px 18px}
+.connect{border-radius:var(--r-md)}
+.connect .ic{border-radius:10px}
+.bar-track,.bar-fill{border-radius:var(--r-pill)}
+
+/* quieter, less inky table rows + more space between sections */
+tr:hover td{background:rgba(233,238,245,.035)}
+.section-title{margin:40px 0 16px}
+
+@media (max-width:640px){
+  .card{border-radius:var(--r-md);padding:15px 16px}
+  .card:has(> table){padding:8px}
 }

@@ -9,13 +9,13 @@
 <style>
   .cat{margin-top:26px}
   .int-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:12px}
-  .int{background:var(--s1);border:1px solid var(--hair);padding:16px 18px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s}
+  .int{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:8px;box-shadow:0 1px 2px rgba(0,0,0,.16);transition:border-color .25s,box-shadow .3s}
   .int:hover{border-color:var(--hair-2)}
   .int .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .int .name{font-weight:700;font-size:15px;color:var(--ink)}
   .int .why{color:var(--ink-2);font-size:12.5px;line-height:1.55}
   .team{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:12px}
-  .emp{background:var(--s1);border:1px solid var(--hair);padding:16px 18px}
+  .emp{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px}
   .emp .n{font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ink)}
   .emp .r{color:var(--ink-2);font-size:12.5px;margin-top:6px;line-height:1.55}
   .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
@@ -27,7 +27,7 @@
     <div class="titles">
       <p class="kicker">The Hands · Connected Systems</p>
       <h1>Integrations</h1>
-      <p>Every service the OS can plug into — wired to 1st FP's real stack (ServiceTrade, Vapi, Twilio → Teams, Microsoft 365). What's connected now, what's one key away, and what's on the roadmap.</p>
+      <p>Every service the OS can plug into, wired to 1st FP's real stack (ServiceTrade, Vapi, Twilio → Teams, Microsoft 365). What's connected now, what's one key away, and what's on the roadmap.</p>
     </div>
     <span id="counts" class="badge demo"><span class="d"></span>Loading…</span>
   </div>
@@ -54,7 +54,7 @@ fetch('/api/integrations').then(function(r){return r.json();}).then(function(d){
   var c=d.counts;
   document.getElementById('counts').innerHTML='<span class="d"></span>'+c.connected+' connected · '+c.available+' available · '+c.planned+' planned';
   document.getElementById('team').innerHTML=(d.team||[]).map(function(a){
-    return '<div class="emp"><div style="display:flex;justify-content:space-between;align-items:center"><div class="n">'+a.name+'</div>'+statusPill(a.status)+'</div><div class="r">'+a.role+'</div><div class="r" style="margin-top:8px;font-family:var(--mono);font-size:11px">via: '+(a.connectVia.join(' · ')||'—')+'</div></div>';
+    return '<div class="emp"><div style="display:flex;justify-content:space-between;align-items:center"><div class="n">'+a.name+'</div>'+statusPill(a.status)+'</div><div class="r">'+a.role+'</div><div class="r" style="margin-top:8px;font-family:var(--mono);font-size:11px">via: '+(a.connectVia.join(' · ')||'-')+'</div></div>';
   }).join('');
   var cat='';
   Object.keys(d.byCategory).forEach(function(k){
