@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Receptionist · 1st FP</title>
+<script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/command.css" />
 <style>
@@ -57,13 +58,14 @@
     .composer input{font-size:16px}   /* 16px stops iOS from zooming on focus */
   }
 </style>
+  <script src="/count.js" defer></script>
 </head>
 <body>
   <div class="page-head">
     <div class="titles">
       <p class="kicker">San Antonio Line · 210-377-FIRE</p>
       <h1>Call Receptionist</h1>
-      <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams — inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
+      <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams, inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
     </div>
     <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
   </div>
@@ -71,7 +73,7 @@
   <div class="hero">
     <div>
       <h2>Single-Source Life Safety</h2>
-      <p>Talk to the receptionist right now — ask it to route an inspection, or say "show me the invoices" and watch it drive the screen.</p>
+      <p>Talk to the receptionist right now, ask it to route an inspection, or say "show me the invoices" and watch it drive the screen.</p>
     </div>
     <div class="talk">
       <button class="mic" id="mic" title="Hold to talk"><svg width="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
@@ -168,7 +170,7 @@ function callDetail(c){
   if(c.ended_reason)r1.push('<span class="cbit">ended <b>'+esc(c.ended_reason)+'</b></span>');
   if(c.success_evaluation)r1.push('<span class="cbit">success <b>'+esc(c.success_evaluation)+'</b></span>');
   if(c.vapi_call_id)r1.push('<span class="cbit">id <b>'+esc(String(c.vapi_call_id).slice(0,8))+'</b></span>');
-  parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call — connect Vapi and enable recording to capture audio.</span>')+'</div>');
+  parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call, connect Vapi and enable recording to capture audio.</span>')+'</div>');
   if(c.summary)parts.push('<div class="summary">'+esc(c.summary)+'</div>');
   var cb=c.cost_breakdown;
   if(cb&&typeof cb==='object'){
@@ -201,7 +203,7 @@ function ask(text){
   es.addEventListener('navigate',function(e){var d=JSON.parse(e.data);if(d.tab){window.parent.postMessage({type:'app-navigate',tab:d.tab},'*');}});
   es.addEventListener('token',function(e){acc+=JSON.parse(e.data).text;bot.textContent=acc;convo.scrollTop=convo.scrollHeight;});
   es.addEventListener('done',function(e){var d=JSON.parse(e.data);bot.textContent=d.text||acc;speak(bot.textContent);es.close();load();});
-  es.addEventListener('error',function(){bot.textContent=acc||'(offline — add an LLM key for full conversation)';es.close();});
+  es.addEventListener('error',function(){bot.textContent=acc||'(offline, add an LLM key for full conversation)';es.close();});
 }
 function speak(text){
   // Prefer server TTS; fall back to browser speech. Never blocks.
@@ -219,7 +221,7 @@ document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='
 var mic=document.getElementById('mic'),hint=document.getElementById('mic-hint'),rec=null,listening=false;
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 mic.onclick=function(){
-  if(!SR){hint.textContent='Voice unavailable — type instead';return;}
+  if(!SR){hint.textContent='Voice unavailable, type instead';return;}
   if(listening){rec&&rec.stop();return;}
   rec=new SR();rec.lang='en-US';rec.interimResults=false;
   rec.onstart=function(){listening=true;mic.classList.add('listening');hint.textContent='Listening…';};

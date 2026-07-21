@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>The Operator · 1st FP</title>
+<script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <style>
   /* ── THE COMMAND ROOM: the business as one radial system ─────────────
@@ -18,6 +19,14 @@
     --sans:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
   }
+  /* light theme (bluish, premium) */
+  :root[data-theme="light"]{
+    --s0:#E9EEF6; --s1:#FFFFFF; --s2:#F1F5FA; --s3:#E3EAF3;
+    --ink:#151E2B; --ink-2:#48586E; --ink-3:#7E8DA2;
+    --hair:rgba(20,34,54,.10); --hair-2:rgba(20,34,54,.17);
+    --gold:#B07D08; --ok:#1F8A50;
+  }
+  :root[data-theme="light"] body{background-image:radial-gradient(1000px 480px at 50% -100px,rgba(43,94,170,.08),transparent 72%)}
   *{box-sizing:border-box;margin:0;padding:0}
   html{scrollbar-color:var(--s2) var(--s0)}
   body{background:var(--s0);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
@@ -28,7 +37,7 @@
   @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
   /* top line */
-  .top{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--hair)}
+  .top{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--hair);padding-right:58px}
   .top .id{display:flex;align-items:baseline;gap:14px}
   .top h1{font-size:15px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
   .top .st{display:flex;align-items:center;gap:8px}
@@ -139,7 +148,7 @@
 
   /* ══ DEPARTMENT VIEW ══ */
   #dept{display:none}
-  .d-head{display:flex;align-items:center;gap:20px;margin-top:38px}
+  .d-head{display:flex;align-items:center;gap:20px;margin-top:38px;padding-right:58px}
   .back{background:transparent;border:1px solid var(--hair-2);color:var(--ink-2);width:40px;height:40px;cursor:pointer;font-size:17px;transition:.2s;flex:none}
   .back:hover{border-color:var(--red);color:var(--ink)}
   .d-head .nm{font-size:24px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}

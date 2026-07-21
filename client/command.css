@@ -38,6 +38,30 @@
   --font:var(--sans); --display:var(--sans);
 }
 
+/* ============================================================
+   LIGHT THEME - a cool, bluish, premium daylight room. Toggled from
+   the shell (data-theme="light" on <html>). Only the surface / ink /
+   hairline tokens change; the three meaning colors stay (gold + green
+   deepen a touch for contrast on a light ground). Everything that reads
+   the surface, ink, and hairline tokens adapts for free.
+   ============================================================ */
+:root[data-theme="light"]{
+  --s0:#E9EEF6; --s1:#FFFFFF; --s2:#F1F5FA; --s3:#E3EAF3;
+  --ink:#151E2B; --ink-2:#48586E; --ink-3:#7E8DA2;
+  --hair:rgba(20,34,54,.10); --hair-2:rgba(20,34,54,.17);
+  --gold:#B07D08; --ok:#1F8A50;
+}
+:root[data-theme="light"] body{
+  background-image:radial-gradient(1100px 520px at 50% -120px,rgba(43,94,170,.08),transparent 72%);
+}
+:root[data-theme="light"] .card{box-shadow:0 1px 2px rgba(30,52,96,.07)}
+:root[data-theme="light"] .card:hover{box-shadow:0 8px 30px rgba(30,52,96,.12)}
+:root[data-theme="light"] .kpi.card,:root[data-theme="light"] .kpi.card:hover{box-shadow:none}
+:root[data-theme="light"] tr:hover td{background:var(--s2)}
+
+/* keep the top-right status clear of the floating theme toggle */
+.page-head{padding-right:58px}
+
 *{box-sizing:border-box;margin:0;padding:0}
 html{scrollbar-color:var(--s2) var(--s0)}
 body{
