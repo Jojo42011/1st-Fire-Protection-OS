@@ -501,6 +501,19 @@ export function initDb(): void {
     }
     setState('mig_license_vendors_v2', '1');
   }
+
+  /* One-time cleanup of dash punctuation in the persisted consult questions. The deck was
+   * seeded before the no-dash rule was applied to the department copy, so already-seeded
+   * question rows still carry an em dash (' — ') or an en dash ('–'). The chips are matched
+   * to a question by its exact text at render time, so a stale dash both shows on screen and
+   * breaks the chip lookup against the corrected config. This rewrites the persisted text to
+   * match. A fresh database seeds the clean text directly, so this is a harmless no-op there.
+   * Idempotent, guarded by a state flag. */
+  if (getState('mig_dash_strip_v1') !== '1') {
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, ' — ', ', ')").run();
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, '–', '-')").run();
+    setState('mig_dash_strip_v1', '1');
+  }
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
