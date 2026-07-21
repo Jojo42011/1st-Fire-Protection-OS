@@ -73,7 +73,6 @@ app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
 app.get('/executive', page('executive.html'));
-app.get('/audit', page('audit.html'));
 app.get('/harness', page('harness.html'));
 app.get('/roster', page('roster.html'));
 app.get('/department', page('department.html'));
@@ -157,5 +156,5 @@ server.listen(PORT, () => {
   console.log(`\n  1st FP Operating System`);
   console.log(`  ▸ http://localhost:${PORT}`);
   console.log(`  ▸ client: ${CLIENT_DIR}`);
-  console.log(`  ▸ tabs: /calls (home) /invoices /reviews /audit /integrations\n`);
+  console.log(`  ▸ tabs: /calls (home) /invoices /reviews /integrations\n`);
 });

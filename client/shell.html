@@ -146,9 +146,7 @@
    the integrations. Built-in agents keep their rich dedicated pages; harness-built agents
    open a generic console (/agent?key=). */
 var CONTROL_TABS = [
-  { key:"audit",     label:"The Operator",  sub:"Finds the gaps",   src:"/audit", home:true, sep:"Command",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>' },
-  { key:"harness",   label:"The Harness",   sub:"Builds the agents", src:"/harness",
+  { key:"harness",   label:"The Harness",   sub:"Builds the agents", src:"/harness", sep:"Command",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2z"/><path d="M18 14l3 3M14 18l3 3"/></svg>' },
   { key:"roster",    label:"The Roster",    sub:"The whole team",   src:"/roster",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M15.5 20a4.5 4.5 0 0 1 6-4.2"/></svg>' }
@@ -167,7 +165,7 @@ var SYSTEM_TABS = [
    under Front Office. Every operational tool here is an agent, not just these three. */
 var FOUNDING_PAGES = { calls:"/calls", invoices:"/invoices", reviews:"/reviews" };
 var AGENT_TABS = [
-  { key:"calls",    label:"Call Receptionist", sub:"Answers and books calls", src:"/calls", sep:"Front Office",
+  { key:"calls",    label:"Call Receptionist", sub:"Answers and books calls", src:"/calls", home:true, sep:"Front Office",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h3l2 5-2.2 1.1a11 11 0 0 0 5.1 5.1L15 13l5 2v3a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z"/></svg>' },
   { key:"invoices", label:"Invoice Collector", sub:"Chases receivables", src:"/invoices",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 8h6M9 12h6"/></svg>' },
