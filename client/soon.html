@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coming soon · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px}
+  .soon{max-width:440px;text-align:center}
+  .soon .tile{width:52px;height:52px;border-radius:14px;background:var(--indigo-bg);color:var(--indigo);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+  .soon .tile svg{width:26px;height:26px}
+  .soon h1{font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink)}
+  .soon p{font-weight:500;font-size:13.5px;line-height:1.65;color:var(--ink-3);margin-top:10px}
+  .soon .phase{display:inline-block;margin-top:18px;font-weight:700;font-size:11px;letter-spacing:.04em;
+    color:var(--indigo-deep);background:var(--indigo-bg);border-radius:var(--r-pill);padding:6px 13px}
+</style>
+</head>
+<body>
+  <div class="soon">
+    <div class="tile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </div>
+    <h1 id="title">This screen is on the way</h1>
+    <p id="body">It's part of the Signal revamp and ships in an upcoming phase. The design is locked in — the screen and its live data are being wired up.</p>
+    <span class="phase" id="phase">Coming soon</span>
+  </div>
+<script>
+  var s = new URLSearchParams(location.search).get('s');
+  if (s) {
+    document.getElementById('title').textContent = s + ' — coming soon';
+    var phase = ({ 'Home':'Phase 3', 'To approve':'Phase 3', 'Accounts':'Phase 4',
+      'Pipeline':'Phase 4', 'ServiceTrade sync':'Phase 4' })[s];
+    if (phase) document.getElementById('phase').textContent = 'Ships in ' + phase;
+    document.title = s + ' · 1st FP';
+  }
+</script>
+</body>
+</html>

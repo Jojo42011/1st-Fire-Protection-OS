@@ -30,6 +30,7 @@ import introspect from './routes/introspect';
 import operator from './routes/operator';
 import licenses from './routes/licenses';
 import onboarding from './routes/onboarding';
+import nav from './routes/nav';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -64,6 +65,7 @@ app.use(introspect);
 app.use(operator);
 app.use(licenses);
 app.use(onboarding);
+app.use(nav);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -83,6 +85,7 @@ app.get('/agent', page('agent.html'));
 app.get('/integrations', page('integrations.html'));
 app.get('/licenses', page('licenses.html'));
 app.get('/onboarding', page('onboarding.html'));
+app.get('/soon', page('soon.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

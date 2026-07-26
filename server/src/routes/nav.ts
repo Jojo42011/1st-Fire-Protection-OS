@@ -1,0 +1,83 @@
+import { Router } from 'express';
+import { getDb } from '../db/index';
+
+/**
+ * Shell chrome data (Phase 2 of the Signal revamp):
+ *   GET /api/nav-counts  — the sidebar badges / activity counts
+ *   GET /api/search      — the ⌘K palette (customers + actions)
+ *
+ * Real where the data already exists (calls, invoices, reviews, license reclaims);
+ * fixtures for the CRM screens that land in Phase 4 (accounts, pipeline), reported
+ * with live:false so nothing pretends to be a ServiceTrade integration yet.
+ */
+const router = Router();
+
+const num = (sql: string): number => {
+  try {
+    return (getDb().prepare(sql).get() as { v: number }).v || 0;
+  } catch {
+    return 0;
+  }
+};
+
+router.get('/api/nav-counts', (_req, res) => {
+  // "Needs your yes" spans every gated queue that exists today.
+  const approvals =
+    num(`SELECT COUNT(*) AS v FROM invoice_reminders WHERE status IN ('draft','approved')`) +
+    num(`SELECT COUNT(*) AS v FROM review_requests WHERE status IN ('draft','approved')`) +
+    num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status IN ('proposed','approved')`);
+
+  res.json({
+    approvals,
+    phones: num(`SELECT COUNT(*) AS v FROM calls WHERE date(started_at) = date('now')`),
+    money: num(`SELECT COUNT(*) AS v FROM invoices WHERE status != 'paid'`),
+    reviews: num(`SELECT COUNT(*) AS v FROM reviews WHERE reply_status IN ('none','draft') AND stars <= 3`),
+    spend: num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status = 'proposed'`),
+    accounts: 412, // fixture — the accounts table lands in Phase 4
+    pipeline: '$412k', // fixture — the pipeline lands in Phase 4
+    live: false,
+  });
+});
+
+router.get('/api/search', (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const db = getDb();
+  let customers: Array<{ name: string; monogram: string; amount: number; days: number; screen: string }> = [];
+
+  try {
+    const like = `%${q}%`;
+    const rows = db
+      .prepare(
+        `SELECT customer, amount, due_at, status FROM invoices
+           WHERE (? = '' OR lower(customer) LIKE ?) AND status != 'paid'
+           ORDER BY amount DESC LIMIT 6`
+      )
+      .all(q, like) as Array<{ customer: string; amount: number; due_at: string | null; status: string }>;
+
+    customers = rows.map((r) => {
+      const days =
+        r.due_at != null ? Math.max(0, Math.round((Date.now() - new Date(r.due_at).getTime()) / 86400000)) : 0;
+      const monogram =
+        r.customer
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase() || '?';
+      return { name: r.customer, monogram, amount: r.amount, days, screen: 'money' };
+    });
+  } catch {
+    customers = [];
+  }
+
+  // A small, stable set of "do something" actions. Every one navigates to a real screen.
+  const actions = [
+    { label: 'Review the pending approvals', kind: 'mail', screen: 'approve', key: 'D' },
+    { label: 'Ask the Operator about the business', kind: 'brain', screen: 'operator' },
+    { label: "See today's call history", kind: 'phone', screen: 'phones' },
+  ];
+
+  res.json({ customers, actions, live: false });
+});
+
+export default router;
