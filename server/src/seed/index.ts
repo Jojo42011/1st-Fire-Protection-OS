@@ -30,6 +30,7 @@ export function seed(): void {
   seedLicenses();
   seedOnboarding();
   seedApprovals();
+  seedCrm();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -889,4 +890,146 @@ function seedApprovals(): void {
 
   setState('seeded_approvals', '1');
   console.log('[seed] approvals inbox seeded (5 pending, 2 routine).');
+}
+
+/**
+ * CRM + ServiceTrade sync fixtures (Signal Phase 4, shell only). Mirrors the design's
+ * sample data so Accounts / Account detail / Pipeline / Sync all look alive and match the
+ * mockups side by side. ServiceTrade is NOT called; sync_objects records the intended
+ * directions and everything reports live:false. Own flag so existing brains pick it up. */
+function seedCrm(): void {
+  if (getState('seeded_crm') === '1') return;
+  const db = getDb();
+  const dOff = (n: number) => { const d = new Date(); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const iso = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
+
+  // ---- accounts (8 shown + 3 pipeline-only) ----
+  // name, segment, contract_type, renews(+days), owner, since, balance$, lifetime$, avgDays, risk, touchKind, touchMins
+  const accounts: [string, string, string, number | null, string, string, number, number, number | null, string | null, string, number][] = [
+    ['Alamo Ridge Medical Plaza', 'Medical', 'contract', 67, 'Sylvia Ruiz', '2014', 34800, 486200, 71, 'at_risk', 'call', 120],
+    ['Northside ISD', 'Education', 'contract', 210, 'Sylvia Ruiz', '2009', 26950, 512000, 44, null, 'autopilot', 30],
+    ['Stone Oak Retail Partners', 'Retail', 'tm', null, 'Marcus Webb', '2019', 18400, 141000, 52, 'at_risk', 'quote', 7200],
+    ['Live Oak Distribution Center', 'Industrial', 'contract', 120, 'Marcus Webb', '2021', 9120, 98600, 39, null, 'job', 4320],
+    ['Culebra Medical Group', 'Medical', 'contract', 300, 'Sylvia Ruiz', '2017', 14600, 220400, 58, null, 'review', 8640],
+    ['Bulverde Self Storage', 'Storage', 'tm', null, 'Marcus Webb', '2022', 0, 41200, 33, null, 'booked', 5760],
+    ['Boerne Industrial Park LLC', 'Industrial', 'contract', 420, 'Sylvia Ruiz', '2012', 12300, 388000, 47, null, 'invoice', 15840],
+    ['Randolph AFB annex', 'Government', 'prospect', null, 'Marcus Webb', 'new', 0, 0, null, null, 'call', 200],
+    ['Mi Tierra (Market Sq)', 'Hospitality', 'prospect', null, 'Marcus Webb', 'new', 0, 0, null, null, 'call', 600],
+    ['Helotes Plaza', 'Retail', 'prospect', null, 'Marcus Webb', 'new', 0, 0, null, null, 'quote', 20000],
+    ['Converse Fleet Services', 'Industrial', 'contract', 360, 'Sylvia Ruiz', '2016', 0, 132000, 41, null, 'job', 10000],
+  ];
+  const insAcc = db.prepare(
+    `INSERT INTO accounts (st_id, name, segment, contract_type, contract_renews_at, owner_user, customer_since,
+       balance_cents, lifetime_cents, avg_days_to_pay, risk, last_touch_at, last_touch_kind, st_updated_at, local_updated_at, sync_state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'clean')`
+  );
+  const accId: Record<string, number> = {};
+  accounts.forEach((a, i) => {
+    const renews = a[3] == null ? null : dOff(a[3]);
+    const info = insAcc.run(
+      'ST-' + (41822 + i), a[0], a[1], a[2], renews, a[4], a[5],
+      a[6] * 100, a[7] * 100, a[8], a[9], iso(a[11]), a[10], iso(180), iso(a[11])
+    );
+    accId[a[0]] = Number(info.lastInsertRowid);
+  });
+
+  // ---- Alamo Ridge full detail: sites, equipment, contacts, timeline ----
+  const ar = accId['Alamo Ridge Medical Plaza'];
+  const insSite = db.prepare(
+    `INSERT INTO sites (st_id, account_id, name, address, system_type, next_service_at, last_result, st_updated_at, local_updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const s1 = insSite.run('ST-S1', ar, 'Main plaza', '7830 Ridge Oak', 'wet', dOff(19), 'deficiencies', iso(180), iso(180));
+  const s2 = insSite.run('ST-S2', ar, 'Imaging annex', '7834 Ridge Oak', 'pre-action', dOff(300), 'passed', iso(180), iso(180));
+  const s3 = insSite.run('ST-S3', ar, 'Surgery center', '210 Vista Ridge', 'wet', dOff(240), 'deficiencies', iso(180), iso(180));
+  const insEq = db.prepare(`INSERT INTO equipment (st_id, site_id, kind, count, due_at, st_updated_at) VALUES (?, ?, ?, ?, ?, ?)`);
+  const eqRows: [number, string, number][] = [
+    [Number(s1.lastInsertRowid), 'heads', 214], [Number(s1.lastInsertRowid), 'extinguishers', 38], [Number(s1.lastInsertRowid), 'backflow', 1],
+    [Number(s2.lastInsertRowid), 'heads', 46], [Number(s2.lastInsertRowid), 'extinguishers', 9],
+    [Number(s3.lastInsertRowid), 'heads', 88], [Number(s3.lastInsertRowid), 'hood', 1],
+  ];
+  eqRows.forEach((e, i) => insEq.run('ST-E' + i, e[0], e[1], e[2], dOff(19), iso(180)));
+
+  const insCon = db.prepare(
+    `INSERT INTO contacts (st_id, account_id, name, role, email, phone, is_primary, is_billing, source, st_updated_at, local_updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  insCon.run('ST-C1', ar, 'Marcy Delgado', 'Facilities', 'marcy.d@alamoridge.com', '(210) 555-0177', 1, 0, 'servicetrade', iso(180), iso(180));
+  insCon.run('ST-C2', ar, 'Ron Beltran', 'Accounts payable', 'ron.beltran@alamoridge.com', '(210) 555-0180', 0, 1, 'call', iso(180), iso(20));
+
+  // timeline (verbatim from the design)
+  const events: [string, string, string, string, string, number][] = [
+    ['CALL', 'Marcy called about the invoice', 'Asked for a copy of #4471 and said it is "with the committee". Front desk logged the promise and set a callback for Monday.', 'Front Desk agent', '1:12 · recording saved', 120],
+    ['$', 'Final notice drafted, waiting on you', '$34,800 · 98 days · third attempt. Escalates to a service pause if unanswered by Monday.', 'Invoice Collector', 'in your approval inbox', 130],
+    ['JOB', 'Quarterly inspection completed — main plaza', '214 heads checked, 4 deficiencies found: 2 painted heads, 1 obstructed, 1 corroded pipe hanger.', 'ServiceTrade', 'job #88214 · tech A. Salinas', 63360],
+    ['QTE', 'Deficiency repair quote sent', '$22,900 for the surgery center items. Opened twice, no reply yet — Estimating Follow-up is on it.', 'ServiceTrade ↔ here', 'quote #Q-2291', 60480],
+    ['★', 'Marcy left a 5-star Google review', '"Techs showed up when they said they would… paperwork was in my inbox the same afternoon."', 'Review Collector', 'reply drafted, awaiting approval', 4320],
+    ['SYN', 'Billing contact changed on both sides', 'ServiceTrade says ap@alamoridge.com; the call today said Ron Beltran. Sitting in the conflict queue.', 'Sync', 'needs a decision', 20],
+  ];
+  const insEv = db.prepare(
+    `INSERT INTO account_events (account_id, tag, title, body, source, meta, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  events.forEach((e) => insEv.run(ar, e[0], e[1], e[2], e[3], e[4], iso(e[5])));
+
+  // ---- pipeline quotes (the visible deals; stage counts/totals are headline fixtures in the route) ----
+  // customer, title(detail), amount$, stage, origin, opened_count, sentDaysAgo, snoozeDays, lost_reason
+  const quotes: [string, string, number, string, string, number, number | null, number | null, string | null][] = [
+    ['Randolph AFB annex', 'Annual inspection · 3 buildings', 18000, 'lead', 'call', 0, null, null, null],
+    ['Mi Tierra (Market Sq)', 'Hood suppression re-cert', 7400, 'lead', 'call', 0, null, null, null],
+    ['Alamo Ridge Medical Plaza', '2 deficiencies · surgery center', 22900, 'quoted', 'deficiency', 0, 5, null, null],
+    ['Live Oak Distribution Center', 'Dry system upgrade', 61500, 'quoted', 'manual', 3, 2, null, null],
+    ['Culebra Medical Group', 'Backflow replacement', 14200, 'quoted', 'deficiency', 0, 1, null, null],
+    ['Stone Oak Retail Partners', 'Called back twice · asked for Sept', 38600, 'following_up', 'call', 2, 9, null, null],
+    ['Bulverde Self Storage', 'Waiting on their board · check 15 Aug', 9800, 'following_up', 'manual', 0, 12, 20, null],
+    ['Northside ISD', 'Warehouse 4 · scheduled 04 Aug', 26400, 'won', 'deficiency', 0, 20, null, null],
+    ['Converse Fleet Services', 'Extinguisher contract renewed', 12300, 'won', 'manual', 0, 25, null, null],
+    ['Helotes Plaza', 'Went with incumbent · price', 8200, 'lost', 'manual', 1, 30, null, 'price'],
+  ];
+  const insQ = db.prepare(
+    `INSERT INTO quotes (st_id, account_id, number, title, amount_cents, stage, origin, opened_count, sent_at, snooze_until, lost_reason, st_updated_at, local_updated_at, sync_state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'clean')`
+  );
+  quotes.forEach((q, i) => {
+    insQ.run('ST-Q' + i, accId[q[0]] ?? null, 'Q-' + (2280 + i), q[1], q[2] * 100, q[3], q[4], q[5],
+      q[6] == null ? null : dOff(-q[6]), q[7] == null ? null : dOff(q[7]), q[8], iso(180), iso(180));
+  });
+
+  // ---- sync objects (exact directions from the handoff) ----
+  const objs: [string, string, string, string, string, number][] = [
+    ['accounts', 'Customers & sites', 'Names, addresses, tags, segments', 'both', 'newest_wins', 908],
+    ['equipment', 'Equipment & inspections', 'Systems, devices, due dates, results', 'in', 'st_wins', 14220],
+    ['jobs', 'Jobs & appointments', 'Scheduled work, techs, completion', 'in', 'st_wins', 1904],
+    ['quotes', 'Quotes & deficiencies', 'Amounts, stages, win/loss reasons', 'both', 'newest_wins', 39],
+    ['invoices', 'Invoices & payments', 'Balances, aging, paid dates', 'in', 'st_wins', 23],
+    ['contacts', 'Contacts & notes', 'People, roles, call notes, promises', 'both', 'newest_wins', 1166],
+    ['agent_output', 'Calls, leads & reviews', 'Everything the agents produce', 'out', 'local_owns', 96],
+  ];
+  const insObj = db.prepare(
+    `INSERT INTO sync_objects (object, label, detail, direction, policy, enabled, record_count, last_pull_at, last_push_at)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`
+  );
+  objs.forEach((o) => insObj.run(o[0], o[1], o[2], o[3], o[4], o[5], iso(2), iso(2)));
+
+  // ---- conflicts (2) ----
+  const insCf = db.prepare(
+    `INSERT INTO sync_conflicts (object, local_id, st_id, field, their_value, their_updated_at, our_value, our_updated_at, our_origin, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`
+  );
+  insCf.run('contacts', ar, 'ST-C2', 'billing_email', 'ap@alamoridge.com', iso(120), 'ron.beltran@alamoridge.com', iso(20), 'from a call');
+  insCf.run('quotes', accId['Stone Oak Retail Partners'], 'ST-Q5', 'stage', 'Quote sent', iso(180), 'Following up · asked for Sept', iso(60), 'from a call');
+
+  // ---- sync log (6, most-recent first) ----
+  const logs: [string, string, string, number][] = [
+    ['in', 'Job #88301 completed — Bulverde Self Storage', 'applied', 4],
+    ['out', 'Call note + callback task on Alamo Ridge', 'accepted', 5],
+    ['out', 'New lead: Randolph AFB annex (from a call)', 'created #41955', 15],
+    ['both', 'Billing email on Alamo Ridge', 'conflict', 31],
+    ['in', 'Full cycle: 412 customers, 39 quotes, 23 invoices', '2.4s', 46],
+    ['out', 'Quote stage → following up (Stone Oak)', 'queued', 48],
+  ];
+  const insLog = db.prepare(`INSERT INTO sync_log (direction, text, state, object, at) VALUES (?, ?, ?, ?, ?)`);
+  logs.forEach((l) => insLog.run(l[0], l[1], l[2], null, iso(l[3])));
+
+  setState('seeded_crm', '1');
+  console.log('[seed] CRM + sync shell seeded (11 accounts, Alamo Ridge detail, 10 quotes, 7 sync objects, 2 conflicts, 6 log rows).');
 }

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Account · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .ad-mono44{width:44px;height:44px;border-radius:12px;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ad-name{font-weight:800;font-size:19px;color:var(--ink);letter-spacing:-.01em}
+  .ad-hmeta{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:5px}
+  .ad-figs{display:flex;gap:34px;margin-top:18px;padding-top:16px;border-top:1px solid var(--divider-soft)}
+  .ad-fig-lab{font-weight:700;font-size:11px;color:var(--muted)}
+  .ad-fig-val{font-weight:800;font-size:19px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
+  .ad-tabs{display:flex;align-items:center;gap:2px}
+  .ad-tab{font-weight:600;font-size:11.5px;color:var(--muted);padding:5px 10px;border-radius:7px;cursor:pointer;background:none;border:none}
+  .ad-tab.on{font-weight:700;color:var(--ink);background:var(--fill)}
+  .ad-row{display:flex;gap:13px;padding:14px 18px;border-bottom:1px solid var(--divider-soft)}
+  .ad-row:last-child{border-bottom:none}
+  .ad-tag{width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:9.5px;flex:none}
+  .ad-ev-top{display:flex;align-items:baseline;gap:9px}
+  .ad-ev-title{font-weight:700;font-size:13px;color:var(--ink)}
+  .ad-when{font-weight:500;font-size:11px;color:var(--faint)}
+  .ad-ev-body{margin:4px 0 0;font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink-3)}
+  .ad-ev-foot{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .ad-chip{font-weight:600;font-size:10.5px;border-radius:6px;padding:3px 8px}
+  .ad-meta{font-weight:500;font-size:11px;color:var(--faint)}
+  .ad-col{display:flex;flex-direction:column;gap:14px}
+  .ad-site{padding:12px 18px;border-bottom:1px solid var(--divider-soft)}
+  .ad-site:last-child{border-bottom:none}
+  .ad-site-name{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .ad-site-sub{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .ad-site-pills{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .ad-pill{display:inline-block;font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 8px}
+  .ad-fromst{font-weight:600;font-size:10.5px;color:var(--muted)}
+  .ad-person{padding:12px 18px;border-bottom:1px solid var(--divider-soft);display:flex;align-items:center;gap:11px}
+  .ad-person:last-child{border-bottom:none}
+  .ad-mono28{width:28px;height:28px;border-radius:50%;background:var(--fill);color:var(--ink-2);font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none}
+  .ad-p-name{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .ad-p-sub{font-weight:500;font-size:11px;color:var(--muted)}
+  .ad-add{font-weight:600;font-size:12.5px;color:var(--indigo)}
+  .ad-own-note{margin:7px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)}
+  .ad-own-rows{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .ad-own-row{display:flex;align-items:center;gap:9px}
+  .ad-own-lab{flex:1;font-weight:600;font-size:12px;color:var(--ink-2)}
+  .ad-own-foot{font-weight:500;font-size:11px;color:var(--faint);margin-top:12px}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="card" id="header" style="padding:18px 20px"></div>
+    <div class="split">
+      <div class="card card-clip" id="timeline-card">
+        <div class="card-head">
+          <h2>Everything that's happened</h2>
+          <span style="flex:1"></span>
+          <div class="ad-tabs" id="tabs"></div>
+        </div>
+        <div id="timeline"></div>
+      </div>
+      <div class="ad-col">
+        <div class="card card-clip" id="sites-card">
+          <div class="card-head"><h2>Sites &amp; equipment</h2><span style="flex:1"></span><span class="ad-fromst">from ServiceTrade</span></div>
+          <div id="sites"></div>
+        </div>
+        <div class="card card-clip" id="people-card">
+          <div class="card-head"><h2>People</h2></div>
+          <div id="people"></div>
+        </div>
+        <div class="card" style="padding:15px 18px">
+          <div style="display:flex;align-items:center;gap:8px"><h2 style="font-weight:800;font-size:13.5px;color:var(--ink)">Record ownership</h2><span style="flex:1"></span><span class="dot live"></span></div>
+          <p class="ad-own-note">Who wins when both sides change the same field.</p>
+          <div class="ad-own-rows">
+            <div class="ad-own-row"><span class="ad-own-lab">Sites, equipment, jobs</span><span class="pill gray">ServiceTrade wins</span></div>
+            <div class="ad-own-row"><span class="ad-own-lab">Contacts, notes, tags</span><span class="pill indigo">Newest wins</span></div>
+            <div class="ad-own-row"><span class="ad-own-lab">Calls, leads, reviews</span><span class="pill green">This OS owns</span></div>
+          </div>
+          <div class="ad-own-foot">Last two-way sync 2 min ago · 0 conflicts on this account</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function relAge(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
+function cap(s){s=String(s||'');return s.charAt(0).toUpperCase()+s.slice(1);}
+
+var TAG_TINT={
+  'CALL':['var(--green-bg)','var(--green)'],
+  '$':['var(--money-bg)','var(--money)'],
+  'JOB':['var(--fill)','var(--ink-2)'],
+  'QTE':['var(--indigo-bg)','var(--indigo)'],
+  '★':['var(--amber-bg)','var(--amber-ink)'],
+  'SYN':['var(--fill)','var(--ink-2)']
+};
+var TABS=[['all','All'],['calls','Calls'],['jobs','Jobs'],['money','Money']];
+var TAB_TAG={calls:'CALL',jobs:'JOB',money:'$'};
+
+var events=[], filter='all';
+
+function fmtSystem(t){
+  t=String(t||'').toLowerCase();
+  if(t==='hood')return 'Hood';
+  var label=cap(t);
+  if(t==='wet'||t==='dry'||t==='pre-action')label+=' system';
+  return label;
+}
+function fmtEq(e){
+  if(e.kind==='hood')return 'hood suppression';
+  return e.count+' '+e.kind;
+}
+
+function renderTimeline(){
+  var vis=events.filter(function(e){return filter==='all'||e.tag===TAB_TAG[filter];});
+  var el=document.getElementById('timeline');
+  if(!vis.length){el.innerHTML='<div class="ad-row"><span class="ad-meta">Nothing here yet.</span></div>';return;}
+  el.innerHTML=vis.map(function(e){
+    var tint=TAG_TINT[e.tag]||['var(--fill)','var(--ink-2)'];
+    return '<div class="ad-row">'+
+      '<span class="ad-tag" style="background:'+tint[0]+';color:'+tint[1]+'">'+esc(e.tag)+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div class="ad-ev-top"><span class="ad-ev-title">'+esc(e.title)+'</span>'+
+          '<span style="flex:1"></span><span class="ad-when">'+esc(relAge(e.age_mins))+'</span></div>'+
+        '<p class="ad-ev-body">'+esc(e.body)+'</p>'+
+        '<div class="ad-ev-foot">'+
+          '<span class="ad-chip" style="background:'+tint[0]+';color:'+tint[1]+'">'+esc(e.source)+'</span>'+
+          '<span class="ad-meta">'+esc(e.meta)+'</span>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function renderTabs(){
+  document.getElementById('tabs').innerHTML=TABS.map(function(t){
+    return '<button class="ad-tab'+(filter===t[0]?' on':'')+'" data-f="'+t[0]+'">'+t[1]+'</button>';
+  }).join('');
+  document.querySelectorAll('#tabs .ad-tab').forEach(function(b){
+    b.onclick=function(){filter=b.getAttribute('data-f');renderTabs();renderTimeline();};
+  });
+}
+
+function render(d){
+  var a=d.account||{};
+  var st=d.stats||{};
+
+  var pills='<span class="pill amber">Contract · renews '+esc(a.renews)+'</span>';
+  if(a.overdueDays>0)pills+=' <span class="pill money">'+esc(a.overdueDays)+' days past due</span>';
+
+  document.getElementById('header').innerHTML=
+    '<div style="display:flex;align-items:flex-start;gap:14px">'+
+      '<span class="ad-mono44" style="background:var(--money-bg);color:var(--money)">'+esc(a.initials)+'</span>'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span class="ad-name">'+esc(a.name)+'</span>'+pills+'</div>'+
+        '<div class="ad-hmeta">'+esc(a.meta)+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'+
+        '<button class="btn-primary">New quote</button>'+
+        '<button class="btn">Book inspection</button>'+
+        '<button class="btn">Log a call</button>'+
+        '<button class="btn-tint">Open in ServiceTrade ↗</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="ad-figs">'+
+      fig('Lifetime revenue',st.lifetime)+
+      fig('Open balance',st.balance,'var(--money)')+
+      fig('Avg days to pay',st.avgDaysToPay)+
+      fig('Open deficiencies',st.openDeficiencies,'var(--amber-ink)')+
+      fig('Quoted, not won',st.quotedNotWon)+
+      fig('Reviews',st.reviews)+
+    '</div>';
+
+  events=d.events||[];
+  renderTabs();
+  renderTimeline();
+
+  document.getElementById('sites').innerHTML=(d.sites||[]).map(function(s){
+    var line=[fmtSystem(s.system_type)].concat((s.equipment||[]).map(fmtEq)).join(' · ');
+    var p='';
+    if(s.last_result==='passed'){
+      p='<span class="ad-pill" style="background:var(--green-bg);color:var(--green)">Passed '+esc(s.next_label)+'</span>';
+    }else if(s.last_result==='deficiencies'){
+      if(s.next_label)p+='<span class="ad-pill" style="background:var(--amber-bg);color:var(--amber-ink)">Inspection due '+esc(s.next_label)+'</span>';
+      p+='<span class="ad-pill" style="background:var(--amber-bg);color:var(--amber-ink)">Deficiencies</span>';
+    }
+    return '<div class="ad-site">'+
+      '<div class="ad-site-name">'+esc(s.name)+' — '+esc(s.address)+'</div>'+
+      '<div class="ad-site-sub">'+esc(line)+'</div>'+
+      (p?'<div class="ad-site-pills">'+p+'</div>':'')+
+    '</div>';
+  }).join('');
+
+  document.getElementById('people').innerHTML=(d.contacts||[]).map(function(c){
+    var ini=initials(c.name);
+    var sub=c.role+(c.phone?' · '+c.phone:'');
+    var pill='';
+    if(c.is_primary)pill='<span class="pill green">Primary</span>';
+    else if(c.is_billing)pill='<span class="pill indigo">Billing</span>';
+    return '<div class="ad-person">'+
+      '<span class="ad-mono28">'+esc(ini)+'</span>'+
+      '<div style="flex:1;min-width:0"><div class="ad-p-name">'+esc(c.name)+'</div>'+
+        '<div class="ad-p-sub mono">'+esc(sub)+'</div></div>'+
+      pill+
+    '</div>';
+  }).join('')+
+    '<div class="ad-person"><span class="ad-mono28">+</span>'+
+      '<div style="flex:1"><span class="ad-add">Add a contact</span></div>'+
+      '<span class="ad-meta">pushes to ServiceTrade</span>'+
+    '</div>';
+}
+
+function fig(lab,val,color){
+  return '<div><div class="ad-fig-lab">'+esc(lab)+'</div>'+
+    '<div class="ad-fig-val"'+(color?' style="color:'+color+'"':'')+'>'+esc(val)+'</div></div>';
+}
+function initials(name){
+  var p=String(name||'').trim().split(/\s+/);
+  return ((p[0]||'')[0]||'')+((p[p.length-1]||'')[0]||'');
+}
+
+function load(id){
+  fetch('/api/accounts/'+id).then(function(r){return r.json();}).then(render);
+}
+var qid=new URLSearchParams(location.search).get('id');
+if(qid){
+  load(qid);
+}else{
+  fetch('/api/accounts?limit=1').then(function(r){return r.json();}).then(function(d){
+    var a=(d.accounts||[])[0];
+    if(a)load(a.id);
+  });
+}
+</script>
+</body>
+</html>

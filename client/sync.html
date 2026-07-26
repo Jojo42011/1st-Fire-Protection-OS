@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ServiceTrade sync · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+
+  /* Status card */
+  .sy-status{display:flex;align-items:center;gap:22px;padding:18px 20px}
+  .sy-tile{width:46px;height:46px;border-radius:12px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;flex:none}
+  .sy-tile svg{width:22px;height:22px}
+  .sy-status .sy-mid{flex:1;min-width:0}
+  .sy-titlerow{display:flex;align-items:center;gap:9px}
+  .sy-titlerow .sy-h{font-weight:800;font-size:16px;color:var(--ink)}
+  .sy-status p{margin:6px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3);max-width:80ch}
+  .sy-counters{display:flex;gap:26px;text-align:right;flex:none}
+  .sy-counters .sy-cl{font-weight:700;font-size:11px;color:var(--muted)}
+  .sy-counters .sy-cv{font-weight:800;font-size:20px;color:var(--ink);margin-top:5px}
+  .sy-syncnow{flex:none;cursor:pointer}
+
+  /* Mapping rows */
+  .sy-map{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--divider-soft)}
+  .sy-map:last-child{border-bottom:none}
+  .sy-map .sy-mtext{flex:1;min-width:0}
+  .sy-map .sy-mlabel{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .sy-map .sy-mdetail{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .sy-map .sy-count{width:82px;text-align:right;font-weight:500;font-size:11px;color:var(--faint)}
+  .sy-dir{font-weight:700;font-size:11px;border-radius:7px;padding:4px 10px;white-space:nowrap}
+  .sy-dir-sm{font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 7px;flex:none}
+
+  /* Conflicts */
+  .sy-badge{font-weight:700;font-size:10.5px;color:#fff;background:var(--money);border-radius:999px;padding:2px 7px}
+  .sy-conf{padding:14px 18px;border-bottom:1px solid var(--divider-soft)}
+  .sy-conf:last-child{border-bottom:none}
+  .sy-conf .sy-ct{font-weight:700;font-size:13px;color:var(--ink)}
+  .sy-wells{display:flex;gap:10px;margin-top:10px}
+  .sy-well{flex:1;border-radius:9px;padding:10px 12px}
+  .sy-well.sy-theirs{background:var(--fill)}
+  .sy-well.sy-ours{background:var(--indigo-bg-2)}
+  .sy-well .sy-wl{font-weight:700;font-size:10.5px;color:var(--muted)}
+  .sy-well.sy-ours .sy-wl{color:var(--indigo)}
+  .sy-well .sy-wv{font-weight:600;font-size:12px;color:var(--ink);margin-top:5px}
+  .sy-well .sy-wv.mono{font-weight:500}
+  .sy-cbtns{display:flex;gap:8px;margin-top:11px}
+  .sy-empty{padding:22px 18px;text-align:center;font-weight:500;font-size:12px;color:var(--muted)}
+
+  /* Sync log */
+  .sy-loghead{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .sy-log{display:flex;align-items:center;gap:11px;padding:10px 18px;border-bottom:1px solid var(--divider-soft)}
+  .sy-log:last-child{border-bottom:none}
+  .sy-log .sy-time{font-weight:500;font-size:11px;color:var(--faint);width:52px;flex:none}
+  .sy-log .sy-ltext{flex:1;font-weight:500;font-size:12.5px;color:var(--ink-2)}
+  .sy-log .sy-lstate{font-weight:500;font-size:11px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="screen view" id="root"></div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* dirTone -> {bg,fg} */
+function toneStyle(t){
+  if(t==='indigo')return 'background:var(--indigo-bg-2);color:var(--indigo-deep)';
+  if(t==='green')return 'background:var(--green-bg);color:var(--green)';
+  return 'background:var(--fill);color:var(--ink-2)'; /* gray */
+}
+
+var data=null;
+
+function load(){
+  fetch('/api/sync').then(function(r){return r.json();}).then(function(d){data=d;render();});
+}
+
+function statusCard(d){
+  var c=d.counters||{};
+  var vol=d.volumes||'';
+  var para='Full sync every 15 minutes, plus webhooks for jobs and quotes so changes land in seconds. '
+    +esc(vol)+'. Reads happen constantly; writes go out in a queue you can inspect below.';
+  return '<div class="card sy-status">'
+    +'<span class="sy-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">'
+    +'<path d="M4 9a8 8 0 0 1 13.3-3.3L20 8"></path><path d="M20 4v4h-4"></path>'
+    +'<path d="M20 15a8 8 0 0 1-13.3 3.3L4 16"></path><path d="M4 20v-4h4"></path></svg></span>'
+    +'<div class="sy-mid">'
+      +'<div class="sy-titlerow"><span class="sy-h">Connected to ServiceTrade</span>'
+      +'<span class="pill green">Two-way</span></div>'
+      +'<p>'+para+'</p>'
+    +'</div>'
+    +'<div class="sy-counters">'
+      +'<div><div class="sy-cl">Pulled in today</div><div class="sy-cv num">'+esc(c.pulled)+'</div></div>'
+      +'<div><div class="sy-cl">Pushed back today</div><div class="sy-cv num">'+esc(c.pushed)+'</div></div>'
+      +'<div><div class="sy-cl">Conflicts</div><div class="sy-cv num" style="color:var(--money)">'+esc(c.conflicts)+'</div></div>'
+    +'</div>'
+    +'<button class="btn sy-syncnow" id="syncnow">Sync now</button>'
+  +'</div>';
+}
+
+function mappingsCard(d){
+  var rows=(d.objects||[]).map(function(m){
+    return '<div class="sy-map">'
+      +'<div class="sy-mtext"><div class="sy-mlabel">'+esc(m.label)+'</div>'
+      +'<div class="sy-mdetail">'+esc(m.detail)+'</div></div>'
+      +'<span class="sy-dir mono" style="'+toneStyle(m.dirTone)+'">'+esc(m.dir)+'</span>'
+      +'<span class="sy-count num">'+esc(m.count)+'</span>'
+    +'</div>';
+  }).join('');
+  return '<div class="card card-clip">'
+    +'<div class="card-head" style="display:block"><h2>What syncs, and which way</h2>'
+    +'<p style="margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)">Change a direction and the next cycle honours it.</p></div>'
+    +rows
+  +'</div>';
+}
+
+function conflictBlock(c){
+  var theirsMono=c.mono?' mono':'';
+  var oursMono=c.mono?' mono':'';
+  var bothBtn=c.mono
+    ? '<button class="btn-quiet" data-choice="both">Keep both as contacts</button>'
+    : '';
+  return '<div class="sy-conf" data-id="'+esc(c.id)+'">'
+    +'<div class="sy-ct">'+esc(c.title)+'</div>'
+    +'<div class="sy-wells">'
+      +'<div class="sy-well sy-theirs"><div class="sy-wl">ServiceTrade · '+esc(c.theirWhen)+'</div>'
+      +'<div class="sy-wv'+theirsMono+'">'+esc(c.theirValue)+'</div></div>'
+      +'<div class="sy-well sy-ours"><div class="sy-wl">Here · '+esc(c.ourWhen)+' ('+esc(c.ourOrigin)+')</div>'
+      +'<div class="sy-wv'+oursMono+'">'+esc(c.ourValue)+'</div></div>'
+    +'</div>'
+    +'<div class="sy-cbtns">'
+      +'<button class="btn-primary" data-choice="ours">Keep ours &amp; push</button>'
+      +'<button class="btn" data-choice="theirs">Keep theirs</button>'
+      +bothBtn
+    +'</div>'
+  +'</div>';
+}
+
+function conflictsCard(d){
+  var list=d.conflicts||[];
+  var body=list.length
+    ? list.map(conflictBlock).join('')
+    : '<div class="sy-empty" id="conf-empty">No conflicts — everything is in sync.</div>';
+  return '<div class="card card-clip" id="conf-card">'
+    +'<div class="card-head"><h2>Conflicts to settle</h2>'
+    +'<span class="sy-badge" id="conf-badge">'+list.length+'</span></div>'
+    +'<div id="conf-list">'+body+'</div>'
+  +'</div>';
+}
+
+function logCard(d){
+  var rows=(d.log||[]).map(function(l){
+    return '<div class="sy-log">'
+      +'<span class="sy-time mono">'+esc(l.time)+'</span>'
+      +'<span class="sy-dir-sm mono" style="'+toneStyle(l.dirTone)+'">'+esc(l.dir)+'</span>'
+      +'<span class="sy-ltext">'+esc(l.text)+'</span>'
+      +'<span class="sy-lstate">'+esc(l.state)+'</span>'
+    +'</div>';
+  }).join('');
+  return '<div class="card card-clip">'
+    +'<div class="card-head"><h2>Sync log</h2><span class="sy-loghead">live</span></div>'
+    +rows
+    +'<div class="card-foot">Nothing writes to ServiceTrade without passing the approval rules — sends, prices and cancellations still wait for a human.</div>'
+  +'</div>';
+}
+
+function render(){
+  var d=data||{};
+  document.getElementById('root').innerHTML=
+    statusCard(d)
+    +'<div class="split-even">'
+      +mappingsCard(d)
+      +'<div style="display:flex;flex-direction:column;gap:16px">'
+        +conflictsCard(d)
+        +logCard(d)
+      +'</div>'
+    +'</div>';
+  wire();
+}
+
+function wire(){
+  var sn=document.getElementById('syncnow');
+  if(sn)sn.onclick=syncNow;
+  document.querySelectorAll('.sy-conf').forEach(function(el){
+    var id=el.getAttribute('data-id');
+    el.querySelectorAll('[data-choice]').forEach(function(btn){
+      btn.onclick=function(){resolve(id,btn.getAttribute('data-choice'),el);};
+    });
+  });
+}
+
+function syncNow(){
+  var btn=document.getElementById('syncnow');
+  btn.disabled=true;
+  var was=btn.textContent;
+  btn.textContent='Syncing…';
+  fetch('/api/sync/now',{method:'POST'}).then(function(r){return r.json();}).then(function(){
+    setTimeout(load,600);
+  }).catch(function(){btn.disabled=false;btn.textContent=was;});
+}
+
+function resolve(id,choice,el){
+  el.querySelectorAll('button').forEach(function(b){b.disabled=true;});
+  fetch('/api/sync/conflicts/'+encodeURIComponent(id)+'/resolve',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({choice:choice})
+  }).then(function(r){return r.json();}).then(function(){
+    // optimistic remove + decrement badge
+    el.parentNode.removeChild(el);
+    var badge=document.getElementById('conf-badge');
+    var n=Math.max(0,(parseInt(badge.textContent,10)||0)-1);
+    badge.textContent=n;
+    if(n===0){
+      document.getElementById('conf-list').innerHTML=
+        '<div class="sy-empty">No conflicts — everything is in sync.</div>';
+    }
+  }).catch(function(){el.querySelectorAll('button').forEach(function(b){b.disabled=false;});});
+}
+
+load();
+</script>
+</body>
+</html>

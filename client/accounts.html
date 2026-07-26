@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Accounts · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .ac-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .ac-filters .chip{cursor:pointer;border:1px solid transparent}
+  .ac-filters .chip.on{background:var(--panel);border-color:var(--border);color:var(--ink)}
+  .ac-filters .chip.risk{color:var(--money)}
+  .ac-sync{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:11.5px;color:var(--green);background:var(--green-bg);border-radius:999px;padding:6px 12px}
+  .ac-mono{width:28px;height:28px;border-radius:9px;font-weight:800;font-size:10px}
+  .ac-cust{display:flex;align-items:center;gap:10px}
+  .ac-name{display:block;font-weight:700;font-size:13px;color:var(--ink)}
+  .ac-seg{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .ac-r{text-align:right}
+  thead th.ac-r{text-align:right}
+  .ac-open{font-weight:600;font-size:11.5px;color:var(--indigo)}
+  #accts tbody tr{cursor:pointer}
+  #accts tbody td:first-child{font-weight:500}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="ac-filters" id="filters"></div>
+  <div class="card card-clip">
+    <table id="accts">
+      <thead><tr>
+        <th>Customer</th>
+        <th>Sites</th>
+        <th>Contract</th>
+        <th>Next service</th>
+        <th class="ac-r">Balance</th>
+        <th>Last touch</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="card-foot" style="display:flex;align-items:center;gap:10px">
+      <span id="foot"></span>
+      <span style="flex:1"></span>
+      <button class="btn btn-sm" id="next50">Next 50</button>
+    </div>
+  </div>
+</div>
+<script>
+var FILTERS=[['all','All'],['contract','Under contract'],['due','Inspection due'],['risk','At risk']];
+var CHIP_FETCH={all:'all',contract:'contract',due:'all',risk:'risk'};
+var data={accounts:[],counts:{all:0,contract:0,due:0,risk:0},total:0,showing:0};
+var filter='all';
+
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function money(v){
+  if(v==null||v==='')return '';
+  if(typeof v==='number')return '$'+v.toLocaleString('en-US');
+  return String(v);
+}
+function nav(ac){
+  try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+ac.id},'*');}catch(e){}
+}
+
+function load(){
+  var f=CHIP_FETCH[filter]||'all';
+  fetch('/api/accounts?filter='+f).then(function(r){return r.json();}).then(function(d){
+    data=d||data; render();
+  });
+}
+
+function renderFilters(){
+  var c=data.counts||{};
+  document.getElementById('filters').innerHTML=
+    FILTERS.map(function(f){
+      var n=c[f[0]];
+      var risk=f[0]==='risk'?' risk':'';
+      return '<button class="chip'+(filter===f[0]?' on':'')+risk+'" data-f="'+f[0]+'">'
+        +esc(f[1])+(n!=null?' '+n:'')+'</button>';
+    }).join('')
+    +'<span style="flex:1"></span>'
+    +'<span class="ac-sync"><span class="dot live"></span>ServiceTrade · synced 2 min ago</span>'
+    +'<button class="btn-accent" id="newcust">New customer</button>';
+  document.querySelectorAll('#filters .chip').forEach(function(b){
+    b.onclick=function(){filter=b.getAttribute('data-f');load();};
+  });
+}
+
+function row(ac){
+  var balFg=ac.balanceOverdue?'var(--money)':'var(--ink)';
+  return '<tr data-id="'+esc(ac.id)+'">'
+    +'<td><span class="ac-cust">'
+      +'<span class="monogram ac-mono" style="background:'+esc(ac.tintBg)+';color:'+esc(ac.tintFg)+'">'+esc(ac.initials)+'</span>'
+      +'<span><span class="ac-name">'+esc(ac.name)+'</span><span class="ac-seg">'+esc(ac.segment)+'</span></span>'
+    +'</span></td>'
+    +'<td>'+esc(ac.sites)+'</td>'
+    +'<td><span class="pill '+esc(ac.contractKind)+'">'+esc(ac.contract)+'</span></td>'
+    +'<td style="color:var(--muted)">'+esc(ac.next)+'</td>'
+    +'<td class="ac-r num" style="color:'+balFg+'">'+esc(money(ac.balance))+'</td>'
+    +'<td style="color:var(--muted)">'+esc(ac.touch)+'</td>'
+    +'<td class="ac-r"><span class="ac-open">Open →</span></td>'
+  +'</tr>';
+}
+
+function render(){
+  renderFilters();
+  var rows=data.accounts||[];
+  document.getElementById('rows').innerHTML=rows.map(row).join('');
+  document.getElementById('foot').textContent=
+    'Showing '+(data.showing!=null?data.showing:rows.length)+' of '+(data.total||0)
+    +' · pulled from ServiceTrade, edits here push back';
+  document.querySelectorAll('#accts tbody tr').forEach(function(tr){
+    var id=tr.getAttribute('data-id');
+    var ac=rows.filter(function(a){return String(a.id)===id;})[0];
+    if(ac)tr.onclick=function(){nav(ac);};
+  });
+}
+
+load();
+</script>
+</body>
+</html>

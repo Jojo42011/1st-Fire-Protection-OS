@@ -238,9 +238,10 @@ var SCREENS = {
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews',                      title:'Reputation',        sub:'Turns finished jobs into reviews, drafts every reply' },
   spend:    { src:'/licenses',                     title:'Wasted spend',      sub:'Finds the seats you pay for but nobody uses' },
-  crm:      { src:'/soon?s=Accounts',             title:'Accounts',          sub:'Customers, live from ServiceTrade' },
-  pipeline: { src:'/soon?s=Pipeline',             title:'Pipeline',          sub:'Every open quote, by stage' },
-  sync:     { src:'/soon?s=ServiceTrade+sync',    title:'ServiceTrade sync', sub:'Two-way, every 15 minutes' },
+  crm:      { src:'/accounts',                     title:'Accounts',          sub:'412 customers, live from ServiceTrade' },
+  account:  { src:'/account',                      title:'Account',           sub:'Customer detail', detail:true },
+  pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'$412,300 open across 39 quotes' },
+  sync:     { src:'/sync',                          title:'ServiceTrade sync', sub:'Two-way, every 15 minutes' },
   team:     { src:'/roster',                       title:'Your team',         sub:'9 agents, one job each' },
   hire:     { src:'/harness',                      title:'Hire a new agent',  sub:'Describe the gap in your own words' }
 };
@@ -318,7 +319,12 @@ window.addEventListener('orientationchange',function(){setTimeout(syncHeights,25
 
 /* ---- cross-frame nav + roster refresh ---- */
 window.addEventListener('message',function(e){var d=e.data||{};
-  if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}
+  if(d.type===NAV_MESSAGE_TYPE&&d.tab){
+    var nk=String(d.tab).toLowerCase();
+    // optional param reloads that screen's frame with a query (e.g. account?id=5)
+    if(d.param&&SCREENS[nk]){var nf=frameEl(nk);if(nf){nf.src=SCREENS[nk].src+(SCREENS[nk].src.indexOf('?')>=0?'&':'?')+d.param;}}
+    activate(nk,true);
+  }
   if(d.type==='counts-changed'){refreshCounts();}
   if(d.type==='roster-changed'){location.replace(location.pathname+'?tab='+encodeURIComponent(current));}
 });

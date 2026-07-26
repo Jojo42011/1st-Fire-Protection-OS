@@ -33,6 +33,8 @@ import onboarding from './routes/onboarding';
 import nav from './routes/nav';
 import approvals from './routes/approvals';
 import home from './routes/home';
+import crm from './routes/crm';
+import sync from './routes/sync';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -70,6 +72,8 @@ app.use(onboarding);
 app.use(nav);
 app.use(approvals);
 app.use(home);
+app.use(crm);
+app.use(sync);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -92,6 +96,10 @@ app.get('/onboarding', page('onboarding.html'));
 app.get('/soon', page('soon.html'));
 app.get('/home', page('home.html'));
 app.get('/approvals', page('approvals.html'));
+app.get('/accounts', page('accounts.html'));
+app.get('/account', page('account.html'));
+app.get('/pipeline', page('pipeline.html'));
+app.get('/sync', page('sync.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

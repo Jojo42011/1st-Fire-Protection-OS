@@ -557,6 +557,90 @@ export function initDb(): void {
       at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- CRM mirror of ServiceTrade (Signal Phase 4, shell only) ----------
+   * Tables mirror ServiceTrade's shape and carry sync bookkeeping on every row. This
+   * pass is a shell: ServiceTrade is NOT called, every read serves fixtures and reports
+   * live:false. Outbound writes go through sync_queue, never inline. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      st_id TEXT UNIQUE, name TEXT NOT NULL, segment TEXT,
+      contract_type TEXT, contract_renews_at TEXT, owner_user TEXT,
+      customer_since TEXT, balance_cents INTEGER DEFAULT 0,
+      lifetime_cents INTEGER DEFAULT 0, avg_days_to_pay INTEGER,
+      risk TEXT, last_touch_at TEXT, last_touch_kind TEXT,
+      st_updated_at TEXT, local_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
+    );
+    CREATE TABLE IF NOT EXISTS sites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, st_id TEXT UNIQUE,
+      account_id INTEGER NOT NULL, name TEXT, address TEXT,
+      system_type TEXT, next_service_at TEXT, last_result TEXT,
+      st_updated_at TEXT, local_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
+    );
+    CREATE TABLE IF NOT EXISTS equipment (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, st_id TEXT UNIQUE,
+      site_id INTEGER NOT NULL, kind TEXT, count INTEGER,
+      due_at TEXT, st_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
+    );
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, st_id TEXT UNIQUE,
+      account_id INTEGER NOT NULL, name TEXT, role TEXT,
+      email TEXT, phone TEXT, is_primary INTEGER DEFAULT 0, is_billing INTEGER DEFAULT 0,
+      source TEXT, st_updated_at TEXT, local_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
+    );
+    CREATE TABLE IF NOT EXISTS crm_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, st_id TEXT UNIQUE,
+      account_id INTEGER, site_id INTEGER, number TEXT, kind TEXT,
+      status TEXT, tech TEXT, scheduled_at TEXT, completed_at TEXT,
+      deficiency_count INTEGER DEFAULT 0, st_updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS quotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, st_id TEXT UNIQUE,
+      account_id INTEGER, site_id INTEGER, number TEXT, title TEXT,
+      amount_cents INTEGER, stage TEXT,
+      origin TEXT, sent_at TEXT, opened_count INTEGER DEFAULT 0, snooze_until TEXT,
+      lost_reason TEXT, st_updated_at TEXT, local_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
+    );
+    CREATE TABLE IF NOT EXISTS account_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL,
+      tag TEXT NOT NULL, title TEXT, body TEXT, source TEXT, meta TEXT,
+      occurred_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_events_account ON account_events(account_id, occurred_at DESC);
+
+    CREATE TABLE IF NOT EXISTS sync_objects (
+      object TEXT PRIMARY KEY, label TEXT, detail TEXT,
+      direction TEXT NOT NULL, policy TEXT NOT NULL,
+      enabled INTEGER DEFAULT 1, record_count INTEGER DEFAULT 0,
+      last_pull_at TEXT, last_push_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      object TEXT NOT NULL, local_id INTEGER, st_id TEXT,
+      op TEXT NOT NULL, payload TEXT NOT NULL,
+      idempotency_key TEXT UNIQUE NOT NULL,
+      state TEXT NOT NULL DEFAULT 'queued',
+      attempts INTEGER DEFAULT 0, last_error TEXT,
+      needs_approval INTEGER DEFAULT 0, approval_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')), sent_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sync_conflicts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      object TEXT NOT NULL, local_id INTEGER, st_id TEXT, field TEXT NOT NULL,
+      their_value TEXT, their_updated_at TEXT,
+      our_value TEXT, our_updated_at TEXT, our_origin TEXT,
+      status TEXT DEFAULT 'open',
+      resolved_by TEXT, resolved_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      direction TEXT NOT NULL, text TEXT NOT NULL, state TEXT,
+      object TEXT, at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
