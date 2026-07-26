@@ -524,6 +524,39 @@ export function initDb(): void {
     db.prepare("UPDATE audit_questions SET question = REPLACE(question, '–', '-')").run();
     setState('mig_dash_strip_v1', '1');
   }
+
+  /* ---------- approvals inbox (Signal Phase 3) ----------
+   * One queue for every gated action across all agents. The individual agents keep
+   * their own status columns (invoice_reminders, reviews.reply_status, license_reclaims)
+   * for their own pages, and additionally write an approvals row so the cross-agent
+   * inbox and the "needs your yes" badge have a single source of truth. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS approvals (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_key     TEXT NOT NULL,           -- 'invoices' | 'reviews' | 'licenses' | 'calls' | 'crm'
+      kind          TEXT NOT NULL,           -- 'send_email' | 'send_sms' | 'publish' | 'cancel_seat' | 'push_st' | 'quote_price'
+      risk          TEXT NOT NULL,           -- 'routine' | 'sensitive'
+      title         TEXT NOT NULL,
+      stake         TEXT,                    -- '$34,800' | 'saves $1,752/yr'
+      body          TEXT,                    -- the actual draft the human reads
+      trail         TEXT,                    -- 'Goes to marcy.d@alamoridge.com + AP inbox'
+      subject_type  TEXT,                    -- 'invoice' | 'review' | 'seat' | 'account'
+      subject_id    INTEGER,
+      status        TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | skipped | expired
+      decided_by    TEXT,
+      decided_at    TEXT,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_approvals_open ON approvals(status, created_at);
+
+    CREATE TABLE IF NOT EXISTS approval_events (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      approval_id INTEGER NOT NULL,
+      action      TEXT NOT NULL,             -- 'approved' | 'skipped' | 'executed'
+      detail      TEXT,
+      at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

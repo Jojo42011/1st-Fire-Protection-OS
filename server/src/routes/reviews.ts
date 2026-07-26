@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db/index';
 import { draftReviewRequest, draftReviewReply, getReputationSummary } from '../services/reviewAgent';
 import { integrationConnected } from '../config/integrations';
+import { createApproval } from './approvals';
 
 const router = Router();
 
@@ -33,6 +34,29 @@ router.post('/api/reviews/request/:jobId', async (req, res) => {
 router.post('/api/reviews/:id/draft-reply', async (req, res) => {
   try {
     const r = await draftReviewReply(Number(req.params.id));
+    // Dual-write into the unified approvals inbox (best-effort).
+    try {
+      const id = Number(req.params.id);
+      const rev = getDb().prepare('SELECT author, stars, source FROM reviews WHERE id = ?').get(id) as
+        | { author: string; stars: number; source: string }
+        | undefined;
+      if (rev) {
+        const src = (rev.source || 'google').replace(/^\w/, (c) => c.toUpperCase());
+        createApproval({
+          agent_key: 'reviews',
+          kind: 'publish',
+          risk: rev.stars >= 4 ? 'routine' : 'sensitive',
+          title: `Reply to ${rev.author} ${'★'.repeat(Math.max(0, Math.min(5, rev.stars)))}`,
+          stake: src,
+          body: r.body,
+          trail: 'Posts on your Google Business Profile',
+          subject_type: 'review',
+          subject_id: id,
+        });
+      }
+    } catch {
+      /* inbox mirror is best-effort */
+    }
     res.json({ ok: true, reply: r });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });

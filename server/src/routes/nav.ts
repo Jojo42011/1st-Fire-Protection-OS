@@ -21,11 +21,8 @@ const num = (sql: string): number => {
 };
 
 router.get('/api/nav-counts', (_req, res) => {
-  // "Needs your yes" spans every gated queue that exists today.
-  const approvals =
-    num(`SELECT COUNT(*) AS v FROM invoice_reminders WHERE status IN ('draft','approved')`) +
-    num(`SELECT COUNT(*) AS v FROM review_requests WHERE status IN ('draft','approved')`) +
-    num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status IN ('proposed','approved')`);
+  // "Needs your yes" reads from the unified approvals inbox (Phase 3 source of truth).
+  const approvals = num(`SELECT COUNT(*) AS v FROM approvals WHERE status = 'pending'`);
 
   res.json({
     approvals,

@@ -10,6 +10,7 @@ import {
   Channel,
 } from '../services/collectionWorkflow';
 import { integrationConnected } from '../config/integrations';
+import { createApproval } from './approvals';
 
 const router = Router();
 
@@ -38,6 +39,29 @@ router.get('/api/invoices', (_req, res) => {
 router.post('/api/invoices/:id/draft-reminder', async (req, res) => {
   try {
     const r = await draftInvoiceReminder(Number(req.params.id));
+    // Dual-write into the unified approvals inbox (best-effort — never breaks the draft).
+    try {
+      const id = Number(req.params.id);
+      const inv = getDb().prepare('SELECT customer, amount FROM invoices WHERE id = ?').get(id) as
+        | { customer: string; amount: number }
+        | undefined;
+      if (inv) {
+        const tier = r.tier ? r.tier[0].toUpperCase() + r.tier.slice(1) + ' ' : '';
+        createApproval({
+          agent_key: 'invoices',
+          kind: 'send_email',
+          risk: r.tier === 'final' ? 'sensitive' : 'routine',
+          title: `${tier}reminder to ${inv.customer}`,
+          stake: '$' + Number(inv.amount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }),
+          body: r.body,
+          trail: 'Goes to the billing contact on file',
+          subject_type: 'invoice',
+          subject_id: id,
+        });
+      }
+    } catch {
+      /* inbox mirror is best-effort */
+    }
     res.json({ ok: true, reminder: r });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });

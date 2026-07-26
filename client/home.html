@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Home · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .hero .date{font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+  .hero .btns{display:flex;gap:9px;margin-top:16px}
+  .hero .b1{font-weight:700;font-size:12px;color:var(--ink);background:#fff;border:none;border-radius:9px;padding:9px 14px;cursor:pointer}
+  .hero .b2{font-weight:700;font-size:12px;color:#fff;background:transparent;border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:8px 13px;cursor:pointer}
+  .glass .lab{font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6)}
+  .glass .v{font-weight:800;font-size:24px;color:#fff;margin-top:8px;font-variant-numeric:tabular-nums}
+  .glass .s{font-weight:500;font-size:11.5px;color:rgba(255,255,255,.7);margin-top:5px}
+  .glass .bar{height:6px;border-radius:999px;background:rgba(255,255,255,.16);margin-top:12px;overflow:hidden}
+  .glass .bar span{display:block;height:100%;background:var(--ember);border-radius:999px}
+  .owe .mono34{width:34px;height:34px;border-radius:10px;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+  .owe .amt{font-weight:800;font-size:14.5px;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+  .owe .ageL{font-weight:700;font-size:11px;margin-top:2px;text-align:right}
+  .owe .cta{font-weight:700;font-size:12px;border-radius:9px;padding:8px 14px;white-space:nowrap;cursor:pointer;border:1px solid transparent}
+  .ny .item{padding:14px 18px;border-bottom:1px solid var(--divider-soft)}
+  .ny .item:last-child{border-bottom:none}
+  .ny .k{display:flex;align-items:center;gap:8px}
+  .ny .k .dotc{width:9px;height:9px;border-radius:3px}
+  .ny .k .age{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .ny .t{font-weight:700;font-size:13.5px;color:var(--ink);margin-top:8px}
+  .ny .s{margin:6px 0 0;font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink-3)}
+  .ny .btns{display:flex;gap:8px;margin-top:11px}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="hero" id="hero"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="split-wide">
+    <div class="card card-clip" id="owe-card">
+      <div class="card-head"><h2>Who owes you money</h2><span style="flex:1"></span>
+        <span class="pill gray">Oldest first</span>
+        <button class="btn-quiet" style="color:var(--indigo)" data-nav="money" id="seeall">See all</button></div>
+      <div id="owe"></div>
+    </div>
+    <div class="card card-clip ny">
+      <div class="card-head"><h2>Needs your yes</h2><span class="badge" id="ny-badge" style="background:var(--money);color:#fff">0</span>
+        <span style="flex:1"></span><button class="btn-quiet" style="color:var(--indigo)" data-nav="approve">Open inbox</button></div>
+      <div id="ny"></div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function money(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
+function age(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+var TINT={money:['var(--money-bg)','var(--money)'],amber:['var(--amber-bg)','var(--amber-ink)'],gray:['var(--fill)','var(--ink-2)'],green:['var(--green-bg)','var(--green)']};
+var TONECOL={money:'var(--money)',amber:'var(--amber-ink)',green:'var(--green)'};
+var AGENT={invoices:'Invoice Collector',reviews:'Review Collector',licenses:'License Reclaim',calls:'Call Receptionist',crm:'ServiceTrade'};
+var KIND_LABEL={send_email:'This sends an email',send_sms:'This sends a text',publish:'This posts publicly',cancel_seat:'This cancels a subscription',push_st:'This writes to ServiceTrade',quote_price:'This quotes a price'};
+var DOT={invoices:'var(--money)',reviews:'var(--amber)',licenses:'var(--indigo)',crm:'var(--indigo)',calls:'var(--green)'};
+var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve'};
+var SECONDARY={cancel_seat:'Keep seat'};
+
+var KPI=[
+  {k:'money',   tint:['var(--money-bg)','var(--money)'],  lab:'Getting paid', ic:'<path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/>', fmt:function(v){return money(v);}},
+  {k:'phones',  tint:['var(--green-bg)','var(--green)'],  lab:'Phones',       ic:'<path d="M6 3h3l2 5-2.2 1.1a11 11 0 0 0 5.1 5.1L15 13l5 2v3a2 2 0 0 1-2 2A17 17 0 0 1 4 5a2 2 0 0 1 2-2z"/>', fmt:function(v){return v+' calls';}},
+  {k:'reputation',tint:['var(--amber-bg)','var(--amber-ink)'],lab:'Reputation',ic:'<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/>', fmt:function(v){return v+' ★';}},
+  {k:'spend',   tint:['var(--indigo-bg)','var(--indigo)'],lab:'Wasted spend', ic:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/>', fmt:function(v){return money(v);}}
+];
+var NAVK={money:'money',phones:'phones',reputation:'reviews',spend:'spend'};
+
+fetch('/api/home').then(function(r){return r.json();}).then(function(d){
+  var car=d.cashAtRisk||{amount:0,accounts:0,pct:0};
+  var now=new Date();
+  var date=now.toLocaleDateString('en-US',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('hero').innerHTML=
+    '<div style="flex:1;min-width:0">'+
+      '<div class="date">'+esc(date)+'</div>'+
+      '<h1>'+esc(d.greeting||'Good day, Devon.')+'</h1>'+
+      '<p>Your agents are working across phones, money, reputation and spend. '+esc(d.pendingLine||'')+'</p>'+
+      '<div class="btns"><button class="b1" data-nav="approve">Review approvals</button>'+
+      '<button class="b2" data-nav="operator">Ask the Operator</button></div>'+
+    '</div>'+
+    '<div class="glass"><div class="lab">Cash at risk</div>'+
+      '<div class="v">'+money(car.amount)+'</div>'+
+      '<div class="s">'+car.accounts+' accounts past 90 days</div>'+
+      '<div class="bar"><span style="width:'+Math.max(6,Math.min(100,car.pct))+'%"></span></div></div>';
+
+  var kp=d.kpis||{};
+  document.getElementById('kpis').innerHTML=KPI.map(function(c){
+    var o=kp[c.k]||{value:0,sub:''};
+    return '<button class="kpi lift" data-nav="'+NAVK[c.k]+'">'+
+      '<span class="top"><span class="tile" style="background:'+c.tint[0]+';color:'+c.tint[1]+'">'+
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">'+c.ic+'</svg></span>'+
+      '<span class="lab">'+c.lab+'</span></span>'+
+      '<span class="val num">'+c.fmt(o.value)+'</span><span class="sub">'+esc(o.sub||'')+'</span></button>';
+  }).join('');
+
+  var owe=(d.topInvoices||[]);
+  document.getElementById('seeall').textContent='See all '+((kp.money&&/^(\d+)/.test(kp.money.sub))?kp.money.sub.match(/^(\d+)/)[1]:'')+'';
+  document.getElementById('owe').innerHTML=owe.map(function(inv){
+    var tint=TINT[inv.tint]||TINT.gray, tone=TONECOL[inv.ageTone]||'var(--muted)';
+    var late=inv.days>90;
+    var cta=late?'<button class="cta" style="color:#fff;background:var(--ink)" data-nav="money">Review notice</button>'
+      :(inv.days>0?'<button class="cta" style="color:var(--ink-2);background:#fff;border-color:var(--border)" data-nav="money">View</button>'
+      :'<span class="cta" style="color:var(--faint);background:#fff">—</span>');
+    return '<div class="row owe">'+
+      '<span class="mono34" style="background:'+tint[0]+';color:'+tint[1]+'">'+esc(inv.initials)+'</span>'+
+      '<div style="flex:1;min-width:0"><div class="t">'+esc(inv.customer)+'</div>'+
+      '<div class="d">invoice · '+(inv.days>0?inv.days+' days out':'current')+'</div></div>'+
+      '<div><div class="amt">'+money(inv.amount)+'</div><div class="ageL" style="color:'+tone+'">'+esc(inv.ageLabel)+'</div></div>'+
+      cta+'</div>';
+  }).join('') || '<div class="row"><span class="d">No open invoices.</span></div>';
+
+  var ap=(d.approvals||[]);
+  document.getElementById('ny-badge').textContent=d.pendingCount||0;
+  if(!ap.length){
+    document.getElementById('ny').innerHTML=
+      '<div class="empty" style="padding:26px 18px"><div class="ic" style="width:36px;height:36px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+      '<h3 style="font-size:13.5px">Inbox clear</h3><p>Your agents keep working. Anything that leaves the building will land here.</p></div>';
+  }else{
+    document.getElementById('ny').innerHTML=ap.map(function(a){
+      var prim=PRIMARY[a.kind]||'Approve', sec=SECONDARY[a.kind]||'Edit';
+      return '<div class="item"><div class="k"><span class="dotc" style="background:'+(DOT[a.agent_key]||'var(--muted)')+'"></span>'+
+        '<span style="font-weight:700;font-size:11.5px;color:'+(DOT[a.agent_key]||'var(--muted)')+'">'+esc(KIND_LABEL[a.kind]||a.kind)+'</span>'+
+        '<span class="age">'+age(a.age_mins)+'</span></div>'+
+        '<div class="t">'+esc(a.title)+'</div>'+
+        (a.stake?'<p class="s">'+esc(a.stake)+(a.body?' · '+esc(a.body.slice(0,90))+(a.body.length>90?'…':''):'')+'</p>':'')+
+        '<div class="btns"><button class="btn-primary" data-nav="approve">'+esc(prim)+'</button>'+
+        '<button class="btn" data-nav="approve">'+esc(sec)+'</button></div></div>';
+    }).join('');
+  }
+
+  document.querySelectorAll('[data-nav]').forEach(function(b){b.addEventListener('click',function(){nav(b.getAttribute('data-nav'));});});
+});
+</script>
+</body>
+</html>

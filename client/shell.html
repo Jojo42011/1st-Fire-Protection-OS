@@ -231,9 +231,9 @@
    not yet built (Home, To approve, and the CRM screens) open a graceful /soon
    placeholder until their phase lands. */
 var SCREENS = {
-  home:     { src:'/soon?s=Home',                 title:'Home',              sub:'Everything in one place' },
-  approve:  { src:'/soon?s=To+approve',           title:'To approve',        sub:'Nothing leaves the building without you' },
-  operator: { src:'/operator',                    title:'Ask the Operator',  sub:'One conversation over the whole company', home:true },
+  home:     { src:'/home',                         title:'Home',              sub:'Everything in one place', home:true },
+  approve:  { src:'/approvals',                    title:'To approve',        sub:'Nothing leaves the building without you' },
+  operator: { src:'/operator',                    title:'Ask the Operator',  sub:'One conversation over the whole company' },
   phones:   { src:'/calls',                        title:'Phones',            sub:'210-377-FIRE · answered 24/7' },
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews',                      title:'Reputation',        sub:'Turns finished jobs into reviews, drafts every reply' },
@@ -319,6 +319,7 @@ window.addEventListener('orientationchange',function(){setTimeout(syncHeights,25
 /* ---- cross-frame nav + roster refresh ---- */
 window.addEventListener('message',function(e){var d=e.data||{};
   if(d.type===NAV_MESSAGE_TYPE&&d.tab){activate(String(d.tab).toLowerCase(),true);}
+  if(d.type==='counts-changed'){refreshCounts();}
   if(d.type==='roster-changed'){location.replace(location.pathname+'?tab='+encodeURIComponent(current));}
 });
 
@@ -331,13 +332,16 @@ document.getElementById('view-seg').addEventListener('click',function(e){
 try{var sv=localStorage.getItem('fpView');if(sv==='office'){document.querySelectorAll('#view-seg button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='office');});}}catch(_){}
 
 /* ---- sidebar counts / badges ---- */
-fetch('/api/nav-counts').then(function(r){return r.json();}).then(function(c){
-  function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
-  set('c-phones',c.phones||0); set('c-money',c.money||0); set('c-reviews',c.reviews||0);
-  set('c-spend',c.spend||0); set('c-accounts',c.accounts||''); set('c-pipeline',c.pipeline||'');
-  var badge=document.getElementById('c-approve');
-  if(badge){if(c.approvals>0){badge.textContent=c.approvals;badge.style.display='';}else{badge.style.display='none';}}
-}).catch(function(){});
+function refreshCounts(){
+  fetch('/api/nav-counts').then(function(r){return r.json();}).then(function(c){
+    function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
+    set('c-phones',c.phones||0); set('c-money',c.money||0); set('c-reviews',c.reviews||0);
+    set('c-spend',c.spend||0); set('c-accounts',c.accounts||''); set('c-pipeline',c.pipeline||'');
+    var badge=document.getElementById('c-approve');
+    if(badge){if(c.approvals>0){badge.textContent=c.approvals;badge.style.display='';}else{badge.style.display='none';}}
+  }).catch(function(){});
+}
+refreshCounts();
 
 /* ---- deep link + public API ---- */
 var q=new URLSearchParams(location.search).get('tab');

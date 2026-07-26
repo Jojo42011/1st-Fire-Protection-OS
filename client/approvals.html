@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>To approve · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .filters{display:flex;align-items:center;gap:6px}
+  .filters .chip{cursor:pointer;border:1px solid transparent}
+  .filters .chip.on{background:#fff;border-color:var(--border);color:var(--ink)}
+  .explain{display:flex;align-items:center;gap:12px}
+  .explain .tile{width:30px;height:30px;border-radius:9px;background:var(--indigo-bg);color:var(--indigo);display:flex;align-items:center;justify-content:center;flex:none}
+  .explain .tile svg{width:15px;height:15px}
+  .explain b{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .explain p{margin:3px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)}
+  .appr .hd{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
+  .appr .hd .agent{font-weight:500;font-size:11.5px;color:var(--faint)}
+  .appr .hd .age{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
+  .appr .bd{padding:15px 18px 17px}
+  .appr .toprow{display:flex;align-items:baseline;gap:12px}
+  .appr .toprow .t{font-weight:800;font-size:15px;color:var(--ink);flex:1}
+  .appr .actions{display:flex;align-items:center;gap:8px;margin-top:13px}
+  .appr .actions .trail{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);text-align:right}
+  .dotc{width:9px;height:9px;border-radius:3px;flex:none}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="filters" id="filters"></div>
+  <div class="card card-pad explain">
+    <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg></span>
+    <div><b>Anything reversible already happened</b><p>Drafting, scheduling and logging run on their own. Only things that leave the building or cost money wait for you.</p></div>
+  </div>
+  <div id="list"></div>
+  <div id="empty" style="display:none"></div>
+</div>
+<script>
+var AGENT={invoices:'Invoice Collector',reviews:'Review Collector',licenses:'License Reclaim',calls:'Call Receptionist',crm:'ServiceTrade'};
+var KIND_LABEL={send_email:'This sends an email',send_sms:'This sends a text',publish:'This posts publicly',cancel_seat:'This cancels a subscription',push_st:'This writes to ServiceTrade',quote_price:'This quotes a price'};
+/* tone by workstream: variant class (signal .appr.send/.post/.money) + dot/label colour */
+var TONE={
+  invoices:{cls:'send', c:'var(--money)'},
+  reviews: {cls:'post', c:'var(--amber-ink)', dot:'var(--amber)'},
+  licenses:{cls:'money',c:'var(--indigo)'},
+  crm:     {cls:'money',c:'var(--indigo)'},
+  calls:   {cls:'', c:'var(--green)'}
+};
+var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve & send'};
+var SECONDARY={cancel_seat:'Keep seat'};
+var SEND=['send_email','send_sms'],MONEY=['cancel_seat','quote_price'],PUBLISH=['publish','push_st'];
+var FILTERS=[['all','All'],['send','Sends something'],['money','Spends money'],['publish','Posts publicly']];
+
+var items=[], filter='all';
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function age(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
+function cat(k){return SEND.indexOf(k)>=0?'send':MONEY.indexOf(k)>=0?'money':'publish';}
+function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+
+function load(){
+  fetch('/api/approvals').then(function(r){return r.json();}).then(function(d){items=d.items||[];render();});
+}
+function counts(){
+  var c={all:items.length,send:0,money:0,publish:0};
+  items.forEach(function(i){c[cat(i.kind)]++;});
+  return c;
+}
+function render(){
+  var c=counts();
+  document.getElementById('filters').innerHTML=
+    FILTERS.map(function(f){return '<button class="chip'+(filter===f[0]?' on':'')+'" data-f="'+f[0]+'">'+f[1]+(f[0]==='all'?' '+c.all:'')+'</button>';}).join('')
+    + '<span style="flex:1"></span><button class="btn-tint" id="routine">Approve all routine</button>';
+  var vis=items.filter(function(i){return filter==='all'||cat(i.kind)===filter;});
+  document.getElementById('list').innerHTML=vis.map(card).join('');
+  var empty=document.getElementById('empty');
+  if(!items.length){
+    empty.style.display='';
+    empty.innerHTML='<div class="card" style="padding:44px 18px;text-align:center">'+
+      '<div class="empty"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+      '<h3>You’re all caught up</h3><p>Nine agents are still working. The next thing that needs a human will show up here — you’ll also get it as a morning digest.</p></div></div>';
+  }else{empty.style.display='none';empty.innerHTML='';}
+  wire();
+}
+function card(a){
+  var tone=TONE[a.agent_key]||TONE.calls, dot=tone.dot||tone.c;
+  var prim=PRIMARY[a.kind]||'Approve', sec=SECONDARY[a.kind]||'Edit';
+  var style=tone.cls?'':' style="border-left:3px solid '+tone.c+'"';
+  return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+
+    '<div class="hd"><span class="dotc" style="background:'+dot+'"></span>'+
+      '<span class="kind" style="color:'+tone.c+'">'+esc(KIND_LABEL[a.kind]||a.kind)+'</span>'+
+      '<span class="agent">· '+esc(AGENT[a.agent_key]||a.agent_key)+'</span>'+
+      '<span class="age">'+age(a.age_mins)+'</span></div>'+
+    '<div class="bd"><div class="toprow"><div class="t">'+esc(a.title)+'</div>'+
+      (a.stake?'<div class="stake" style="color:'+tone.c+'">'+esc(a.stake)+'</div>':'')+'</div>'+
+      (a.body?'<p class="well" style="margin-top:7px">'+esc(a.body)+'</p>':'')+
+      '<div class="actions"><button class="btn-primary" data-act="approve">'+esc(prim)+'</button>'+
+      '<button class="btn" data-act="skip">'+esc(sec)+'</button>'+
+      (a.trail?'<span class="trail">'+esc(a.trail)+'</span>':'')+'</div></div></div>';
+}
+function wire(){
+  document.querySelectorAll('#filters .chip').forEach(function(b){b.onclick=function(){filter=b.getAttribute('data-f');render();};});
+  var rt=document.getElementById('routine');if(rt)rt.onclick=approveRoutine;
+  document.querySelectorAll('.appr').forEach(function(el){
+    var id=+el.getAttribute('data-id');
+    el.querySelectorAll('[data-act]').forEach(function(btn){
+      btn.onclick=function(){decide(id,btn.getAttribute('data-act'),el);};
+    });
+  });
+}
+function removeCard(el,id){
+  el.classList.add('leaving');
+  setTimeout(function(){
+    items=items.filter(function(i){return i.id!==id;});
+    render(); notify();
+  },320);
+}
+function decide(id,act,el){
+  el.querySelectorAll('button').forEach(function(b){b.disabled=true;});
+  fetch('/api/approvals/'+id+'/'+act,{method:'POST'}).then(function(r){return r.json();}).then(function(){
+    removeCard(el,id);
+  }).catch(function(){el.querySelectorAll('button').forEach(function(b){b.disabled=false;});});
+}
+function approveRoutine(){
+  var routine=items.filter(function(i){return i.risk==='routine';});
+  if(!routine.length)return;
+  fetch('/api/approvals/approve-routine',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    var ids={};(d.approved||[]).forEach(function(x){ids[x]=1;});
+    document.querySelectorAll('.appr').forEach(function(el){if(ids[+el.getAttribute('data-id')])el.classList.add('leaving');});
+    setTimeout(function(){items=items.filter(function(i){return !ids[i.id];});render();notify();},380);
+  });
+}
+load();
+</script>
+</body>
+</html>

@@ -29,6 +29,7 @@ export function seed(): void {
   seedCalibration();
   seedLicenses();
   seedOnboarding();
+  seedApprovals();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -830,4 +831,62 @@ function seedOnboarding(): void {
 
   setState('seeded_onboarding', '1');
   console.log('[seed] onboarding seeded (3 requests: one fresh, one partway, one complete; routed through the live map).');
+}
+
+/**
+ * Approvals inbox fixtures (Signal Phase 3). Five pending items, two flagged routine
+ * (the SMS reminder and the review reply/request) — those are what "Approve all routine"
+ * clears. Copy is lifted verbatim from the design so Home + the inbox match it side by
+ * side. Own flag so existing brains pick it up on upgrade. */
+function seedApprovals(): void {
+  if (getState('seeded_approvals') === '1') return;
+  const db = getDb();
+
+  // agent_key, kind, risk, title, stake, body, trail, subject_type
+  const rows: [string, string, string, string, string, string, string, string][] = [
+    [
+      'invoices', 'send_email', 'sensitive',
+      'Final notice to Alamo Ridge Medical Plaza', '$34,800',
+      '"Hi Marcy — invoice #4471 for the Q1 sprinkler inspection is now 98 days past due at $34,800. We’ve sent three reminders. Please confirm today whether this is in your AP queue, or we’ll need to pause scheduled service at the plaza."',
+      'Goes to marcy.d@alamoridge.com + AP inbox', 'invoice',
+    ],
+    [
+      'reviews', 'publish', 'routine',
+      'Reply to Marcy Delgado ★★★★★', 'Google',
+      '"Thank you, Marcy. Keeping the clinic open during an inspection is the whole job — glad the crew got it done clean. We’ll see you at the next annual."',
+      'Posts on your Google Business Profile', 'review',
+    ],
+    [
+      'licenses', 'cancel_seat', 'sensitive',
+      'Cancel the Bluebeam seat for T. Nguyen', 'saves $1,752/yr',
+      'Terminated 2026-04-30 per BambooHR, but the seat is still active and billing $146/mo. Offboarding task drafted for IT: revoke the license and move shared markups to the estimating pool.',
+      'IT gets the task; nothing cancels until they run it', 'seat',
+    ],
+    [
+      'invoices', 'send_sms', 'routine',
+      'Friendly reminder to Stone Oak Retail Partners', '$18,400',
+      '"Hi — just a heads up that invoice #4518 for the extinguisher recharge is 34 days out. Happy to resend the paperwork or take a card over the phone. — 1st Fire Protection"',
+      'SMS to the billing contact on file', 'invoice',
+    ],
+    [
+      'reviews', 'send_email', 'routine',
+      'Review request to Live Oak Distribution Center', '6 queued',
+      '"Thanks for having us out Tuesday — if the crew took care of you, a quick Google review helps a family business more than you’d think. Here’s the link."',
+      'Email; SMS follows in 3 days if unopened', 'review',
+    ],
+  ];
+
+  // Space the created_at so the ages read 2m / 18m / 1h / 3h / 5h ago like the design.
+  const minsAgo = [2, 18, 60, 180, 300];
+  const ins = db.prepare(
+    `INSERT INTO approvals (agent_key, kind, risk, title, stake, body, trail, subject_type, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`
+  );
+  rows.forEach((r, i) => {
+    const at = new Date(Date.now() - minsAgo[i] * 60000).toISOString();
+    ins.run(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], at);
+  });
+
+  setState('seeded_approvals', '1');
+  console.log('[seed] approvals inbox seeded (5 pending, 2 routine).');
 }

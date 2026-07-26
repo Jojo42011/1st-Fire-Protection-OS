@@ -10,6 +10,7 @@ import {
 } from '../services/licenseAgent';
 import { fetchDirectory, fetchTerminated, bambooConfigured } from '../services/bamboo';
 import { fetchAllVendorSeats, configuredVendors } from '../services/licenseSources';
+import { createApproval } from './approvals';
 
 const router = Router();
 
@@ -35,7 +36,31 @@ router.get('/api/licenses', (_req, res) => {
 /** Flag a seat for reclaim (the DRAFT - human-gated, nothing cancels). */
 router.post('/api/licenses/:seatId/flag', (req, res) => {
   try {
-    const r = proposeReclaim(Number(req.params.seatId));
+    const seatId = Number(req.params.seatId);
+    const r = proposeReclaim(seatId);
+    // Dual-write into the unified approvals inbox (best-effort).
+    try {
+      const seat = getDb()
+        .prepare('SELECT assignee_name, product, vendor, cost_monthly FROM license_seats WHERE id = ?')
+        .get(seatId) as { assignee_name: string | null; product: string | null; vendor: string; cost_monthly: number } | undefined;
+      if (seat) {
+        const yr = Math.round((seat.cost_monthly || 0) * 12).toLocaleString('en-US');
+        const label = seat.product || seat.vendor;
+        createApproval({
+          agent_key: 'licenses',
+          kind: 'cancel_seat',
+          risk: 'sensitive',
+          title: `Cancel the ${label} seat for ${seat.assignee_name || 'a former employee'}`,
+          stake: `saves $${yr}/yr`,
+          body: `The seat is still active and billing $${seat.cost_monthly}/mo. Offboarding task drafted for IT: revoke the license and reassign any shared work.`,
+          trail: 'IT gets the task; nothing cancels until they run it',
+          subject_type: 'seat',
+          subject_id: seatId,
+        });
+      }
+    } catch {
+      /* inbox mirror is best-effort */
+    }
     res.json({ ok: true, reclaim: r });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
