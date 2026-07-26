@@ -3,232 +3,105 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The Harness · 1st FP</title>
+<title>Hire a new agent · 1st FP</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
 <style>
-  /* ── THE HARNESS - the execution layer over the Operator's build queue ─────
-     The Operator finds the gap and proposes the build; a human approves it; the
-     harness picks it up, drafts the plan, and stages it for a final human ship.
-     The OS proposes AND builds its own next steps, gated at each hop. Same
-     command-room language as the Operator. Color is meaning: red signal, gold
-     build/staged, green shipped/live. */
-  :root{
-    --s0:#0C131D; --s1:#101927; --s2:#152134; --s3:#1B2A42;
-    --ink:#E9EEF5; --ink-2:#8FA0B4; --ink-3:#5C6B7D;
-    --hair:rgba(233,238,245,.08); --hair-2:rgba(233,238,245,.16);
-    --red:#E53935; --gold:#F5B81B; --ok:#2E9E5B;
-    --sans:'Geist',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-    --mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
-  }
-  :root[data-theme="light"]{
-    --s0:#E9EEF6; --s1:#FFFFFF; --s2:#F1F5FA; --s3:#E3EAF3;
-    --ink:#151E2B; --ink-2:#48586E; --ink-3:#7E8DA2;
-    --hair:rgba(20,34,54,.10); --hair-2:rgba(20,34,54,.17);
-    --gold:#B07D08; --ok:#1F8A50;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scrollbar-color:var(--s2) var(--s0)}
-  body{background:var(--s0);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
-    background-image:radial-gradient(1000px 480px at 50% -100px,rgba(245,184,27,.05),transparent 70%)}
-  .wrap{max-width:1080px;margin:0 auto;padding:40px 40px 90px}
-  .micro{font-family:var(--mono);font-size:10px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
-  .fadein{animation:rise .45s cubic-bezier(.2,.7,.3,1)}
-  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-
-  /* top line */
-  .top{display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--hair);padding-right:58px}
-  .top .id{display:flex;align-items:baseline;gap:14px}
-  .top h1{font-size:15px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
-  .top .st{display:flex;align-items:center;gap:8px}
-  .top .st .d{width:6px;height:6px;border-radius:50%;background:var(--gold)}
-  .top .st.on .d{background:var(--ok);box-shadow:0 0 8px rgba(46,158,91,.6)}
-
-  /* intro */
-  .lede{margin-top:26px;max-width:680px}
-  .lede h2{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
-  .lede p{color:var(--ink-2);font-size:14px;line-height:1.6;margin-top:12px}
-
-  /* metrics strip */
-  .strip{display:flex;gap:56px;margin-top:34px;flex-wrap:wrap}
-  .strip .t .v{font-size:38px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
-  .strip .t .v.red{color:var(--red)} .strip .t .v.gold{color:var(--gold)} .strip .t .v.ok{color:var(--ok)}
-
-  /* run bar */
-  .runbar{display:flex;align-items:center;gap:16px;margin-top:34px;padding:18px 22px;background:var(--s1);border:1px solid var(--hair);border-radius:14px}
-  .runbar .rt{flex:1}
-  .runbar .rt .h{font-size:14px;font-weight:700} .runbar .rt .s{color:var(--ink-3);font-size:12.5px;margin-top:4px}
-  .btn{font-family:var(--sans);font-weight:700;font-size:13px;border:none;border-radius:10px;padding:11px 20px;cursor:pointer;transition:transform .1s,opacity .15s}
-  .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.4;cursor:default}
-  .btn.pri{background:var(--gold);color:#1a1204} .btn.ship{background:var(--ok);color:#04140a}
-  .btn.ghost{background:var(--s2);color:var(--ink)}
-
-  /* columns */
-  .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:38px}
-  @media(max-width:860px){.cols{grid-template-columns:1fr}}
-  .col h3{font-family:var(--mono);font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--hair)}
-  .col h3 .n{margin-left:auto;color:var(--ink);font-weight:600}
-  .col .list{margin-top:14px;display:flex;flex-direction:column;gap:12px;min-height:60px}
-
-  /* card */
-  .card{background:var(--s1);border:1px solid var(--hair);border-radius:12px;padding:15px 16px;transition:border-color .15s}
-  .card:hover{border-color:var(--hair-2)}
-  .card .pk{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
-  .card .ti{font-size:14px;font-weight:700;line-height:1.35;margin-top:6px}
-  .card .bd{color:var(--ink-2);font-size:12.5px;line-height:1.5;margin-top:8px}
-  .card .val{color:var(--gold);font-size:12px;font-weight:600;margin-top:10px}
-  .card .plan{margin-top:12px;padding-top:12px;border-top:1px solid var(--hair);display:flex;flex-direction:column;gap:7px}
-  .card .plan .step{display:flex;gap:9px;font-size:12px;color:var(--ink-2);line-height:1.45}
-  .card .plan .step .k{font-family:var(--mono);font-size:10px;color:var(--gold);flex-shrink:0;padding-top:1px}
-  .card .code{margin-top:12px;border-top:1px solid var(--hair);padding-top:12px}
-  .card .code summary{cursor:pointer;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);list-style:none}
-  .card .code summary::-webkit-details-marker{display:none}
-  .card .code summary::before{content:"› ";color:var(--ink-3)}
-  .card .code[open] summary::before{content:"⌄ "}
-  .card .code .cp{color:var(--ink-3);text-transform:none;letter-spacing:0}
-  .card .code pre{margin-top:10px;background:var(--s0);border:1px solid var(--hair);border-radius:8px;padding:12px;overflow-x:auto;font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--ink-2);max-height:340px;overflow-y:auto;white-space:pre}
-  .card .code .cnote{margin-top:8px;font-size:11px;color:var(--ink-3);line-height:1.5;font-style:italic}
-  .card .foot{display:flex;align-items:center;gap:10px;margin-top:14px}
-  .card .foot .eta{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.1em;text-transform:uppercase}
-  .card .foot .eng{margin-left:auto;font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding:3px 8px;border:1px solid var(--hair);border-radius:20px}
-  .card.shipped{opacity:.72}
-  .card.shipped .ti{color:var(--ink-2)}
-  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;padding:4px 9px;border-radius:20px}
-  .pill.live{background:rgba(46,158,91,.14);color:var(--ok)}
-  .empty{color:var(--ink-3);font-size:12.5px;line-height:1.5;padding:18px 4px;font-style:italic}
-  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--s3);border:1px solid var(--hair-2);color:var(--ink);font-size:13px;padding:11px 18px;border-radius:10px;transition:.25s;pointer-events:none;z-index:9}
-  .toast.show{opacity:1;transform:translateX(-50%)}
+  .hire{max-width:900px;margin:0 auto;padding:30px 26px 40px;display:flex;flex-direction:column;gap:18px}
+  .hire h1{font-weight:800;font-size:25px;letter-spacing:-.02em;color:var(--ink)}
+  .hire .lead{margin:9px 0 0;font-weight:500;font-size:13.5px;line-height:1.65;color:var(--ink-3);max-width:72ch}
+  .hr-req .q{font-weight:700;font-size:12px;color:var(--muted)}
+  .hr-req .body{margin:10px 0 0;font-weight:500;font-size:14.5px;line-height:1.6;color:var(--ink)}
+  .hr-req .row{display:flex;align-items:center;gap:9px;margin-top:14px}
+  .hr-req .est{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
+  .hr-build .hd{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid var(--divider)}
+  .hr-build .mono{width:30px;height:30px;border-radius:9px;background:var(--indigo-bg-2);color:var(--indigo);font-weight:800;font-size:10.5px;display:flex;align-items:center;justify-content:center;font-family:var(--sans)}
+  .hr-build .nm{font-weight:800;font-size:14px;color:var(--ink)}
+  .hr-build .dept{font-weight:500;font-size:12px;color:var(--muted)}
+  .hr-build .badge{display:flex;align-items:center;gap:6px;font-weight:700;font-size:11px;color:var(--indigo);background:var(--indigo-bg-2);border-radius:var(--r-pill);padding:5px 11px}
+  .hr-steps{padding:6px 20px 14px}
+  .hr-step{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--divider-soft)}
+  .hr-step:last-child{border-bottom:none}
+  .hr-step .ic{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+  .hr-step .ic svg{width:12px;height:12px}
+  .hr-step .tx{flex:1;font-weight:600;font-size:13px}
+  .hr-step .when{font-weight:500;font-size:11.5px}
+  .hr-foot{padding:14px 20px;background:var(--panel-alt);border-top:1px solid var(--divider);display:flex;align-items:center;gap:12px}
+  .hr-foot span.t{flex:1;font-weight:500;font-size:12.5px;color:var(--ink-3)}
+  .hr-foot b{color:var(--ink)}
+  .hr-sugg{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .hr-sugg .c{background:var(--panel);border:1px dashed var(--border-strong);border-radius:var(--r-card);padding:16px 18px}
+  .hr-sugg .c .t{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .hr-sugg .c p{margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)}
+  .hr-sugg .c .s{display:inline-block;font-weight:700;font-size:11.5px;color:var(--indigo);margin-top:11px}
 </style>
-  <script src="/count.js" defer></script>
 </head>
 <body>
-<div class="wrap">
-  <div class="top">
-    <div class="id">
-      <h1>The Harness</h1>
-      <span class="micro">Execution layer</span>
-    </div>
-    <div class="st" id="st"><span class="d"></span><span class="micro" id="stt">Rules engine</span></div>
+<div class="hire view">
+  <div>
+    <h1>Describe the job. We'll build the agent.</h1>
+    <p class="lead">No prompts, no configuration screens. Tell it what keeps falling through the cracks — in your words — and it comes back with a working agent you can test before it goes live.</p>
   </div>
 
-  <div class="lede fadein">
-    <h2>The OS builds and codes its own team.</h2>
-    <p>The Operator finds the gap and proposes the fix. You approve it. The harness drafts a new
-       AI employee, and a dedicated coder (Opus 4.8) writes its real code module. You review the
-       code, then ship it, and it lands on the Roster. Propose, build, code, ship, a person at
-       every gate. Nothing runs until you merge it.</p>
-  </div>
-
-  <div class="strip fadein" id="strip"></div>
-
-  <div class="runbar fadein">
-    <div class="rt">
-      <div class="h">Run the harness</div>
-      <div class="s" id="runsub">Draft build orders for every approved gap.</div>
-    </div>
-    <button class="btn pri" id="runbtn">Run harness</button>
-  </div>
-
-  <div class="cols">
-    <div class="col">
-      <h3>Inbox <span class="n" id="c-inbox">0</span></h3>
-      <div class="micro" style="margin-top:8px;color:var(--ink-3)">Approved · awaiting a plan</div>
-      <div class="list" id="inbox"></div>
-    </div>
-    <div class="col">
-      <h3>Staged <span class="n" id="c-staged">0</span></h3>
-      <div class="micro" style="margin-top:8px;color:var(--ink-3)">Planned · awaiting your ship</div>
-      <div class="list" id="staged"></div>
-    </div>
-    <div class="col">
-      <h3>Shipped <span class="n" id="c-shipped">0</span></h3>
-      <div class="micro" style="margin-top:8px;color:var(--ink-3)">Live in the OS</div>
-      <div class="list" id="shipped"></div>
+  <div class="card card-pad hr-req">
+    <div class="q">What's falling through the cracks?</div>
+    <p class="body" id="req">"Quotes sit for a week because nobody follows up after the estimator sends them. If we called back in 24 hours we'd win a lot more of them."</p>
+    <div class="row">
+      <button class="btn-accent" id="build">Build it</button>
+      <button class="btn" id="reword">Change the wording</button>
+      <span class="est">Estimated build: 6 days</span>
     </div>
   </div>
+
+  <div class="card card-clip hr-build">
+    <div class="hd">
+      <span class="mono">EF</span>
+      <div style="flex:1;min-width:0"><div class="nm">Estimating Follow-up</div><div class="dept">Sales &amp; Estimating · calls back every quote inside 24 hours</div></div>
+      <span class="badge">Building · step 3 of 5</span>
+    </div>
+    <div class="hr-steps" id="steps"></div>
+    <div class="hr-foot">
+      <span class="t">On last month's data it would have followed up on <b>38 quotes</b> and likely recovered <b>$21,400</b> in work.</span>
+      <button class="btn btn-sm">See the dry run</button>
+    </div>
+  </div>
+
+  <div class="hr-sugg" id="sugg"></div>
 </div>
-<div class="toast" id="toast"></div>
-
 <script>
-var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
-var toastEl=document.getElementById('toast'),toastT;
-function toast(m){toastEl.innerHTML=m;toastEl.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){toastEl.classList.remove('show');},2600);}
-async function get(u){var r=await fetch(u);return r.json();}
-async function post(u,b){var r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})});return r.json();}
+var CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M5 13l4 4L19 7"/></svg>';
+var CLOCK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>';
+var STEPS=[
+  {s:'done', t:'Read the gap and named the job', when:'2m'},
+  {s:'done', t:'Found the data it needs — quotes, jobs, contacts', when:'6m'},
+  {s:'now',  t:'Writing the follow-up rules and the call-back script', when:'now'},
+  {s:'todo', t:'Dry run against last month’s quotes', when:''},
+  {s:'todo', t:'You approve, then it goes live', when:''}
+];
+document.getElementById('steps').innerHTML=STEPS.map(function(st){
+  var ic, tx, when;
+  if(st.s==='done'){ic='<span class="ic" style="background:var(--green-bg);color:var(--green)">'+CHECK+'</span>';tx='color:var(--ink)';when='color:var(--faint)';}
+  else if(st.s==='now'){ic='<span class="ic" style="background:var(--indigo-bg-2);color:var(--indigo)">'+CLOCK+'</span>';tx='color:var(--ink)';when='color:var(--indigo)';}
+  else{ic='<span class="ic" style="background:var(--fill)"></span>';tx='color:var(--faint)';when='color:var(--faint)';}
+  return '<div class="hr-step">'+ic+'<span class="tx" style="'+tx+'">'+st.t+'</span>'+(st.when?'<span class="when" style="'+when+'">'+st.when+'</span>':'')+'</div>';
+}).join('');
 
-function inboxCard(f){
-  var tag=f.mode==='upgrade'?'Strengthen':(f.custom?'Off-catalog agent':'New agent');
-  return '<div class="card fadein"><div class="pk">'+esc(f.pillar)+' · '+esc(tag)+'</div>'+
-    '<div class="ti">'+esc(f.title)+'</div>'+
-    (f.action?'<div class="bd">'+esc(f.action)+'</div>':'')+
-    (f.value?'<div class="val">'+esc(f.value)+'</div>':'')+
-    '<div class="foot"><span class="eta">Queued</span></div></div>';
-}
-function orderCard(o,shipped){
-  var isUp=o.mode==='upgrade';
-  var tag=isUp?'Strengthen':(o.custom?'Off-catalog agent':'New agent');
-  var know=(o.knowledge||[]).map(function(s,i){return '<div class="step"><span class="k">+</span><span>'+esc(s)+'</span></div>';}).join('');
-  var head=isUp?('Strengthen '+esc(o.agent_name||'')):('Build '+esc(o.agent_name||o.title));
-  var live=o.agent_built!==false; // honest: only claim live if the agent really exists
-  var foot=shipped
-    ? '<div class="foot"><span class="pill '+(live?'live':'')+'">'+(isUp?'Smarter':(live?'Live in the Roster':'Pending'))+'</span>'+(o.shipped_at?'<span class="eta">'+esc((o.shipped_at||'').slice(0,10))+'</span>':'')+'<span class="eng">'+esc(o.engine||'')+'</span></div>'
-    : '<div class="foot"><button class="btn ship" data-ship="'+o.id+'">Ship it</button><span class="eta">~'+(o.eta_weeks||2)+' wk</span><span class="eng">'+esc(o.engine||'')+'</span></div>';
-  var code='';
-  if(!isUp && o.code){
-    var ce=o.code_engine||'';
-    var eng;
-    if(ce.indexOf('swarm')>=0){var m=ce.match(/x(\d+)/);eng='K3 Swarm'+(m?' (x'+m[1]+')':'');}
-    else if(ce.indexOf('kimi')>=0)eng='Kimi K3';
-    else if(ce.indexOf('anthropic')>=0)eng='Opus 4.8';
-    else if(ce.indexOf('openai')>=0)eng='GPT';
-    else eng='template';
-    code='<details class="code"><summary>The code '+esc(eng)+' wrote'+(o.code_path?' · <span class="cp">'+esc(o.code_path)+'</span>':'')+'</summary>'+
-      '<pre>'+esc(o.code)+'</pre>'+
-      '<div class="cnote">Reviewable artifact. Merge it through the dev pipeline to give this agent hard-coded logic; it never auto-runs.</div></details>';
-  }
-  return '<div class="card fadein'+(shipped?' shipped':'')+'"><div class="pk">'+esc(tag)+'</div>'+
-    '<div class="ti">'+head+'</div>'+
-    (o.role?'<div class="bd">'+esc(o.role)+'</div>':'')+
-    (o.value?'<div class="val">'+esc(o.value)+'</div>':'')+
-    (know?'<div class="plan">'+know+'</div>':'')+
-    code+
-    foot+'</div>';
-}
-function render(s){
-  document.getElementById('st').classList.toggle('on',!!s.brain);
-  document.getElementById('stt').textContent=(s.brain?'Brain live':'Rules engine')+' · Coder: '+esc(s.coder||'template');
-  var m=s.metrics||{};
-  document.getElementById('strip').innerHTML=
-    '<div class="t"><div class="micro">Awaiting a build</div><div class="v red">'+(m.pending||0)+'</div></div>'+
-    '<div class="t"><div class="micro">Staged to ship</div><div class="v gold">'+(m.staged||0)+'</div></div>'+
-    '<div class="t"><div class="micro">Shipped</div><div class="v ok">'+(m.shipped||0)+'</div></div>'+
-    '<div class="t"><div class="micro">Agents on the roster</div><div class="v">'+(m.agents_live||0)+'<small style="font-size:15px;color:var(--ink-3);font-weight:400"> · '+(m.agents_built||0)+' built here</small></div></div>';
-  document.getElementById('c-inbox').textContent=(s.inbox||[]).length;
-  document.getElementById('c-staged').textContent=(s.staged||[]).length;
-  document.getElementById('c-shipped').textContent=(s.shipped||[]).length;
-  document.getElementById('inbox').innerHTML=(s.inbox||[]).length?s.inbox.map(inboxCard).join(''):'<div class="empty">No approved gaps waiting. Approve a proposed build on the Operator and it lands here.</div>';
-  document.getElementById('staged').innerHTML=(s.staged||[]).length?s.staged.map(function(o){return orderCard(o,false);}).join(''):'<div class="empty">Nothing staged. Run the harness to draft the agents.</div>';
-  document.getElementById('shipped').innerHTML=(s.shipped||[]).length?s.shipped.map(function(o){return orderCard(o,true);}).join(''):'<div class="empty">Nothing shipped yet. Shipped agents land on the Roster.</div>';
-  var rb=document.getElementById('runbtn');
-  rb.disabled=!(s.inbox||[]).length;
-  document.getElementById('runsub').textContent=(s.inbox||[]).length?('Draft build orders for '+s.inbox.length+' approved gap'+(s.inbox.length>1?'s':'')+'.'):'Inbox empty. Approve a gap on the Operator first.';
-}
+var SUGG=[
+  {t:'Permit expediter', d:'Chases AHJ permit status so projects stop stalling.', dept:'Projects'},
+  {t:'Deficiency converter', d:'Turns failed inspection items into quoted repair work.', dept:'Inspections'},
+  {t:'Tech scheduler', d:'Fills tomorrow’s empty truck slots from the backlog.', dept:'Service'}
+];
+document.getElementById('sugg').innerHTML=SUGG.map(function(s){
+  return '<div class="c"><div class="t">'+s.t+'</div><p>'+s.d+'</p><span class="s">Suggested for '+s.dept+' &rarr;</span></div>';
+}).join('');
 
-document.getElementById('runbtn').addEventListener('click',async function(){
-  this.disabled=true;this.textContent='Drafting…';
-  var r=await post('/api/harness/run');
-  this.textContent='Run harness';
-  if(r&&r.ok){toast('Drafted <b>'+(r.built||0)+'</b> build order'+((r.built||0)===1?'':'s')+'.');render(r.state);}
-});
-document.addEventListener('click',async function(e){
-  var b=e.target.closest('[data-ship]');if(!b)return;
-  b.disabled=true;b.textContent='Shipping…';
-  var r=await post('/api/harness/orders/'+b.getAttribute('data-ship')+'/ship');
-  if(r&&r.ok){toast(r.result?esc(r.result.charAt(0).toUpperCase()+r.result.slice(1))+'.':'Shipped.');render(r.state);
-    try{window.parent.postMessage({type:'roster-changed'},'*');}catch(_){/* standalone */}}
-});
-
-get('/api/harness').then(render);
+/* Shell-level: the redesign reframes the Harness as hiring. "Build it" acknowledges;
+   the real build pipeline (POST /api/harness/build) stays wired for when it's turned on. */
+document.getElementById('build').onclick=function(){var b=this;b.textContent='Building…';b.disabled=true;setTimeout(function(){b.textContent='Building · step 3 of 5';},1200);};
+document.getElementById('reword').onclick=function(){
+  var p=document.getElementById('req');p.setAttribute('contenteditable','true');p.focus();
+};
 </script>
 </body>
 </html>
