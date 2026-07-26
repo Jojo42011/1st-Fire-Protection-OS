@@ -7,10 +7,15 @@ better-sqlite3 backend and **one** SQLite "brain," presented behind a collapsibl
 
 > **SINGLE-SOURCE LIFE SAFETY** — 108 years of combined experience · SCTRCA · MBE · SBE · HUB.
 
-**Brand:** a fire-station command center — red `#E53935` is *the fire*, navy `#1E2D40` is *the
-uniform*, off-white `#F5F7F9` blueprint is *the paper*, gold `#F5B81B` is *the badge*. Inter
-(900 uppercase, stamped-sign headings) + JetBrains Mono for technical detail. Real brand kit
-lives in `client/brand/` (tokens + fonts); the app themes off it.
+**Brand — "Signal":** light-first and calm, shaped like modern SaaS rather than a control
+room. Off-blue-white surfaces `#F7F8FB`, white cards, near-black ink `#151A2D`. Colour is
+*meaning* — green `#2FA36B` = phones, pink-red `#E02D62` = money, amber `#E2A93C` =
+reputation, indigo `#4C5BD4` = system / AI / spend. The brand heat survives as the `1F`
+logo gradient (`#FF6B4A → #E02D62`) and the pink-red money accent. **Figtree** for
+everything, **Geist Mono** for numeric/technical micro-text. The design system lives in
+`client/signal.css`; fonts are self-hosted in `client/brand/` and loaded via
+`client/brand/brand.css`. (The earlier fire-red-on-navy "command room" system is retired;
+`command.css` remains only for pages not yet migrated.)
 
 ## The four employees
 
@@ -34,7 +39,7 @@ are present. Live path: forward 210-377-FIRE → Twilio → Vapi (BYO OpenAI key
   the shell UI, the integration catalog, graceful degradation.
 - **The founder layer** — a thin, per-company identity dropped on top. For 1st FP that's:
   - `server/src/config/constants.ts` — brand + personas + system prompts
-  - `server/src/config/theme.ts` + the shell's `:root` CSS vars — the palette (fire-red on navy)
+  - `server/src/config/theme.ts` + the shell's `:root` CSS vars — the palette (Signal: light-first, colour-as-meaning)
   - `server/src/config/agents.ts` — which employees exist
   - `server/src/config/integrations.ts` — which hands are wired
   - the shell's `TABS` array

@@ -3,49 +3,64 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Review Collector · 1st FP</title>
+<title>Reputation · 1st FP</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/command.css" />
+<link rel="stylesheet" href="/signal.css" />
   <script src="/count.js" defer></script>
   <script src="/motion.js" defer></script>
 </head>
 <body>
-  <div class="page-head">
-    <div class="titles">
-      <p class="kicker">Reputation · The Word-of-Mouth Engine</p>
-      <h1>Review Collector</h1>
-      <p>Turns completed ServiceTrade jobs into 5-star reviews and protects the reputation that built the company. Requests reviews from happy customers and drafts on-brand replies, all awaiting your approval.</p>
+  <div class="screen view">
+    <div style="display:flex;align-items:flex-start;gap:14px">
+      <div style="flex:1;min-width:0">
+        <p style="font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Reputation · The Word-of-Mouth Engine</p>
+        <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Reputation</h1>
+        <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--muted);margin-top:8px;max-width:74ch">Turns completed ServiceTrade jobs into 5-star reviews and protects the reputation that built the company. Requests reviews from happy customers and drafts on-brand replies, all awaiting your approval.</p>
+      </div>
+      <span id="status-badge" class="pill gray" style="display:inline-flex;align-items:center;gap:6px;flex:none"><span class="dot" style="background:var(--muted)"></span>Standalone</span>
     </div>
-    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span>
-  </div>
 
-  <div class="grid kpis" id="kpis"></div>
+    <div class="kpis" id="kpis"></div>
 
-  <div class="two-col" style="margin-top:22px">
-    <div>
-      <div class="section-title">Incoming Reviews</div>
-      <div id="reviews"></div>
-    </div>
-    <div>
-      <div class="section-title">Star Distribution</div>
-      <div class="card"><div class="bars" id="dist"></div></div>
+    <div class="split">
+      <div class="stack">
+        <div class="card" style="padding:18px 20px;display:flex;align-items:center;gap:28px">
+          <div style="flex:none">
+            <div class="num" id="avg-big" style="font-weight:800;font-size:34px;line-height:1;color:var(--ink)">4.8</div>
+            <div style="color:var(--amber);font-size:14px;letter-spacing:2px;margin-top:6px">★★★★★</div>
+            <div id="rev-count" style="font-weight:500;font-size:12px;color:var(--muted);margin-top:6px">312 reviews</div>
+          </div>
+          <div class="dist-bars" id="dist" style="flex:1;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
 
-      <div class="section-title">Request Queue · Completed Jobs</div>
-      <div id="jobs"></div>
-      <div class="connect">
-        <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z"/></svg></div>
-        <div><b>Connect to go live:</b> Google Business Profile + Facebook to pull &amp; publish replies, ServiceTrade to trigger on job completion, Email / SMS to send requests.</div>
+        <div class="stack" id="reviews"></div>
+      </div>
+
+      <div class="card card-clip">
+        <div class="card-head" style="display:block">
+          <h2>Ask these customers</h2>
+          <p style="margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)">Jobs finished in the last 5 days with no review yet.</p>
+        </div>
+        <div id="jobs"></div>
+        <div style="padding:13px 18px;background:var(--indigo-bg);border-top:1px solid var(--border)">
+          <div style="font-weight:700;font-size:12px;color:var(--indigo-deep)">Connect Google Business</div>
+          <p style="margin:4px 0 0;font-weight:500;font-size:11.5px;line-height:1.5;color:#5560A8">So approved replies post themselves and new reviews land here within minutes.</p>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
 function starStr(n){return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
+function initials(n){return (n||'?').trim().split(/\s+/).map(function(w){return w.charAt(0);}).join('').slice(0,2).toUpperCase();}
+function barColor(k){return k>=5?'var(--green)':k===4?'var(--green-soft)':k===3?'var(--amber)':'var(--money)';}
 function load(){
   fetch('/api/reviews').then(function(r){return r.json();}).then(function(d){
     var s=d.summary;
-    if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Connected · Live';}
+    if(d.live){var b=document.getElementById('status-badge');b.className='pill green';b.innerHTML='<span class="dot live"></span>Connected · Live';}
+    var avgEl=document.getElementById('avg-big');if(avgEl)avgEl.textContent=s.avgRating.toFixed(1);
+    var rcEl=document.getElementById('rev-count');if(rcEl)rcEl.textContent=s.totalReviews+' reviews';
     document.getElementById('kpis').innerHTML=[
       kpi('Avg Rating',s.avgRating.toFixed(1)+'★','across '+s.totalReviews+' reviews',true),
       kpi('Total Reviews',s.totalReviews,'all sources',false),
@@ -54,25 +69,36 @@ function load(){
     ].join('');
     var maxd=Math.max(1,Math.max.apply(null,[1,2,3,4,5].map(function(k){return s.distribution[k]||0;})));
     document.getElementById('dist').innerHTML=[5,4,3,2,1].map(function(k){
-      var v=s.distribution[k]||0;return '<div class="bar-row"><span class="lab">'+k+'★</span><div class="bar-track"><div class="bar-fill" style="width:'+(v/maxd*100)+'%"></div></div><span class="mono muted">'+v+'</span></div>';
+      var v=s.distribution[k]||0;return '<div class="bar-row" style="gap:10px"><span class="lab" style="width:24px">'+k+'★</span><span class="bar bar-thin"><span style="width:'+(v/maxd*100)+'%;background:'+barColor(k)+'"></span></span><span class="v num" style="width:30px">'+v+'</span></div>';
     }).join('');
     document.getElementById('reviews').innerHTML=(d.reviews||[]).map(function(r){
-      var reply= r.reply_draft? '<div class="draft" style="margin-top:10px"><div class="meta"><b>Drafted reply</b><span class="pill '+(r.reply_status==='approved'||r.reply_status==='published'?'green':'gray')+'">'+r.reply_status+'</span></div><div class="body">'+esc(r.reply_draft)+'</div><div class="actions"><button class="btn primary" onclick="approveReply('+r.id+')" '+(r.reply_status==='approved'||r.reply_status==='published'?'disabled':'')+'>Approve &amp; Publish</button></div></div>'
-        : '<div class="actions" style="justify-content:flex-start;margin-top:10px"><button class="btn" onclick="draftReply('+r.id+')">Draft reply</button></div>';
-      return '<div class="card" style="margin-bottom:12px"><div class="meta" style="display:flex;justify-content:space-between;align-items:center"><div><b>'+r.author+'</b> <span class="muted mono" style="font-size:11px">· '+r.source+'</span></div><span class="stars">'+starStr(r.stars)+'</span></div><div class="body" style="color:var(--text);margin-top:8px;font-size:13.5px">'+esc(r.text)+'</div>'+reply+'</div>';
+      var meta=[r.source,r.age].filter(Boolean).join(' · ');
+      var done=(r.reply_status==='approved'||r.reply_status==='published');
+      var reply= r.reply_draft
+        ? '<div class="well" style="margin-top:12px;padding:12px 14px;border-radius:10px"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:700;font-size:11.5px;color:var(--indigo)">Drafted reply</span><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">'+esc(r.reply_status||'')+'</span></div><p style="margin:7px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3)">'+esc(r.reply_draft)+'</p><div style="display:flex;gap:8px;margin-top:11px"><button class="btn-primary" onclick="approveReply('+r.id+')" '+(done?'disabled':'')+'>Approve &amp; post</button><button class="btn" onclick="draftReply('+r.id+')">Edit</button></div></div>'
+        : '<div style="margin-top:12px"><button class="btn" onclick="draftReply('+r.id+')">Draft reply</button></div>';
+      return '<div class="card" style="padding:17px 19px">'
+        +'<div style="display:flex;align-items:center;gap:11px">'
+        +'<span class="monogram" style="width:32px;height:32px;border-radius:50%;background:var(--fill);color:var(--ink-2)">'+esc(initials(r.author))+'</span>'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13.5px;color:var(--ink)">'+esc(r.author)+'</div><div style="font-weight:500;font-size:11.5px;color:var(--muted)">'+esc(meta)+'</div></div>'
+        +'<span style="color:var(--amber);letter-spacing:2px;font-size:13px">'+starStr(r.stars)+'</span>'
+        +'</div>'
+        +'<p style="margin:11px 0 0;font-weight:500;font-size:13px;line-height:1.65;color:var(--ink)">'+esc(r.text)+'</p>'
+        +reply+'</div>';
     }).join('');
     document.getElementById('jobs').innerHTML=(d.pendingJobs||[]).map(function(j){
-      return '<div class="draft"><div class="meta"><b>'+j.customer+'</b><button class="btn" onclick="reqReview('+j.id+')">Draft request</button></div><div class="body">'+esc(j.job_desc||'')+'</div></div>';
-    }).join('') || '<div class="empty">No jobs waiting.</div>';
+      return '<div style="padding:13px 18px;border-bottom:1px solid var(--divider-soft)"><div style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(j.customer)+'</div><p style="margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)">'+esc(j.job_desc||'')+'</p><button class="btn btn-sm" style="margin-top:9px" onclick="reqReview('+j.id+')">Draft the ask</button></div>';
+    }).join('') || '<div style="padding:16px 18px;font-weight:500;font-size:12.5px;color:var(--muted)">No jobs waiting.</div>';
     var rq=d.requests||[];
     if(rq.length){
       document.getElementById('jobs').innerHTML= rq.map(function(r){
-        return '<div class="draft"><div class="meta"><b>'+r.customer+'</b><span class="pill '+(r.status==='approved'?'green':'gray')+'">'+r.status+'</span></div><div class="body">'+esc(r.body)+'</div><div class="actions"><button class="btn primary" onclick="approveReq('+r.id+')" '+(r.status==='approved'?'disabled':'')+'>Approve &amp; Send</button></div></div>';
+        var ok=r.status==='approved';
+        return '<div style="padding:13px 18px;border-bottom:1px solid var(--divider-soft)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(r.customer)+'</span><span class="pill '+(ok?'green':'gray')+'">'+esc(r.status)+'</span></div><p style="margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)">'+esc(r.body)+'</p><button class="btn-primary btn-sm" style="margin-top:9px" onclick="approveReq('+r.id+')" '+(ok?'disabled':'')+'>Approve &amp; send</button></div>';
       }).join('') + document.getElementById('jobs').innerHTML;
     }
   });
 }
-function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
+function kpi(l,v,s,hot){return '<div class="kpi"><div class="top"><span class="lab">'+l+'</span></div><span class="val num"'+(hot?' style="color:var(--amber)"':'')+'>'+v+'</span><span class="sub">'+s+'</span></div>';}
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 function draftReply(id){fetch('/api/reviews/'+id+'/draft-reply',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 function approveReply(id){fetch('/api/reviews/'+id+'/approve-reply',{method:'POST'}).then(function(r){return r.json();}).then(load);}

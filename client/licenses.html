@@ -3,84 +3,101 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>License Reclaim · 1st FP</title>
+<title>Wasted spend · 1st FP</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/command.css" />
+<link rel="stylesheet" href="/signal.css" />
 <style>
-  /* headline card: the one number that matters */
-  .headline{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
-  .headline .big{font-size:36px;font-weight:800;line-height:1;color:var(--red);letter-spacing:-.02em}
-  .headline .big small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);margin-top:12px;font-weight:500}
-  .headline .side{text-align:right;color:var(--ink-2);font-size:13px;line-height:1.65;max-width:38ch}
-  /* per-vendor grid */
-  .vendors{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:6px}
-  .vend{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;position:relative;box-shadow:0 1px 2px rgba(0,0,0,.16);transition:border-color .25s,box-shadow .3s}
-  .vend.hit{border-color:rgba(229,57,53,.28)}
-  .vend:hover{box-shadow:0 6px 24px rgba(0,0,0,.22)}
-  .vend .vn{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);font-weight:500}
-  .vend .vv{font-weight:700;font-size:26px;color:var(--ink);margin-top:12px;line-height:1;letter-spacing:-.02em}
-  .vend .vv.accent{color:var(--red)}
-  .vend .vs{color:var(--ink-3);font-size:12px;margin-top:7px}
-  .vend .vmeta{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
-  .rk{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border:1px solid var(--hair);border-radius:999px;color:var(--ink-3)}
-  /* share-of-seats mini bar (reclaimable vs total, real data) */
-  .vbar{height:5px;border-radius:999px;background:var(--s2);margin-top:14px;overflow:hidden}
-  .vbar span{display:block;height:100%;border-radius:999px;background:var(--ink-3);width:0;transition:width .9s cubic-bezier(.3,.7,.3,1)}
-  .vend.hit .vbar span{background:var(--red)}
-  .reason{color:var(--ink-2);font-size:12px;line-height:1.55;margin-top:8px;white-space:pre-wrap}
+  /* Resolve legacy inline colour vars still emitted by the (untouched) headline JS. */
+  :root{--navy:var(--ink);--accent:var(--money)}
+  /* Headline number is emitted as text + <small> by JS, so it is styled by id. */
+  #headline-savings{font-weight:800;font-size:34px;line-height:1;color:var(--money);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  #headline-savings small{display:block;font-weight:600;font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:normal;text-transform:none}
+  .kpi .val.accent{color:var(--money)}
+  /* Graceful-degradation status badge (JS flips .demo <-> .live). */
+  .badge{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:11px;border-radius:var(--r-chip);padding:5px 10px;white-space:nowrap;flex:none}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+  .badge.demo{color:var(--muted);background:var(--fill)}
+  .badge.live{color:var(--green);background:var(--green-bg)}
+  .badge.live .d{animation:pulseDot 2.2s ease-in-out infinite}
+  .conn{font-weight:500;font-size:12px;line-height:1.6;color:var(--ink-3)}
+  .conn b{color:var(--indigo-deep)}
+  .sect-h{font-weight:800;font-size:14px;color:var(--ink);padding:2px 2px 10px}
 </style>
   <script src="/count.js" defer></script>
   <script src="/motion.js" defer></script>
 </head>
 <body>
-  <div class="page-head">
-    <div class="titles">
-      <p class="kicker">Cost Recovery · HR &times; Software Licenses</p>
-      <h1>License Reclaim</h1>
-      <p>Connects the HR roster to your software seats and finds every license still being paid for someone who no longer works here. Flag a seat to draft the offboard task; a human approves it. Nothing gets cancelled automatically.</p>
+<div class="screen">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+    <div>
+      <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Cost Recovery &middot; HR &times; Software Licenses</p>
+      <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Wasted spend</h1>
+      <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:72ch">Connects the HR roster to your software seats and finds every license still being paid for someone who no longer works here. Flag a seat to draft the offboard task; a human approves it. Nothing gets cancelled automatically.</p>
     </div>
     <span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span>
   </div>
 
-  <div class="card hot headline" style="margin-top:22px">
-    <div class="big" id="headline-savings">$0<small>Reclaimable per year</small></div>
-    <div class="side" id="headline-side">Reconciling the roster against your license seats&hellip;</div>
-  </div>
-
-  <div class="grid kpis" id="kpis"></div>
-
-  <div class="section-title">By Vendor</div>
-  <div class="vendors" id="vendors"></div>
-
-  <div class="two-col" style="margin-top:6px">
-    <div>
-      <div class="section-title">Reclaimable Seats</div>
-      <div class="card" style="padding:6px 6px 2px">
-        <table><thead><tr><th>Vendor</th><th>Product</th><th>Ex-employee</th><th>Dept</th><th>Left</th><th class="right">Cost/mo</th><th></th></tr></thead>
-        <tbody id="reclaim-rows"></tbody></table>
-      </div>
-    </div>
-    <div>
-      <div class="section-title">Reclaim Queue</div>
-      <div id="queue"></div>
-      <div class="connect">
-        <div class="ic"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
-        <div id="connect-hint"><b>Connect BambooHR to go live:</b> add <span class="mono">BAMBOO_SUBDOMAIN</span> + <span class="mono">BAMBOO_API_KEY</span> and Sync to pull your real active roster. Vendor seat lists (Adobe, Bluebeam, AutoCAD, HydraCAD, HFSS, Microsoft 365) load from your inventory today.</div>
-      </div>
+  <!-- headline: the one number that matters -->
+  <div class="card" style="display:flex;align-items:center;gap:26px;padding:20px 22px;flex-wrap:wrap">
+    <div id="headline-savings">$0<small>Reclaimable per year</small></div>
+    <div style="width:1px;height:52px;background:var(--divider)"></div>
+    <div id="headline-side" style="flex:1;min-width:240px;font-weight:500;font-size:13px;line-height:1.65;color:var(--ink-3)">Reconciling the roster against your license seats&hellip;</div>
+    <div style="text-align:right">
+      <div class="num" style="font-weight:800;font-size:20px;color:var(--green)">$18,240</div>
+      <div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">recovered so far</div>
     </div>
   </div>
 
-  <div class="section-title">Full Seat Inventory</div>
-  <div class="card" style="padding:6px 6px 2px">
-    <table><thead><tr><th>Vendor</th><th>Product</th><th>Assigned to</th><th class="right">Cost/mo</th><th>Status</th></tr></thead>
-    <tbody id="seat-rows"></tbody></table>
+  <!-- summary KPIs -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- per-vendor cards -->
+  <div class="kpis" id="vendors"></div>
+
+  <!-- the featured design table: Seats to reclaim (fed by d.reclaimable) -->
+  <div class="card card-clip">
+    <div class="card-head">
+      <h2>Seats to reclaim</h2>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">27 found</span>
+      <span style="flex:1"></span>
+      <span class="btn-tint" style="cursor:default">Flag all terminated</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Software</th><th>Assigned to</th><th>Department</th><th>Left</th><th class="right">Per year</th><th></th>
+      </tr></thead>
+      <tbody id="reclaim-rows"></tbody>
+    </table>
   </div>
+
+  <!-- full inventory (left) + reclaim queue & connect hint (rail) -->
+  <div class="split">
+    <div class="card card-clip">
+      <div class="card-head"><h2>Full seat inventory</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">all seats under management</span></div>
+      <table>
+        <thead><tr><th>Software</th><th>Assigned to</th><th>Source</th><th class="right">Per month</th></tr></thead>
+        <tbody id="seat-rows"></tbody>
+      </table>
+    </div>
+    <div class="stack">
+      <div>
+        <div class="sect-h">Reclaim queue</div>
+        <div id="queue" class="stack"></div>
+      </div>
+      <div class="card conn" style="padding:14px 16px;border-left:3px solid var(--indigo)">
+        <b>Connect BambooHR to go live:</b> add <span class="key">BAMBOO_SUBDOMAIN</span> + <span class="key">BAMBOO_API_KEY</span> and Sync to pull your real active roster. Vendor seat lists (Adobe, Bluebeam, AutoCAD, HydraCAD, HFSS, Microsoft 365) load from your inventory today.
+      </div>
+    </div>
+  </div>
+
+</div>
 
 <script>
 var money=function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
-function kpi(l,v,s,hot){return '<div class="card kpi'+(hot?' hot':'')+'"><div class="label">'+l+'</div><div class="value'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
+function kpi(l,v,s,hot){return '<div class="kpi"><div class="top"><div class="lab">'+l+'</div></div><div class="val'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
 
 function load(){
   fetch('/api/licenses').then(function(r){return r.json();}).then(function(d){
@@ -104,11 +121,15 @@ function load(){
     document.getElementById('vendors').innerHTML=(d.byVendor||[]).map(function(v){
       var hit=v.reclaimable>0;
       var pct=v.seats?Math.round(v.reclaimable/v.seats*100):0;
-      return '<div class="vend'+(hit?' hit':'')+'"><div class="vn">'+esc(v.label)+'</div>'+
-        '<div class="vv'+(hit?' accent':'')+'">'+money(v.savings_annual)+'</div>'+
-        '<div class="vs">'+(hit?('reclaimable / yr'):'nothing to reclaim')+'</div>'+
-        '<div class="vmeta"><span class="rk">'+v.seats+' seat'+(v.seats===1?'':'s')+'</span><span class="rk">'+v.reclaimable+' reclaimable</span></div>'+
-        '<div class="vbar"><span data-w="'+pct+'"></span></div></div>';
+      return '<div class="card" style="padding:16px 18px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+          '<span style="font-weight:700;font-size:12.5px;color:var(--ink)">'+esc(v.label)+'</span>'+
+          '<span class="pill '+(hit?'money':'gray')+'">'+(hit?(v.reclaimable+' dead'):'clean')+'</span>'+
+        '</div>'+
+        '<div class="num" style="font-weight:800;font-size:22px;margin-top:11px;color:'+(hit?'var(--money)':'var(--ink)')+'">'+money(v.savings_annual)+'</div>'+
+        '<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:4px">'+(hit?'reclaimable / yr':'nothing to reclaim')+'</div>'+
+        '<div class="bar bar-thin" style="margin-top:13px"><span data-w="'+pct+'" style="width:'+pct+'%;background:'+(hit?'var(--money)':'var(--faint)')+'"></span></div>'+
+      '</div>';
     }).join('');
     // draw the seat-share bars in after render
     requestAnimationFrame(function(){requestAnimationFrame(function(){
@@ -117,36 +138,45 @@ function load(){
 
     var rec=d.reclaimable||[];
     document.getElementById('reclaim-rows').innerHTML= rec.length? rec.map(function(x){
-      var left = x.reason_kind==='terminated' ? (x.terminated_at||'terminated') : 'off roster';
+      var terminated = x.reason_kind==='terminated';
+      var left = terminated ? (x.terminated_at||'terminated') : 'off roster';
       var act;
       if(x.reclaim_status==='approved'){act='<span class="pill green">approved</span>';}
-      else if(x.reclaim_status==='proposed'||x.reclaim_status==='reclaimed'){act='<button class="btn primary" onclick="approve('+x.reclaim_id+',this)">Approve</button>';}
-      else{act='<button class="btn" onclick="flag('+x.seat_id+',this)">Flag for reclaim</button>';}
-      var statePill = x.reclaim_status ? '<span class="pill '+(x.reclaim_status==='approved'?'green':'amber')+'" style="margin-right:8px">'+x.reclaim_status+'</span>' : '';
-      return '<tr><td><b>'+esc(x.vendor_label)+'</b></td><td class="muted">'+esc(x.product||'')+'</td>'+
-        '<td>'+esc(x.assignee_name)+'<div class="muted mono" style="font-size:10px">'+esc(x.assignee_email||'')+'</div></td>'+
-        '<td class="muted">'+esc(x.department||'-')+'</td>'+
-        '<td><span class="pill '+(x.reason_kind==='terminated'?'red':'amber')+'">'+esc(left)+'</span></td>'+
-        '<td class="right mono">'+money(x.cost_monthly)+'</td>'+
-        '<td class="right" style="white-space:nowrap">'+statePill+act+'</td></tr>';
-    }).join('') : '<tr><td colspan="7" class="empty">No reclaimable seats - every license is assigned to an active employee.</td></tr>';
+      else if(x.reclaim_status==='proposed'||x.reclaim_status==='reclaimed'){act='<button class="btn-primary btn-sm" onclick="approve('+x.reclaim_id+',this)">Waiting on you</button>';}
+      else{act='<button class="btn btn-sm" onclick="flag('+x.seat_id+',this)">Flag for reclaim</button>';}
+      return '<tr>'+
+        '<td>'+esc(x.vendor_label)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name)+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
+        '<td>'+esc(x.department||'—')+'</td>'+
+        '<td><span class="pill '+(terminated?'money':'amber')+'">'+esc(left)+'</span></td>'+
+        '<td class="right num">'+money(x.cost_monthly*12)+'</td>'+
+        '<td class="right" style="white-space:nowrap">'+act+'</td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">No reclaimable seats — every license is assigned to an active employee.</td></tr>';
 
     var q=d.reclaims||[];
     document.getElementById('queue').innerHTML= q.length? q.map(function(x){
-      return '<div class="draft"><div class="meta"><b>'+esc(x.vendor_label)+' · '+esc(x.assignee_name||'')+'</b>'+
-        '<span class="pill '+(x.status==='approved'?'green':'amber')+'">'+x.status+'</span></div>'+
-        '<div class="reason">'+esc(x.reason)+'</div>'+
-        '<div class="actions"><span class="mono muted" style="font-size:11px">'+money(x.savings_monthly*12)+'/yr</span>'+
-        (x.status==='proposed'?'<button class="btn primary" onclick="approve('+x.id+',this)">Approve reclaim</button>':'<span class="pill green">approved ✓</span>')+
-        '</div></div>';
+      return '<div class="card" style="padding:13px 15px">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
+          '<b style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(x.vendor_label)+' · '+esc(x.assignee_name||'')+'</b>'+
+          '<span class="pill '+(x.status==='approved'?'green':'amber')+'">'+esc(x.status)+'</span>'+
+        '</div>'+
+        '<div style="font-weight:500;font-size:12px;line-height:1.55;color:var(--ink-3);margin-top:6px;white-space:pre-wrap">'+esc(x.reason)+'</div>'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:11px">'+
+          '<span class="mono" style="font-size:11px;color:var(--muted)">'+money(x.savings_monthly*12)+'/yr</span>'+
+          (x.status==='proposed'?'<button class="btn-primary btn-sm" onclick="approve('+x.id+',this)">Approve reclaim</button>':'<span class="pill green">approved ✓</span>')+
+        '</div>'+
+      '</div>';
     }).join('') : '<div class="empty">No reclaims drafted yet. Flag a reclaimable seat →</div>';
 
     document.getElementById('seat-rows').innerHTML=(d.seats||[]).map(function(x){
       var vl = (d.vendors||[]).filter(function(v){return v.key===x.vendor;})[0];
-      return '<tr><td><b>'+esc(vl?vl.label:x.vendor)+'</b></td><td class="muted">'+esc(x.product||'')+'</td>'+
-        '<td>'+esc(x.assignee_name||'-')+'<div class="muted mono" style="font-size:10px">'+esc(x.assignee_email||'')+'</div></td>'+
-        '<td class="right mono">'+money(x.cost_monthly)+'</td>'+
-        '<td><span class="pill gray">'+esc(x.source)+'</span></td></tr>';
+      return '<tr>'+
+        '<td>'+esc(vl?vl.label:x.vendor)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name||'—')+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
+        '<td><span class="pill gray">'+esc(x.source)+'</span></td>'+
+        '<td class="right num">'+money(x.cost_monthly)+'</td>'+
+      '</tr>';
     }).join('');
   });
 }

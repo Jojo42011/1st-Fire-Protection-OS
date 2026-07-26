@@ -3,124 +3,112 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>The Operator · 1st FP</title>
+<title>Ask the Operator · 1st FP</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/command.css" />
+<link rel="stylesheet" href="/signal.css" />
 <style>
-  /* ── THE OPERATOR — one conversation over the whole company ──────────
-     Enterprise-calm chat: generous space, one accent, no chrome. The orb
-     (Jarvis mode) is the same intelligence with the interface removed. */
+  /* ── ASK THE OPERATOR — one conversation over the whole company ──────────
+     Signal: light, calm, one indigo accent. The orb (Jarvis mode) is the same
+     intelligence with the interface removed — restyled to indigo particles. */
   html{height:100%}
-  /* pinned like the Jarvis overlay - the dock always sits on the true bottom edge */
-  body{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden;
-    background-image:radial-gradient(900px 400px at 50% -120px,rgba(229,57,53,.05),transparent 70%)}
+  body{position:fixed;inset:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
 
-  /* top bar */
-  .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;
-    padding:10px 28px;border-bottom:1px solid var(--hair);flex:none}
-  .bar .id{display:flex;align-items:center;gap:12px}
-  .bar h1{font-size:14px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--ink)}
-  .bar .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-3)}
-  .jarvis-btn{display:flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--hair-2);
-    border-radius:999px;color:var(--ink);font-family:var(--sans);font-weight:700;font-size:11.5px;
-    letter-spacing:.12em;text-transform:uppercase;padding:9px 18px 9px 12px;cursor:pointer;transition:.2s}
-  .jarvis-btn:hover{border-color:rgba(229,57,53,.5);box-shadow:0 0 18px rgba(229,57,53,.15)}
+  /* slim top bar — just the Jarvis entry; the H1 lives in the column */
+  .op-bar{display:flex;align-items:center;justify-content:flex-end;gap:14px;
+    padding:11px 26px;flex:none}
+  .jarvis-btn{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--r-pill);color:var(--ink-2);font-family:var(--sans);font-weight:700;font-size:11.5px;
+    padding:8px 15px;cursor:pointer;transition:border-color .18s,box-shadow .26s}
+  .jarvis-btn:hover{border-color:var(--border-strong);box-shadow:var(--sh-rest)}
+  .jarvis-btn::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--mark)}
 
   /* conversation */
   #scroll{flex:1;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column}
-  .col{width:100%;max-width:880px;margin:0 auto;padding:44px 28px 24px;flex:1;display:flex;flex-direction:column}
-  .col.empty{justify-content:center}
-  .msgs{width:100%}
-  .hero{text-align:center;padding:20px 10px 8vh}
-  .hero h2{font-size:34px;font-weight:700;letter-spacing:-.015em;color:var(--ink)}
-  .hero p{font-size:15px;color:var(--ink-2);margin-top:16px;line-height:1.7;max-width:46ch;margin-left:auto;margin-right:auto}
-  .starters{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:38px}
-  .starter{background:var(--s1);border:1px solid var(--hair);border-radius:999px;color:var(--ink-2);
-    font-family:var(--sans);font-size:13.5px;padding:12px 20px;cursor:pointer;transition:.18s}
-  .starter:hover{color:var(--ink);border-color:rgba(229,57,53,.4);box-shadow:0 0 14px rgba(229,57,53,.12)}
+  .col{width:100%;max-width:860px;margin:0 auto;padding:14px 26px 26px;flex:1;display:flex;flex-direction:column;gap:20px}
+  .col.empty{justify-content:flex-start}
+  .op-hero{display:flex;flex-direction:column}
+  .op-eyebrow{font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:9px}
+  .op-hero h1{font-weight:800;font-size:26px;letter-spacing:-.02em;color:var(--ink)}
+  .op-hero p{margin:9px 0 0;font-weight:500;font-size:13.5px;line-height:1.65;color:var(--ink-3);max-width:70ch}
+  .starters{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+  .starter{background:#fff;border:1px solid var(--border);border-radius:var(--r-pill);color:var(--ink-2);
+    font-family:var(--sans);font-weight:600;font-size:12.5px;padding:9px 15px;cursor:pointer;transition:border-color .18s,box-shadow .26s}
+  .starter:hover{color:var(--ink);border-color:var(--border-strong);box-shadow:var(--sh-rest)}
 
-  .msg{margin:0 0 36px;animation:up .3s ease}
-  @keyframes up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg{animation:rise .3s var(--ease) both}
   .msg.you{display:flex;justify-content:flex-end}
-  .msg.you .b{background:var(--s2);border:1px solid var(--hair);border-radius:18px 18px 4px 18px;
-    padding:14px 20px;max-width:56ch;font-size:15px;line-height:1.6;color:var(--ink)}
-  .msg.op .b{font-size:15.5px;line-height:1.75;color:var(--ink);max-width:100%;min-width:0}
+  .msg.you .b{background:var(--ink);color:#fff;border-radius:14px 14px 4px 14px;
+    padding:12px 16px;max-width:54ch;font-weight:500;font-size:13.5px;line-height:1.55}
+  .msg.op{display:flex;gap:12px}
+  .op-av{width:28px;height:28px;border-radius:9px;background:var(--mark);flex:none}
+  .msg.op .b{flex:1;min-width:0;font-weight:500;font-size:14px;line-height:1.7;color:var(--ink)}
   .msg.op .b strong{font-weight:700}
   .msg.op .b li{margin:4px 0 4px 18px}
-  .caret{display:inline-block;width:2px;height:1em;background:var(--red);vertical-align:-2px;
+  .caret{display:inline-block;width:2px;height:1em;background:var(--indigo);vertical-align:-2px;
     animation:blink 1s steps(2) infinite;margin-left:1px}
   @keyframes blink{50%{opacity:0}}
   .think{display:inline-flex;gap:5px;padding:6px 0}
-  .think i{width:5px;height:5px;border-radius:50%;background:var(--ink-3);animation:tp 1.2s ease-in-out infinite}
+  .think i{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:tp 1.2s ease-in-out infinite}
   .think i:nth-child(2){animation-delay:.15s}.think i:nth-child(3){animation-delay:.3s}
   @keyframes tp{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
 
-  /* composer */
-  .dock{flex:none;padding:10px 28px 10px}
-  .comp{width:100%;max-width:880px;margin:0 auto;display:flex;align-items:center;gap:8px;background:var(--s1);
-    border:1px solid var(--hair-2);border-radius:999px;padding:9px 10px 9px 26px;
-    box-shadow:0 14px 40px rgba(0,0,0,.25);transition:border-color .25s,box-shadow .25s}
-  :root[data-theme="light"] .comp{box-shadow:0 14px 34px rgba(21,30,43,.10)}
-  .comp:focus-within{border-color:rgba(229,57,53,.45);box-shadow:0 0 0 3px rgba(229,57,53,.08),0 14px 40px rgba(0,0,0,.25)}
-  #q{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:16px;
-    padding:12px 0;min-width:0}
-  #q::placeholder{color:var(--ink-3)} #q:focus{outline:none}
-  .send{width:46px;height:46px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;transition:.18s;flex:none}
-  .send:hover{background:#C62828}.send:disabled{opacity:.35}
-  .send svg{width:18px;height:18px}
-  .foot{margin:6px auto 0;text-align:center}
-  .foot span{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+  /* composer — sticky, pill, dark circular send */
+  .dock{flex:none;padding:8px 26px 12px;background:linear-gradient(to top,var(--bg) 60%,transparent)}
+  .comp{width:100%;max-width:860px;margin:0 auto;display:flex;align-items:center;gap:10px;background:#fff;
+    border:1px solid var(--border);border-radius:var(--r-pill);padding:8px 8px 8px 20px;
+    box-shadow:var(--sh-float);transition:border-color .2s,box-shadow .2s}
+  .comp:focus-within{border-color:var(--indigo);box-shadow:0 0 0 3px rgba(76,91,212,.12),var(--sh-float)}
+  #q{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:14.5px;
+    padding:9px 0;min-width:0}
+  #q::placeholder{color:var(--faint)} #q:focus{outline:none}
+  .send{width:38px;height:38px;border-radius:50%;border:none;background:var(--ink);color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:transform .15s,opacity .18s;flex:none}
+  .send:active{transform:scale(.94)}.send:disabled{opacity:.35}
+  .send svg{width:16px;height:16px}
+  .foot{margin:8px auto 0;text-align:center}
+  .foot span{font-weight:500;font-size:11px;color:var(--faint)}
 
   /* ── JARVIS MODE ── */
-  #jarvis{position:fixed;inset:0;z-index:60;background:var(--s0);display:none;flex-direction:column;
-    background-image:radial-gradient(700px 700px at 50% 42%,rgba(229,57,53,.06),transparent 70%)}
-  #jarvis.on{display:flex;animation:up .35s ease}
-  .j-bar{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;flex:none}
-  .j-exit{background:transparent;border:1px solid var(--hair-2);border-radius:999px;color:var(--ink-2);
-    font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    padding:9px 18px;cursor:pointer;transition:.2s}
-  .j-exit:hover{border-color:rgba(229,57,53,.5);color:var(--ink)}
-  .j-state{font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-3)}
+  #jarvis{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column;
+    background-image:radial-gradient(700px 700px at 50% 42%,rgba(76,91,212,.07),transparent 70%)}
+  #jarvis.on{display:flex;animation:rise .35s var(--ease) both}
+  .j-bar{display:flex;align-items:center;justify-content:space-between;padding:18px 26px;flex:none}
+  .j-exit{background:#fff;border:1px solid var(--border);border-radius:var(--r-pill);color:var(--ink-2);
+    font-family:var(--sans);font-weight:700;font-size:11.5px;padding:8px 15px;cursor:pointer;transition:border-color .18s,color .16s}
+  .j-exit:hover{border-color:var(--border-strong);color:var(--ink)}
+  .j-state{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
   .j-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;padding:0 24px}
   #orb{width:min(58vh,520px);height:min(58vh,520px);max-width:88vw;max-height:50vh}
-  .j-caption{max-width:62ch;text-align:center;font-size:15.5px;line-height:1.7;color:var(--ink-2);
+  .j-caption{max-width:62ch;text-align:center;font-weight:500;font-size:15px;line-height:1.7;color:var(--ink-3);
     min-height:56px;margin-top:26px;transition:opacity .3s}
   .j-dock{flex:none;padding:10px 26px 30px}
-  .j-comp{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:6px;background:var(--s1);
-    border:1px solid var(--hair-2);border-radius:999px;padding:5px 7px 5px 20px}
-  .j-comp:focus-within{border-color:rgba(229,57,53,.45)}
+  .j-comp{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:8px;background:#fff;
+    border:1px solid var(--border);border-radius:var(--r-pill);padding:6px 8px 6px 20px;box-shadow:var(--sh-float)}
+  .j-comp:focus-within{border-color:var(--indigo)}
   #jq{flex:1;background:transparent;border:none;color:var(--ink);font-family:var(--sans);font-size:14px;padding:9px 0;min-width:0}
-  #jq::placeholder{color:var(--ink-3)} #jq:focus{outline:none}
-  .j-mic{width:38px;height:38px;border-radius:50%;border:1px solid var(--hair-2);background:transparent;
+  #jq::placeholder{color:var(--faint)} #jq:focus{outline:none}
+  .j-mic{width:38px;height:38px;border-radius:50%;border:1px solid var(--border);background:#fff;
     color:var(--ink-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;flex:none}
-  .j-mic:hover{color:var(--ink);border-color:rgba(229,57,53,.5)}
-  .j-mic.rec{color:#fff;background:var(--red);border-color:var(--red);animation:pulse 1.4s infinite}
+  .j-mic:hover{color:var(--ink);border-color:var(--border-strong)}
+  .j-mic.rec{color:#fff;background:var(--indigo);border-color:var(--indigo);animation:pulse 1.4s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
   .j-mic svg{width:17px;height:17px}
 
   @media (max-width:640px){
-    .bar{padding:12px 14px}
-    .bar .sub{display:none}
-    .bar h1{font-size:13px}
-    .jarvis-btn{padding:8px 14px;font-size:10.5px}
-    .col{padding:18px 14px 10px}
-    .hero{padding:10px 4px 4vh}
-    .hero h2{font-size:26px}
-    .hero p{font-size:13.5px}
-    .starter{font-size:12.5px;padding:10px 15px}
-    .msg{margin-bottom:26px}
+    .op-bar{padding:12px 14px}
+    .col{padding:12px 14px 10px}
+    .op-hero h1{font-size:22px}
+    .op-hero p{font-size:13px}
+    .starter{font-size:12.5px;padding:9px 13px}
     .msg.you .b{max-width:86%;font-size:14px}
     .msg.op .b{max-width:100%;font-size:14.5px}
     .dock{padding:6px 12px calc(6px + env(safe-area-inset-bottom))}
     .comp{padding-left:16px}
     #q{font-size:16px}          /* 16px stops iOS zoom-on-focus */
-    .send{width:44px;height:44px}
     /* jarvis on a phone — clear the shell's floating Menu + theme buttons */
     .j-bar{padding:64px 14px 0}
-    .j-bar span[style]{display:none}
-    .j-state{font-size:8.5px;letter-spacing:.2em}
+    .j-state{font-size:9px;letter-spacing:.14em}
     #orb{width:min(80vw,340px);height:min(80vw,340px);max-height:40vh}
     .j-caption{font-size:14px;line-height:1.6;margin-top:16px;min-height:44px;padding:0 6px}
     .j-dock{padding:8px 14px calc(16px + env(safe-area-inset-bottom))}
@@ -132,25 +120,25 @@
 </head>
 <body>
 
-  <header class="bar">
-    <div class="id"><h1>The Operator</h1><span class="sub" id="st">The digital twin</span></div>
-    <button class="jarvis-btn" id="jarvis-open"><span class="t">Jarvis Mode</span></button>
+  <header class="op-bar">
+    <button class="jarvis-btn" id="jarvis-open">Jarvis Mode</button>
   </header>
 
   <div id="scroll"><div class="col empty" id="col">
-    <div class="hero" id="hero">
-      <h2 id="greet">The Operator</h2>
-      <p>One conversation over the whole company — money, calls, reputation, the map, every agent. Ask anything.</p>
+    <div class="op-hero" id="hero">
+      <div class="op-eyebrow" id="greet">The Operator</div>
+      <h1>Ask about anything in the company.</h1>
+      <p>The Operator reads every invoice, call, review, license and agent. It answers in plain English, shows the numbers it used, and can open the right screen for you.</p>
       <div class="starters" id="starters"></div>
     </div>
   </div></div>
 
   <div class="dock">
     <div class="comp">
-      <input id="q" placeholder="Ask the Operator anything…" autocomplete="off" />
-      <button class="send" id="send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      <input id="q" placeholder="Ask anything — or say &quot;show me the invoices&quot;" autocomplete="off" />
+      <button class="send" id="send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
     </div>
-    <div class="foot"><span id="foot-t">Connected to the company brain</span></div>
+    <div class="foot"><span id="foot-t">Reads your live data · never sends anything without approval</span></div>
   </div>
 
   <!-- JARVIS -->
@@ -210,11 +198,11 @@ if(window.visualViewport)window.visualViewport.addEventListener('resize',functio
 
 /* status + greeting */
 fetch('/api/operator').then(function(r){return r.json();}).then(function(d){
-  document.getElementById('foot-t').textContent=d.brain?'Connected to the company brain':'Live data mode — add an LLM key for full conversation';
+  document.getElementById('foot-t').textContent=d.brain?'Reads your live data · never sends anything without approval':'Live data mode — add an LLM key for full conversation';
   var h=new Date().getHours();
-  document.getElementById('greet').textContent=(h<12?'Good morning.':h<17?'Good afternoon.':'Good evening.');
+  document.getElementById('greet').textContent=(h<12?'Good morning, Devon.':h<17?'Good afternoon, Devon.':'Good evening, Devon.');
 });
-var STARTERS=['How are we doing today?','How much is outstanding?','What gaps are still open?','How did the front desk do?'];
+var STARTERS=['How are we doing today?',"Who's slowest to pay?",'What did the front desk miss?','Where are we losing money?'];
 document.getElementById('starters').innerHTML=STARTERS.map(function(s){return '<button class="starter">'+esc(s)+'</button>';}).join('');
 document.querySelectorAll('.starter').forEach(function(b){b.addEventListener('click',function(){ask(b.textContent);});});
 
@@ -226,7 +214,7 @@ function addYou(text){
 }
 function addOp(){
   var el=document.createElement('div');el.className='msg op';
-  el.innerHTML='<div class="b"><span class="think"><i></i><i></i><i></i></span></div>';
+  el.innerHTML='<span class="op-av"></span><div class="b"><span class="think"><i></i><i></i><i></i></span></div>';
   col.appendChild(el);toBottom();
   return el.querySelector('.b');
 }
@@ -264,7 +252,7 @@ function ask(text){
     es.close();BUSY=false;
   });
   es.addEventListener('error',function(){
-    if(!acc)b.innerHTML='<span style="color:var(--ink-3)">Connection dropped — try again.</span>';
+    if(!acc)b.innerHTML='<span style="color:var(--muted)">Connection dropped — try again.</span>';
     else if(finish)finish();
     es.close();BUSY=false;
   });
@@ -321,7 +309,7 @@ function bSpeak(text,end){
   try{var u=new SpeechSynthesisUtterance(text);u.rate=1.02;u.onend=end;speechSynthesis.speak(u);}catch(e){end();}
 }
 
-/* ── the orb: a particle sphere, alive but calm ── */
+/* ── the orb: a particle sphere, alive but calm — indigo (Signal AI accent) ── */
 var orbStarted=false;
 function cssColor(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
 function startOrb(){
@@ -346,7 +334,7 @@ function startOrb(){
     var breathe=1+(reduced?0:Math.sin(t*(J.state==='speaking'?5:0.9))*(J.state==='speaking'?0.035:J.state==='listening'?0.02:0.012));
     var R=Math.min(w,h)*0.40*breathe*(J.state==='listening'?1.05:1);
     var cx=w/2,cy=h/2;
-    var light=document.documentElement.getAttribute('data-theme')==='light';
+    var light=document.documentElement.getAttribute('data-theme')!=='dark';
     var tilt=0.35;
     for(var i=0;i<N;i++){
       var p=pts[i];
@@ -358,7 +346,7 @@ function startOrb(){
       var a=(light?0.16:0.10)+depth*(light?0.7:0.85);
       var size=0.7+depth*1.5;
       ctx.beginPath();
-      ctx.fillStyle='rgba(229,57,53,'+a.toFixed(3)+')';
+      ctx.fillStyle='rgba(76,91,212,'+a.toFixed(3)+')';
       ctx.arc(cx+x*R,cy+y*R,size,0,6.2832);
       ctx.fill();
     }

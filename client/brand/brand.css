@@ -1,130 +1,31 @@
 /* ============================================================
-   1st Fire Protection, Brand stylesheet
-   Authoritative · industrial · urgent. A fire-station command
-   center: red = the fire, navy = the uniform, off-white = the
-   blueprint, gold = the badge.
+   1st Fire Protection — font loader
+   Self-hosted @font-face only. The design system (colours, type
+   roles, geometry) now lives in /signal.css. This file exists so
+   every page can load its typefaces from one place.
 
-   Usage:
-     <link rel="stylesheet" href="/brand/brand.css">
-   Fonts load relative to this file (brand/fonts/*.woff2). For a
-   single self-contained file (e.g. an emailed HTML export), inline
-   the @font-face src as base64 data URIs instead, see brand/README.md.
+   Load order on every page:
+     <link rel="stylesheet" href="/brand/brand.css">   (font faces — this file)
+     <link rel="stylesheet" href="/signal.css">         (the Signal design system)
+
+   Fonts resolve relative to this file (brand/fonts/*.woff2).
    ============================================================ */
 
-/* ---- Typefaces ---- */
-@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;
-  src:url('fonts/Inter-Regular.woff2') format('woff2');}
-@font-face{font-family:'Inter';font-style:normal;font-weight:700;font-display:swap;
-  src:url('fonts/Inter-Bold.woff2') format('woff2');}
-@font-face{font-family:'Inter';font-style:normal;font-weight:900;font-display:swap;
-  src:url('fonts/Inter-Black.woff2') format('woff2');}
-@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:500;font-display:swap;
-  src:url('fonts/JetBrainsMono-Medium.woff2') format('woff2');}
+/* ---- Figtree — the Signal UI face (everything) ---- */
+@font-face{font-family:'Figtree';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/Figtree-Regular.woff2') format('woff2');}
+@font-face{font-family:'Figtree';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/Figtree-Medium.woff2') format('woff2');}
+@font-face{font-family:'Figtree';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Figtree-SemiBold.woff2') format('woff2');}
+@font-face{font-family:'Figtree';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/Figtree-Bold.woff2') format('woff2');}
+@font-face{font-family:'Figtree';font-style:normal;font-weight:800;font-display:swap;src:url('fonts/Figtree-ExtraBold.woff2') format('woff2');}
 
-/* Geist + Geist Mono (Vercel) - the premium command-room type system. One cohesive
-   family: Geist for headline/body sans, Geist Mono for the micro-labels. Retires
-   Inter + JetBrains Mono as the operator faces (the old files stay for legacy surfaces). */
+/* ---- Geist Mono — numeric / technical micro-text (phone numbers, times, IDs) ---- */
+@font-face{font-family:'Geist Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
+@font-face{font-family:'Geist Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
+
+/* Legacy Geist sans faces are still present in fonts/ for any surface not yet
+   migrated to Signal; Signal itself uses Figtree + Geist Mono only. */
 @font-face{font-family:'Geist';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/Geist-Regular.woff2') format('woff2');}
 @font-face{font-family:'Geist';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/Geist-Medium.woff2') format('woff2');}
 @font-face{font-family:'Geist';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Geist-SemiBold.woff2') format('woff2');}
 @font-face{font-family:'Geist';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/Geist-Bold.woff2') format('woff2');}
 @font-face{font-family:'Geist';font-style:normal;font-weight:800;font-display:swap;src:url('fonts/Geist-ExtraBold.woff2') format('woff2');}
-@font-face{font-family:'Geist';font-style:normal;font-weight:900;font-display:swap;src:url('fonts/Geist-Black.woff2') format('woff2');}
-@font-face{font-family:'Geist Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
-
-/* ---- Design tokens ---- */
-:root{
-  /* Primary red, the fire. CTAs, icons, borders, signal lines. */
-  --fp-red:#E53935;
-  --fp-red-deep:#C62828;
-  --fp-red-tint:#FCE9E8;
-
-  /* Secondary navy, the uniform. Dark sections, nav, footer. */
-  --fp-navy:#1E2D40;
-  --fp-navy-2:#26384f;
-  --fp-navy-line:#34465d;
-
-  /* Off-white, the blueprint paper. */
-  --fp-paper:#F5F7F9;
-  --fp-panel:#FFFFFF;
-
-  /* Accent gold, the badge. Certification, excellence. */
-  --fp-gold:#F5B81B;
-  --fp-gold-deep:#B9860C;
-  --fp-gold-tint:#FCF3DC;
-
-  /* Working neutrals (navy-biased, not pure grey). */
-  --fp-ink:#1E2D40;
-  --fp-muted:#5C6B7D;
-  --fp-line:#D2DAE2;
-  --fp-line-2:#B9C4CF;
-
-  /* Type roles. */
-  --fp-sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  --fp-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
-
-  /* Red corner-cross mark used by .fp-frame. */
-  --fp-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M5 1v8M1 5h8' stroke='%23E53935' stroke-width='1'/%3E%3C/svg%3E");
-}
-
-/* ---- Blueprint grid ground ---- */
-/* Apply to <body> or any full-bleed section. */
-.fp-blueprint{
-  background-color:var(--fp-paper);
-  background-image:
-    linear-gradient(rgba(30,45,64,.045) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(30,45,64,.045) 1px,transparent 1px);
-  background-size:26px 26px;
-}
-
-/* ---- Type helpers ---- */
-.fp-display{             /* stamped-metal-sign heading */
-  font-family:var(--fp-sans);font-weight:900;text-transform:uppercase;
-  letter-spacing:-.02em;line-height:1.0;color:var(--fp-navy);text-wrap:balance;
-}
-.fp-kicker{              /* mono eyebrow with a red lead rule */
-  font-family:var(--fp-mono);font-weight:500;font-size:12px;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--fp-red);display:inline-flex;align-items:center;gap:10px;
-}
-.fp-kicker::before{content:"";width:26px;height:2px;background:var(--fp-red)}
-.fp-mono{font-family:var(--fp-mono);font-weight:500}
-
-/* ---- Thin red signal line (section divider) ---- */
-.fp-signal{position:relative;height:2px;background:var(--fp-red);width:100%}
-.fp-signal::after{content:"";position:absolute;right:0;top:-3px;width:8px;height:8px;
-  background:var(--fp-red);transform:rotate(45deg)}
-
-/* ---- Technical frame with corner-cross markers ---- */
-.fp-frame{position:relative}
-.fp-frame::after{
-  content:"";position:absolute;inset:-6px;pointer-events:none;
-  background-image:var(--fp-cross),var(--fp-cross),var(--fp-cross),var(--fp-cross);
-  background-position:left top,right top,left bottom,right bottom;
-  background-repeat:no-repeat;background-size:11px 11px;
-}
-
-/* ---- Badge (gold, certification flavor) ---- */
-.fp-badge{
-  font-family:var(--fp-mono);font-weight:500;font-size:11px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--fp-navy);background:var(--fp-gold);padding:6px 11px;
-}
-
-/* ---- Button / CTA ---- */
-.fp-btn{
-  font-family:var(--fp-sans);font-weight:700;font-size:14px;letter-spacing:.02em;
-  text-transform:uppercase;color:#fff;background:var(--fp-red);border:none;
-  padding:12px 22px;cursor:pointer;display:inline-block;text-decoration:none;
-  transition:background .14s ease;
-}
-.fp-btn:hover{background:var(--fp-red-deep)}
-.fp-btn:focus-visible{outline:3px solid var(--fp-navy);outline-offset:2px}
-.fp-btn--ghost{background:transparent;color:var(--fp-navy);border:2px solid var(--fp-navy)}
-.fp-btn--ghost:hover{background:var(--fp-navy);color:#fff}
-
-/* ---- Dark "uniform" panel ---- */
-.fp-panel-navy{background:var(--fp-navy);color:#fff}
-.fp-panel-navy a{color:var(--fp-gold)}
-
-@media (prefers-reduced-motion:reduce){
-  .fp-btn{transition:none}
-}
