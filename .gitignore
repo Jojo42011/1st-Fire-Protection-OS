@@ -8,3 +8,7 @@ data/
 .env.local
 *.log
 .DS_Store
+
+# Local design-handoff reference (unzipped from the Signal rebrand package).
+# Reference material consulted during the build, not part of the product.
+_design_import/
