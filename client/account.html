@@ -13,6 +13,11 @@
   .ad-name{font-weight:800;font-size:19px;color:var(--ink);letter-spacing:-.01em}
   .ad-hmeta{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:5px}
   .ad-figs{display:flex;gap:34px;margin-top:18px;padding-top:16px;border-top:1px solid var(--divider-soft)}
+  @media (max-width:900px){
+    .ad-htop{flex-wrap:wrap}
+    .ad-htop>div:last-child{width:100%;justify-content:flex-start}
+    .ad-figs{flex-wrap:wrap;gap:16px 26px}
+  }
   .ad-fig-lab{font-weight:700;font-size:11px;color:var(--muted)}
   .ad-fig-val{font-weight:800;font-size:19px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
   .ad-tabs{display:flex;align-items:center;gap:2px}
@@ -153,7 +158,7 @@ function render(d){
   if(a.overdueDays>0)pills+=' <span class="pill money">'+esc(a.overdueDays)+' days past due</span>';
 
   document.getElementById('header').innerHTML=
-    '<div style="display:flex;align-items:flex-start;gap:14px">'+
+    '<div class="ad-htop" style="display:flex;align-items:flex-start;gap:14px">'+
       '<span class="ad-mono44" style="background:var(--money-bg);color:var(--money)">'+esc(a.initials)+'</span>'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><span class="ad-name">'+esc(a.name)+'</span>'+pills+'</div>'+

@@ -10,6 +10,10 @@
 <style>
   .screen{max-width:none}
   .pl-stats{display:flex;align-items:center;gap:26px;padding:16px 20px}
+  @media (max-width:900px){
+    .pl-stats{flex-wrap:wrap;gap:16px 26px}
+    .pl-note{flex-basis:100%;max-width:none}
+  }
   .pl-fig .pl-lab{font-weight:700;font-size:11px;color:var(--muted)}
   .pl-fig .pl-val{font-weight:800;font-size:22px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
   .pl-fig .pl-val.money{color:var(--money)}

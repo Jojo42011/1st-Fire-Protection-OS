@@ -248,6 +248,30 @@ input[type=checkbox],input[type=radio]{accent-color:var(--indigo);cursor:pointer
 :root[data-theme="dark"] .btn-primary{background:var(--ink);color:var(--bg)}
 :root[data-theme="dark"] .avatar{background:var(--fill);color:var(--ink)}
 
+/* ---- responsive: phones & narrow tablets ----
+   The design targets 1440px+; this collapses the shared layout primitives so every
+   Signal screen reflows to a single column on small screens instead of overflowing.
+   Page-local grids (.tm-grid, .hr-sugg, inline strips) add their own rules on top. */
+@media (max-width:900px){
+  .screen{padding:16px 14px 30px;gap:14px}
+  .split,.split-wide,.split-even{grid-template-columns:1fr}
+  .kpis,.kpis-5{grid-template-columns:repeat(2,1fr)}
+  .board{grid-template-columns:1fr;gap:12px}
+  /* hero greeting band stacks; the glass card goes full-width */
+  .hero{flex-direction:column;align-items:stretch;gap:16px;padding:18px}
+  .hero .glass{width:auto}
+  /* header wraps; the subtitle drops to its own line, secondary controls hide */
+  .head{flex-wrap:wrap;row-gap:2px}
+  .head .sub{flex-basis:100%;order:6}
+  /* wide tables scroll horizontally inside their card rather than blowing out the page */
+  .card-clip{overflow-x:auto}
+  .card-clip>table{min-width:640px}
+}
+@media (max-width:560px){
+  .kpis,.kpis-5{grid-template-columns:1fr}
+  .seg{display:none}          /* Owner/Office switch is desktop-only on phones */
+}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }

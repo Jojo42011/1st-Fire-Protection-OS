@@ -23,6 +23,11 @@
   .tm-card .stat{font-weight:800;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
   .tm-card .stat-l{font-weight:500;font-size:11.5px;color:var(--muted)}
   .tm-card .open{font-weight:600;font-size:11.5px;color:var(--indigo);background:none;border:none;cursor:pointer}
+  @media (max-width:900px){
+    .tm-strip{flex-wrap:wrap;gap:18px 22px}
+    .tm-strip p{flex-basis:100%;max-width:none}
+    .tm-grid{grid-template-columns:1fr}
+  }
 </style>
 </head>
 <body>
