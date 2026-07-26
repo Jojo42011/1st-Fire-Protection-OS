@@ -147,22 +147,13 @@
    open a generic console (/agent?key=). */
 var CONTROL_TABS = [
   { key:"operator",  label:"The Operator",  sub:"The digital twin", src:"/operator", home:true, sep:"Command",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>' },
-  { key:"harness",   label:"The Harness",   sub:"Builds the agents", src:"/harness",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1.4 1.4 0 0 0 2 2l6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2z"/><path d="M18 14l3 3M14 18l3 3"/></svg>' },
-  { key:"roster",    label:"The Roster",    sub:"The whole team",   src:"/roster",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M15.5 20a4.5 4.5 0 0 1 6-4.2"/></svg>' }
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>' }
 ];
 var TOOL_TABS = [
-  { key:"onboarding", label:"Onboarding", sub:"New-hire intake + routing", src:"/onboarding", sep:"People",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M18 8v6M15 11h6"/></svg>' },
   { key:"licenses", label:"License Reclaim", sub:"Unused software seats", src:"/licenses", sep:"Cost Recovery",
     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 14h4"/><circle cx="16.5" cy="14.5" r="1.5"/></svg>' }
 ];
-var SYSTEM_TABS = [
-  { key:"integrations", label:"Integrations", sub:"The hands", src:"/integrations", sep:"System",
-    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' }
-];
+var SYSTEM_TABS = [];
 /* The built-in agents (the tools the OS shipped with), shown directly in the nav
    under Front Office. Every operational tool here is an agent, not just these three. */
 var FOUNDING_PAGES = { calls:"/calls", invoices:"/invoices", reviews:"/reviews" };

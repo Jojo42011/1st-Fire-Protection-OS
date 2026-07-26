@@ -162,7 +162,12 @@ export function normalizeVapiCall(src: any): CallRecord {
     transcript: firstStr(src?.transcript, artifact?.transcript) || '',
     summary: firstStr(src?.summary, analysis?.summary, artifact?.summary),
     messages: src?.messages || artifact?.messages || undefined,
+    // Vapi returns BOTH a bare storage path (recordingUrl — not directly readable, 400)
+    // and short-lived PRESIGNED URLs. Prefer the presigned ones; the play-time proxy
+    // re-pulls a fresh call so these never serve stale/expired.
     recording_url: firstStr(
+      artifact?.presignedMonoUrl,
+      artifact?.presignedUrl,
       src?.recordingUrl,
       artifact?.recordingUrl,
       recording?.mono?.combinedUrl,
@@ -170,6 +175,7 @@ export function normalizeVapiCall(src: any): CallRecord {
       recording?.url
     ),
     stereo_recording_url: firstStr(
+      artifact?.presignedStereoUrl,
       src?.stereoRecordingUrl,
       artifact?.stereoRecordingUrl,
       recording?.stereoUrl
@@ -282,6 +288,50 @@ export async function syncFromVapi(limit = 100): Promise<{ synced: number; live:
     return { synced, live: true };
   } catch (err) {
     return { synced: 0, live: true, error: (err as Error).message };
+  }
+}
+
+/**
+ * Fetch the FRESHEST recording URL for a single call straight from Vapi, and probe it.
+ *
+ * Vapi hands back time-limited / storage-scoped recording URLs; the copy we stored at
+ * ingest can go stale or (with HIPAA storage on) be a private path the browser can't read.
+ * Re-pulling GET /call/{id} at play time gives the newest URL, and a byte probe tells us
+ * whether it's actually playable — so the UI can show audio when it can and an honest note
+ * when the recording is locked in Vapi's private (HIPAA) bucket.
+ */
+export async function getFreshRecording(
+  vapiCallId: string,
+  stereo = false
+): Promise<{ url?: string; ok: boolean; reason?: 'no-key' | 'not-found' | 'no-recording' | 'locked' | 'error' }> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key) return { ok: false, reason: 'no-key' };
+  try {
+    const res = await fetch(`https://api.vapi.ai/call/${encodeURIComponent(vapiCallId)}`, {
+      headers: { authorization: `Bearer ${key}` },
+    });
+    if (!res.ok) return { ok: false, reason: 'not-found' };
+    const rec = normalizeVapiCall(await res.json());
+    const url = stereo ? rec.stereo_recording_url || rec.recording_url : rec.recording_url;
+    if (!url) return { ok: false, reason: 'no-recording' };
+
+    // keep the stored copy current
+    if (rec.vapi_call_id && (rec.recording_url || rec.stereo_recording_url)) {
+      getDb()
+        .prepare(`UPDATE calls SET recording_url = COALESCE(?, recording_url), stereo_recording_url = COALESCE(?, stereo_recording_url) WHERE vapi_call_id = ?`)
+        .run(rec.recording_url || null, rec.stereo_recording_url || null, rec.vapi_call_id);
+    }
+
+    // probe: can anyone actually read it? (HIPAA private buckets answer 400/403 here)
+    try {
+      const probe = await fetch(url, { headers: { Range: 'bytes=0-1' } });
+      if (probe.ok || probe.status === 206) return { url, ok: true };
+      return { url, ok: false, reason: 'locked' };
+    } catch {
+      return { url, ok: false, reason: 'locked' };
+    }
+  } catch {
+    return { ok: false, reason: 'error' };
   }
 }
 
