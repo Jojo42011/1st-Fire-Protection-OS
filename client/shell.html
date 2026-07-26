@@ -71,7 +71,9 @@
   .reopen{position:fixed;top:14px;left:14px;z-index:60;display:none;align-items:center;gap:9px;
     padding:9px 14px 9px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-btn);
     box-shadow:var(--sh-rest);cursor:pointer;color:var(--ink-2)}
-  .app.collapsed .reopen{display:none}
+  .app.collapsed .reopen{display:flex}   /* show the Menu button whenever collapsed (desktop + mobile) */
+  /* on desktop, clear the header title from under the floating Menu button when collapsed */
+  @media (min-width:901px){ .app.collapsed .head{padding-left:118px} }
   .reopen .rl{font-weight:700;font-size:12px;color:var(--ink)}
   .backdrop{position:fixed;inset:0;z-index:15;background:rgba(21,26,45,.4);opacity:0;pointer-events:none;
     transition:opacity .3s;display:none}
