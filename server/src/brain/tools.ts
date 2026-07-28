@@ -9,7 +9,9 @@ import { getCallMetrics, captureLead, bookInspection, Lead } from '../services/r
  * plus one tool per agent action. Gated actions only DRAFT — they never send/publish/charge.
  */
 
-const TAB_KEYS = AGENTS.map((a) => a.key).concat('integrations');
+// Agent tabs come from the registry; the CRM surfaces (Accounts/Pipeline/ServiceTrade
+// sync) are screens, not employees, so they're navigable via open_tab without being in AGENTS.
+const TAB_KEYS = AGENTS.map((a) => a.key).concat('integrations', 'crm', 'pipeline', 'sync');
 
 export const TOOLS: ToolDef[] = [
   {

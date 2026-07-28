@@ -22,6 +22,7 @@
   --money:#E02D62; --money-bg:#FDEBF1;
   --amber:#E2A93C; --amber-ink:#B87B12; --amber-bg:#FDF4E3;
   --indigo:#4C5BD4; --indigo-deep:#2C36A8; --indigo-bg:#F0F2FE; --indigo-bg-2:#EEF0FE;
+  --teal:#1E8E96; --teal-bg:#E6F4F5;   /* fifth meaning: delivering the work (schedule + service plans) */
 
   /* brand gradients */
   --hero:linear-gradient(120deg,#151A2D 0%,#2B2160 58%,#7A2A55 100%);
@@ -156,6 +157,7 @@ button:active{transform:scale(.985)}
 .pill.money{color:var(--money);background:var(--money-bg)}
 .pill.amber{color:var(--amber-ink);background:var(--amber-bg)}
 .pill.indigo{color:var(--indigo);background:var(--indigo-bg-2)}
+.pill.teal{color:var(--teal);background:var(--teal-bg)}
 .pill.gray{color:var(--ink-2);background:var(--fill)}
 .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 .dot.live{background:var(--green);animation:pulseDot 2.2s ease-in-out infinite}
@@ -239,6 +241,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--indigo);cursor:pointer
   --money:#F0576F; --money-bg:rgba(240,87,111,.12);
   --amber:#E9B554; --amber-ink:#E9B554; --amber-bg:rgba(233,181,84,.12);
   --indigo:#8B96F0; --indigo-deep:#B6BDF7; --indigo-bg:rgba(139,150,240,.12); --indigo-bg-2:rgba(139,150,240,.10);
+  --teal:#3FB8C0; --teal-bg:rgba(63,184,192,.12);
   --sh-rest:0 1px 2px rgba(0,0,0,.3); --sh-lift:0 14px 30px rgba(0,0,0,.4);
   --sh-float:0 6px 20px rgba(0,0,0,.35); --sh-modal:0 30px 80px rgba(0,0,0,.6);
 }

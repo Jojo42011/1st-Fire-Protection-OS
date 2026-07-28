@@ -39,25 +39,30 @@
   <div id="empty" style="display:none"></div>
 </div>
 <script>
-var AGENT={invoices:'Invoice Collector',reviews:'Review Collector',licenses:'License Reclaim',calls:'Call Receptionist',crm:'ServiceTrade'};
-var KIND_LABEL={send_email:'This sends an email',send_sms:'This sends a text',publish:'This posts publicly',cancel_seat:'This cancels a subscription',push_st:'This writes to ServiceTrade',quote_price:'This quotes a price'};
+var AGENT={invoices:'Invoice Collector',reviews:'Review Collector',licenses:'License Reclaim',calls:'Call Receptionist',crm:'ServiceTrade',estimator:'The Estimator',closer:'The Closer',dispatch:'The Dispatcher',plans:'Service-Plan Manager',costing:'Job Costing'};
+var KIND_LABEL={send_email:'This sends an email',send_sms:'This sends a text',publish:'This posts publicly',cancel_seat:'This cancels a subscription',push_st:'This writes to ServiceTrade',quote_price:'This quotes a price',schedule_change:'This schedules work'};
 /* tone by workstream: variant class (signal .appr.send/.post/.money) + dot/label colour */
 var TONE={
   invoices:{cls:'send', c:'var(--money)'},
   reviews: {cls:'post', c:'var(--amber-ink)', dot:'var(--amber)'},
   licenses:{cls:'money',c:'var(--indigo)'},
   crm:     {cls:'money',c:'var(--indigo)'},
-  calls:   {cls:'', c:'var(--green)'}
+  calls:   {cls:'', c:'var(--green)'},
+  estimator:{cls:'money',c:'var(--indigo)'},
+  closer:  {cls:'send', c:'var(--money)'},
+  dispatch:{cls:'', c:'var(--teal)'},
+  plans:   {cls:'', c:'var(--teal)'},
+  costing: {cls:'', c:'var(--green)'}
 };
-var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve & send'};
+var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve & send',schedule_change:'Approve & schedule'};
 var SECONDARY={cancel_seat:'Keep seat'};
-var SEND=['send_email','send_sms'],MONEY=['cancel_seat','quote_price'],PUBLISH=['publish','push_st'];
-var FILTERS=[['all','All'],['send','Sends something'],['money','Spends money'],['publish','Posts publicly']];
+var SEND=['send_email','send_sms'],MONEY=['cancel_seat','quote_price'],PUBLISH=['publish','push_st'],SCHEDULE=['schedule_change'];
+var FILTERS=[['all','All'],['send','Sends something'],['money','Spends money'],['publish','Posts publicly'],['schedule','Schedules work']];
 
 var items=[], filter='all';
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function age(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
-function cat(k){return SEND.indexOf(k)>=0?'send':MONEY.indexOf(k)>=0?'money':'publish';}
+function cat(k){return SEND.indexOf(k)>=0?'send':MONEY.indexOf(k)>=0?'money':SCHEDULE.indexOf(k)>=0?'schedule':'publish';}
 function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
 function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
 
@@ -65,7 +70,7 @@ function load(){
   fetch('/api/approvals').then(function(r){return r.json();}).then(function(d){items=d.items||[];render();});
 }
 function counts(){
-  var c={all:items.length,send:0,money:0,publish:0};
+  var c={all:items.length,send:0,money:0,publish:0,schedule:0};
   items.forEach(function(i){c[cat(i.kind)]++;});
   return c;
 }

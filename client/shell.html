@@ -159,6 +159,35 @@
           <span class="count" id="c-spend"></span>
         </button>
 
+        <div class="group">Winning work</div>
+        <button class="nav-item" data-key="estimator">
+          <span class="sq" style="background:var(--indigo)"></span>
+          <span class="grow">Estimates</span>
+          <span class="count" id="c-estimator"></span>
+        </button>
+        <button class="nav-item" data-key="closer">
+          <span class="sq" style="background:var(--money)"></span>
+          <span class="grow">Follow-ups</span>
+          <span class="count" id="c-closer"></span>
+        </button>
+
+        <div class="group">Delivering work</div>
+        <button class="nav-item" data-key="dispatch">
+          <span class="sq" style="background:var(--teal)"></span>
+          <span class="grow">Schedule</span>
+          <span class="count" id="c-dispatch"></span>
+        </button>
+        <button class="nav-item" data-key="plans">
+          <span class="sq" style="background:var(--teal)"></span>
+          <span class="grow">Service plans</span>
+          <span class="count" id="c-plans"></span>
+        </button>
+        <button class="nav-item" data-key="costing">
+          <span class="sq" style="background:var(--green)"></span>
+          <span class="grow">Job margins</span>
+          <span class="count" id="c-costing"></span>
+        </button>
+
         <div class="group">Customers</div>
         <button class="nav-item" data-key="crm">
           <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20v-1.5A4.5 4.5 0 0 1 8.5 14h3A4.5 4.5 0 0 1 16 18.5V20"/><circle cx="10" cy="8" r="3.4"/><path d="M17 11.5a3 3 0 1 0 0-6"/><path d="M18.5 20v-1.2a3.6 3.6 0 0 0-1.8-3.1"/></svg></span>
@@ -240,6 +269,11 @@ var SCREENS = {
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews',                      title:'Reputation',        sub:'Turns finished jobs into reviews, drafts every reply' },
   spend:    { src:'/licenses',                     title:'Wasted spend',      sub:'Finds the seats you pay for but nobody uses' },
+  estimator:{ src:'/soon?s=Estimates',            title:'Estimates',         sub:'Photos and plans become priced, traceable quotes' },
+  closer:   { src:'/soon?s=Follow-ups',           title:'Follow-ups',        sub:'Every open quote chased on a cadence until it books or dies' },
+  dispatch: { src:'/soon?s=Schedule',             title:'Schedule',          sub:'Jobs matched to crews, no-shows cut, cancellations backfilled' },
+  plans:    { src:'/soon?s=Service+plans',        title:'Service plans',     sub:'Jobs become recurring agreements, renewed before they lapse' },
+  costing:  { src:'/soon?s=Job+margins',          title:'Job margins',       sub:'Real cost tracked against the quote, margin bleed flagged' },
   crm:      { src:'/accounts',                     title:'Accounts',          sub:'412 customers, live from ServiceTrade' },
   account:  { src:'/account',                      title:'Account',           sub:'Customer detail', detail:true },
   pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'$412,300 open across 39 quotes' },

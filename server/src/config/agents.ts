@@ -41,6 +41,42 @@ export const AGENTS: AgentDef[] = [
     status: 'standalone',
     connectVia: ['anthropic', 'openai'],
   },
+  // ---- the five cross-industry agents (Winning work + Delivering work) ----
+  {
+    key: 'estimator',
+    name: 'The Estimator',
+    role: 'Turns photos or plans into a priced, traceable quote',
+    status: 'standalone',
+    connectVia: ['anthropic'],
+  },
+  {
+    key: 'closer',
+    name: 'The Closer',
+    role: 'Follows every open quote until it books or dies, on a cadence',
+    status: 'standalone',
+    connectVia: ['gmail', 'twilio', 'servicetrade'],
+  },
+  {
+    key: 'dispatch',
+    name: 'The Dispatcher',
+    role: 'Schedules jobs to crews, cuts no-shows, backfills cancellations',
+    status: 'standalone',
+    connectVia: ['microsoft365', 'servicetrade', 'twilio'],
+  },
+  {
+    key: 'plans',
+    name: 'The Service-Plan Manager',
+    role: 'Turns jobs into recurring agreements, schedules visits, renews before they lapse',
+    status: 'standalone',
+    connectVia: ['servicetrade', 'stripe', 'gmail'],
+  },
+  {
+    key: 'costing',
+    name: 'Job Costing',
+    role: 'Tracks real cost against the quote per job, flags margin bleed',
+    status: 'standalone',
+    connectVia: ['servicetrade', 'quickbooks', 'stripe'],
+  },
 ];
 
 export function agentByKey(key: string): AgentDef | undefined {

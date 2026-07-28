@@ -31,6 +31,7 @@ export function seed(): void {
   seedOnboarding();
   seedApprovals();
   seedCrm();
+  seedFiveAgents();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1032,4 +1033,32 @@ function seedCrm(): void {
 
   setState('seeded_crm', '1');
   console.log('[seed] CRM + sync shell seeded (11 accounts, Alamo Ridge detail, 10 quotes, 7 sync objects, 2 conflicts, 6 log rows).');
+}
+
+/**
+ * The five cross-industry agents (Signal five-agents delta) as rows in `agents` so the team
+ * view renders 11 and the roster picks them up. Own flag so existing brains (already past
+ * seedAgents) upgrade in place. Their dedicated screens/engines land in later phases; here
+ * they exist as team members whose "Open" points at their (soon) screen. */
+function seedFiveAgents(): void {
+  if (getState('seeded_five_agents') === '1') return;
+  const db = getDb();
+  const five: { key: string; name: string; role: string; pillar: string; capability_id: string; knowledge: string[] }[] = [
+    { key: 'estimator', name: 'The Estimator', role: 'Turns photos or plans into a priced, traceable quote', pillar: 'sales', capability_id: 'estimator', knowledge: ['Read a takeoff from photos or a blueprint with per-item confidence', 'Price every line from the rate card so the quote is traceable'] },
+    { key: 'closer', name: 'The Closer', role: 'Follows every open quote until it books or dies, on a cadence', pillar: 'sales', capability_id: 'closer', knowledge: ['Chase on a cadence: day 1 nudge, day 3 value, day 7 last call', 'Log why every lost quote was lost'] },
+    { key: 'dispatch', name: 'The Dispatcher', role: 'Schedules jobs to crews, cuts no-shows, backfills cancellations', pillar: 'service', capability_id: 'dispatch', knowledge: ['Match a job to the right crew by skill, zone and capacity', 'Backfill a cancellation from the waitlist'] },
+    { key: 'plans', name: 'The Service-Plan Manager', role: 'Turns jobs into recurring agreements, schedules visits, renews before they lapse', pillar: 'service', capability_id: 'plans', knowledge: ['Turn a finished job into a recurring service agreement', 'Renew an agreement before it lapses'] },
+    { key: 'costing', name: 'Job Costing', role: 'Tracks real cost against the quote per job, flags margin bleed', pillar: 'finance', capability_id: 'costing', knowledge: ['Track logged labour, material and subs against the quote', 'Flag a job whose margin is bleeding below target'] },
+  ];
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO agents (key, name, role, pillar_key, capability_id, knowledge, origin, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'founding', 'live')`
+  );
+  const skillIns = db.prepare(`INSERT INTO agent_skills (agent_key, skill) VALUES (?, ?)`);
+  for (const a of five) {
+    const r = ins.run(a.key, a.name, a.role, a.pillar, a.capability_id, JSON.stringify(a.knowledge));
+    if (r.changes) for (const s of a.knowledge) skillIns.run(a.key, s);
+  }
+  setState('seeded_five_agents', '1');
+  console.log('[seed] five cross-industry agents seeded (team view now shows 11).');
 }

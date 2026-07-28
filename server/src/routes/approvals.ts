@@ -77,6 +77,7 @@ const SELECT =
 const SEND_KINDS = new Set(['send_email', 'send_sms']);
 const MONEY_KINDS = new Set(['cancel_seat', 'quote_price']);
 const PUBLISH_KINDS = new Set(['publish', 'push_st']);
+const SCHEDULE_KINDS = new Set(['schedule_change']);
 
 function openItems(): ApprovalRow[] {
   return getDb()
@@ -90,6 +91,7 @@ function counts(items: ApprovalRow[]) {
     send: items.filter((i) => SEND_KINDS.has(i.kind)).length,
     money: items.filter((i) => MONEY_KINDS.has(i.kind)).length,
     publish: items.filter((i) => PUBLISH_KINDS.has(i.kind)).length,
+    schedule: items.filter((i) => SCHEDULE_KINDS.has(i.kind)).length,
   };
 }
 

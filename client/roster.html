@@ -45,13 +45,19 @@ var TINT={
   invoices:['var(--money-bg)','var(--money)'], finance:['var(--money-bg)','var(--money)'],
   reviews:['var(--amber-bg)','var(--amber-ink)'],
   licenses:['var(--indigo-bg-2)','var(--indigo)'],
-  audit:['var(--indigo-bg-2)','var(--indigo)'], operator:['var(--indigo-bg-2)','var(--indigo)']
+  audit:['var(--indigo-bg-2)','var(--indigo)'], operator:['var(--indigo-bg-2)','var(--indigo)'],
+  estimator:['var(--indigo-bg-2)','var(--indigo)'], closer:['var(--money-bg)','var(--money)'],
+  dispatch:['var(--teal-bg)','var(--teal)'], plans:['var(--teal-bg)','var(--teal)'],
+  costing:['var(--green-bg)','var(--green)']
 };
-var OPEN={calls:'phones',invoices:'money',reviews:'reviews',licenses:'spend',audit:'operator',operator:'operator'};
+var OPEN={calls:'phones',invoices:'money',reviews:'reviews',licenses:'spend',audit:'operator',operator:'operator',
+  estimator:'estimator',closer:'closer',dispatch:'dispatch',plans:'plans',costing:'costing'};
 /* headline stat for the founding agents (shell figures matching the design). */
 var STAT={
   calls:['41','calls today'], invoices:['$96,420','collected this month'],
-  reviews:['+14','reviews this month'], licenses:['$18,240','recovered']
+  reviews:['+14','reviews this month'], licenses:['$18,240','recovered'],
+  estimator:['34','quotes this month'], closer:['$412,300','at risk'],
+  dispatch:['14','jobs today'], plans:['118','agreements'], costing:['34.2%','portfolio margin']
 };
 var FALLBACK_TINTS=[['var(--green-bg)','var(--green)'],['var(--money-bg)','var(--money)'],['var(--amber-bg)','var(--amber-ink)'],['var(--indigo-bg-2)','var(--indigo)']];
 function initials(name){return String(name||'?').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';}
