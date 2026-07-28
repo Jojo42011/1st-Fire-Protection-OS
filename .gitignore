@@ -12,3 +12,6 @@ data/
 # Local design-handoff reference (unzipped from the Signal rebrand package).
 # Reference material consulted during the build, not part of the product.
 _design_import/
+
+# Local handoff reference (five-agents delta)
+_upload2/
