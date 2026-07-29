@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job margins · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .jc-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .jc-kpi{padding:16px 18px}
+  .jc-kpi .lab{font-weight:700;font-size:12px;color:var(--ink-2)}
+  .jc-kpi .val{font-weight:800;font-size:25px;letter-spacing:-.02em;margin-top:12px;font-variant-numeric:tabular-nums}
+  .jc-kpi .sub{font-weight:500;font-size:12px;color:var(--muted);margin-top:5px}
+  .jc-grid{display:grid;grid-template-columns:1fr 372px;gap:18px;align-items:start}
+  .jc-tab{font-weight:700;font-size:11.5px;border-radius:7px;padding:5px 10px;cursor:pointer;border:none;background:none;color:var(--muted)}
+  .jc-tab.on{color:var(--ink);background:var(--fill)}
+  .jc-cost{text-align:right;font-weight:500;font-size:12.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .jc-bar{width:78px;height:6px;border-radius:999px;background:var(--fill);overflow:hidden;display:block}
+  .jc-bar span{display:block;height:100%;border-radius:999px}
+  .jc-cta{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 12px;white-space:nowrap;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--ink-2)}
+  .jc-cta.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .jc-focus .ln{display:flex;align-items:baseline;gap:10px}
+  .jc-focus .ln .k{flex:1;font-weight:500;font-size:12.5px;color:var(--ink-3)}
+  .jc-focus .ln .v{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .jc-co p{margin:9px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3);background:var(--bg);border-radius:9px;padding:11px 13px}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="jc-kpis" id="kpis"></div>
+  <div class="jc-grid" style="margin-top:18px">
+    <div class="card card-clip" id="jobs-card"></div>
+    <div class="stack">
+      <div class="card card-clip jc-focus" id="focus-card" style="display:none"></div>
+      <div class="card card-clip jc-co" id="co-card" style="border-left:3px solid var(--indigo);display:none"></div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
+var DATA=null, tab='in_progress';
+
+fetch('/api/costing').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+
+function render(){
+  var d=DATA, s=d.summary;
+  var kpis=[
+    ['Portfolio margin', s.portfolioMargin, 'var(--green)', 'target '+s.target+' · '+s.jobsClosed+' jobs closed'],
+    ['Losing money right now', s.losingCount+' jobs', 'var(--money)', s.atRisk+' of margin at risk'],
+    ['Best job this month', s.bestPct, 'var(--ink)', s.bestJob],
+    ['Where it bleeds', s.bleedsFrom, 'var(--ink)', s.bleedShare]
+  ];
+  document.getElementById('kpis').innerHTML=kpis.map(function(k){
+    return '<div class="card jc-kpi"><div class="lab">'+esc(k[0])+'</div><div class="val" style="color:'+k[2]+'">'+esc(k[1])+'</div><div class="sub">'+esc(k[3])+'</div></div>';
+  }).join('');
+
+  var vis=d.jobs.filter(function(j){return j.status===tab;});
+  var rows=vis.map(function(j){
+    return '<tr>'+
+      '<td style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(j.customer)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(j.work)+'</div></td>'+
+      '<td class="jc-cost">'+esc(j.quoted)+'</td>'+
+      '<td class="jc-cost">'+esc(j.cost)+'</td>'+
+      '<td class="right" style="font-weight:800;font-size:13.5px;color:'+j.mFg+';font-variant-numeric:tabular-nums">'+esc(j.pct)+'</td>'+
+      '<td><span style="display:flex;align-items:center;gap:9px"><span class="jc-bar"><span style="width:'+j.bar+';background:'+j.mFg+'"></span></span>'+
+        '<span style="font-weight:500;font-size:11.5px;color:var(--muted)">'+esc(j.note)+'</span></span></td>'+
+      '<td class="right"><button class="jc-cta'+(j.ctaDark?' dark':'')+'" data-id="'+j.id+'" data-cta="'+esc(j.cta)+'">'+esc(j.cta)+'</button></td>'+
+    '</tr>';
+  }).join('');
+  var counts={in_progress:d.jobs.filter(function(j){return j.status==='in_progress';}).length,
+              closed:d.jobs.filter(function(j){return j.status==='closed';}).length};
+  document.getElementById('jobs-card').innerHTML=
+    '<div class="card-head"><h2>Every job, worst margin first</h2><span style="flex:1"></span>'+
+      '<button class="jc-tab'+(tab==='in_progress'?' on':'')+'" data-t="in_progress">In progress</button>'+
+      '<button class="jc-tab'+(tab==='closed'?' on':'')+'" data-t="closed">Closed</button></div>'+
+    '<table><thead><tr><th>Job</th><th class="right">Quoted</th><th class="right">Cost so far</th><th class="right">Margin</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div class="card-foot">Margin is computed, never stored — quoted minus logged labor, material and subs. Change the costs and this moves.</div>';
+  document.querySelectorAll('.jc-tab').forEach(function(b){b.onclick=function(){tab=b.getAttribute('data-t');render();};});
+  document.querySelectorAll('.jc-cta').forEach(function(b){b.onclick=function(){
+    if(b.getAttribute('data-cta')==='Draft change order'){changeOrder(+b.getAttribute('data-id'),b);}
+  };});
+
+  var f=d.focus, fc=document.getElementById('focus-card');
+  if(f){
+    fc.style.display='';
+    fc.innerHTML=
+      '<div class="card-head" style="border-bottom:1px solid var(--divider-soft)"><h2 style="font-size:13.5px">'+esc(f.title)+'</h2><span style="flex:1"></span>'+
+        '<span class="pill '+(f.pct.indexOf('-')===0?'money':'green')+'">'+esc(f.pct)+'</span></div>'+
+      '<div class="card-pad" style="display:flex;flex-direction:column;gap:9px">'+
+        '<div class="ln"><span class="k" style="font-weight:600;color:var(--ink)">Quoted</span><span class="v" style="font-size:14px">'+esc(f.quoted)+'</span></div>'+
+        '<div class="ln"><span class="k">Labor · '+f.laborHrs+' hrs (quoted '+f.laborQuotedHrs+')</span><span class="v" style="color:'+(f.laborOver?'var(--money)':'var(--ink)')+'">'+esc(f.labor)+'</span></div>'+
+        '<div class="ln"><span class="k">Material</span><span class="v">'+esc(f.material)+'</span></div>'+
+        '<div class="ln"><span class="k">Sub · '+esc(f.subLabel)+'</span><span class="v">'+esc(f.sub)+'</span></div>'+
+        '<div class="ln" style="padding-top:9px;border-top:1px solid var(--divider-soft)"><span class="k" style="font-weight:700;color:var(--ink)">Margin</span><span class="v" style="font-size:16px;color:'+f.marginFg+'">'+esc(f.margin)+'</span></div>'+
+        '<p style="margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)">'+esc(f.insight)+'</p>'+
+      '</div>';
+  } else { fc.style.display='none'; }
+
+  var co=d.changeOrder, cc=document.getElementById('co-card');
+  if(co){
+    cc.style.display='';
+    cc.innerHTML=
+      '<div class="hd" style="display:flex;align-items:center;gap:9px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)"><span class="dot" style="background:var(--indigo)"></span><span style="font-weight:700;font-size:11.5px;color:var(--indigo)">This quotes a price</span></div>'+
+      '<div class="card-pad" id="co-body"><div style="font-weight:800;font-size:15px;color:var(--ink)">Change order · '+esc(co.amount)+'</div>'+
+        '<p>'+esc(co.body)+'</p>'+
+        '<div style="display:flex;gap:8px;margin-top:13px"><button class="btn-primary" id="send-co">Approve &amp; send</button><button class="btn" id="eat-co">Eat it</button></div></div>';
+    document.getElementById('send-co').onclick=function(){changeOrder(co.jobId,this,true);};
+    document.getElementById('eat-co').onclick=function(){cc.style.display='none';};
+  } else { cc.style.display='none'; }
+}
+function changeOrder(id,btn,isCard){
+  btn.disabled=true; var orig=btn.textContent; btn.textContent='Drafting…';
+  fetch('/api/costing/'+id+'/change-order',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}).then(function(r){return r.json();}).then(function(){
+    notify();
+    if(isCard){
+      document.getElementById('co-body').innerHTML=
+        '<div class="empty" style="padding:24px 8px"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+        '<h3 style="font-size:14px">Change order is in your inbox</h3><p>It quotes the customer a price, so it waits for your yes.</p>'+
+        '<button class="btn-primary" style="margin-top:12px" onclick="nav(\'approve\')">Open the approvals inbox</button></div>';
+    } else { btn.textContent='In your inbox ✓'; }
+  }).catch(function(){btn.disabled=false;btn.textContent=orig;});
+}
+</script>
+</body>
+</html>

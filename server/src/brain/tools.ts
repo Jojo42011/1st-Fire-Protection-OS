@@ -7,6 +7,7 @@ import { getEstimatingSummary, draftQuote } from '../services/estimatorAgent';
 import { getPipelineSummary, draftFollowup } from '../services/closerAgent';
 import { getRecurringSummary, draftRenewal, proposePlan } from '../services/planAgent';
 import { getScheduleSummary, proposeSchedule, draftReminder } from '../services/dispatchAgent';
+import { getCostingSummary, draftChangeOrder } from '../services/costingAgent';
 
 /**
  * Function-tool defs + executeTool(). At minimum: open_tab (navigation), get_agent_status,
@@ -105,6 +106,16 @@ export const TOOLS: ToolDef[] = [
     name: 'draft_reminder',
     description: 'Draft the customer reminder text for an appointment. GATED — draft only, awaits human approval.',
     parameters: { type: 'object', properties: { appointment_id: { type: 'number' } }, required: ['appointment_id'] },
+  },
+  {
+    name: 'get_costing_summary',
+    description: 'Summarize Job Costing: portfolio margin, jobs losing money, best job, and where margin bleeds. Margin is computed, never stored.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'draft_change_order',
+    description: 'Draft a change order for a job that ran past its quote (out-of-scope overrun). GATED — draft only, awaits human approval.',
+    parameters: { type: 'object', properties: { job_id: { type: 'number' } }, required: ['job_id'] },
   },
   {
     name: 'get_reputation_summary',
@@ -231,6 +242,13 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'draft_reminder': {
         const r = draftReminder(Number(args.appointment_id));
         return { ok: true, data: r, navigate: 'dispatch', message: 'Drafted a reminder — awaiting your approval.' };
+      }
+      case 'get_costing_summary': {
+        return { ok: true, data: getCostingSummary(), navigate: 'costing', message: 'Job margins summarized.' };
+      }
+      case 'draft_change_order': {
+        const r = draftChangeOrder(Number(args.job_id));
+        return { ok: true, data: r, navigate: 'costing', message: `Drafted a ${r.amount} change order — awaiting your approval.` };
       }
       case 'get_reputation_summary': {
         const s = getReputationSummary();

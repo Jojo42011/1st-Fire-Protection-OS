@@ -38,6 +38,12 @@ export interface TradeConfig {
     renewSoonDays: number; // counts as "lapsing"
     renewUrgentDays: number; // money-coloured, draft the renewal now
   };
+  /** Job Costing thresholds. Margin is COMPUTED, never stored — this only sets the bands. */
+  costing: {
+    laborRate: number; // $/hr applied to logged hours (matches the estimating rate card)
+    targetMarginPct: number; // at/above this a job reads healthy (green)
+    // below target but positive = amber (thin); at or below zero = bleeding (money)
+  };
   /** The Dispatcher's crew/skill taxonomy + scoring weights — engine logic, not a prompt. */
   dispatch: {
     /** the skill vocabulary a crew can carry and a job can require */
@@ -80,6 +86,10 @@ export const TRADE_CONFIG: TradeConfig = {
     defaultIntervals: { annual: 365, semiannual: 180, quarterly: 90 },
     renewSoonDays: 30,
     renewUrgentDays: 14,
+  },
+  costing: {
+    laborRate: 86, // same shop rate the Estimator quotes at
+    targetMarginPct: 32,
   },
   dispatch: {
     skills: ['sprinkler', 'backflow', 'extinguisher', 'alarm', 'hood', 'clearance'],

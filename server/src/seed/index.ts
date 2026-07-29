@@ -37,6 +37,7 @@ export function seed(): void {
   seedCloser();
   seedPlans();
   seedDispatch();
+  seedCosting();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1211,4 +1212,36 @@ function seedDispatch(): void {
 
   setState('seeded_dispatch', '1');
   console.log('[seed] Dispatcher seeded (4 crews, a week of jobs, Randolph AFB proposed, 7 on waitlist).');
+}
+
+/**
+ * Job Costing (five-agents Phase 6). Every job's margin is COMPUTED on read, so the seed only
+ * carries the raw costs. Numbers are chosen so the live compute reproduces the design: five
+ * in-progress jobs bleed, Bulverde extinguishers is the 61% best, and Northside ISD — Warehouse
+ * 4 lands at -4% (quoted $26,400; 214 labour hrs vs 160 quoted; $7,910 material; $1,140 sub),
+ * the anchor for the right-rail breakdown + change order. Own flag. */
+function seedCosting(): void {
+  if (getState('seeded_costing') === '1') return;
+  const db = getDb();
+  // customer, work, quoted$, laborHrs, quotedHrs, material$, sub$, subLabel, status, note
+  const jobs: [string, string, number, number, number, number, number, string | null, string, string][] = [
+    ['La Cantera Mall', 'Alarm upgrade — Phase 2', 31200, 300, 250, 6800, 1200, 'monitoring tie-in', 'in_progress', 'Labor 50 hrs over'],
+    ['Helotes Crossing', 'New construction rough-in', 19800, 190, 150, 4200, 900, 'fire pump test', 'in_progress', 'Labor 40 hrs over'],
+    ['Northside ISD', 'Warehouse 4', 26400, 214, 160, 7910, 1140, 'backflow cert', 'in_progress', 'Labor 54 hrs over'],
+    ['Stone Oak Retail', 'Extinguisher recharge', 8400, 74, 60, 2600, 0, null, 'in_progress', 'Material ran high'],
+    ['Converse Fleet', 'Quarterly route', 9600, 96, 84, 1900, 0, null, 'in_progress', 'Labor 12 hrs over'],
+    ['Alamo Ridge Plaza', 'Quarterly sprinkler', 24600, 120, 130, 5200, 800, 'backflow cert', 'in_progress', 'On plan'],
+    ['Bulverde Self Storage', 'Extinguisher service', 4200, 12, 14, 600, 0, null, 'closed', 'Clean route'],
+    ['Boerne Industrial', 'Annual inspection', 14400, 80, 90, 3100, 0, null, 'closed', 'On plan'],
+    ['Live Oak DC', 'Annual + backflow', 7300, 40, 44, 1400, 0, null, 'closed', 'On plan'],
+    ['Mi Tierra (Market Sq)', 'Hood re-cert', 2400, 10, 12, 700, 0, null, 'closed', 'Quick turn'],
+  ];
+  const ins = db.prepare(
+    `INSERT INTO job_costs (customer, work, quoted_cents, labor_hrs, labor_quoted_hrs, material_cents, sub_cents, sub_label, status, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  for (const j of jobs) ins.run(j[0], j[1], j[2] * 100, j[3], j[4], j[5] * 100, j[6] * 100, j[7], j[8], j[9]);
+
+  setState('seeded_costing', '1');
+  console.log('[seed] Job Costing seeded (10 jobs; Northside Warehouse 4 bleeding at -4%).');
 }

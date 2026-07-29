@@ -39,6 +39,7 @@ import estimating from './routes/estimating';
 import closer from './routes/closer';
 import plans from './routes/plans';
 import schedule from './routes/schedule';
+import costing from './routes/costing';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -82,6 +83,7 @@ app.use(estimating);
 app.use(closer);
 app.use(plans);
 app.use(schedule);
+app.use(costing);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -112,6 +114,7 @@ app.get('/estimates', page('estimates.html'));
 app.get('/closer', page('closer.html'));
 app.get('/plans', page('plans.html'));
 app.get('/schedule', page('schedule.html'));
+app.get('/costing', page('costing.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

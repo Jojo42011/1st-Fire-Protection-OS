@@ -726,6 +726,27 @@ export function initDb(): void {
       flexibility TEXT, created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- Job Costing (five-agents delta, Phase 6) ----------
+   * Tracks logged cost (labour hours × rate, material, subs) against the quoted price per job.
+   * The MARGIN IS NEVER STORED — it is computed on read as quoted − cost, so changing a cost
+   * moves the number and nothing goes stale. A bleeding job's out-of-scope overrun becomes a
+   * drafted change order (gated). */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS job_costs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer TEXT NOT NULL, work TEXT,
+      quoted_cents INTEGER,
+      labor_hrs REAL DEFAULT 0,        -- hours logged so far
+      labor_quoted_hrs REAL DEFAULT 0, -- hours the quote assumed (for the overrun line)
+      material_cents INTEGER DEFAULT 0,
+      sub_cents INTEGER DEFAULT 0,
+      sub_label TEXT,                  -- e.g. 'backflow cert'
+      status TEXT DEFAULT 'in_progress', -- 'in_progress' | 'closed'
+      note TEXT,                       -- short human read of where it moved
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
