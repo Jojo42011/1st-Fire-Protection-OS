@@ -36,6 +36,7 @@ export function seed(): void {
   seedEstimator();
   seedCloser();
   seedPlans();
+  seedDispatch();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1149,4 +1150,65 @@ function seedPlans(): void {
 
   setState('seeded_plans', '1');
   console.log('[seed] service plans seeded (6 agreements; Boerne lapsing in 12 days).');
+}
+
+/**
+ * The Dispatcher (five-agents Phase 5). Four crews with distinct skills/zones/loads, a week of
+ * confirmed appointments across Mon–Fri, the one proposed slot (Randolph AFB annex → Crew B,
+ * Wed 8–12) that drives the right-rail proposal, and a 7-deep waitlist. Appointments are stored
+ * by day-of-week so the grid always reads as "this week". Own flag. */
+function seedDispatch(): void {
+  if (getState('seeded_dispatch') === '1') return;
+  const db = getDb();
+
+  // crews: name, skills(csv), zone, capacity/day, load%
+  const crews: [string, string, string, number, number][] = [
+    ['Crew A', 'sprinkler,backflow', 'North', 3, 92],
+    ['Crew B', 'clearance,sprinkler', 'Northeast', 3, 74],
+    ['Crew C', 'alarm,hood', 'Central', 3, 88],
+    ['Crew D', 'extinguisher', 'West', 3, 56],
+  ];
+  const insCrew = db.prepare(`INSERT INTO crews (name, skills, zone, capacity_per_day, load_pct) VALUES (?, ?, ?, ?, ?)`);
+  const crewId: Record<string, number> = {};
+  for (const c of crews) crewId[c[0]] = Number(insCrew.run(c[0], c[1], c[2], c[3], c[4]).lastInsertRowid);
+
+  // appointments: crew, customer, skill, dow(0=Mon..4=Fri), window, status
+  // Crew B keeps Wed as the proposed Randolph AFB slot and Thursday deliberately open.
+  const appts: [string, string, string, number, string, string][] = [
+    ['Crew A', 'Alamo Ridge Plaza', 'sprinkler', 0, '8–12', 'confirmed'],
+    ['Crew A', 'Live Oak DC', 'backflow', 1, '8–11', 'confirmed'],
+    ['Crew A', 'Stone Oak Retail', 'sprinkler', 2, '1–4', 'confirmed'],
+    ['Crew A', 'Northside ISD #4', 'sprinkler', 3, '8–12', 'confirmed'],
+    ['Crew A', 'Boerne Ind — Bldg 1', 'backflow', 4, '8–11', 'confirmed'],
+    ['Crew B', 'Converse Fleet', 'clearance', 0, '9–12', 'confirmed'],
+    ['Crew B', 'Helotes Crossing', 'sprinkler', 1, '1–4', 'confirmed'],
+    ['Crew B', 'Randolph AFB annex', 'clearance', 2, '8–12', 'proposed'],
+    ['Crew B', 'Schertz Medical', 'clearance', 4, '8–11', 'confirmed'],
+    ['Crew C', 'Mi Tierra (Market Sq)', 'hood', 0, '8–11', 'confirmed'],
+    ['Crew C', 'Market Sq Grill', 'hood', 1, '8–12', 'confirmed'],
+    ['Crew C', 'La Cantera Mall', 'alarm', 2, '9–12', 'confirmed'],
+    ['Crew C', 'Rim Shopping Center', 'alarm', 3, '1–4', 'confirmed'],
+    ['Crew C', 'Bulverde Storage', 'hood', 4, '8–11', 'confirmed'],
+    ['Crew D', 'Converse Bays', 'extinguisher', 0, '1–3', 'confirmed'],
+    ['Crew D', 'Bandera Rd store', 'extinguisher', 2, '8–10', 'confirmed'],
+    ['Crew D', 'Leon Valley Depot', 'extinguisher', 4, '1–3', 'confirmed'],
+  ];
+  const insAppt = db.prepare(`INSERT INTO appointments (crew_id, customer, skill, dow, window, status) VALUES (?, ?, ?, ?, ?, ?)`);
+  for (const a of appts) insAppt.run(crewId[a[0]], a[1], a[2], a[3], a[4], a[5]);
+
+  // waitlist: rank, customer, need, skill, flexibility (top 3 match the design)
+  const wait: [number, string, string, string, string][] = [
+    [1, 'Culebra Medical Group', 'Sprinkler repair · asked for "any day"', 'sprinkler', 'any day'],
+    [2, 'Bandera Rd store', 'Alarm panel · called today', 'alarm', 'this week'],
+    [3, 'Boerne Industrial — Bldg 3', 'Annual · flexible until Sept', 'sprinkler', 'until Sept'],
+    [4, 'Schertz Auto Group', 'Extinguisher route · new customer', 'extinguisher', 'flexible'],
+    [5, 'Cibolo Town Center', 'Backflow test · overdue', 'backflow', 'this month'],
+    [6, 'Universal City Plaza', 'Hood re-cert · code deadline', 'hood', 'by month-end'],
+    [7, 'Selma Crossing', 'Alarm inspection · annual', 'alarm', 'flexible'],
+  ];
+  const insWait = db.prepare(`INSERT INTO waitlist (rank, customer, need, skill, flexibility) VALUES (?, ?, ?, ?, ?)`);
+  for (const w of wait) insWait.run(w[0], w[1], w[2], w[3], w[4]);
+
+  setState('seeded_dispatch', '1');
+  console.log('[seed] Dispatcher seeded (4 crews, a week of jobs, Randolph AFB proposed, 7 on waitlist).');
 }

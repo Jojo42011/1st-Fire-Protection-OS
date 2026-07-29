@@ -698,6 +698,34 @@ export function initDb(): void {
       agreement_id INTEGER, scheduled_at TEXT, status TEXT
     );
   `);
+
+  /* ---------- The Dispatcher (five-agents delta, Phase 5) ----------
+   * Matches each job to the right crew by skill, zone and spare capacity, cuts no-shows with
+   * two reminders per visit, and backfills a cancellation from the waitlist. Appointments are
+   * stored by day-of-week (0=Mon..4=Fri) so the crew-week grid always reads as "this week"
+   * however long the fixture has been sitting in the DB. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS crews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      skills TEXT,                    -- csv from TRADE_CONFIG.dispatch.skills
+      zone TEXT,                      -- the service area this crew works
+      capacity_per_day INTEGER DEFAULT 3,
+      load_pct INTEGER DEFAULT 0      -- this week's utilization (fixture)
+    );
+    CREATE TABLE IF NOT EXISTS appointments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      crew_id INTEGER, customer TEXT, site TEXT, skill TEXT,
+      dow INTEGER,                    -- 0=Mon .. 4=Fri (rendered against the current week)
+      window TEXT,                    -- '8–12'
+      status TEXT DEFAULT 'confirmed' -- 'proposed' | 'confirmed' | 'done' | 'no_show'
+    );
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rank INTEGER, customer TEXT, need TEXT, skill TEXT,
+      flexibility TEXT, created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

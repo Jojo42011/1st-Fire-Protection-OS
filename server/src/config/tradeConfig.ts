@@ -38,6 +38,19 @@ export interface TradeConfig {
     renewSoonDays: number; // counts as "lapsing"
     renewUrgentDays: number; // money-coloured, draft the renewal now
   };
+  /** The Dispatcher's crew/skill taxonomy + scoring weights — engine logic, not a prompt. */
+  dispatch: {
+    /** the skill vocabulary a crew can carry and a job can require */
+    skills: string[];
+    /** default job window length, hours */
+    slotHours: number;
+    /** a crew at/above this daily load counts as full (money-coloured) */
+    fullLoadPct: number;
+    /** reminders per appointment, hours before the window */
+    reminderHoursBefore: number[];
+    /** weights the match score sums — skill fit dominates, then zone, then spare capacity */
+    scoring: { skill: number; zone: number; capacity: number };
+  };
 }
 
 export const TRADE_CONFIG: TradeConfig = {
@@ -67,6 +80,13 @@ export const TRADE_CONFIG: TradeConfig = {
     defaultIntervals: { annual: 365, semiannual: 180, quarterly: 90 },
     renewSoonDays: 30,
     renewUrgentDays: 14,
+  },
+  dispatch: {
+    skills: ['sprinkler', 'backflow', 'extinguisher', 'alarm', 'hood', 'clearance'],
+    slotHours: 4,
+    fullLoadPct: 90,
+    reminderHoursBefore: [48, 4], // 48 hours out, then the morning of
+    scoring: { skill: 3, zone: 2, capacity: 1 },
   },
 };
 

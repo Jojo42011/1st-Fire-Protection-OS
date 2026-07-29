@@ -6,6 +6,7 @@ import { getCallMetrics, captureLead, bookInspection, Lead } from '../services/r
 import { getEstimatingSummary, draftQuote } from '../services/estimatorAgent';
 import { getPipelineSummary, draftFollowup } from '../services/closerAgent';
 import { getRecurringSummary, draftRenewal, proposePlan } from '../services/planAgent';
+import { getScheduleSummary, proposeSchedule, draftReminder } from '../services/dispatchAgent';
 
 /**
  * Function-tool defs + executeTool(). At minimum: open_tab (navigation), get_agent_status,
@@ -89,6 +90,21 @@ export const TOOLS: ToolDef[] = [
     name: 'propose_plan',
     description: 'Propose a recurring service plan from a finished one-time job. GATED — draft only, awaits human approval.',
     parameters: { type: 'object', properties: { candidate_index: { type: 'number' } }, required: ['candidate_index'] },
+  },
+  {
+    name: 'get_schedule_summary',
+    description: 'Summarize the Dispatcher: jobs today, crew utilization, no-show rate, open slots, and the crew-week schedule.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'propose_schedule',
+    description: 'Propose the best crew + slot for a waitlisted job, with the reason. GATED — draft only, awaits human approval.',
+    parameters: { type: 'object', properties: { wait_id: { type: 'number' } }, required: ['wait_id'] },
+  },
+  {
+    name: 'draft_reminder',
+    description: 'Draft the customer reminder text for an appointment. GATED — draft only, awaits human approval.',
+    parameters: { type: 'object', properties: { appointment_id: { type: 'number' } }, required: ['appointment_id'] },
   },
   {
     name: 'get_reputation_summary',
@@ -204,6 +220,17 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'propose_plan': {
         const r = proposePlan(Number(args.candidate_index));
         return { ok: true, data: r, navigate: 'plans', message: `Proposed a plan for ${r.customer} — awaiting your approval.` };
+      }
+      case 'get_schedule_summary': {
+        return { ok: true, data: getScheduleSummary(), navigate: 'dispatch', message: 'Schedule summarized.' };
+      }
+      case 'propose_schedule': {
+        const r = proposeSchedule(Number(args.wait_id));
+        return { ok: true, data: r, navigate: 'dispatch', message: `Proposed ${r.crew} — awaiting your approval.` };
+      }
+      case 'draft_reminder': {
+        const r = draftReminder(Number(args.appointment_id));
+        return { ok: true, data: r, navigate: 'dispatch', message: 'Drafted a reminder — awaiting your approval.' };
       }
       case 'get_reputation_summary': {
         const s = getReputationSummary();
