@@ -20,6 +20,20 @@ run**, so you never touch a terminal. You only do two things once, both in a bro
 - Go to the Fly dashboard → **Tokens** (org-level) → **Create token** (or Account →
   Access Tokens). Copy it. This token can create apps and deploy.
 
+> **Token scope matters — use an org/account token, not an app-scoped one.**
+> `fly deploy` builds on a **remote builder machine** (`--remote-only`). If no
+> `fly-builder-*` machine exists in the org yet — which is always true on the first
+> deploy — flyctl has to **create** one, and that needs **org-level** permission. An
+> **app-scoped** deploy token (`fly tokens create deploy -a <app>`) can deploy but
+> **cannot provision the builder**, so a first deploy with it fails with:
+> ```
+> WARN Failed to start remote builder heartbeat: unauthorized
+> Error: failed to fetch an image or build from source: unauthorized
+> ```
+> Fix: use an **org token** (`fly tokens create org -o <org-slug>`, or the dashboard
+> Account → Access Tokens) for the initial deploy. Once a builder exists in the org, a
+> narrower app-scoped token is enough for subsequent deploys.
+
 ### 2. Add the token as a GitHub repo secret (browser)
 - In this repo on GitHub: **Settings → Secrets and variables → Actions →
   New repository secret**.
@@ -77,6 +91,37 @@ fly secrets set SERVICETRADE_TOKEN=...              # Invoice Collector pulls re
 fly secrets set GOOGLE_BUSINESS_TOKEN=... FACEBOOK_PAGE_TOKEN=...   # Review Collector
 ```
 `fly secrets set` restarts the machine automatically. See `.env.example` for the full list.
+
+---
+
+## Troubleshooting deploys
+
+- **`WARN Failed to start remote builder heartbeat: unauthorized`** (then
+  `failed to fetch an image or build from source: unauthorized`). The token is valid but
+  **too narrow to provision the remote builder**. Use an **org/account token** for the
+  first deploy (see the token-scope note in Option A §1). App-scoped tokens only work once
+  a `fly-builder-*` machine already exists in the org.
+
+- **`verify: root banned: <token-id>`** (or `no verified tokens`). Fly has banned that
+  token's **root** — an **account/org-level** ban (a suspended account), not a per-token
+  revocation. Two things to know:
+  - **The ban survives an account restore.** If support un-suspends the account, tokens
+    that were already banned **stay** banned — lifting the ban only helps tokens **minted
+    afterward**. Always create a **fresh** token after an unban; don't reuse the old one.
+  - **It can hide behind a stale env var.** If `FLY_API_TOKEN` is exported in the shell
+    (CI, a container, a dev box), flyctl uses it even when you pass `-t`/`--access-token`,
+    and a banned value there poisons the whole request. Run with the env cleared:
+    `env -u FLY_API_TOKEN fly deploy … -t "<good-token>"`.
+
+- **Building behind a TLS-intercepting proxy** (`x509: certificate signed by unknown
+  authority` from the depot builder). Add `--depot=false` to fall back to the legacy
+  remote builder, which uses a trusted HTTPS path:
+  `fly deploy --remote-only --depot=false --ha=false`.
+
+- **GitHub Actions deploy fails in ~3s with no runner assigned.** That's a **GitHub
+  billing/spending block on the repo owner's account**, not a Fly problem — the deploy job
+  never runs because `needs: build` fails first. Fix GitHub billing, or deploy directly
+  with flyctl (Option B) to bypass Actions entirely.
 
 ---
 
