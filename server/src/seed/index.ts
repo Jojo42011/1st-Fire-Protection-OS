@@ -10,6 +10,7 @@ import { upsertNode } from '../db/memory';
 import { PILLARS } from '../config/auditor';
 import { DEPARTMENTS } from '../config/departments';
 import { COMPANY } from '../config/constants';
+import { SAMPLE_TAKEOFF, type TakeoffItem } from '../services/estimatorAgent';
 
 /**
  * Idempotent seed — guarded by a system_state flag so every dashboard looks alive on first
@@ -32,6 +33,7 @@ export function seed(): void {
   seedApprovals();
   seedCrm();
   seedFiveAgents();
+  seedEstimator();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1061,4 +1063,39 @@ function seedFiveAgents(): void {
   }
   setState('seeded_five_agents', '1');
   console.log('[seed] five cross-industry agents seeded (team view now shows 11).');
+}
+
+/**
+ * The Estimator takeoffs (five-agents Phase 2). Randolph AFB (the active, flagged read with
+ * the full item list that prices to $17,402) plus three in the queue. Own flag. */
+function seedEstimator(): void {
+  if (getState('seeded_estimator') === '1') return;
+  const db = getDb();
+  const ins = db.prepare(
+    `INSERT INTO takeoffs (customer, address, source, asset_count, scale_ref, items_json, confidence, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const roll = (items: TakeoffItem[]) => items.reduce((s, i) => s + i.confidence, 0) / items.length;
+
+  // Randolph AFB annex — the active takeoff (must be id 1 so the quote reads #Q-2304).
+  ins.run(
+    SAMPLE_TAKEOFF.customer, SAMPLE_TAKEOFF.address, SAMPLE_TAKEOFF.source, SAMPLE_TAKEOFF.asset_count,
+    SAMPLE_TAKEOFF.scale_ref, JSON.stringify(SAMPLE_TAKEOFF.items), roll(SAMPLE_TAKEOFF.items), 'flagged'
+  );
+
+  // The queue — one representative item each drives the descriptor + badge.
+  const queue: { customer: string; source: string; assets: number; item: TakeoffItem; status: string }[] = [
+    { customer: 'Mi Tierra (Market Sq)', source: 'photos', assets: 8, status: 'read',
+      item: { item: 'Hood suppression', where: 'Kitchen line', count: 1, unit: 'system', confidence: 0.9 } },
+    { customer: 'Helotes Crossing — Bldg C', source: 'blueprint', assets: 3, status: 'flagged',
+      item: { item: 'New construction rough-in', where: 'Sheet A-3', count: 1, unit: 'system', confidence: 0.68, flag: 'low scale confidence' } },
+    { customer: 'Converse Fleet Services', source: 'photos', assets: 21, status: 'read',
+      item: { item: 'Extinguisher recount', where: 'All bays', count: 21, unit: 'units', confidence: 0.94 } },
+  ];
+  for (const q of queue) {
+    ins.run(q.customer, null, q.source, q.assets, null, JSON.stringify([q.item]), q.item.confidence, q.status);
+  }
+
+  setState('seeded_estimator', '1');
+  console.log('[seed] Estimator takeoffs seeded (Randolph AFB + 3 in queue).');
 }

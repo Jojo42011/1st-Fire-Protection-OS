@@ -641,6 +641,26 @@ export function initDb(): void {
       object TEXT, at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- The Estimator (five-agents delta, Phase 2) ----------
+   * A takeoff is the vision read (items + per-item confidence); the Estimator prices it
+   * off the rate card into the existing `quotes` table. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS takeoffs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer TEXT, address TEXT,
+      source TEXT,                    -- 'photos' | 'blueprint'
+      asset_count INTEGER,            -- 14 photos / 3 sheets
+      scale_ref TEXT,                 -- '36in entry door'
+      items_json TEXT,                -- [{item,where,count,unit,confidence,flag}]
+      confidence REAL,                -- rolled up
+      status TEXT DEFAULT 'read',     -- 'read' | 'flagged' | 'quoted'
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+  // The Estimator writes the takeoff + its priced line items back onto a quote row.
+  addColumn('quotes', 'takeoff_id', 'INTEGER');
+  addColumn('quotes', 'line_items_json', 'TEXT');
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

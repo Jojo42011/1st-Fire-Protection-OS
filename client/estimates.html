@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Estimates · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .es-kpi .lab{font-weight:700;font-size:12px;color:var(--ink-2)}
+  .es-kpi .val{font-weight:800;font-size:25px;letter-spacing:-.02em;margin-top:12px;font-variant-numeric:tabular-nums}
+  .es-kpi .sub{font-weight:500;font-size:12px;color:var(--muted);margin-top:5px}
+  .es-conf{display:flex;align-items:center;gap:8px}
+  .es-conf .track{width:52px;height:6px;border-radius:999px;background:var(--fill);overflow:hidden;display:block}
+  .es-conf .track>span{display:block;height:100%;border-radius:999px}
+  .es-conf .pct{font-weight:700;font-size:11.5px}
+  .es-foot{padding:12px 18px;background:var(--panel-alt);border-top:1px solid var(--divider);display:flex;align-items:center;gap:12px}
+  .es-foot .t{flex:1;font-weight:500;font-size:12px;color:var(--muted)}
+  /* quote card */
+  .es-q .hd{display:flex;align-items:center;gap:9px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
+  .es-q .li{display:flex;align-items:baseline;gap:10px}
+  .es-q .li .d{flex:1;font-weight:500;font-size:12.5px;color:var(--ink-3)}
+  .es-q .li .a{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .es-q .li.total{padding-top:9px;border-top:1px solid var(--divider-soft)}
+  .es-q .li.total .d{font-weight:700;font-size:13px;color:var(--ink)}
+  .es-q .li.total .a{font-weight:800;font-size:17px}
+  .es-qrow{display:flex;flex-direction:column;gap:8px;margin-top:13px}
+  .es-drop{padding:12px 18px;border:1px dashed var(--border-strong);border-radius:11px;margin:12px;display:flex;align-items:center;gap:11px;cursor:pointer}
+  .es-drop .ic{width:26px;height:26px;border-radius:8px;background:var(--indigo-bg);color:var(--indigo);display:flex;align-items:center;justify-content:center;flex:none}
+  .es-qi{padding:12px 18px;border-bottom:1px solid var(--divider-soft);display:flex;align-items:center;gap:11px}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="kpis" id="kpis"></div>
+  <div class="split">
+    <div class="card card-clip" id="takeoff-card"></div>
+    <div class="stack">
+      <div class="card card-clip es-q" id="quote-card" style="border-left:3px solid var(--indigo)"></div>
+      <div class="card card-clip" id="queue-card"></div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+var activeId=null;
+
+fetch('/api/estimating').then(function(r){return r.json();}).then(function(d){
+  var s=d.summary;
+  document.getElementById('kpis').innerHTML=[
+    kpi('Quotes sent this month', s.quotesThisMonth, s.quotedThisMonth+' quoted', 'var(--ink)'),
+    kpi('Time to quote', s.timeToQuote, s.wasByHand, 'var(--green)'),
+    kpi('Win rate', s.winRate, 'last 90 days', 'var(--ink)'),
+    kpi('Waiting on a price', s.waiting, 'takeoffs ready to quote', 'var(--ink)')
+  ].join('');
+
+  var a=d.active;
+  if(a){
+    activeId=a.id;
+    var rows=a.items.map(function(i){
+      return '<tr>'+
+        '<td style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(i.item)+'</td>'+
+        '<td style="color:var(--muted)">'+esc(i.where)+'</td>'+
+        '<td class="right" style="font-weight:700;color:var(--ink)">'+esc(i.count)+'</td>'+
+        '<td class="mono" style="color:var(--muted)">'+esc(i.unit)+'</td>'+
+        '<td><span class="es-conf"><span class="track"><span style="width:'+esc(i.pct)+';background:'+i.confFg+'"></span></span><span class="pct" style="color:'+i.confFg+'">'+esc(i.conf)+'</span></span></td>'+
+        '<td class="right" style="font-weight:500;font-size:11.5px;color:'+i.flagFg+'">'+esc(i.flag)+'</td>'+
+      '</tr>';
+    }).join('');
+    var flaggedN=a.flaggedCount, flagWord=flaggedN===1?'One item is':(flaggedN+' items are');
+    document.getElementById('takeoff-card').innerHTML=
+      '<div class="card-head"><h2>Takeoff · '+esc(a.customer)+'</h2>'+
+        '<span class="pill indigo">'+esc(a.photosLabel)+'</span><span style="flex:1"></span>'+
+        (a.scaleRef?'<span style="font-weight:500;font-size:11.5px;color:var(--muted)">scale: '+esc(a.scaleRef)+'</span>':'')+'</div>'+
+      '<table><thead><tr><th>Item</th><th>Location</th><th class="right">Count</th><th>Unit</th><th>Confidence</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div class="es-foot"><span class="t">Photos were read by the model; every quantity below was priced by the rules engine, not guessed. '+flagWord+' flagged for a human eye.</span>'+
+        '<button class="btn btn-sm" onclick="nav(\'approve\')">Fix flagged items</button></div>';
+  }
+
+  var q=d.quote;
+  if(q){
+    var lines=q.lineItems.map(function(l){return '<div class="li"><span class="d">'+esc(l.detail)+'</span><span class="a">'+esc(l.amount)+'</span></div>';}).join('');
+    lines+='<div class="li"><span class="d">'+esc(q.labor.detail)+'</span><span class="a">'+esc(q.labor.amount)+'</span></div>';
+    lines+='<div class="li total"><span class="d">Total</span><span class="a">'+esc(q.total)+'</span></div>';
+    document.getElementById('quote-card').innerHTML=
+      '<div class="hd"><span class="dot" style="background:var(--indigo)"></span><span style="font-weight:700;font-size:11.5px;color:var(--indigo)">This quotes a price</span><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">drafted 4m ago</span></div>'+
+      '<div class="card-pad" id="quote-body">'+
+        '<div style="font-weight:800;font-size:15px;color:var(--ink)">Quote '+esc(q.number)+' · '+esc(q.customer)+'</div>'+
+        '<div class="es-qrow">'+lines+'</div>'+
+        '<p class="well" style="margin-top:12px">'+esc(q.note)+'</p>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:13px"><button class="btn-primary" id="send-quote">Approve &amp; send quote</button><button class="btn" onclick="nav(\'approve\')">Edit pricing</button></div>'+
+      '</div>';
+    document.getElementById('send-quote').onclick=sendQuote;
+  }
+
+  var queue=d.queue||[];
+  document.getElementById('queue-card').innerHTML=
+    '<div class="card-head"><h2>Takeoffs in the queue</h2></div>'+
+    queue.map(function(t){
+      return '<div class="es-qi"><div style="flex:1"><div style="font-weight:700;font-size:12.5px;color:var(--ink)">'+esc(t.customer)+'</div>'+
+        '<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(t.detail)+'</div></div>'+
+        '<span class="pill '+(t.badgeTone==='amber'?'amber':'green')+'">'+esc(t.badge)+'</span></div>';
+    }).join('')+
+    '<div class="es-drop" onclick="nav(\'approve\')"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M5 12h14"/></svg></span><span style="font-weight:600;font-size:12.5px;color:var(--indigo)">Drop photos or a blueprint</span></div>';
+});
+
+function kpi(lab,val,sub,color){
+  return '<div class="card card-pad es-kpi"><div class="lab">'+esc(lab)+'</div><div class="val" style="color:'+color+'">'+esc(val)+'</div><div class="sub">'+esc(sub)+'</div></div>';
+}
+function sendQuote(){
+  var btn=document.getElementById('send-quote'); if(!activeId){return;}
+  btn.disabled=true; btn.textContent='Sending…';
+  fetch('/api/estimating/'+activeId+'/quote',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    document.getElementById('quote-body').innerHTML=
+      '<div class="empty" style="padding:26px 8px"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+      '<h3 style="font-size:14px">Quote '+esc(res.number||'')+' is in your inbox</h3>'+
+      '<p>It quotes a price, so it waits for your yes. Open the approvals inbox to send it.</p>'+
+      '<button class="btn-primary" style="margin-top:12px" onclick="nav(\'approve\')">Open the approvals inbox</button></div>';
+    try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}
+  }).catch(function(){btn.disabled=false;btn.textContent='Approve & send quote';});
+}
+</script>
+</body>
+</html>

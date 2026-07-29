@@ -3,6 +3,7 @@ import { AGENTS } from '../config/agents';
 import { draftInvoiceReminder, getReceivablesSummary } from '../services/invoiceAgent';
 import { draftReviewRequest, draftReviewReply, getReputationSummary } from '../services/reviewAgent';
 import { getCallMetrics, captureLead, bookInspection, Lead } from '../services/receptionist';
+import { getEstimatingSummary, draftQuote } from '../services/estimatorAgent';
 
 /**
  * Function-tool defs + executeTool(). At minimum: open_tab (navigation), get_agent_status,
@@ -42,6 +43,20 @@ export const TOOLS: ToolDef[] = [
       type: 'object',
       properties: { invoice_id: { type: 'number' } },
       required: ['invoice_id'],
+    },
+  },
+  {
+    name: 'get_estimating_summary',
+    description: 'Summarize the Estimator: quotes sent this month, dollars quoted, time-to-quote, win rate, takeoffs waiting on a price.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'draft_quote',
+    description: 'Price a read takeoff into a quote off the rate card. GATED — draft only, awaits human approval.',
+    parameters: {
+      type: 'object',
+      properties: { takeoff_id: { type: 'number' } },
+      required: ['takeoff_id'],
     },
   },
   {
@@ -133,6 +148,13 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'draft_invoice_reminder': {
         const r = await draftInvoiceReminder(Number(args.invoice_id));
         return { ok: true, data: r, navigate: 'invoices', message: `Drafted a ${r.tier} reminder — awaiting your approval.` };
+      }
+      case 'get_estimating_summary': {
+        return { ok: true, data: getEstimatingSummary(), message: 'Estimator summarized.' };
+      }
+      case 'draft_quote': {
+        const r = draftQuote(Number(args.takeoff_id));
+        return { ok: true, data: r, navigate: 'estimator', message: `Drafted quote ${r.number} ($${r.total.toLocaleString('en-US')}) — awaiting your approval.` };
       }
       case 'get_reputation_summary': {
         const s = getReputationSummary();
