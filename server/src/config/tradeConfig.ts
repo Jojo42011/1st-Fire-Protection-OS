@@ -26,6 +26,12 @@ export interface TradeConfig {
     confidenceThreshold: number;
     rateCard: RateCardItem[];
   };
+  /** The Closer's follow-up cadence — engine logic, not a prompt. */
+  closer: {
+    cadence: { tier: string; dayFrom: number; label: string }[];
+    /** after this many days with no book, a quote is marked stalled and handed back to a human */
+    stalledAfterDays: number;
+  };
 }
 
 export const TRADE_CONFIG: TradeConfig = {
@@ -41,6 +47,15 @@ export const TRADE_CONFIG: TradeConfig = {
       { match: 'Ceiling drops', quoteLabel: 'Ceiling drops', unit: 'drops', rate: 74, laborHrs: 0.3 },
       { match: 'Hood suppression', quoteLabel: 'Hood suppression', unit: 'system', rate: 2400, laborHrs: 6 },
     ],
+  },
+  closer: {
+    // day 1 a nudge, day 3 the value, day 7 last call, then stalled.
+    cadence: [
+      { tier: 'nudge', dayFrom: 1, label: 'nudge sent' },
+      { tier: 'value', dayFrom: 3, label: 'value sent' },
+      { tier: 'last_call', dayFrom: 7, label: 'last call' },
+    ],
+    stalledAfterDays: 10,
   },
 };
 

@@ -661,6 +661,26 @@ export function initDb(): void {
   // The Estimator writes the takeoff + its priced line items back onto a quote row.
   addColumn('quotes', 'takeoff_id', 'INTEGER');
   addColumn('quotes', 'line_items_json', 'TEXT');
+
+  /* ---------- The Closer (five-agents delta, Phase 3) ----------
+   * Chases every open quote on a cadence; logs why each lost quote was lost so the
+   * "why we lose" panel can graduate into the shared context library. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS closer_touches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_id INTEGER NOT NULL,
+      channel TEXT,                   -- 'email' | 'sms' | 'call_script'
+      tier TEXT,                      -- 'nudge' | 'value' | 'last_call'
+      body TEXT,
+      status TEXT DEFAULT 'draft',    -- 'draft' | 'sent'
+      scheduled_at TEXT, sent_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS lost_reasons (
+      quote_id INTEGER PRIMARY KEY,
+      reason TEXT,                    -- 'price' | 'incumbent' | 'budget_cycle' | 'too_slow' | 'none'
+      detail TEXT, logged_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

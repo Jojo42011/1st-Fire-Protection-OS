@@ -36,6 +36,7 @@ import home from './routes/home';
 import crm from './routes/crm';
 import sync from './routes/sync';
 import estimating from './routes/estimating';
+import closer from './routes/closer';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -76,6 +77,7 @@ app.use(home);
 app.use(crm);
 app.use(sync);
 app.use(estimating);
+app.use(closer);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -103,6 +105,7 @@ app.get('/account', page('account.html'));
 app.get('/pipeline', page('pipeline.html'));
 app.get('/sync', page('sync.html'));
 app.get('/estimates', page('estimates.html'));
+app.get('/closer', page('closer.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

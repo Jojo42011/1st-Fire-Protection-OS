@@ -34,6 +34,7 @@ export function seed(): void {
   seedCrm();
   seedFiveAgents();
   seedEstimator();
+  seedCloser();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1098,4 +1099,27 @@ function seedEstimator(): void {
 
   setState('seeded_estimator', '1');
   console.log('[seed] Estimator takeoffs seeded (Randolph AFB + 3 in queue).');
+}
+
+/**
+ * The Closer (five-agents Phase 3). Logs the last-90-days lost reasons (the "why we lose"
+ * distribution — price 14, incumbent 8, budget 6, too slow 3, none 2) and ages one open
+ * quote to day 7 so the right-rail last-call draft has a subject. Own flag. */
+function seedCloser(): void {
+  if (getState('seeded_closer') === '1') return;
+  const db = getDb();
+
+  // lost_reasons is keyed by quote_id but carries no FK; synthetic ids stand in for the
+  // 33 hard-no's over the last 90 days so the panel counts are real.
+  const dist: [string, number][] = [['price', 14], ['incumbent', 8], ['budget_cycle', 6], ['too_slow', 3], ['none', 2]];
+  const insLost = db.prepare(`INSERT OR IGNORE INTO lost_reasons (quote_id, reason) VALUES (?, ?)`);
+  let synth = -1;
+  for (const [reason, n] of dist) for (let i = 0; i < n; i++) insLost.run(synth--, reason);
+
+  // Age the Alamo Ridge surgery-center quote to day 7 so it reads as a last-call.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  db.prepare(`UPDATE quotes SET sent_at = ? WHERE title LIKE '%surgery center%'`).run(sevenDaysAgo);
+
+  setState('seeded_closer', '1');
+  console.log('[seed] Closer seeded (33 lost reasons; one quote aged to last-call).');
 }

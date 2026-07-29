@@ -4,6 +4,7 @@ import { draftInvoiceReminder, getReceivablesSummary } from '../services/invoice
 import { draftReviewRequest, draftReviewReply, getReputationSummary } from '../services/reviewAgent';
 import { getCallMetrics, captureLead, bookInspection, Lead } from '../services/receptionist';
 import { getEstimatingSummary, draftQuote } from '../services/estimatorAgent';
+import { getPipelineSummary, draftFollowup } from '../services/closerAgent';
 
 /**
  * Function-tool defs + executeTool(). At minimum: open_tab (navigation), get_agent_status,
@@ -57,6 +58,20 @@ export const TOOLS: ToolDef[] = [
       type: 'object',
       properties: { takeoff_id: { type: 'number' } },
       required: ['takeoff_id'],
+    },
+  },
+  {
+    name: 'get_pipeline_summary',
+    description: 'Summarize open quotes the Closer is chasing: value at risk, stalled count, win rate, and why quotes are lost.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'draft_followup',
+    description: 'Draft the next-tier follow-up (nudge/value/last call) for an open quote. GATED — draft only, awaits human approval.',
+    parameters: {
+      type: 'object',
+      properties: { quote_id: { type: 'number' } },
+      required: ['quote_id'],
     },
   },
   {
@@ -155,6 +170,13 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'draft_quote': {
         const r = draftQuote(Number(args.takeoff_id));
         return { ok: true, data: r, navigate: 'estimator', message: `Drafted quote ${r.number} ($${r.total.toLocaleString('en-US')}) — awaiting your approval.` };
+      }
+      case 'get_pipeline_summary': {
+        return { ok: true, data: getPipelineSummary(), message: 'Open quotes summarized.' };
+      }
+      case 'draft_followup': {
+        const r = draftFollowup(Number(args.quote_id));
+        return { ok: true, data: r, navigate: 'closer', message: `Drafted a ${r.tier.replace('_', ' ')} follow-up (${r.value} on the line) — awaiting your approval.` };
       }
       case 'get_reputation_summary': {
         const s = getReputationSummary();

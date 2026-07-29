@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Follow-ups · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .cl-stats{display:flex;align-items:center;gap:26px;padding:16px 20px}
+  .cl-stats .fig .l{font-weight:700;font-size:11px;color:var(--muted)}
+  .cl-stats .fig .v{font-weight:800;font-size:22px;margin-top:6px;font-variant-numeric:tabular-nums}
+  .cl-stats p{flex:1;margin:0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3);max-width:52ch}
+  .cl-chips{display:flex;align-items:center;gap:6px}
+  .cl-chips .chip{cursor:pointer}
+  .cl-chips .chip.on{background:var(--fill);color:var(--ink)}
+  .cl-age{font-family:var(--mono);font-size:12px}
+  .cl-cta{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 12px;white-space:nowrap;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--ink-2)}
+  .cl-cta.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+  /* draft card */
+  .cl-d .hd{display:flex;align-items:center;gap:9px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
+  /* why we lose */
+  .cl-lose .bar{display:flex;align-items:center;gap:11px}
+  .cl-lose .bar .l{width:104px;font-weight:600;font-size:11.5px;color:var(--muted)}
+  .cl-lose .bar .track{flex:1;height:7px;border-radius:999px;background:var(--fill);overflow:hidden;display:block}
+  .cl-lose .bar .track>span{display:block;height:100%;border-radius:999px}
+  .cl-lose .bar .n{width:22px;text-align:right;font-weight:600;font-size:11.5px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="card card-pad cl-stats" id="stats"></div>
+  <div class="split">
+    <div class="card card-clip" id="quotes-card"></div>
+    <div class="stack">
+      <div class="card card-clip cl-d" id="draft-card" style="border-left:3px solid var(--money);display:none"></div>
+      <div class="card card-clip cl-lose" id="lose-card"></div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
+var DATA=null, filter='needs';
+var NEEDS=['awaiting price','last call','stalled'], CADENCE=['nudge sent','value sent','queued'];
+function grp(tier){return NEEDS.indexOf(tier)>=0?'needs':CADENCE.indexOf(tier)>=0?'cadence':'stalled';}
+
+fetch('/api/closer').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+
+function render(){
+  var d=DATA, s=d.summary;
+  document.getElementById('stats').innerHTML=
+    fig('Value at risk', s.valueAtRisk, 'var(--ink)')+
+    fig('Stalled past 7 days', s.stalled, 'var(--money)')+
+    fig('Win rate', s.winRate, 'var(--green)')+
+    fig('Avg days to close', s.avgDays, 'var(--ink)')+
+    '<p>Every open quote gets followed on a cadence until it books or gets a hard no: <b style="color:var(--ink)">day 1 a nudge, day 3 the value, day 7 last call</b>. Then it’s marked stalled and you decide.</p>';
+
+  var chips=[['needs','Needs a touch',s.needsTouch],['cadence','On cadence',''],['stalled','Stalled','']];
+  var vis=d.quotes.filter(function(q){return filter==='stalled'?grp(q.tier)==='stalled':grp(q.tier)===filter;});
+  var rows=vis.map(function(q){
+    var pillCls=({money:'money',green:'green',gray:'gray',indigo:'indigo',amber:'amber'})[q.tierPill]||'gray';
+    return '<tr>'+
+      '<td style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(q.customer)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(q.work)+'</div></td>'+
+      '<td class="right" style="font-weight:700;color:var(--ink)">'+esc(q.value)+'</td>'+
+      '<td class="right cl-age" style="color:'+q.ageTone+'">'+esc(q.age)+'</td>'+
+      '<td><span class="pill '+pillCls+'">'+esc(q.tier)+'</span></td>'+
+      '<td style="color:var(--ink-3)">'+esc(q.next)+'</td>'+
+      '<td class="right"><button class="cl-cta'+(q.ctaDark?' dark':'')+'" data-id="'+q.id+'">'+esc(q.cta)+'</button></td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('quotes-card').innerHTML=
+    '<div class="card-head"><h2>Open quotes</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">'+d.quotes.length+' · oldest first</span><span style="flex:1"></span>'+
+      '<span class="cl-chips">'+chips.map(function(c){return '<button class="chip'+(filter===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+(c[2]!==''?' '+c[2]:'')+'</button>';}).join('')+'</span></div>'+
+    '<table><thead><tr><th>Quote</th><th class="right">Value</th><th class="right">Sent</th><th>Touches</th><th>Next move</th><th></th></tr></thead><tbody>'+
+      (rows||'<tr><td colspan="6" style="padding:22px 18px;color:var(--muted)">Nothing in this view.</td></tr>')+'</tbody></table>';
+  document.querySelectorAll('.cl-chips .chip').forEach(function(b){b.onclick=function(){filter=b.getAttribute('data-f');render();};});
+  document.querySelectorAll('.cl-cta').forEach(function(b){b.onclick=function(){touch(+b.getAttribute('data-id'),b);};});
+
+  var a=d.activeDraft, dc=document.getElementById('draft-card');
+  if(a){
+    dc.style.display='';
+    dc.innerHTML=
+      '<div class="hd"><span class="dot" style="background:var(--money)"></span><span style="font-weight:700;font-size:11.5px;color:var(--money)">This sends an email</span><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">'+esc(a.tier)+'</span></div>'+
+      '<div class="card-pad" id="draft-body"><div style="font-weight:800;font-size:15px;color:var(--ink)">'+esc(a.title)+'</div>'+
+        '<div style="font-weight:700;font-size:12.5px;color:var(--money);margin-top:4px;font-variant-numeric:tabular-nums">'+esc(a.value)+'</div>'+
+        '<p class="well" style="margin-top:10px">'+esc(a.body)+'</p>'+
+        '<div style="display:flex;gap:8px;margin-top:13px"><button class="btn-primary" id="send-draft">Approve &amp; send</button><button class="btn" onclick="nav(\'approve\')">Edit</button><button class="btn-quiet">Call instead</button></div></div>';
+    document.getElementById('send-draft').onclick=function(){touch(a.quoteId,this,true);};
+  } else { dc.style.display='none'; }
+
+  document.getElementById('lose-card').innerHTML=
+    '<div class="card-head" style="display:block"><h2>Why we lose</h2><p style="margin:4px 0 0;font-weight:500;font-size:12px;color:var(--muted)">Last 90 days, from hard no’s.</p></div>'+
+    '<div class="card-pad" style="display:flex;flex-direction:column;gap:10px">'+
+      d.lostReasons.map(function(r){return '<div class="bar"><span class="l">'+esc(r.label)+'</span><span class="track"><span style="width:'+esc(r.pct)+';background:'+r.tone+'"></span></span><span class="n">'+r.count+'</span></div>';}).join('')+
+    '</div>'+
+    '<div class="card-foot">'+esc(d.lostFooter)+'</div>';
+}
+function fig(l,v,color){return '<div class="fig"><div class="l">'+esc(l)+'</div><div class="v" style="color:'+color+'">'+esc(v)+'</div></div>';}
+function touch(id,btn,isDraftCard){
+  btn.disabled=true; var orig=btn.textContent; btn.textContent='Drafting…';
+  fetch('/api/closer/'+id+'/touch',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    notify();
+    if(isDraftCard){
+      document.getElementById('draft-body').innerHTML=
+        '<div class="empty" style="padding:24px 8px"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+        '<h3 style="font-size:14px">Follow-up is in your inbox</h3><p>It sends an email, so it waits for your yes.</p>'+
+        '<button class="btn-primary" style="margin-top:12px" onclick="nav(\'approve\')">Open the approvals inbox</button></div>';
+    } else { btn.textContent='Drafted ✓'; }
+  }).catch(function(){btn.disabled=false;btn.textContent=orig;});
+}
+</script>
+</body>
+</html>
