@@ -681,6 +681,23 @@ export function initDb(): void {
       detail TEXT, logged_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- Service plans (five-agents delta, Phase 4) ----------
+   * Turns finished jobs into recurring agreements, schedules the visits (through the
+   * Dispatcher) and renews them before they lapse. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS service_agreements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER, customer TEXT,
+      plan_type TEXT, interval_days INTEGER, price INTEGER,
+      status TEXT DEFAULT 'active',   -- 'active' | 'lapsing' | 'cancelled'
+      started_at TEXT, next_service_at TEXT, renews_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS service_visits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agreement_id INTEGER, scheduled_at TEXT, status TEXT
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

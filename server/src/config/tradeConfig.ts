@@ -32,6 +32,12 @@ export interface TradeConfig {
     /** after this many days with no book, a quote is marked stalled and handed back to a human */
     stalledAfterDays: number;
   };
+  /** Service-plan defaults. */
+  plans: {
+    defaultIntervals: { annual: number; semiannual: number; quarterly: number };
+    renewSoonDays: number; // counts as "lapsing"
+    renewUrgentDays: number; // money-coloured, draft the renewal now
+  };
 }
 
 export const TRADE_CONFIG: TradeConfig = {
@@ -56,6 +62,11 @@ export const TRADE_CONFIG: TradeConfig = {
       { tier: 'last_call', dayFrom: 7, label: 'last call' },
     ],
     stalledAfterDays: 10,
+  },
+  plans: {
+    defaultIntervals: { annual: 365, semiannual: 180, quarterly: 90 },
+    renewSoonDays: 30,
+    renewUrgentDays: 14,
   },
 };
 

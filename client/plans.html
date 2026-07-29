@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Service plans · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .pl-head{display:flex;align-items:center;gap:26px;padding:18px 20px}
+  .pl-head .big{font-weight:800;font-size:32px;line-height:1;color:var(--teal);font-variant-numeric:tabular-nums}
+  .pl-head .biglab{font-weight:600;font-size:12px;color:var(--muted);margin-top:8px}
+  .pl-head .div{width:1px;height:52px;background:var(--divider)}
+  .pl-head p{flex:1;margin:0;font-weight:500;font-size:13px;line-height:1.65;color:var(--ink-3)}
+  .pl-head .lap{text-align:right}
+  .pl-head .lap .v{font-weight:800;font-size:20px;color:var(--money);font-variant-numeric:tabular-nums}
+  .pl-head .lap .l{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .pl-every{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .pl-cta{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 12px;white-space:nowrap;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--ink-2)}
+  .pl-cta.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pl-cand{padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
+  .pl-cand:last-child{border-bottom:none}
+  .pl-cand .nm{font-weight:700;font-size:12.5px;color:var(--ink)}
+  .pl-cand p{margin:4px 0 0;font-weight:500;font-size:11.5px;line-height:1.5;color:var(--muted)}
+  .pl-propose{display:inline-block;font-weight:700;font-size:11.5px;color:var(--teal);background:var(--teal-bg);border:none;border-radius:8px;padding:6px 11px;margin-top:9px;cursor:pointer}
+  .pl-chips .chip{cursor:pointer}
+  .pl-chips .chip.on{background:var(--fill);color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="card pl-head" id="head"></div>
+  <div class="split">
+    <div class="card card-clip" id="agreements-card"></div>
+    <div class="stack">
+      <div class="card card-clip" id="renewal-card" style="border-left:3px solid var(--money);display:none"></div>
+      <div class="card card-clip" id="candidates-card"></div>
+    </div>
+  </div>
+</div>
+<script>
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
+function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
+var DATA=null, filter='all';
+
+fetch('/api/plans').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+
+function render(){
+  var d=DATA, s=d.summary;
+  document.getElementById('head').innerHTML=
+    '<div><div class="big">'+esc(s.recurringRevenue)+'</div><div class="biglab">recurring revenue under agreement, per year</div></div>'+
+    '<div class="div"></div>'+
+    '<p>'+s.agreements+' active agreements. Visits schedule themselves through the Dispatcher and renewals go out before they lapse — this is the revenue you’re entitled to and used to forget to bill.</p>'+
+    '<div class="lap"><div class="v">'+s.lapsing+'</div><div class="l">lapsing in 30 days</div></div>';
+
+  var chips=[['all','All',s.agreements],['lapsing','Lapsing',s.lapsing],['visit','Due a visit',s.dueVisit]];
+  var vis=d.agreements.filter(function(a){return filter==='all'?true:filter==='lapsing'?(a.renewPill!=='gray'):true;});
+  var rows=vis.map(function(a){
+    var pill=({money:'money',amber:'amber',gray:'gray'})[a.renewPill]||'gray';
+    return '<tr>'+
+      '<td style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(a.customer)+'</td>'+
+      '<td style="color:var(--ink-3)">'+esc(a.plan)+'</td>'+
+      '<td class="pl-every">'+esc(a.interval)+'</td>'+
+      '<td class="right" style="font-weight:700;color:var(--ink)">'+esc(a.price)+'</td>'+
+      '<td style="color:var(--ink-3)">'+esc(a.next)+'</td>'+
+      '<td><span class="pill '+pill+'">'+esc(a.renews)+'</span></td>'+
+      '<td class="right"><button class="pl-cta'+(a.ctaDark?' dark':'')+'" data-id="'+a.id+'" data-cta="'+esc(a.cta)+'">'+esc(a.cta)+'</button></td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('agreements-card').innerHTML=
+    '<div class="card-head"><h2>Active agreements</h2><span style="flex:1"></span>'+
+      '<span class="pl-chips" style="display:flex;gap:6px">'+chips.map(function(c){return '<button class="chip'+(filter===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+' '+c[2]+'</button>';}).join('')+'</span></div>'+
+    '<table><thead><tr><th>Customer</th><th>Plan</th><th>Every</th><th class="right">Per year</th><th>Next visit</th><th>Renews</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  document.querySelectorAll('.pl-chips .chip').forEach(function(b){b.onclick=function(){filter=b.getAttribute('data-f');render();};});
+  document.querySelectorAll('.pl-cta').forEach(function(b){b.onclick=function(){
+    var cta=b.getAttribute('data-cta');
+    if(cta==='Draft renewal'){renew(+b.getAttribute('data-id'),b);} else {nav('approve');}
+  };});
+
+  var a=d.activeRenewal, rc=document.getElementById('renewal-card');
+  if(a){
+    rc.style.display='';
+    rc.innerHTML=
+      '<div class="hd" style="display:flex;align-items:center;gap:9px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)"><span class="dot" style="background:var(--money)"></span><span style="font-weight:700;font-size:11.5px;color:var(--money)">This sends an email</span><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">'+esc(a.lapsesIn)+'</span></div>'+
+      '<div class="card-pad" id="renewal-body"><div style="font-weight:800;font-size:15px;color:var(--ink)">'+esc(a.title)+'</div>'+
+        '<div style="font-weight:700;font-size:12.5px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums">'+esc(a.meta)+'</div>'+
+        '<p class="well" style="margin-top:10px">'+esc(a.body)+'</p>'+
+        '<div style="display:flex;gap:8px;margin-top:13px"><button class="btn-primary" id="send-renewal">Approve &amp; send</button><button class="btn" id="raise-rate">Raise the rate</button></div></div>';
+    document.getElementById('send-renewal').onclick=function(){renew(a.agreementId,this,false,true);};
+    document.getElementById('raise-rate').onclick=function(){renew(a.agreementId,this,true,true);};
+  } else { rc.style.display='none'; }
+
+  document.getElementById('candidates-card').innerHTML=
+    '<div class="card-head" style="display:block"><h2>These jobs could be agreements</h2><p style="margin:4px 0 0;font-weight:500;font-size:12px;color:var(--muted)">One-time work that finished in the last 30 days.</p></div>'+
+    d.candidates.map(function(c){
+      return '<div class="pl-cand"><div class="nm">'+esc(c.customer)+'</div><p>'+esc(c.detail)+'</p><button class="pl-propose" data-i="'+c.index+'">Propose a plan</button></div>';
+    }).join('');
+  document.querySelectorAll('.pl-propose').forEach(function(b){b.onclick=function(){propose(+b.getAttribute('data-i'),b);};});
+}
+function renew(id,btn,raise,isCard){
+  btn.disabled=true; var orig=btn.textContent; btn.textContent='Drafting…';
+  fetch('/api/plans/'+id+'/renewal',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({raiseRate:!!raise})}).then(function(r){return r.json();}).then(function(){
+    notify();
+    if(isCard){
+      document.getElementById('renewal-body').innerHTML=
+        '<div class="empty" style="padding:24px 8px"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
+        '<h3 style="font-size:14px">'+(raise?'Rate change':'Renewal')+' is in your inbox</h3><p>It goes to the customer, so it waits for your yes.</p>'+
+        '<button class="btn-primary" style="margin-top:12px" onclick="nav(\'approve\')">Open the approvals inbox</button></div>';
+    } else { btn.textContent='Drafted ✓'; }
+  }).catch(function(){btn.disabled=false;btn.textContent=orig;});
+}
+function propose(i,btn){
+  btn.disabled=true; btn.textContent='Proposing…';
+  fetch('/api/plans/propose',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({index:i})}).then(function(r){return r.json();}).then(function(){
+    btn.textContent='In your inbox ✓'; notify();
+  }).catch(function(){btn.disabled=false;btn.textContent='Propose a plan';});
+}
+</script>
+</body>
+</html>

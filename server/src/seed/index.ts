@@ -35,6 +35,7 @@ export function seed(): void {
   seedFiveAgents();
   seedEstimator();
   seedCloser();
+  seedPlans();
 
   if (getState('seeded') === '1') return;
   const db = getDb();
@@ -1122,4 +1123,30 @@ function seedCloser(): void {
 
   setState('seeded_closer', '1');
   console.log('[seed] Closer seeded (33 lost reasons; one quote aged to last-call).');
+}
+
+/**
+ * Service plans (five-agents Phase 4). Six active agreements matching the design, with
+ * Boerne lapsing in 12 days (drives the right-rail renewal draft). Own flag. */
+function seedPlans(): void {
+  if (getState('seeded_plans') === '1') return;
+  const db = getDb();
+  const iso = (offDays: number) => new Date(Date.now() + offDays * 86400000).toISOString().slice(0, 10);
+  // customer, plan_type, interval_days, price$, startYear, nextVisitOff, renewsOff
+  const rows: [string, string, number, number, number, number, number][] = [
+    ['Boerne Industrial Park LLC', 'Annual inspection · 9 sites', 365, 14400, 2012, 56, 12],
+    ['Northside ISD', 'Quarterly inspection · 14 sites', 90, 58800, 2009, 7, 158],
+    ['Alamo Ridge Medical Plaza', 'Quarterly sprinkler · 3 sites', 90, 24600, 2014, 17, 65],
+    ['Culebra Medical Group', 'Annual + backflow · 4 sites', 365, 11200, 2017, 36, 22],
+    ['Converse Fleet Services', 'Quarterly extinguisher route', 90, 9600, 2016, 14, 217],
+    ['Live Oak Distribution Center', 'Annual + backflow · 2 sites', 365, 7300, 2021, 15, 125],
+  ];
+  const ins = db.prepare(
+    `INSERT INTO service_agreements (customer, plan_type, interval_days, price, status, started_at, next_service_at, renews_at)
+     VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`
+  );
+  for (const r of rows) ins.run(r[0], r[1], r[2], r[3], `${r[4]}-01-01`, iso(r[5]), iso(r[6]));
+
+  setState('seeded_plans', '1');
+  console.log('[seed] service plans seeded (6 agreements; Boerne lapsing in 12 days).');
 }

@@ -5,6 +5,7 @@ import { draftReviewRequest, draftReviewReply, getReputationSummary } from '../s
 import { getCallMetrics, captureLead, bookInspection, Lead } from '../services/receptionist';
 import { getEstimatingSummary, draftQuote } from '../services/estimatorAgent';
 import { getPipelineSummary, draftFollowup } from '../services/closerAgent';
+import { getRecurringSummary, draftRenewal, proposePlan } from '../services/planAgent';
 
 /**
  * Function-tool defs + executeTool(). At minimum: open_tab (navigation), get_agent_status,
@@ -73,6 +74,21 @@ export const TOOLS: ToolDef[] = [
       properties: { quote_id: { type: 'number' } },
       required: ['quote_id'],
     },
+  },
+  {
+    name: 'get_recurring_summary',
+    description: 'Summarize service plans: recurring revenue under agreement, agreements lapsing soon, visits due.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'draft_renewal',
+    description: 'Draft a renewal for a service agreement that is lapsing. GATED — draft only, awaits human approval.',
+    parameters: { type: 'object', properties: { agreement_id: { type: 'number' } }, required: ['agreement_id'] },
+  },
+  {
+    name: 'propose_plan',
+    description: 'Propose a recurring service plan from a finished one-time job. GATED — draft only, awaits human approval.',
+    parameters: { type: 'object', properties: { candidate_index: { type: 'number' } }, required: ['candidate_index'] },
   },
   {
     name: 'get_reputation_summary',
@@ -177,6 +193,17 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'draft_followup': {
         const r = draftFollowup(Number(args.quote_id));
         return { ok: true, data: r, navigate: 'closer', message: `Drafted a ${r.tier.replace('_', ' ')} follow-up (${r.value} on the line) — awaiting your approval.` };
+      }
+      case 'get_recurring_summary': {
+        return { ok: true, data: getRecurringSummary(), message: 'Service plans summarized.' };
+      }
+      case 'draft_renewal': {
+        const r = draftRenewal(Number(args.agreement_id));
+        return { ok: true, data: r, navigate: 'plans', message: 'Drafted a renewal — awaiting your approval.' };
+      }
+      case 'propose_plan': {
+        const r = proposePlan(Number(args.candidate_index));
+        return { ok: true, data: r, navigate: 'plans', message: `Proposed a plan for ${r.customer} — awaiting your approval.` };
       }
       case 'get_reputation_summary': {
         const s = getReputationSummary();
