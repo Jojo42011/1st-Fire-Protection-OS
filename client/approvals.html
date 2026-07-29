@@ -26,6 +26,11 @@
   .appr .actions{display:flex;align-items:center;gap:8px;margin-top:13px}
   .appr .actions .trail{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);text-align:right}
   .dotc{width:9px;height:9px;border-radius:3px;flex:none}
+  .edit-ta{width:100%;box-sizing:border-box;margin-top:7px;min-height:110px;resize:vertical;
+    font-family:var(--sans);font-weight:500;font-size:13px;line-height:1.6;color:var(--ink);
+    background:var(--panel-alt);border:1px solid var(--border-strong);border-radius:10px;padding:11px 13px}
+  .edit-ta:focus{outline:none;border-color:var(--indigo)}
+  .edit-hint{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
 </style>
 </head>
 <body>
@@ -55,11 +60,14 @@ var TONE={
   costing: {cls:'', c:'var(--green)'}
 };
 var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve & send',schedule_change:'Approve & schedule'};
-var SECONDARY={cancel_seat:'Keep seat'};
+/* the dismiss button: honest label per kind ("Keep seat" declines a cancellation; "Skip" everywhere else) */
+var DISMISS={cancel_seat:'Keep seat'};
+/* editing a draft only makes sense where there's message text to change (not a seat-cancel decision) */
+function canEdit(a){return !!a.body && a.kind!=='cancel_seat';}
 var SEND=['send_email','send_sms'],MONEY=['cancel_seat','quote_price'],PUBLISH=['publish','push_st'],SCHEDULE=['schedule_change'];
 var FILTERS=[['all','All'],['send','Sends something'],['money','Spends money'],['publish','Posts publicly'],['schedule','Schedules work']];
 
-var items=[], filter='all';
+var items=[], filter='all', editingId=null;
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function age(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
 function cat(k){return SEND.indexOf(k)>=0?'send':MONEY.indexOf(k)>=0?'money':SCHEDULE.indexOf(k)>=0?'schedule':'publish';}
@@ -92,18 +100,30 @@ function render(){
 }
 function card(a){
   var tone=TONE[a.agent_key]||TONE.calls, dot=tone.dot||tone.c;
-  var prim=PRIMARY[a.kind]||'Approve', sec=SECONDARY[a.kind]||'Edit';
+  var prim=PRIMARY[a.kind]||'Approve', dismiss=DISMISS[a.kind]||'Skip';
   var style=tone.cls?'':' style="border-left:3px solid '+tone.c+'"';
-  return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+
-    '<div class="hd"><span class="dotc" style="background:'+dot+'"></span>'+
+  var head='<div class="hd"><span class="dotc" style="background:'+dot+'"></span>'+
       '<span class="kind" style="color:'+tone.c+'">'+esc(KIND_LABEL[a.kind]||a.kind)+'</span>'+
       '<span class="agent">· '+esc(AGENT[a.agent_key]||a.agent_key)+'</span>'+
-      '<span class="age">'+age(a.age_mins)+'</span></div>'+
+      '<span class="age">'+age(a.age_mins)+'</span></div>';
+
+  // editing state — the draft body becomes an editable textarea with Save / Cancel.
+  if(editingId===a.id){
+    return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+head+
+      '<div class="bd"><div class="toprow"><div class="t">'+esc(a.title)+'</div></div>'+
+      '<textarea class="edit-ta" id="edit-'+a.id+'">'+esc(a.body||'')+'</textarea>'+
+      '<div class="actions"><button class="btn-primary" data-act="save">Save changes</button>'+
+      '<button class="btn" data-act="cancel">Cancel</button>'+
+      '<span class="edit-hint">Edits the draft that gets sent on approval</span></div></div></div>';
+  }
+
+  return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+head+
     '<div class="bd"><div class="toprow"><div class="t">'+esc(a.title)+'</div>'+
       (a.stake?'<div class="stake" style="color:'+tone.c+'">'+esc(a.stake)+'</div>':'')+'</div>'+
       (a.body?'<p class="well" style="margin-top:7px">'+esc(a.body)+'</p>':'')+
       '<div class="actions"><button class="btn-primary" data-act="approve">'+esc(prim)+'</button>'+
-      '<button class="btn" data-act="skip">'+esc(sec)+'</button>'+
+      (canEdit(a)?'<button class="btn" data-act="edit">Edit</button>':'')+
+      '<button class="btn" data-act="skip">'+esc(dismiss)+'</button>'+
       (a.trail?'<span class="trail">'+esc(a.trail)+'</span>':'')+'</div></div></div>';
 }
 function wire(){
@@ -112,9 +132,25 @@ function wire(){
   document.querySelectorAll('.appr').forEach(function(el){
     var id=+el.getAttribute('data-id');
     el.querySelectorAll('[data-act]').forEach(function(btn){
-      btn.onclick=function(){decide(id,btn.getAttribute('data-act'),el);};
+      var act=btn.getAttribute('data-act');
+      btn.onclick=function(){
+        if(act==='edit'){editingId=id;render();var ta=document.getElementById('edit-'+id);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}return;}
+        if(act==='cancel'){editingId=null;render();return;}
+        if(act==='save'){saveEdit(id);return;}
+        decide(id,act,el); // approve | skip
+      };
     });
   });
+}
+function saveEdit(id){
+  var ta=document.getElementById('edit-'+id);if(!ta)return;
+  var body=ta.value.trim();if(!body)return;
+  ta.disabled=true;
+  fetch('/api/approvals/'+id+'/edit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({body:body})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.item){items=items.map(function(i){return i.id===id?d.item:i;});}
+      editingId=null;render();
+    }).catch(function(){ta.disabled=false;});
 }
 function removeCard(el,id){
   el.classList.add('leaving');

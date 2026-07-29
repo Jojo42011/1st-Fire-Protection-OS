@@ -120,6 +120,24 @@ router.post('/api/approvals/:id/approve', (req, res) => {
   res.json({ ok: true, item });
 });
 
+/** Edit the draft body of a pending item (the copy that gets sent once keys exist).
+ *  Leaves it pending — the human still has to approve the edited version. */
+router.post('/api/approvals/:id/edit', (req, res) => {
+  const db = getDb();
+  const id = Number(req.params.id);
+  const body = typeof req.body?.body === 'string' ? req.body.body.trim() : null;
+  if (!body) return res.status(400).json({ ok: false, error: 'body required' });
+
+  const row = db.prepare(`SELECT status FROM approvals WHERE id = ?`).get(id) as { status: string } | undefined;
+  if (!row) return res.status(404).json({ ok: false, error: 'not found' });
+  if (row.status !== 'pending') return res.status(409).json({ ok: false, error: `already ${row.status}` });
+
+  db.prepare(`UPDATE approvals SET body = ? WHERE id = ?`).run(body, id);
+  db.prepare(`INSERT INTO approval_events (approval_id, action, detail) VALUES (?, 'edited', ?)`).run(id, 'body edited by human');
+  const item = db.prepare(`${SELECT} WHERE id = ?`).get(id) as ApprovalRow;
+  res.json({ ok: true, item });
+});
+
 /** Skip (dismiss) one item. Idempotent. */
 router.post('/api/approvals/:id/skip', (req, res) => {
   const db = getDb();
