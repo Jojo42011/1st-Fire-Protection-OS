@@ -1,6 +1,25 @@
 import { Router } from 'express';
-import { stConfigured, stCredKind, getStMode, setStMode, testConnection, type StMode } from '../services/servicetrade';
+import {
+  stConfigured,
+  stCredKind,
+  getStMode,
+  setStMode,
+  testConnection,
+  listWebhooks,
+  registerWebhook,
+  deleteWebhook,
+  ServiceTradeReadOnlyError,
+  ServiceTradeNotConnectedError,
+  type StMode,
+} from '../services/servicetrade';
 import { getDb } from '../db/index';
+
+/** Map a ServiceTrade client error to a clean HTTP response. */
+function stError(res: import('express').Response, err: unknown) {
+  if (err instanceof ServiceTradeReadOnlyError) return res.status(409).json({ ok: false, error: err.message, code: 'read_only' });
+  if (err instanceof ServiceTradeNotConnectedError) return res.status(409).json({ ok: false, error: err.message, code: 'not_connected' });
+  return res.status(502).json({ ok: false, error: (err as Error).message });
+}
 
 /**
  * Settings — the ServiceTrade connection status + the read-only/write safety toggle.
@@ -39,6 +58,39 @@ router.post('/api/settings/servicetrade/mode', (req, res) => {
 router.post('/api/settings/servicetrade/test', async (_req, res) => {
   const result = await testConnection();
   res.json({ ...result, connected: stConfigured(), mode: getStMode() });
+});
+
+// ── webhook subscriptions on ServiceTrade (list = read; register/delete = write, mode-gated) ──
+
+router.get('/api/settings/servicetrade/webhooks', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await listWebhooks()) });
+  } catch (err) {
+    stError(res, err);
+  }
+});
+
+router.post('/api/settings/servicetrade/webhooks', async (req, res) => {
+  // Default the hook URL to THIS app's receiver, carrying the shared secret if one is set.
+  const base = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const secret = process.env.SERVICETRADE_WEBHOOK_SECRET;
+  const defaultUrl = `${base}/api/servicetrade/webhook${secret ? `?token=${encodeURIComponent(secret)}` : ''}`;
+  const hookUrl = String(req.body?.hookUrl || defaultUrl);
+  const entityEvents = Array.isArray(req.body?.entityEvents) ? req.body.entityEvents : null;
+  try {
+    res.json({ ok: true, webhook: await registerWebhook(hookUrl, entityEvents) });
+  } catch (err) {
+    stError(res, err); // read-only mode → 409 read_only
+  }
+});
+
+router.delete('/api/settings/servicetrade/webhooks/:id', async (req, res) => {
+  try {
+    await deleteWebhook(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    stError(res, err);
+  }
 });
 
 export default router;

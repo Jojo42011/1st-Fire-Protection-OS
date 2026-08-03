@@ -747,6 +747,23 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  /* ---------- ServiceTrade webhook inbox ----------
+   * Real-time events ServiceTrade PUSHES to us (job completed, invoice created, quote updated…)
+   * over its native webhook API — no Zapier. This is a read-side landing table: events are
+   * recorded here as they arrive; routing them to agents (which then DRAFT, gated) comes later.
+   * Receiving never writes back to ServiceTrade, so it's safe under read-only mode. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS servicetrade_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT,                     -- 'created' | 'updated' | 'deleted'
+      entity_type TEXT,                -- job | invoice | quote | ... (as sent)
+      entity_id TEXT,
+      payload_json TEXT,               -- the raw event body
+      processed INTEGER DEFAULT 0,     -- 0 until an agent has acted on it
+      received_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
