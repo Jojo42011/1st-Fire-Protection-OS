@@ -113,6 +113,8 @@ app.get('/home', page('home.html'));
 app.get('/approvals', page('approvals.html'));
 app.get('/accounts', page('accounts.html'));
 app.get('/sites', page('sites.html'));
+app.get('/jobs', page('jobs.html'));
+app.get('/quotes', page('quotes.html'));
 app.get('/account', page('account.html'));
 app.get('/pipeline', page('pipeline.html'));
 app.get('/sync', page('sync.html'));

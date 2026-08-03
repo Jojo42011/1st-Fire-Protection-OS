@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { hasRealAccounts, hasRealSites } from '../services/servicetradeSync';
+import { hasRealAccounts, hasRealSites, hasRealJobs, hasRealQuotes } from '../services/servicetradeSync';
 import { runList, countWith, type ListSpec } from '../services/listQuery';
 
 /**
@@ -210,6 +210,78 @@ router.get('/api/sites', (req, res) => {
     };
   });
   res.json({ sites, counts: { all: rows.length, linked: rows.length, addressed: 0 }, total: rows.length, page: 1, pages: 1, showing: sites.length, live: false });
+});
+
+// Jobs at scale.
+const JOBS_SPEC: ListSpec = {
+  table: 'crm_jobs',
+  baseWhere: "source = 'servicetrade'",
+  searchCols: ['number', 'kind', 'status'],
+  filters: { all: '1 = 1', open: 'completed_at IS NULL', completed: 'completed_at IS NOT NULL' },
+  sorts: { number: 'number', scheduled: 'scheduled_at', status: 'status' },
+  defaultSort: 'scheduled_at DESC',
+};
+interface JobRow { id: number; account_id: number | null; number: string | null; kind: string | null; status: string | null; scheduled_at: string | null; completed_at: string | null; }
+
+router.get('/api/jobs', (req, res) => {
+  const db = getDb();
+  if (hasRealJobs()) {
+    const result = runList<JobRow>(JOBS_SPEC, {
+      q: req.query.q as string, filter: req.query.filter as string, sort: req.query.sort as string,
+      order: req.query.order as string, page: req.query.page as string, pageSize: req.query.pageSize as string,
+    });
+    const nameOf = db.prepare(`SELECT name FROM accounts WHERE id = ?`);
+    const jobs = result.rows.map((j) => {
+      const a = j.account_id ? (nameOf.get(j.account_id) as { name: string } | undefined) : undefined;
+      return {
+        id: j.id, number: j.number || '—', kind: j.kind || '', status: j.status || '',
+        account: a?.name || '—', accountId: j.account_id,
+        scheduled: j.scheduled_at ? fmtDate(j.scheduled_at) : '—',
+        completed: j.completed_at ? fmtDate(j.completed_at) : '',
+      };
+    });
+    return res.json({
+      jobs,
+      counts: { all: countWith(JOBS_SPEC, 'all'), open: countWith(JOBS_SPEC, 'open'), completed: countWith(JOBS_SPEC, 'completed') },
+      total: result.total, page: result.page, pageSize: result.pageSize, pages: result.pages, showing: jobs.length, live: true,
+    });
+  }
+  res.json({ jobs: [], counts: { all: 0, open: 0, completed: 0 }, total: 0, page: 1, pages: 1, showing: 0, live: false });
+});
+
+// Quotes at scale.
+const QUOTES_SPEC: ListSpec = {
+  table: 'quotes',
+  baseWhere: "source = 'servicetrade'",
+  searchCols: ['number', 'title'],
+  filters: { all: '1 = 1', valued: 'amount_cents > 0' },
+  sorts: { amount: 'amount_cents', number: 'number' },
+  defaultSort: 'amount_cents DESC',
+};
+interface QuoteListRow { id: number; account_id: number | null; number: string | null; title: string | null; amount_cents: number | null; stage: string | null; }
+
+router.get('/api/quotes', (req, res) => {
+  const db = getDb();
+  if (hasRealQuotes()) {
+    const result = runList<QuoteListRow>(QUOTES_SPEC, {
+      q: req.query.q as string, filter: req.query.filter as string, sort: req.query.sort as string,
+      order: req.query.order as string, page: req.query.page as string, pageSize: req.query.pageSize as string,
+    });
+    const nameOf = db.prepare(`SELECT name FROM accounts WHERE id = ?`);
+    const quotes = result.rows.map((q) => {
+      const a = q.account_id ? (nameOf.get(q.account_id) as { name: string } | undefined) : undefined;
+      return {
+        id: q.id, number: q.number || '—', title: q.title || '', amount: money(q.amount_cents || 0),
+        status: q.stage || '', account: a?.name || '—', accountId: q.account_id,
+      };
+    });
+    return res.json({
+      quotes,
+      counts: { all: countWith(QUOTES_SPEC, 'all'), valued: countWith(QUOTES_SPEC, 'valued') },
+      total: result.total, page: result.page, pageSize: result.pageSize, pages: result.pages, showing: quotes.length, live: true,
+    });
+  }
+  res.json({ quotes: [], counts: { all: 0, valued: 0 }, total: 0, page: 1, pages: 1, showing: 0, live: false });
 });
 
 router.get('/api/accounts/:id', (req, res) => {

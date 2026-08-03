@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jobs · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/list-view.css" />
+<style>
+  .screen{max-width:none}
+  .jb-num{font-weight:700;font-size:13px;color:var(--ink)}
+  .jb-acct{font-weight:600;font-size:12.5px;color:var(--indigo)}
+</style>
+</head>
+<body>
+<div class="screen view" id="root"></div>
+<script src="/list-view.js"></script>
+<script>
+var esc=ListView.esc;
+function nav(id){ if(id==null)return; try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
+function statusPill(s){
+  var t=(s||'').toLowerCase();
+  var tone= t.indexOf('complete')>=0?'green' : (t.indexOf('cancel')>=0||t.indexOf('void')>=0)?'gray' : t.indexOf('progress')>=0?'indigo' : 'amber';
+  return s?'<span class="pill '+tone+'">'+esc(s)+'</span>':'<span style="color:var(--faint)">—</span>';
+}
+
+ListView({
+  mount:document.getElementById('root'),
+  endpoint:'/api/jobs', dataKey:'jobs', noun:'jobs',
+  searchPlaceholder:'Search jobs (number, type, status)…',
+  filters:[['all','All'],['open','Open'],['completed','Completed']],
+  defaultSort:'scheduled', sortDefaults:{scheduled:'desc',number:'asc'},
+  onRow:function(j){ nav(j.accountId); },
+  columns:[
+    { label:'Job', sort:'number', cell:function(j){ return '<span class="jb-num">#'+esc(j.number)+'</span>'+(j.kind?'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px">'+esc(j.kind)+'</div>':''); } },
+    { label:'Account', cell:function(j){ return '<span class="jb-acct">'+esc(j.account)+'</span>'; } },
+    { label:'Status', sort:'status', cell:function(j){ return statusPill(j.status); } },
+    { label:'Scheduled', sort:'scheduled', cell:function(j){ return '<span style="color:var(--muted)">'+esc(j.scheduled)+'</span>'; } },
+    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
+  ]
+});
+</script>
+</body>
+</html>

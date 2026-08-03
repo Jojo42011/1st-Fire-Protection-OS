@@ -17,7 +17,7 @@ const isoFromUnix = (s?: number | null): string | null => (s ? new Date(s * 1000
 // Big pulls (locations paginate ~10/page → hundreds of pages) can't ride a single HTTP
 // request, so pulls run in the background: start one, poll status. One pull at a time.
 const MAX_PAGES = 5000; // safety backstop, high enough not to truncate real data
-type Entity = 'accounts' | 'sites' | 'invoices';
+type Entity = 'accounts' | 'sites' | 'invoices' | 'jobs' | 'quotes';
 let runningEntity: Entity | null = null;
 let progress: { page: number; totalPages: number; count: number } | null = null;
 let lastStatus: { entity: Entity; state: 'done' | 'error'; counts?: any; error?: string; at: string } | null = null;
@@ -42,7 +42,12 @@ export function startPull(entity: Entity): { started: boolean; busy?: boolean; e
   if (runningEntity) return { started: false, busy: true, entity: runningEntity };
   runningEntity = entity;
   progress = { page: 0, totalPages: 1, count: 0 };
-  const fn = entity === 'accounts' ? pullAccounts : entity === 'sites' ? pullSites : pullInvoices;
+  const fn =
+    entity === 'accounts' ? pullAccounts :
+    entity === 'sites' ? pullSites :
+    entity === 'invoices' ? pullInvoices :
+    entity === 'jobs' ? pullJobs :
+    pullQuotes;
   Promise.resolve()
     .then(() => fn())
     .then((counts) => {
@@ -143,6 +148,109 @@ export function hasRealSites(): boolean {
   const row = getDb().prepare(`SELECT 1 FROM sites WHERE source = 'servicetrade' LIMIT 1`).get();
   return !!row;
 }
+export function hasRealJobs(): boolean {
+  return !!getDb().prepare(`SELECT 1 FROM crm_jobs WHERE source = 'servicetrade' LIMIT 1`).get();
+}
+export function hasRealQuotes(): boolean {
+  return !!getDb().prepare(`SELECT 1 FROM quotes WHERE source = 'servicetrade' LIMIT 1`).get();
+}
+
+interface StJob {
+  id: number; number?: number | null; name?: string; type?: string; status?: string; displayStatus?: string;
+  serviceLine?: string; scheduledDate?: number | null; completedOn?: number | null;
+  customer?: { id?: number }; location?: { id?: number }; updated?: number;
+}
+
+/** Pull jobs into the crm_jobs mirror, linked to account + site. Incremental with `since`. */
+export async function pullJobs(since?: number): Promise<{ pulled: number; pages: number }> {
+  const db = getDb();
+  const startedAt = Math.floor(Date.now() / 1000);
+  const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
+  const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
+  const upsert = db.prepare(
+    `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source)
+     VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade')
+     ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
+       kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
+       st_updated_at=excluded.st_updated_at, source='servicetrade'`
+  );
+  let page = 1, totalPages = 1, pulled = 0;
+  const sinceQ = since ? `&updatedAfter=${since}` : '';
+  do {
+    const resp = await stGet(`/job?page=${page}${sinceQ}`);
+    const { rows, totalPages: tp } = unwrap<StJob>(resp, 'jobs');
+    totalPages = tp;
+    const tx = db.transaction((js: StJob[]) => {
+      for (const j of js) {
+        if (j?.id == null) continue;
+        const a = idOf(j.customer) ? (acctBy.get(idOf(j.customer)) as { id: number } | undefined) : undefined;
+        const s = idOf(j.location) ? (siteBy.get(idOf(j.location)) as { id: number } | undefined) : undefined;
+        upsert.run({
+          st_id: String(j.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
+          number: j.number != null ? String(j.number) : j.name || null,
+          kind: j.serviceLine || j.type || null, status: j.displayStatus || j.status || null,
+          sched: isoFromUnix(j.scheduledDate), completed: isoFromUnix(j.completedOn), updated: isoFromUnix(j.updated),
+        });
+        pulled++;
+      }
+    });
+    tx(rows);
+    progress = { page, totalPages, count: pulled };
+    page++;
+  } while (page <= totalPages && page <= MAX_PAGES);
+  setState('st_jobs_pulled', '1');
+  setCursor('jobs', startedAt);
+  try { db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'jobs')`).run(`${since ? 'Synced' : 'Pulled'} ${pulled} job${pulled === 1 ? '' : 's'} from ServiceTrade`); } catch { /* */ }
+  return { pulled, pages: totalPages };
+}
+
+interface StQuote {
+  id: number; refNumber?: string; name?: string; status?: string; totalPrice?: string;
+  customer?: { id?: number }; location?: { id?: number }; latestSubmission?: number | null; updated?: number;
+}
+
+/** Pull quotes into the quotes mirror, linked to account + site. Incremental with `since`. */
+export async function pullQuotes(since?: number): Promise<{ pulled: number; pages: number }> {
+  const db = getDb();
+  const startedAt = Math.floor(Date.now() / 1000);
+  const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
+  const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
+  const upsert = db.prepare(
+    `INSERT INTO quotes (st_id, account_id, site_id, number, title, amount_cents, stage, sent_at, st_updated_at, local_updated_at, sync_state, source)
+     VALUES (@st_id, @account_id, @site_id, @number, @title, @amount, @stage, @sent, @updated, datetime('now'), 'clean', 'servicetrade')
+     ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
+       title=excluded.title, amount_cents=excluded.amount_cents, stage=excluded.stage, sent_at=excluded.sent_at,
+       st_updated_at=excluded.st_updated_at, local_updated_at=datetime('now'), source='servicetrade'`
+  );
+  let page = 1, totalPages = 1, pulled = 0;
+  const sinceQ = since ? `&updatedAfter=${since}` : '';
+  do {
+    const resp = await stGet(`/quote?page=${page}${sinceQ}`);
+    const { rows, totalPages: tp } = unwrap<StQuote>(resp, 'quotes');
+    totalPages = tp;
+    const tx = db.transaction((qs: StQuote[]) => {
+      for (const q of qs) {
+        if (q?.id == null) continue;
+        const a = idOf(q.customer) ? (acctBy.get(idOf(q.customer)) as { id: number } | undefined) : undefined;
+        const s = idOf(q.location) ? (siteBy.get(idOf(q.location)) as { id: number } | undefined) : undefined;
+        upsert.run({
+          st_id: String(q.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
+          number: q.refNumber || String(q.id), title: q.name || '(untitled quote)',
+          amount: Math.round((parseFloat(q.totalPrice || '0') || 0) * 100),
+          stage: q.status || 'quoted', sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
+        });
+        pulled++;
+      }
+    });
+    tx(rows);
+    progress = { page, totalPages, count: pulled };
+    page++;
+  } while (page <= totalPages && page <= MAX_PAGES);
+  setState('st_quotes_pulled', '1');
+  setCursor('quotes', startedAt);
+  try { db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'quotes')`).run(`${since ? 'Synced' : 'Pulled'} ${pulled} quote${pulled === 1 ? '' : 's'} from ServiceTrade`); } catch { /* */ }
+  return { pulled, pages: totalPages };
+}
 
 /**
  * The scheduled incremental sync. Accounts + sites refresh incrementally (only records changed
@@ -160,6 +268,10 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     if (getCursor('sites')) { progress = { page: 0, totalPages: 1, count: 0 }; out.sites = await pullSites(getCursor('sites')); }
     runningEntity = 'invoices';
     if (getCursor('invoices')) { progress = { page: 0, totalPages: 1, count: 0 }; out.invoices = await pullInvoices(); }
+    runningEntity = 'jobs';
+    if (getCursor('jobs')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).jobs = await pullJobs(getCursor('jobs')); }
+    runningEntity = 'quotes';
+    if (getCursor('quotes')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).quotes = await pullQuotes(getCursor('quotes')); }
     lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
     return out;
   } catch (err) {
@@ -194,6 +306,8 @@ export function syncSummary() {
       accounts: { count: count('accounts'), lastSynced: iso('accounts') },
       sites: { count: count('sites'), lastSynced: iso('sites') },
       invoices: { lastSynced: iso('invoices') },
+      jobs: { count: count('crm_jobs'), lastSynced: iso('jobs') },
+      quotes: { count: count('quotes'), lastSynced: iso('quotes') },
     },
   };
 }

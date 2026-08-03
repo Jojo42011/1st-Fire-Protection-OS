@@ -130,7 +130,7 @@ function safetyCard(s){
     +'<div class="sy-mid">'
       +'<div class="sy-titlerow"><span class="sy-h">'+esc(title)+'</span>'+connPill+modePill+'</div>'
       +'<p>'+esc(para)+'</p>'
-      +(connected&&summary&&summary.entities?('<div class="sy-testout" style="color:var(--muted)">Auto-syncs every 15 min · accounts '+esc(ago(summary.entities.accounts.lastSynced))+' · sites '+esc(ago(summary.entities.sites.lastSynced))+' · invoices '+esc(ago(summary.entities.invoices.lastSynced))+'</div>'):'')
+      +(connected&&summary&&summary.entities?('<div class="sy-testout" style="color:var(--muted)">Auto-syncs every 15 min · accounts '+esc(ago(summary.entities.accounts.lastSynced))+' · sites '+esc(ago(summary.entities.sites.lastSynced))+' · invoices '+esc(ago(summary.entities.invoices.lastSynced))+' · jobs '+esc(ago(summary.entities.jobs.lastSynced))+' · quotes '+esc(ago(summary.entities.quotes.lastSynced))+'</div>'):'')
       +'<div class="sy-testout" id="test-out"></div>'
     +'</div>'
     +'<div class="sy-modewrap">'
@@ -142,6 +142,8 @@ function safetyCard(s){
       +(connected?'<button class="sy-test" data-pull="accounts">Pull accounts</button>':'')
       +(connected?'<button class="sy-test" data-pull="sites">Pull sites</button>':'')
       +(connected?'<button class="sy-test" data-pull="invoices">Pull invoices</button>':'')
+      +(connected?'<button class="sy-test" data-pull="jobs">Pull jobs</button>':'')
+      +(connected?'<button class="sy-test" data-pull="quotes">Pull quotes</button>':'')
     +'</div>'
   +'</div>';
 }
@@ -329,7 +331,10 @@ function doneMsg(entity,c){
   if(!c)return 'Pull finished.';
   if(entity==='accounts')return 'Pulled '+c.pulled+' customers — open Accounts to see them.';
   if(entity==='sites')return 'Pulled '+c.pulled+' sites ('+c.linked+' linked to accounts).';
-  return 'Pulled '+c.pulled+' invoices → '+c.accountsUpdated+' account balances updated.';
+  if(entity==='invoices')return 'Pulled '+c.pulled+' invoices → '+c.accountsUpdated+' account balances updated.';
+  if(entity==='jobs')return 'Pulled '+c.pulled+' jobs — open Jobs to see them.';
+  if(entity==='quotes')return 'Pulled '+c.pulled+' quotes — open Quotes to see them.';
+  return 'Pull finished.';
 }
 function pull(entity,btn){
   var out=document.getElementById('test-out');

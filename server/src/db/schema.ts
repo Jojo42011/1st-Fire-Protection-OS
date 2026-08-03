@@ -769,6 +769,9 @@ export function initDb(): void {
   // can flip to real data once a pull has happened without deleting the keyless demo dataset.
   addColumn('accounts', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
   addColumn('sites', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
+  addColumn('crm_jobs', 'source', "TEXT DEFAULT 'seed'");
+  addColumn('crm_jobs', 'local_updated_at', 'TEXT');
+  addColumn('quotes', 'source', "TEXT DEFAULT 'seed'");
 
   // Indexes for the v2 server-side list query (search / filter / sort / paginate at scale).
   db.exec(`
@@ -779,6 +782,12 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_sites_account      ON sites(account_id);
     CREATE INDEX IF NOT EXISTS idx_sites_source       ON sites(source);
     CREATE INDEX IF NOT EXISTS idx_sites_name         ON sites(name);
+    CREATE INDEX IF NOT EXISTS idx_jobs_source        ON crm_jobs(source);
+    CREATE INDEX IF NOT EXISTS idx_jobs_account        ON crm_jobs(account_id);
+    CREATE INDEX IF NOT EXISTS idx_jobs_scheduled      ON crm_jobs(scheduled_at);
+    CREATE INDEX IF NOT EXISTS idx_quotes_source       ON quotes(source);
+    CREATE INDEX IF NOT EXISTS idx_quotes_account       ON quotes(account_id);
+    CREATE INDEX IF NOT EXISTS idx_quotes_amount        ON quotes(amount_cents);
   `);
 
   // Sites pulled before the source column existed defaulted to 'seed'. Tag any site whose

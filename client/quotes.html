@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quotes · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/list-view.css" />
+<style>
+  .screen{max-width:none}
+  .qt-title{font-weight:700;font-size:13px;color:var(--ink)}
+  .qt-num{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .qt-acct{font-weight:600;font-size:12.5px;color:var(--indigo)}
+</style>
+</head>
+<body>
+<div class="screen view" id="root"></div>
+<script src="/list-view.js"></script>
+<script>
+var esc=ListView.esc;
+function nav(id){ if(id==null)return; try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
+function statusPill(s){
+  var t=(s||'').toLowerCase();
+  var tone= (t.indexOf('accept')>=0||t.indexOf('approv')>=0||t.indexOf('won')>=0)?'green'
+    : (t.indexOf('reject')>=0||t.indexOf('lost')>=0||t.indexOf('expire')>=0)?'money'
+    : (t.indexOf('submit')>=0||t.indexOf('sent')>=0)?'indigo' : 'gray';
+  return s?'<span class="pill '+tone+'">'+esc(s)+'</span>':'<span style="color:var(--faint)">—</span>';
+}
+
+ListView({
+  mount:document.getElementById('root'),
+  endpoint:'/api/quotes', dataKey:'quotes', noun:'quotes',
+  searchPlaceholder:'Search quotes (number or title)…',
+  filters:[['all','All'],['valued','Has value']],
+  defaultSort:'amount', sortDefaults:{amount:'desc',number:'asc'},
+  onRow:function(q){ nav(q.accountId); },
+  columns:[
+    { label:'Quote', sort:'number', cell:function(q){ return '<div class="qt-title">'+esc(q.title)+'</div><div class="qt-num">#'+esc(q.number)+'</div>'; } },
+    { label:'Account', cell:function(q){ return '<span class="qt-acct">'+esc(q.account)+'</span>'; } },
+    { label:'Status', cell:function(q){ return statusPill(q.status); } },
+    { label:'Value', align:'right', sort:'amount', cell:function(q){ return '<span class="num" style="font-weight:700;color:var(--ink)">'+esc(q.amount)+'</span>'; } },
+    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
+  ]
+});
+</script>
+</body>
+</html>

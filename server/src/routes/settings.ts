@@ -100,11 +100,11 @@ router.delete('/api/settings/servicetrade/webhooks/:id', async (req, res) => {
 // not-connected error via the status if creds are missing.
 router.post('/api/settings/servicetrade/pull/:entity', (req, res) => {
   const entity = req.params.entity;
-  if (entity !== 'accounts' && entity !== 'sites' && entity !== 'invoices') {
+  if (!['accounts', 'sites', 'invoices', 'jobs', 'quotes'].includes(entity)) {
     return res.status(400).json({ ok: false, error: 'unknown entity' });
   }
   if (!stConfigured()) return res.status(409).json({ ok: false, error: 'ServiceTrade is not connected', code: 'not_connected' });
-  const r = startPull(entity);
+  const r = startPull(entity as 'accounts' | 'sites' | 'invoices' | 'jobs' | 'quotes');
   if (!r.started) return res.status(409).json({ ok: false, error: `a ${r.entity} pull is already running`, code: 'busy' });
   res.json({ ok: true, started: true, entity });
 });
