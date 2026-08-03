@@ -7,169 +7,45 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/list-view.css" />
 <style>
   .screen{max-width:none}
-  .ac-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-  .ac-search{position:relative;flex:1;min-width:220px;max-width:380px}
-  .ac-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted)}
-  .ac-search input{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:13px;font-weight:500;
-    color:var(--ink);background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 12px 9px 33px}
-  .ac-search input:focus{outline:none;border-color:var(--indigo)}
-  .ac-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .ac-filters .chip{cursor:pointer;border:1px solid transparent}
-  .ac-filters .chip.on{background:var(--panel);border-color:var(--border);color:var(--ink)}
-  .ac-filters .chip.risk.on{color:var(--money)}
-  .ac-sync{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:11.5px;color:var(--green);background:var(--green-bg);border-radius:999px;padding:6px 12px}
-  .ac-sync.demo{color:var(--muted);background:var(--fill)}
   .ac-mono{width:28px;height:28px;border-radius:9px;font-weight:800;font-size:10px}
   .ac-cust{display:flex;align-items:center;gap:10px}
   .ac-name{display:block;font-weight:700;font-size:13px;color:var(--ink)}
   .ac-seg{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
-  .ac-r{text-align:right}
-  thead th.ac-r{text-align:right}
-  th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
-  th.sortable .arw{color:var(--indigo);font-size:9px;margin-left:3px}
-  .ac-open{font-weight:600;font-size:11.5px;color:var(--indigo)}
-  #accts tbody tr{cursor:pointer}
-  .ac-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .ac-page{display:flex;align-items:center;gap:8px;margin-left:auto}
-  .ac-pageinfo{font-weight:600;font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-  .ac-empty{padding:40px 18px;text-align:center;color:var(--muted);font-weight:500;font-size:13px}
-  .btn-pg{font-weight:700;font-size:12px;border:1px solid var(--border);background:var(--panel);color:var(--ink-2);border-radius:8px;padding:6px 12px;cursor:pointer}
-  .btn-pg:disabled{opacity:.4;cursor:default}
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
-  <div class="ac-bar">
-    <label class="ac-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg>
-      <input id="search" type="text" placeholder="Search customers…" autocomplete="off" />
-    </label>
-    <div class="ac-filters" id="filters"></div>
-  </div>
-  <div class="card card-clip">
-    <table id="accts">
-      <thead><tr>
-        <th class="sortable" data-sort="name">Customer<span class="arw" data-arw="name"></span></th>
-        <th>Sites</th>
-        <th>Contract</th>
-        <th>Next service</th>
-        <th class="ac-r sortable" data-sort="balance">Balance<span class="arw" data-arw="balance"></span></th>
-        <th>Last touch</th>
-        <th></th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div id="empty"></div>
-    <div class="card-foot ac-foot">
-      <span id="foot"></span>
-      <span class="ac-page">
-        <button class="btn-pg" id="prev">‹ Prev</button>
-        <span class="ac-pageinfo" id="pageinfo"></span>
-        <button class="btn-pg" id="next">Next ›</button>
-      </span>
-    </div>
-  </div>
-</div>
+<div class="screen view" id="root"></div>
+<script src="/list-view.js"></script>
 <script>
-var FILTERS=[['all','All'],['contract','Under contract'],['due','Balance due'],['risk','At risk']];
-var state={q:'',filter:'all',sort:'name',order:'asc',page:1,pageSize:50};
-var data={accounts:[],counts:{},total:0,pages:1,live:false};
-var SORT_DEFAULT_ORDER={name:'asc',balance:'desc'};
-
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+var esc=ListView.esc;
 function money(v){ if(v==null||v==='')return ''; if(typeof v==='number')return '$'+v.toLocaleString('en-US'); return String(v); }
-function nav(ac){ try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+ac.id},'*');}catch(e){} }
+function nav(id){ try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
 
-function qs(){
-  var p=new URLSearchParams();
-  if(state.q)p.set('q',state.q);
-  p.set('filter',state.filter); p.set('sort',state.sort); p.set('order',state.order);
-  p.set('page',state.page); p.set('pageSize',state.pageSize);
-  return p.toString();
-}
-function load(){
-  fetch('/api/accounts?'+qs()).then(function(r){return r.json();}).then(function(d){ data=d||data; render(); });
-}
-
-function renderFilters(){
-  var c=data.counts||{};
-  document.getElementById('filters').innerHTML=
-    FILTERS.map(function(f){
-      var n=c[f[0]];
-      var risk=f[0]==='risk'?' risk':'';
-      return '<button class="chip'+(state.filter===f[0]?' on':'')+risk+'" data-f="'+f[0]+'">'
-        +esc(f[1])+(n!=null?' '+n.toLocaleString('en-US'):'')+'</button>';
-    }).join('')
-    +'<span class="ac-sync'+(data.live?'':' demo')+'">'+(data.live?'<span class="dot live"></span>ServiceTrade · live':'demo data')+'</span>';
-  document.querySelectorAll('#filters .chip').forEach(function(b){
-    b.onclick=function(){ state.filter=b.getAttribute('data-f'); state.page=1; load(); };
-  });
-}
-function arrows(){
-  document.querySelectorAll('[data-arw]').forEach(function(s){
-    var key=s.getAttribute('data-arw');
-    s.textContent = state.sort===key ? (state.order==='asc'?'▲':'▼') : '';
-  });
-}
-function row(ac){
-  var balFg=ac.balanceOverdue?'var(--money)':'var(--ink)';
-  return '<tr data-id="'+esc(ac.id)+'">'
-    +'<td><span class="ac-cust">'
-      +'<span class="monogram ac-mono" style="background:'+esc(ac.tintBg)+';color:'+esc(ac.tintFg)+'">'+esc(ac.initials)+'</span>'
-      +'<span><span class="ac-name">'+esc(ac.name)+'</span><span class="ac-seg">'+esc(ac.segment)+'</span></span>'
-    +'</span></td>'
-    +'<td>'+esc(ac.sites)+'</td>'
-    +'<td>'+(ac.contract?'<span class="pill '+esc(ac.contractKind)+'">'+esc(ac.contract)+'</span>':'<span style="color:var(--faint)">—</span>')+'</td>'
-    +'<td style="color:var(--muted)">'+esc(ac.next)+'</td>'
-    +'<td class="ac-r num" style="color:'+balFg+'">'+esc(money(ac.balance))+'</td>'
-    +'<td style="color:var(--muted)">'+esc(ac.touch)+'</td>'
-    +'<td class="ac-r"><span class="ac-open">Open →</span></td>'
-  +'</tr>';
-}
-function render(){
-  renderFilters(); arrows();
-  var rows=data.accounts||[];
-  document.getElementById('rows').innerHTML=rows.map(row).join('');
-  var empty=document.getElementById('empty');
-  empty.innerHTML = rows.length ? '' : '<div class="ac-empty">No customers match “'+esc(state.q)+'”.</div>';
-
-  var total=data.total||0;
-  var from=total?((data.page-1)*data.pageSize+1):0;
-  var to=Math.min(data.page*data.pageSize,total);
-  document.getElementById('foot').textContent = total? ('Showing '+from.toLocaleString('en-US')+'–'+to.toLocaleString('en-US')+' of '+total.toLocaleString('en-US')) : '';
-  document.getElementById('pageinfo').textContent = 'Page '+(data.page||1)+' of '+(data.pages||1);
-  document.getElementById('prev').disabled = (data.page||1)<=1;
-  document.getElementById('next').disabled = (data.page||1)>=(data.pages||1);
-
-  document.querySelectorAll('#accts tbody tr').forEach(function(tr){
-    var id=tr.getAttribute('data-id');
-    var ac=rows.filter(function(a){return String(a.id)===id;})[0];
-    if(ac)tr.onclick=function(){nav(ac);};
-  });
-}
-
-// sortable headers
-document.querySelectorAll('th.sortable').forEach(function(th){
-  th.onclick=function(){
-    var key=th.getAttribute('data-sort');
-    if(state.sort===key){ state.order=state.order==='asc'?'desc':'asc'; }
-    else { state.sort=key; state.order=SORT_DEFAULT_ORDER[key]||'asc'; }
-    state.page=1; load();
-  };
+ListView({
+  mount:document.getElementById('root'),
+  endpoint:'/api/accounts', dataKey:'accounts', noun:'customers',
+  searchPlaceholder:'Search customers…',
+  filters:[['all','All'],['contract','Under contract'],['due','Balance due'],['risk','At risk']],
+  defaultSort:'name', sortDefaults:{name:'asc',balance:'desc'},
+  onRow:function(a){ nav(a.id); },
+  columns:[
+    { label:'Customer', sort:'name', cell:function(a){
+        return '<span class="ac-cust">'
+          +'<span class="monogram ac-mono" style="background:'+esc(a.tintBg)+';color:'+esc(a.tintFg)+'">'+esc(a.initials)+'</span>'
+          +'<span><span class="ac-name">'+esc(a.name)+'</span><span class="ac-seg">'+esc(a.segment)+'</span></span>'
+        +'</span>'; } },
+    { label:'Sites', cell:function(a){ return esc(a.sites); } },
+    { label:'Contract', cell:function(a){ return a.contract?'<span class="pill '+esc(a.contractKind)+'">'+esc(a.contract)+'</span>':'<span style="color:var(--faint)">—</span>'; } },
+    { label:'Next service', cell:function(a){ return '<span style="color:var(--muted)">'+esc(a.next)+'</span>'; } },
+    { label:'Balance', align:'right', sort:'balance', cell:function(a){
+        return '<span class="num" style="color:'+(a.balanceOverdue?'var(--money)':'var(--ink)')+'">'+esc(money(a.balance))+'</span>'; } },
+    { label:'Last touch', cell:function(a){ return '<span style="color:var(--muted)">'+esc(a.touch)+'</span>'; } },
+    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
+  ]
 });
-// debounced search
-var t=null;
-document.getElementById('search').addEventListener('input',function(e){
-  clearTimeout(t); var v=e.target.value;
-  t=setTimeout(function(){ state.q=v.trim(); state.page=1; load(); },280);
-});
-// pagination
-document.getElementById('prev').onclick=function(){ if(state.page>1){state.page--;load();} };
-document.getElementById('next').onclick=function(){ if(state.page<(data.pages||1)){state.page++;load();} };
-
-load();
 </script>
 </body>
 </html>
