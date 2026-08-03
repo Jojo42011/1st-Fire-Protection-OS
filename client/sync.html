@@ -128,7 +128,9 @@ function safetyCard(s){
         +'<button data-mode="read_write" class="'+(write?'on write':'')+'">Write</button>'
       +'</span>'
       +'<button class="sy-test" id="testbtn">Test connection</button>'
-      +(connected?'<button class="sy-test" id="pullbtn">Pull accounts</button>':'')
+      +(connected?'<button class="sy-test" data-pull="accounts">Pull accounts</button>':'')
+      +(connected?'<button class="sy-test" data-pull="sites">Pull sites</button>':'')
+      +(connected?'<button class="sy-test" data-pull="invoices">Pull invoices</button>':'')
     +'</div>'
   +'</div>';
 }
@@ -248,8 +250,9 @@ function wire(){
   });
   var tb=document.getElementById('testbtn');
   if(tb)tb.onclick=testConn;
-  var pb=document.getElementById('pullbtn');
-  if(pb)pb.onclick=pullAccounts;
+  document.querySelectorAll('[data-pull]').forEach(function(b){
+    b.onclick=function(){pull(b.getAttribute('data-pull'),b);};
+  });
 
   document.querySelectorAll('.sy-conf').forEach(function(el){
     var id=el.getAttribute('data-id');
@@ -310,16 +313,16 @@ function testConn(){
   }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
 }
 
-function pullAccounts(){
-  var btn=document.getElementById('pullbtn'), out=document.getElementById('test-out');
+function pull(entity,btn){
+  var out=document.getElementById('test-out');
   btn.disabled=true; var was=btn.textContent; btn.textContent='Pulling…';
-  fetch('/api/settings/servicetrade/pull/accounts',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+  fetch('/api/settings/servicetrade/pull/'+entity,{method:'POST'}).then(function(r){return r.json();}).then(function(res){
     btn.disabled=false; btn.textContent=was;
-    if(res.ok){
-      if(out)out.innerHTML='<span style="color:var(--green)">✓ Pulled '+res.pulled+' customers from ServiceTrade — open Accounts to see them.</span>';
-    } else {
-      if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(res.error||'pull failed')+'</span>';
-    }
+    if(!res.ok){ if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(res.error||'pull failed')+'</span>'; return; }
+    var msg=entity==='accounts'?('Pulled '+res.pulled+' customers — open Accounts to see them.')
+      :entity==='sites'?('Pulled '+res.pulled+' sites ('+res.linked+' linked to accounts).')
+      :('Pulled '+res.pulled+' invoices → '+res.accountsUpdated+' account balances updated.');
+    if(out)out.innerHTML='<span style="color:var(--green)">✓ '+esc(msg)+'</span>';
   }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Pull failed to run.';});
 }
 

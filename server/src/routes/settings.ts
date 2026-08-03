@@ -12,7 +12,7 @@ import {
   ServiceTradeNotConnectedError,
   type StMode,
 } from '../services/servicetrade';
-import { pullAccounts } from '../services/servicetradeSync';
+import { pullAccounts, pullSites, pullInvoices } from '../services/servicetradeSync';
 import { getDb } from '../db/index';
 
 /** Map a ServiceTrade client error to a clean HTTP response. */
@@ -97,8 +97,23 @@ router.delete('/api/settings/servicetrade/webhooks/:id', async (req, res) => {
 // ── pull real records FROM ServiceTrade (GET-only; safe in read-only) ──
 router.post('/api/settings/servicetrade/pull/accounts', async (_req, res) => {
   try {
-    const r = await pullAccounts();
-    res.json({ ok: true, ...r });
+    res.json({ ok: true, ...(await pullAccounts()) });
+  } catch (err) {
+    stError(res, err);
+  }
+});
+
+router.post('/api/settings/servicetrade/pull/sites', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await pullSites()) });
+  } catch (err) {
+    stError(res, err);
+  }
+});
+
+router.post('/api/settings/servicetrade/pull/invoices', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await pullInvoices()) });
   } catch (err) {
     stError(res, err);
   }
