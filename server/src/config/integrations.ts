@@ -91,6 +91,15 @@ const CATALOG: IntegrationDef[] = [
     isConnected: () => !!process.env.FACEBOOK_PAGE_TOKEN,
   },
   {
+    id: 'sage_intacct',
+    name: 'Sage Intacct',
+    category: 'Payments & Finance',
+    why: 'The accounting system of record for A/R. Turns on the Invoice Collector against real receivables.',
+    baseline: 'planned',
+    isConnected: () =>
+      !!(process.env.INTACCT_SENDER_ID && process.env.INTACCT_SENDER_PASSWORD && process.env.INTACCT_COMPANY_ID && process.env.INTACCT_USER_ID && process.env.INTACCT_USER_PASSWORD),
+  },
+  {
     id: 'stripe',
     name: 'Stripe',
     category: 'Payments & Finance',

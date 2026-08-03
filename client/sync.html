@@ -89,7 +89,7 @@ function toneStyle(t){
   return 'background:var(--fill);color:var(--ink-2)'; /* gray */
 }
 
-var data=null, settings=null, summary=null;
+var data=null, settings=null, summary=null, intacct=null;
 
 function ago(iso){
   if(!iso)return 'never';
@@ -104,8 +104,44 @@ function load(){
   Promise.all([
     fetch('/api/sync').then(function(r){return r.json();}),
     fetch('/api/settings/servicetrade').then(function(r){return r.json();}),
-    fetch('/api/settings/servicetrade/sync-summary').then(function(r){return r.json();})
-  ]).then(function(res){data=res[0];settings=res[1];summary=res[2];render();});
+    fetch('/api/settings/servicetrade/sync-summary').then(function(r){return r.json();}),
+    fetch('/api/settings/intacct').then(function(r){return r.json();})
+  ]).then(function(res){data=res[0];settings=res[1];summary=res[2];intacct=res[3];render();});
+}
+
+/* Sage Intacct connector card — same safety model as ServiceTrade, its own toggle. */
+function intacctCard(i){
+  i=i||{}; var connected=!!i.connected, write=i.mode==='read_write';
+  var tileCls=!connected?'off':write?'warn':'';
+  var title=connected?'Connected to Sage Intacct':'Sage Intacct not connected';
+  var connPill=connected?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>';
+  var modePill=write?'<span class="pill money">Write enabled</span>':'<span class="pill amber">Read-only</span>';
+  var para=connected
+    ? 'The accounting system of record for A/R. Read-only until you flip it — this is what turns on the Invoice Collector against real receivables.'
+    : 'Add Sage Intacct credentials (as secrets) to connect. This is the accounting source that will turn on the Invoice Collector.';
+  return '<div class="card sy-safety" style="margin-top:16px">'
+    +'<span class="sy-tile '+tileCls+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>'
+    +'<div class="sy-mid"><div class="sy-titlerow"><span class="sy-h">'+esc(title)+'</span>'+connPill+modePill+'</div>'
+      +'<p>'+esc(para)+'</p><div class="sy-testout" id="ia-test-out"></div></div>'
+    +'<div class="sy-modewrap"><span class="sy-seg" id="ia-modeseg">'
+      +'<button data-iamode="read_only" class="'+(!write?'on':'')+'">Read-only</button>'
+      +'<button data-iamode="read_write" class="'+(write?'on write':'')+'">Write</button></span>'
+      +'<button class="sy-test" id="ia-testbtn">Test connection</button></div>'
+  +'</div>';
+}
+function setIaMode(mode){
+  if(!intacct||mode===intacct.mode)return;
+  if(mode==='read_write'){ if(!window.confirm('Enable WRITE mode for Sage Intacct?\n\nThe app will be allowed to change real accounting data. Keep this off while testing.'))return; }
+  fetch('/api/settings/intacct/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:mode})})
+    .then(function(r){return r.json();}).then(function(res){ if(res&&res.ok){intacct.mode=res.mode;intacct.canWrite=res.canWrite;render();} });
+}
+function testIa(){
+  var btn=document.getElementById('ia-testbtn'), out=document.getElementById('ia-test-out');
+  btn.disabled=true; var was=btn.textContent; btn.textContent='Testing…';
+  fetch('/api/settings/intacct/test',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false; btn.textContent=was;
+    if(out)out.innerHTML='<span style="color:'+(res.ok?'var(--green)':'var(--money)')+'">'+(res.ok?'✓ ':'✕ ')+esc(res.detail||'')+'</span>';
+  }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
 }
 
 /* Connection + the read-only/write safety toggle — the real, live control. */
@@ -241,6 +277,7 @@ function render(){
   var d=data||{};
   document.getElementById('root').innerHTML=
     safetyCard(settings)
+    +intacctCard(intacct)
     +statusCard(d)
     +'<div class="split-even">'
       +mappingsCard(d)
@@ -266,6 +303,11 @@ function wire(){
   document.querySelectorAll('[data-pull]').forEach(function(b){
     b.onclick=function(){pull(b.getAttribute('data-pull'),b);};
   });
+  // Sage Intacct card
+  var iaseg=document.getElementById('ia-modeseg');
+  if(iaseg)iaseg.querySelectorAll('button').forEach(function(b){ b.onclick=function(){setIaMode(b.getAttribute('data-iamode'));}; });
+  var iatb=document.getElementById('ia-testbtn');
+  if(iatb)iatb.onclick=testIa;
 
   document.querySelectorAll('.sy-conf').forEach(function(el){
     var id=el.getAttribute('data-id');

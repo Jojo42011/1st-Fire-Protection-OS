@@ -13,6 +13,13 @@ import {
   type StMode,
 } from '../services/servicetrade';
 import { startPull, pullStatus, syncSummary } from '../services/servicetradeSync';
+import {
+  intacctConfigured,
+  getIntacctMode,
+  setIntacctMode,
+  testConnection as intacctTest,
+  type IntacctMode,
+} from '../services/sageIntacct';
 import { getDb } from '../db/index';
 
 /** Map a ServiceTrade client error to a clean HTTP response. */
@@ -115,6 +122,30 @@ router.get('/api/settings/servicetrade/pull/status', (_req, res) => {
 
 router.get('/api/settings/servicetrade/sync-summary', (_req, res) => {
   res.json({ ok: true, ...syncSummary() });
+});
+
+// ── Sage Intacct connector (the authoritative A/R source for the Invoice Collector) ──
+router.get('/api/settings/intacct', (_req, res) => {
+  res.json({ connected: intacctConfigured(), mode: getIntacctMode(), canWrite: getIntacctMode() === 'read_write' });
+});
+
+router.post('/api/settings/intacct/mode', (req, res) => {
+  const requested = String(req.body?.mode || '');
+  if (requested !== 'read_only' && requested !== 'read_write') {
+    return res.status(400).json({ ok: false, error: "mode must be 'read_only' or 'read_write'" });
+  }
+  const mode = setIntacctMode(requested as IntacctMode);
+  try {
+    getDb()
+      .prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('out', ?, 'applied', NULL)`)
+      .run(mode === 'read_write' ? 'Sage Intacct write mode ENABLED' : 'Sage Intacct switched to read-only');
+  } catch { /* best-effort */ }
+  res.json({ ok: true, mode, canWrite: mode === 'read_write' });
+});
+
+router.post('/api/settings/intacct/test', async (_req, res) => {
+  const result = await intacctTest();
+  res.json({ ...result, connected: intacctConfigured(), mode: getIntacctMode() });
 });
 
 export default router;
