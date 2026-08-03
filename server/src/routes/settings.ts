@@ -12,7 +12,7 @@ import {
   ServiceTradeNotConnectedError,
   type StMode,
 } from '../services/servicetrade';
-import { pullAccounts, pullSites, pullInvoices } from '../services/servicetradeSync';
+import { startPull, pullStatus } from '../services/servicetradeSync';
 import { getDb } from '../db/index';
 
 /** Map a ServiceTrade client error to a clean HTTP response. */
@@ -95,28 +95,22 @@ router.delete('/api/settings/servicetrade/webhooks/:id', async (req, res) => {
 });
 
 // ── pull real records FROM ServiceTrade (GET-only; safe in read-only) ──
-router.post('/api/settings/servicetrade/pull/accounts', async (_req, res) => {
-  try {
-    res.json({ ok: true, ...(await pullAccounts()) });
-  } catch (err) {
-    stError(res, err);
+// Pulls run in the background (locations paginate into hundreds of pages); the client polls
+// /pull/status. Credentials/connection are still required — startPull's work will surface a
+// not-connected error via the status if creds are missing.
+router.post('/api/settings/servicetrade/pull/:entity', (req, res) => {
+  const entity = req.params.entity;
+  if (entity !== 'accounts' && entity !== 'sites' && entity !== 'invoices') {
+    return res.status(400).json({ ok: false, error: 'unknown entity' });
   }
+  if (!stConfigured()) return res.status(409).json({ ok: false, error: 'ServiceTrade is not connected', code: 'not_connected' });
+  const r = startPull(entity);
+  if (!r.started) return res.status(409).json({ ok: false, error: `a ${r.entity} pull is already running`, code: 'busy' });
+  res.json({ ok: true, started: true, entity });
 });
 
-router.post('/api/settings/servicetrade/pull/sites', async (_req, res) => {
-  try {
-    res.json({ ok: true, ...(await pullSites()) });
-  } catch (err) {
-    stError(res, err);
-  }
-});
-
-router.post('/api/settings/servicetrade/pull/invoices', async (_req, res) => {
-  try {
-    res.json({ ok: true, ...(await pullInvoices()) });
-  } catch (err) {
-    stError(res, err);
-  }
+router.get('/api/settings/servicetrade/pull/status', (_req, res) => {
+  res.json({ ok: true, status: pullStatus() });
 });
 
 export default router;

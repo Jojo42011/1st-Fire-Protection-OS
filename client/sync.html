@@ -313,17 +313,35 @@ function testConn(){
   }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
 }
 
+function setPullBtns(disabled){document.querySelectorAll('[data-pull]').forEach(function(b){b.disabled=disabled;});}
+function doneMsg(entity,c){
+  if(!c)return 'Pull finished.';
+  if(entity==='accounts')return 'Pulled '+c.pulled+' customers — open Accounts to see them.';
+  if(entity==='sites')return 'Pulled '+c.pulled+' sites ('+c.linked+' linked to accounts).';
+  return 'Pulled '+c.pulled+' invoices → '+c.accountsUpdated+' account balances updated.';
+}
 function pull(entity,btn){
   var out=document.getElementById('test-out');
-  btn.disabled=true; var was=btn.textContent; btn.textContent='Pulling…';
+  setPullBtns(true);
+  if(out)out.innerHTML='<span style="color:var(--ink-3)">Starting '+entity+' pull…</span>';
   fetch('/api/settings/servicetrade/pull/'+entity,{method:'POST'}).then(function(r){return r.json();}).then(function(res){
-    btn.disabled=false; btn.textContent=was;
-    if(!res.ok){ if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(res.error||'pull failed')+'</span>'; return; }
-    var msg=entity==='accounts'?('Pulled '+res.pulled+' customers — open Accounts to see them.')
-      :entity==='sites'?('Pulled '+res.pulled+' sites ('+res.linked+' linked to accounts).')
-      :('Pulled '+res.pulled+' invoices → '+res.accountsUpdated+' account balances updated.');
-    if(out)out.innerHTML='<span style="color:var(--green)">✓ '+esc(msg)+'</span>';
-  }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Pull failed to run.';});
+    if(!res.ok){ setPullBtns(false); if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(res.error||'could not start')+'</span>'; return; }
+    pollPull(entity,out);
+  }).catch(function(){setPullBtns(false);if(out)out.textContent='Pull failed to start.';});
+}
+function pollPull(entity,out){
+  fetch('/api/settings/servicetrade/pull/status').then(function(r){return r.json();}).then(function(res){
+    var s=res.status||{};
+    if(s.state==='running'){
+      var p=s.progress||{};
+      if(out)out.innerHTML='<span style="color:var(--ink-3)">Pulling '+esc(s.entity)+'… page '+(p.page||0)+'/'+(p.totalPages||'?')+' · '+(p.count||0)+' so far</span>';
+      setTimeout(function(){pollPull(entity,out);},1500);
+    } else {
+      setPullBtns(false);
+      if(s.state==='error'){ if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(s.error||'pull failed')+'</span>'; }
+      else { if(out)out.innerHTML='<span style="color:var(--green)">✓ '+esc(doneMsg(s.entity,s.counts))+'</span>'; load(); }
+    }
+  }).catch(function(){setPullBtns(false);if(out)out.textContent='Lost track of the pull (it may still be running).';});
 }
 
 load();

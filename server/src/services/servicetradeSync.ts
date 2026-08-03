@@ -13,6 +13,40 @@ import { stGet } from './servicetrade';
 
 const isoFromUnix = (s?: number | null): string | null => (s ? new Date(s * 1000).toISOString() : null);
 
+// ── background pull runner ──
+// Big pulls (locations paginate ~10/page → hundreds of pages) can't ride a single HTTP
+// request, so pulls run in the background: start one, poll status. One pull at a time.
+const MAX_PAGES = 5000; // safety backstop, high enough not to truncate real data
+type Entity = 'accounts' | 'sites' | 'invoices';
+let runningEntity: Entity | null = null;
+let progress: { page: number; totalPages: number; count: number } | null = null;
+let lastStatus: { entity: Entity; state: 'done' | 'error'; counts?: any; error?: string; at: string } | null = null;
+
+export const isPulling = (): Entity | null => runningEntity;
+export function pullStatus() {
+  if (runningEntity) return { entity: runningEntity, state: 'running' as const, progress };
+  return lastStatus;
+}
+export function startPull(entity: Entity): { started: boolean; busy?: boolean; entity: Entity } {
+  if (runningEntity) return { started: false, busy: true, entity: runningEntity };
+  runningEntity = entity;
+  progress = { page: 0, totalPages: 1, count: 0 };
+  const fn = entity === 'accounts' ? pullAccounts : entity === 'sites' ? pullSites : pullInvoices;
+  Promise.resolve()
+    .then(fn)
+    .then((counts) => {
+      lastStatus = { entity, state: 'done', counts, at: new Date().toISOString() };
+    })
+    .catch((err) => {
+      lastStatus = { entity, state: 'error', error: (err as Error).message, at: new Date().toISOString() };
+    })
+    .finally(() => {
+      runningEntity = null;
+      progress = null;
+    });
+  return { started: true, entity };
+}
+
 function unwrap<T = any>(resp: any, key: string): { rows: T[]; totalPages: number } {
   const body = resp?.data ?? resp ?? {};
   return { rows: (body[key] as T[]) || [], totalPages: Number(body.totalPages) || 1 };
@@ -69,8 +103,9 @@ export async function pullAccounts(): Promise<{ pulled: number; pages: number }>
       }
     });
     tx(rows);
+    progress = { page, totalPages, count: pulled };
     page++;
-  } while (page <= totalPages && page <= 200); // hard safety cap on pages
+  } while (page <= totalPages && page <= MAX_PAGES);
 
   setState('st_accounts_pulled', '1');
   try {
@@ -144,8 +179,9 @@ export async function pullSites(): Promise<{ pulled: number; linked: number; pag
       }
     });
     tx(rows);
+    progress = { page, totalPages, count: pulled };
     page++;
-  } while (page <= totalPages && page <= 500);
+  } while (page <= totalPages && page <= MAX_PAGES);
 
   setState('st_sites_pulled', '1');
   try {
@@ -203,8 +239,9 @@ export async function pullInvoices(): Promise<{ pulled: number; accountsUpdated:
       agg.set(cust, entry);
       pulled++;
     }
+    progress = { page, totalPages, count: pulled };
     page++;
-  } while (page <= totalPages && page <= 500);
+  } while (page <= totalPages && page <= MAX_PAGES);
 
   const update = db.prepare(
     `UPDATE accounts SET balance_cents = @balance, lifetime_cents = @lifetime,
