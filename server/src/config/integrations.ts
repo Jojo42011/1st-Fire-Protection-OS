@@ -64,7 +64,7 @@ const CATALOG: IntegrationDef[] = [
     category: 'Field Service (System of Record)',
     why: 'Jobs, invoices & completions. Job completion → review request; open invoices → the collector.',
     baseline: 'planned',
-    isConnected: () => !!process.env.SERVICETRADE_TOKEN,
+    isConnected: () => !!(process.env.SERVICETRADE_TOKEN || (process.env.SERVICETRADE_USERNAME && process.env.SERVICETRADE_PASSWORD)),
   },
   {
     id: 'microsoft365',

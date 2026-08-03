@@ -29,6 +29,19 @@
   .sy-counters .sy-cv{font-weight:800;font-size:20px;color:var(--ink);margin-top:5px}
   .sy-syncnow{flex:none;cursor:pointer}
 
+  /* Connection + safety mode */
+  .sy-safety{display:flex;align-items:center;gap:18px;padding:16px 20px;flex-wrap:wrap}
+  .sy-safety .sy-mid{flex:1;min-width:220px}
+  .sy-modewrap{display:flex;align-items:center;gap:10px;flex:none;flex-wrap:wrap}
+  .sy-seg{display:inline-flex;background:var(--fill);border-radius:9px;padding:3px}
+  .sy-seg button{font-family:var(--sans);font-weight:700;font-size:11.5px;color:var(--muted);background:transparent;border:none;border-radius:7px;padding:7px 13px;cursor:pointer}
+  .sy-seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(21,26,45,.08)}
+  .sy-seg button.on.write{color:var(--money)}
+  .sy-test{font-weight:700;font-size:11.5px;border:1px solid var(--border);background:#fff;color:var(--ink-2);border-radius:8px;padding:7px 12px;cursor:pointer}
+  .sy-testout{font-weight:500;font-size:11.5px;margin-top:8px}
+  .sy-tile.warn{background:var(--amber-bg);color:var(--amber-ink)}
+  .sy-tile.off{background:var(--fill);color:var(--muted)}
+
   /* Mapping rows */
   .sy-map{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--divider-soft)}
   .sy-map:last-child{border-bottom:none}
@@ -76,10 +89,47 @@ function toneStyle(t){
   return 'background:var(--fill);color:var(--ink-2)'; /* gray */
 }
 
-var data=null;
+var data=null, settings=null;
 
 function load(){
-  fetch('/api/sync').then(function(r){return r.json();}).then(function(d){data=d;render();});
+  Promise.all([
+    fetch('/api/sync').then(function(r){return r.json();}),
+    fetch('/api/settings/servicetrade').then(function(r){return r.json();})
+  ]).then(function(res){data=res[0];settings=res[1];render();});
+}
+
+/* Connection + the read-only/write safety toggle — the real, live control. */
+function safetyCard(s){
+  s=s||{};
+  var connected=!!s.connected, write=s.mode==='read_write';
+  var tileCls=!connected?'off':write?'warn':'';
+  var title=connected?'Connected to ServiceTrade':'ServiceTrade not connected';
+  var connPill=connected
+    ? '<span class="pill green">Connected</span>'
+    : '<span class="pill gray">Not connected</span>';
+  var modePill=write
+    ? '<span class="pill money">Write enabled</span>'
+    : '<span class="pill amber">Read-only</span>';
+  var para=write
+    ? 'Write mode is ON — approved actions can change real ServiceTrade data. Every write still passes the approval rules first.'
+    : 'Read-only: the app pulls everything it needs but physically cannot change anything in ServiceTrade. Safe for testing.';
+  if(!connected) para='Add ServiceTrade credentials (as secrets) to connect. Until then this stays a read-only shell — no calls go out.';
+  return '<div class="card sy-safety">'
+    +'<span class="sy-tile '+tileCls+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">'
+    +'<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg></span>'
+    +'<div class="sy-mid">'
+      +'<div class="sy-titlerow"><span class="sy-h">'+esc(title)+'</span>'+connPill+modePill+'</div>'
+      +'<p>'+esc(para)+'</p>'
+      +'<div class="sy-testout" id="test-out"></div>'
+    +'</div>'
+    +'<div class="sy-modewrap">'
+      +'<span class="sy-seg" id="modeseg">'
+        +'<button data-mode="read_only" class="'+(!write?'on':'')+'">Read-only</button>'
+        +'<button data-mode="read_write" class="'+(write?'on write':'')+'">Write</button>'
+      +'</span>'
+      +'<button class="sy-test" id="testbtn">Test connection</button>'
+    +'</div>'
+  +'</div>';
 }
 
 function statusCard(d){
@@ -92,7 +142,7 @@ function statusCard(d){
     +'<path d="M4 9a8 8 0 0 1 13.3-3.3L20 8"></path><path d="M20 4v4h-4"></path>'
     +'<path d="M20 15a8 8 0 0 1-13.3 3.3L4 16"></path><path d="M4 20v-4h4"></path></svg></span>'
     +'<div class="sy-mid">'
-      +'<div class="sy-titlerow"><span class="sy-h">Connected to ServiceTrade</span>'
+      +'<div class="sy-titlerow"><span class="sy-h">What syncs today</span>'
       +'<span class="pill green">Two-way</span></div>'
       +'<p>'+para+'</p>'
     +'</div>'
@@ -174,7 +224,8 @@ function logCard(d){
 function render(){
   var d=data||{};
   document.getElementById('root').innerHTML=
-    statusCard(d)
+    safetyCard(settings)
+    +statusCard(d)
     +'<div class="split-even">'
       +mappingsCard(d)
       +'<div style="display:flex;flex-direction:column;gap:16px">'
@@ -188,6 +239,15 @@ function render(){
 function wire(){
   var sn=document.getElementById('syncnow');
   if(sn)sn.onclick=syncNow;
+
+  // safety mode toggle
+  var seg=document.getElementById('modeseg');
+  if(seg)seg.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){setMode(b.getAttribute('data-mode'));};
+  });
+  var tb=document.getElementById('testbtn');
+  if(tb)tb.onclick=testConn;
+
   document.querySelectorAll('.sy-conf').forEach(function(el){
     var id=el.getAttribute('data-id');
     el.querySelectorAll('[data-choice]').forEach(function(btn){
@@ -223,6 +283,28 @@ function resolve(id,choice,el){
         '<div class="sy-empty">No conflicts — everything is in sync.</div>';
     }
   }).catch(function(){el.querySelectorAll('button').forEach(function(b){b.disabled=false;});});
+}
+
+function setMode(mode){
+  if(!settings)return;
+  if(mode===settings.mode)return;
+  if(mode==='read_write'){
+    var ok=window.confirm('Enable WRITE mode?\n\nThe app will be allowed to change real ServiceTrade data (approved actions only). Turn this off while testing so nothing you do here touches the live account.');
+    if(!ok)return;
+  }
+  fetch('/api/settings/servicetrade/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:mode})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(res&&res.ok){settings.mode=res.mode;settings.canWrite=res.canWrite;render();}
+    });
+}
+
+function testConn(){
+  var btn=document.getElementById('testbtn'), out=document.getElementById('test-out');
+  btn.disabled=true; var was=btn.textContent; btn.textContent='Testing…';
+  fetch('/api/settings/servicetrade/test',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false; btn.textContent=was;
+    if(out)out.innerHTML='<span style="color:'+(res.ok?'var(--green)':'var(--money)')+'">'+(res.ok?'✓ ':'✕ ')+esc(res.detail||'')+'</span>';
+  }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
 }
 
 load();

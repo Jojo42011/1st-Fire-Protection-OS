@@ -40,6 +40,7 @@ import closer from './routes/closer';
 import plans from './routes/plans';
 import schedule from './routes/schedule';
 import costing from './routes/costing';
+import settings from './routes/settings';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -84,6 +85,7 @@ app.use(closer);
 app.use(plans);
 app.use(schedule);
 app.use(costing);
+app.use(settings);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
