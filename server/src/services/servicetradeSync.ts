@@ -236,7 +236,9 @@ export async function pullQuotes(since?: number): Promise<{ pulled: number; page
         upsert.run({
           st_id: String(q.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
           number: q.refNumber || String(q.id), title: q.name || '(untitled quote)',
-          amount: Math.round((parseFloat(q.totalPrice || '0') || 0) * 100),
+          // totalPrice is a string and may be comma-grouped ("12,500.00") — strip commas so
+          // parseFloat doesn't truncate high-value quotes to a few dollars.
+          amount: Math.round((parseFloat(String(q.totalPrice || '0').replace(/,/g, '')) || 0) * 100),
           stage: q.status || 'quoted', sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
         });
         pulled++;
