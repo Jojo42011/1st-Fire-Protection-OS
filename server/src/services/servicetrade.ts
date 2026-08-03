@@ -174,11 +174,14 @@ export function deleteWebhook(id: number): Promise<any> {
  * plain result the settings UI can show without leaking anything sensitive.
  */
 export async function testConnection(): Promise<{ ok: boolean; detail: string }> {
-  if (!stConfigured()) return { ok: false, detail: 'No ServiceTrade credentials set.' };
+  const kind = stCredKind();
+  if (kind === 'none') return { ok: false, detail: 'No ServiceTrade credentials set.' };
   try {
-    // /auth is the lightest authenticated read; falls back to a 1-row customer read.
-    await stGet('/auth').catch(() => stGet('/customer?limit=1'));
-    const via = { oauth2: 'OAuth2 client credentials', token: 'API token', password: 'username/password', none: 'nothing' }[stCredKind()];
+    // Identity probe appropriate to the auth (OAuth2 → /oauth2/userinfo, session → /auth),
+    // falling back to a tiny company read (customers live at /company in ServiceTrade).
+    const probe = kind === 'oauth2' ? '/oauth2/userinfo' : '/auth';
+    await stGet(probe).catch(() => stGet('/company?limit=1'));
+    const via = { oauth2: 'OAuth2 client credentials', token: 'API token', password: 'username/password', none: 'nothing' }[kind];
     return { ok: true, detail: `Connected via ${via}.` };
   } catch (err) {
     return { ok: false, detail: (err as Error).message };
