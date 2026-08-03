@@ -123,6 +123,11 @@ export function hasRealAccounts(): boolean {
   const row = getDb().prepare(`SELECT 1 FROM accounts WHERE source = 'servicetrade' LIMIT 1`).get();
   return !!row;
 }
+/** Have we pulled real sites yet? */
+export function hasRealSites(): boolean {
+  const row = getDb().prepare(`SELECT 1 FROM sites WHERE source = 'servicetrade' LIMIT 1`).get();
+  return !!row;
+}
 
 const idOf = (obj: any): string | null => (obj && obj.id != null ? String(obj.id) : null);
 
@@ -146,11 +151,11 @@ export async function pullSites(): Promise<{ pulled: number; linked: number; pag
   const db = getDb();
   const acctByStId = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const upsert = db.prepare(
-    `INSERT INTO sites (st_id, account_id, name, address, st_updated_at, local_updated_at, sync_state)
-     VALUES (@st_id, @account_id, @name, @address, @updated, datetime('now'), 'clean')
+    `INSERT INTO sites (st_id, account_id, name, address, st_updated_at, local_updated_at, sync_state, source)
+     VALUES (@st_id, @account_id, @name, @address, @updated, datetime('now'), 'clean', 'servicetrade')
      ON CONFLICT(st_id) DO UPDATE SET
        account_id = excluded.account_id, name = excluded.name, address = excluded.address,
-       st_updated_at = excluded.st_updated_at, local_updated_at = datetime('now')`
+       st_updated_at = excluded.st_updated_at, local_updated_at = datetime('now'), source = 'servicetrade'`
   );
 
   let page = 1;

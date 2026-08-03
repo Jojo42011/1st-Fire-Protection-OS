@@ -768,6 +768,7 @@ export function initDb(): void {
   // Distinguish demo-seed CRM rows from records pulled live from ServiceTrade, so the screens
   // can flip to real data once a pull has happened without deleting the keyless demo dataset.
   addColumn('accounts', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
+  addColumn('sites', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
 
   // Indexes for the v2 server-side list query (search / filter / sort / paginate at scale).
   db.exec(`
@@ -776,7 +777,21 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_accounts_balance  ON accounts(balance_cents);
     CREATE INDEX IF NOT EXISTS idx_accounts_risk     ON accounts(risk);
     CREATE INDEX IF NOT EXISTS idx_sites_account      ON sites(account_id);
+    CREATE INDEX IF NOT EXISTS idx_sites_source       ON sites(source);
+    CREATE INDEX IF NOT EXISTS idx_sites_name         ON sites(name);
   `);
+
+  // Sites pulled before the source column existed defaulted to 'seed'. Tag any site whose
+  // parent account came from ServiceTrade as 'servicetrade', so the Sites screen sees the
+  // already-pulled 6k+ records without a manual re-pull. Idempotent, flag-guarded; a no-op on
+  // a fresh demo database (no ServiceTrade accounts yet).
+  if (getState('mig_sites_source_v1') !== '1') {
+    db.prepare(
+      `UPDATE sites SET source = 'servicetrade'
+        WHERE source = 'seed' AND account_id IN (SELECT id FROM accounts WHERE source = 'servicetrade')`
+    ).run();
+    setState('mig_sites_source_v1', '1');
+  }
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

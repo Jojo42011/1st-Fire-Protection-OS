@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { hasRealAccounts } from '../services/servicetradeSync';
+import { hasRealAccounts, hasRealSites } from '../services/servicetradeSync';
 import { runList, countWith, type ListSpec } from '../services/listQuery';
 
 /**
@@ -145,6 +145,71 @@ router.get('/api/accounts', (req, res) => {
   else if (filter === 'risk') list = all.filter((a) => a.risk === 'at_risk');
   const accounts = list.slice(0, limit).map((a) => mapAccount(db, a));
   res.json({ accounts, counts, total: 412, showing: accounts.length, page: 1, pages: 1, live: false });
+});
+
+// Sites at scale — the same server-side list contract over 6,130 records.
+const SITES_SPEC: ListSpec = {
+  table: 'sites',
+  baseWhere: "source = 'servicetrade'",
+  searchCols: ['name', 'address'],
+  filters: { all: '1 = 1', linked: 'account_id IS NOT NULL', addressed: "address IS NOT NULL AND address != ''" },
+  sorts: { name: 'name', account: 'account_id' },
+  defaultSort: 'name ASC',
+};
+
+interface SiteRow {
+  id: number; st_id: string | null; account_id: number | null; name: string | null;
+  address: string | null; system_type: string | null; next_service_at: string | null;
+}
+
+router.get('/api/sites', (req, res) => {
+  const db = getDb();
+
+  if (hasRealSites()) {
+    const result = runList<SiteRow>(SITES_SPEC, {
+      q: req.query.q as string,
+      filter: req.query.filter as string,
+      sort: req.query.sort as string,
+      order: req.query.order as string,
+      page: req.query.page as string,
+      pageSize: req.query.pageSize as string,
+    });
+    const nameOf = db.prepare(`SELECT name FROM accounts WHERE id = ?`);
+    const sites = result.rows.map((s) => {
+      const acc = s.account_id ? (nameOf.get(s.account_id) as { name: string } | undefined) : undefined;
+      return {
+        id: s.id,
+        name: s.name || '(unnamed site)',
+        address: s.address || '',
+        account: acc?.name || '—',
+        accountId: s.account_id,
+        system: s.system_type || '',
+        next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : '—',
+      };
+    });
+    return res.json({
+      sites,
+      counts: { all: countWith(SITES_SPEC, 'all'), linked: countWith(SITES_SPEC, 'linked'), addressed: countWith(SITES_SPEC, 'addressed') },
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      pages: result.pages,
+      showing: sites.length,
+      live: true,
+    });
+  }
+
+  // Demo mode: the seeded sites (few), joined to their seed accounts.
+  const rows = db.prepare(`SELECT * FROM sites ORDER BY id ASC LIMIT 50`).all() as SiteRow[];
+  const nameOf = db.prepare(`SELECT name FROM accounts WHERE id = ?`);
+  const sites = rows.map((s) => {
+    const acc = s.account_id ? (nameOf.get(s.account_id) as { name: string } | undefined) : undefined;
+    return {
+      id: s.id, name: s.name || '(unnamed site)', address: s.address || '', account: acc?.name || '—',
+      accountId: s.account_id, system: s.system_type || '', next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : '—',
+    };
+  });
+  res.json({ sites, counts: { all: rows.length, linked: rows.length, addressed: 0 }, total: rows.length, page: 1, pages: 1, showing: sites.length, live: false });
 });
 
 router.get('/api/accounts/:id', (req, res) => {

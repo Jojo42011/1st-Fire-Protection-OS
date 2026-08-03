@@ -194,6 +194,11 @@
           <span class="grow">Accounts</span>
           <span class="count" id="c-accounts"></span>
         </button>
+        <button class="nav-item" data-key="sites">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01"/></svg></span>
+          <span class="grow">Sites</span>
+          <span class="count" id="c-sites"></span>
+        </button>
         <button class="nav-item" data-key="pipeline">
           <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="5" height="14" rx="1.5"/><rect x="10" y="5" width="5" height="9" rx="1.5"/><rect x="17" y="5" width="4" height="5" rx="1.5"/></svg></span>
           <span class="grow">Pipeline</span>
@@ -275,6 +280,7 @@ var SCREENS = {
   plans:    { src:'/plans',                        title:'Service plans',     sub:'Jobs become recurring agreements, renewed before they lapse' },
   costing:  { src:'/costing',                      title:'Job margins',       sub:'Real cost tracked against the quote, margin bleed flagged' },
   crm:      { src:'/accounts',                     title:'Accounts',          sub:'412 customers, live from ServiceTrade' },
+  sites:    { src:'/sites',                         title:'Sites',             sub:'Every service location, searchable' },
   account:  { src:'/account',                      title:'Account',           sub:'Customer detail', detail:true },
   pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'$412,300 open across 39 quotes' },
   sync:     { src:'/sync',                          title:'ServiceTrade sync', sub:'Two-way, every 15 minutes' },

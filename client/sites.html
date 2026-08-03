@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sites · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .st-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .st-search{position:relative;flex:1;min-width:220px;max-width:400px}
+  .st-search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted)}
+  .st-search input{width:100%;box-sizing:border-box;font-family:var(--sans);font-size:13px;font-weight:500;
+    color:var(--ink);background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:9px 12px 9px 33px}
+  .st-search input:focus{outline:none;border-color:var(--indigo)}
+  .st-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .st-filters .chip{cursor:pointer;border:1px solid transparent}
+  .st-filters .chip.on{background:var(--panel);border-color:var(--border);color:var(--ink)}
+  .st-sync{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:11.5px;color:var(--green);background:var(--green-bg);border-radius:999px;padding:6px 12px}
+  .st-sync.demo{color:var(--muted);background:var(--fill)}
+  .st-name{font-weight:700;font-size:13px;color:var(--ink)}
+  .st-addr{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .st-acct{font-weight:600;font-size:12.5px;color:var(--indigo);cursor:pointer}
+  .st-acct:hover{text-decoration:underline}
+  th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+  th.sortable .arw{color:var(--indigo);font-size:9px;margin-left:3px}
+  .st-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .st-page{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .st-pageinfo{font-weight:600;font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .st-empty{padding:40px 18px;text-align:center;color:var(--muted);font-weight:500;font-size:13px}
+  .btn-pg{font-weight:700;font-size:12px;border:1px solid var(--border);background:var(--panel);color:var(--ink-2);border-radius:8px;padding:6px 12px;cursor:pointer}
+  .btn-pg:disabled{opacity:.4;cursor:default}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div class="st-bar">
+    <label class="st-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Search sites or addresses…" autocomplete="off" />
+    </label>
+    <div class="st-filters" id="filters"></div>
+  </div>
+  <div class="card card-clip">
+    <table id="tbl">
+      <thead><tr>
+        <th class="sortable" data-sort="name">Site<span class="arw" data-arw="name"></span></th>
+        <th>Account</th>
+        <th>System</th>
+        <th>Next service</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty"></div>
+    <div class="card-foot st-foot">
+      <span id="foot"></span>
+      <span class="st-page">
+        <button class="btn-pg" id="prev">‹ Prev</button>
+        <span class="st-pageinfo" id="pageinfo"></span>
+        <button class="btn-pg" id="next">Next ›</button>
+      </span>
+    </div>
+  </div>
+</div>
+<script>
+var FILTERS=[['all','All'],['linked','Linked to account'],['addressed','Has address']];
+var state={q:'',filter:'all',sort:'name',order:'asc',page:1,pageSize:50};
+var data={sites:[],counts:{},total:0,pages:1,live:false};
+
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function goAccount(id){ if(id==null)return; try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
+
+function qs(){
+  var p=new URLSearchParams();
+  if(state.q)p.set('q',state.q);
+  p.set('filter',state.filter);p.set('sort',state.sort);p.set('order',state.order);
+  p.set('page',state.page);p.set('pageSize',state.pageSize);
+  return p.toString();
+}
+function load(){ fetch('/api/sites?'+qs()).then(function(r){return r.json();}).then(function(d){data=d||data;render();}); }
+
+function renderFilters(){
+  var c=data.counts||{};
+  document.getElementById('filters').innerHTML=
+    FILTERS.map(function(f){
+      var n=c[f[0]];
+      return '<button class="chip'+(state.filter===f[0]?' on':'')+'" data-f="'+f[0]+'">'+esc(f[1])+(n!=null?' '+n.toLocaleString('en-US'):'')+'</button>';
+    }).join('')
+    +'<span class="st-sync'+(data.live?'':' demo')+'">'+(data.live?'<span class="dot live"></span>ServiceTrade · live':'demo data')+'</span>';
+  document.querySelectorAll('#filters .chip').forEach(function(b){
+    b.onclick=function(){state.filter=b.getAttribute('data-f');state.page=1;load();};
+  });
+}
+function arrows(){
+  document.querySelectorAll('[data-arw]').forEach(function(s){
+    var key=s.getAttribute('data-arw');
+    s.textContent=state.sort===key?(state.order==='asc'?'▲':'▼'):'';
+  });
+}
+function row(s){
+  return '<tr>'
+    +'<td><div class="st-name">'+esc(s.name)+'</div>'+(s.address?'<div class="st-addr">'+esc(s.address)+'</div>':'')+'</td>'
+    +'<td><span class="st-acct" data-acct="'+esc(s.accountId==null?'':s.accountId)+'">'+esc(s.account)+'</span></td>'
+    +'<td style="color:var(--muted)">'+(s.system?esc(s.system):'<span style="color:var(--faint)">—</span>')+'</td>'
+    +'<td style="color:var(--muted)">'+esc(s.next)+'</td>'
+    +'<td class="right"><span class="st-acct" data-acct="'+esc(s.accountId==null?'':s.accountId)+'">Open →</span></td>'
+  +'</tr>';
+}
+function render(){
+  renderFilters();arrows();
+  var rows=data.sites||[];
+  document.getElementById('rows').innerHTML=rows.map(row).join('');
+  document.getElementById('empty').innerHTML=rows.length?'':'<div class="st-empty">No sites match “'+esc(state.q)+'”.</div>';
+
+  var total=data.total||0;
+  var from=total?((data.page-1)*data.pageSize+1):0;
+  var to=Math.min(data.page*data.pageSize,total);
+  document.getElementById('foot').textContent=total?('Showing '+from.toLocaleString('en-US')+'–'+to.toLocaleString('en-US')+' of '+total.toLocaleString('en-US')+' sites'):'';
+  document.getElementById('pageinfo').textContent='Page '+(data.page||1)+' of '+(data.pages||1);
+  document.getElementById('prev').disabled=(data.page||1)<=1;
+  document.getElementById('next').disabled=(data.page||1)>=(data.pages||1);
+
+  document.querySelectorAll('[data-acct]').forEach(function(el){
+    var id=el.getAttribute('data-acct');
+    if(id!=='')el.onclick=function(ev){ev.stopPropagation();goAccount(+id);};
+  });
+}
+
+document.querySelectorAll('th.sortable').forEach(function(th){
+  th.onclick=function(){
+    var key=th.getAttribute('data-sort');
+    if(state.sort===key){state.order=state.order==='asc'?'desc':'asc';}
+    else{state.sort=key;state.order='asc';}
+    state.page=1;load();
+  };
+});
+var t=null;
+document.getElementById('search').addEventListener('input',function(e){
+  clearTimeout(t);var v=e.target.value;
+  t=setTimeout(function(){state.q=v.trim();state.page=1;load();},280);
+});
+document.getElementById('prev').onclick=function(){if(state.page>1){state.page--;load();}};
+document.getElementById('next').onclick=function(){if(state.page<(data.pages||1)){state.page++;load();}};
+
+load();
+</script>
+</body>
+</html>
