@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { hasRealAccounts } from '../services/servicetradeSync';
 
 /**
  * CRM (Signal Phase 4) — Accounts, Account detail and Pipeline. Shell only: everything
@@ -55,13 +56,25 @@ router.get('/api/accounts', (req, res) => {
   const filter = String(req.query.filter || 'all');
   const limit = Math.min(Number(req.query.limit) || 8, 50);
 
-  const all = db.prepare(`SELECT * FROM accounts ORDER BY id ASC`).all() as Acc[];
-  const counts = {
-    all: 412,
-    contract: 118,
-    due: 34,
-    risk: all.filter((a) => a.risk === 'at_risk').length || 9,
-  };
+  // Once real ServiceTrade customers have been pulled, the screen shows ONLY those (live);
+  // until then it serves the keyless demo seed (fixtures).
+  const real = hasRealAccounts();
+  const all = (real
+    ? db.prepare(`SELECT * FROM accounts WHERE source = 'servicetrade' ORDER BY name ASC`).all()
+    : db.prepare(`SELECT * FROM accounts ORDER BY id ASC`).all()) as Acc[];
+  const counts = real
+    ? {
+        all: all.length,
+        contract: all.filter((a) => a.contract_type === 'contract').length,
+        due: all.filter((a) => a.balance_cents > 0).length,
+        risk: all.filter((a) => a.risk === 'at_risk').length,
+      }
+    : {
+        all: 412,
+        contract: 118,
+        due: 34,
+        risk: all.filter((a) => a.risk === 'at_risk').length || 9,
+      };
 
   let list = all;
   if (filter === 'contract') list = all.filter((a) => a.contract_type === 'contract');
@@ -98,7 +111,7 @@ router.get('/api/accounts', (req, res) => {
     };
   });
 
-  res.json({ accounts, counts, total: 412, showing: accounts.length, live: false });
+  res.json({ accounts, counts, total: real ? all.length : 412, showing: accounts.length, live: real });
 });
 
 router.get('/api/accounts/:id', (req, res) => {

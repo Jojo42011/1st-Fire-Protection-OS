@@ -128,6 +128,7 @@ function safetyCard(s){
         +'<button data-mode="read_write" class="'+(write?'on write':'')+'">Write</button>'
       +'</span>'
       +'<button class="sy-test" id="testbtn">Test connection</button>'
+      +(connected?'<button class="sy-test" id="pullbtn">Pull accounts</button>':'')
     +'</div>'
   +'</div>';
 }
@@ -247,6 +248,8 @@ function wire(){
   });
   var tb=document.getElementById('testbtn');
   if(tb)tb.onclick=testConn;
+  var pb=document.getElementById('pullbtn');
+  if(pb)pb.onclick=pullAccounts;
 
   document.querySelectorAll('.sy-conf').forEach(function(el){
     var id=el.getAttribute('data-id');
@@ -305,6 +308,19 @@ function testConn(){
     btn.disabled=false; btn.textContent=was;
     if(out)out.innerHTML='<span style="color:'+(res.ok?'var(--green)':'var(--money)')+'">'+(res.ok?'✓ ':'✕ ')+esc(res.detail||'')+'</span>';
   }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
+}
+
+function pullAccounts(){
+  var btn=document.getElementById('pullbtn'), out=document.getElementById('test-out');
+  btn.disabled=true; var was=btn.textContent; btn.textContent='Pulling…';
+  fetch('/api/settings/servicetrade/pull/accounts',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false; btn.textContent=was;
+    if(res.ok){
+      if(out)out.innerHTML='<span style="color:var(--green)">✓ Pulled '+res.pulled+' customers from ServiceTrade — open Accounts to see them.</span>';
+    } else {
+      if(out)out.innerHTML='<span style="color:var(--money)">✕ '+esc(res.error||'pull failed')+'</span>';
+    }
+  }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Pull failed to run.';});
 }
 
 load();

@@ -764,6 +764,10 @@ export function initDb(): void {
       received_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  // Distinguish demo-seed CRM rows from records pulled live from ServiceTrade, so the screens
+  // can flip to real data once a pull has happened without deleting the keyless demo dataset.
+  addColumn('accounts', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
