@@ -12,7 +12,7 @@ import {
   ServiceTradeNotConnectedError,
   type StMode,
 } from '../services/servicetrade';
-import { startPull, pullStatus } from '../services/servicetradeSync';
+import { startPull, pullStatus, syncSummary } from '../services/servicetradeSync';
 import { getDb } from '../db/index';
 
 /** Map a ServiceTrade client error to a clean HTTP response. */
@@ -111,6 +111,10 @@ router.post('/api/settings/servicetrade/pull/:entity', (req, res) => {
 
 router.get('/api/settings/servicetrade/pull/status', (_req, res) => {
   res.json({ ok: true, status: pullStatus() });
+});
+
+router.get('/api/settings/servicetrade/sync-summary', (_req, res) => {
+  res.json({ ok: true, ...syncSummary() });
 });
 
 export default router;

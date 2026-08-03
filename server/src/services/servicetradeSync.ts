@@ -1,6 +1,6 @@
 import { getDb } from '../db/index';
-import { setState } from '../db/schema';
-import { stGet } from './servicetrade';
+import { getState, setState } from '../db/schema';
+import { stGet, stConfigured } from './servicetrade';
 
 /**
  * The pull path — reads real records FROM ServiceTrade into our local mirror tables. Every call
@@ -22,6 +22,17 @@ let runningEntity: Entity | null = null;
 let progress: { page: number; totalPages: number; count: number } | null = null;
 let lastStatus: { entity: Entity; state: 'done' | 'error'; counts?: any; error?: string; at: string } | null = null;
 
+// Incremental cursors: the unix time of each entity's last successful sync. The next sync asks
+// ServiceTrade only for records changed since (updatedAfter), so a refresh is seconds not minutes.
+function cursorKey(e: Entity): string { return `st_cursor_${e}`; }
+export function getCursor(entity: Entity): number | undefined {
+  const v = getState(cursorKey(entity));
+  return v ? Number(v) : undefined;
+}
+export function setCursor(entity: Entity, unixSec: number): void {
+  setState(cursorKey(entity), String(unixSec));
+}
+
 export const isPulling = (): Entity | null => runningEntity;
 export function pullStatus() {
   if (runningEntity) return { entity: runningEntity, state: 'running' as const, progress };
@@ -33,7 +44,7 @@ export function startPull(entity: Entity): { started: boolean; busy?: boolean; e
   progress = { page: 0, totalPages: 1, count: 0 };
   const fn = entity === 'accounts' ? pullAccounts : entity === 'sites' ? pullSites : pullInvoices;
   Promise.resolve()
-    .then(fn)
+    .then(() => fn())
     .then((counts) => {
       lastStatus = { entity, state: 'done', counts, at: new Date().toISOString() };
     })
@@ -67,9 +78,11 @@ const firstTag = (tags?: StCompany['tags']): string => {
   return (typeof t === 'string' ? t : t?.name || '').toString();
 };
 
-/** Pull every customer company from ServiceTrade into the accounts mirror. Read-only safe. */
-export async function pullAccounts(): Promise<{ pulled: number; pages: number }> {
+/** Pull customer companies into the accounts mirror. With `since`, only records changed after
+ *  that unix time (incremental). Read-only safe. */
+export async function pullAccounts(since?: number): Promise<{ pulled: number; pages: number }> {
   const db = getDb();
+  const startedAt = Math.floor(Date.now() / 1000);
   const upsert = db.prepare(
     `INSERT INTO accounts (st_id, name, segment, customer_since, st_updated_at, local_updated_at, sync_state, source)
      VALUES (@st_id, @name, @segment, @since, @updated, datetime('now'), 'clean', 'servicetrade')
@@ -85,8 +98,9 @@ export async function pullAccounts(): Promise<{ pulled: number; pages: number }>
   let page = 1;
   let totalPages = 1;
   let pulled = 0;
+  const sinceQ = since ? `&updatedAfter=${since}` : '';
   do {
-    const resp = await stGet(`/company?isCustomer=true&page=${page}`);
+    const resp = await stGet(`/company?isCustomer=true&page=${page}${sinceQ}`);
     const { rows, totalPages: tp } = unwrap<StCompany>(resp, 'companies');
     totalPages = tp;
     const tx = db.transaction((companies: StCompany[]) => {
@@ -108,9 +122,10 @@ export async function pullAccounts(): Promise<{ pulled: number; pages: number }>
   } while (page <= totalPages && page <= MAX_PAGES);
 
   setState('st_accounts_pulled', '1');
+  setCursor('accounts', startedAt);
   try {
     db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'accounts')`).run(
-      `Pulled ${pulled} customers from ServiceTrade`
+      `${since ? 'Synced' : 'Pulled'} ${pulled} customer${pulled === 1 ? '' : 's'} from ServiceTrade`
     );
   } catch {
     /* best-effort log */
@@ -127,6 +142,60 @@ export function hasRealAccounts(): boolean {
 export function hasRealSites(): boolean {
   const row = getDb().prepare(`SELECT 1 FROM sites WHERE source = 'servicetrade' LIMIT 1`).get();
   return !!row;
+}
+
+/**
+ * The scheduled incremental sync. Accounts + sites refresh incrementally (only records changed
+ * since their cursor — seconds, not the full 613-page site crawl); invoices re-pull in full
+ * (cheap, 2 pages) so balances stay correct. Runs only when connected, never overlaps a manual
+ * pull, and is entirely read-only. Skips an entity that was never fully pulled (no cursor yet).
+ */
+export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any; invoices?: any } | null> {
+  if (!stConfigured() || runningEntity) return null;
+  const out: { accounts?: any; sites?: any; invoices?: any } = {};
+  try {
+    runningEntity = 'accounts';
+    if (getCursor('accounts')) { progress = { page: 0, totalPages: 1, count: 0 }; out.accounts = await pullAccounts(getCursor('accounts')); }
+    runningEntity = 'sites';
+    if (getCursor('sites')) { progress = { page: 0, totalPages: 1, count: 0 }; out.sites = await pullSites(getCursor('sites')); }
+    runningEntity = 'invoices';
+    if (getCursor('invoices')) { progress = { page: 0, totalPages: 1, count: 0 }; out.invoices = await pullInvoices(); }
+    lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
+    return out;
+  } catch (err) {
+    lastStatus = { entity: runningEntity || 'accounts', state: 'error', error: (err as Error).message, at: new Date().toISOString() };
+    return out;
+  } finally {
+    runningEntity = null;
+    progress = null;
+  }
+}
+
+// Debounced sync trigger for inbound webhooks — coalesces a burst of events into one sync run
+// ~30s later, so real-time changes flow in without a sync per event.
+let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
+export function nudgeSync(): void {
+  if (nudgeTimer) return;
+  nudgeTimer = setTimeout(() => {
+    nudgeTimer = null;
+    void runScheduledSync().catch(() => {});
+  }, 30000);
+  if (typeof nudgeTimer.unref === 'function') nudgeTimer.unref();
+}
+
+/** Per-entity last-synced snapshot for the sync screen. */
+export function syncSummary() {
+  const db = getDb();
+  const count = (t: string) => (db.prepare(`SELECT COUNT(*) AS c FROM ${t} WHERE source = 'servicetrade'`).get() as { c: number }).c;
+  const iso = (e: Entity) => { const c = getCursor(e); return c ? new Date(c * 1000).toISOString() : null; };
+  return {
+    connected: stConfigured(),
+    entities: {
+      accounts: { count: count('accounts'), lastSynced: iso('accounts') },
+      sites: { count: count('sites'), lastSynced: iso('sites') },
+      invoices: { lastSynced: iso('invoices') },
+    },
+  };
 }
 
 const idOf = (obj: any): string | null => (obj && obj.id != null ? String(obj.id) : null);
@@ -146,9 +215,11 @@ interface StLocation {
   updated?: number;
 }
 
-/** Pull sites (ServiceTrade "locations") and link each to its parent account. Read-only safe. */
-export async function pullSites(): Promise<{ pulled: number; linked: number; pages: number }> {
+/** Pull sites (ServiceTrade "locations"), linking each to its parent account. With `since`,
+ *  only records changed after that unix time (incremental). Read-only safe. */
+export async function pullSites(since?: number): Promise<{ pulled: number; linked: number; pages: number }> {
   const db = getDb();
+  const startedAt = Math.floor(Date.now() / 1000);
   const acctByStId = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const upsert = db.prepare(
     `INSERT INTO sites (st_id, account_id, name, address, st_updated_at, local_updated_at, sync_state, source)
@@ -162,8 +233,9 @@ export async function pullSites(): Promise<{ pulled: number; linked: number; pag
   let totalPages = 1;
   let pulled = 0;
   let linked = 0;
+  const sinceQ = since ? `&updatedAfter=${since}` : '';
   do {
-    const resp = await stGet(`/location?isCustomer=true&page=${page}`);
+    const resp = await stGet(`/location?isCustomer=true&page=${page}${sinceQ}`);
     const { rows, totalPages: tp } = unwrap<StLocation>(resp, 'locations');
     totalPages = tp;
     const tx = db.transaction((locs: StLocation[]) => {
@@ -189,9 +261,10 @@ export async function pullSites(): Promise<{ pulled: number; linked: number; pag
   } while (page <= totalPages && page <= MAX_PAGES);
 
   setState('st_sites_pulled', '1');
+  setCursor('sites', startedAt);
   try {
     db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'sites')`).run(
-      `Pulled ${pulled} sites from ServiceTrade (${linked} linked to accounts)`
+      `${since ? 'Synced' : 'Pulled'} ${pulled} site${pulled === 1 ? '' : 's'} from ServiceTrade (${linked} linked)`
     );
   } catch {
     /* best-effort */
@@ -218,6 +291,7 @@ interface StInvoice {
 export async function pullInvoices(): Promise<{ pulled: number; accountsUpdated: number; pages: number }> {
   const db = getDb();
   const nowSec = Math.floor(Date.now() / 1000);
+  const startedAt = nowSec;
 
   // Aggregate in memory by customer st_id, then write once per account.
   const agg = new Map<string, { outstanding: number; lifetime: number; overdue: boolean }>();
@@ -268,6 +342,7 @@ export async function pullInvoices(): Promise<{ pulled: number; accountsUpdated:
   tx();
 
   setState('st_invoices_pulled', '1');
+  setCursor('invoices', startedAt);
   try {
     db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'invoices')`).run(
       `Pulled ${pulled} invoices from ServiceTrade → ${accountsUpdated} account balances updated`

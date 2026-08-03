@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { nudgeSync } from '../services/servicetradeSync';
 
 /**
  * ServiceTrade webhook receiver — the endpoint ServiceTrade PUSHES events to (job completed,
@@ -48,6 +49,7 @@ router.post('/api/servicetrade/webhook', (req, res) => {
   } catch {
     /* never let recording failure bounce a webhook — ServiceTrade would just retry */
   }
+  nudgeSync(); // coalesce this + any burst into one incremental sync ~30s out
   res.status(200).json({ ok: true });
 });
 

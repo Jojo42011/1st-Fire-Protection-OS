@@ -89,13 +89,23 @@ function toneStyle(t){
   return 'background:var(--fill);color:var(--ink-2)'; /* gray */
 }
 
-var data=null, settings=null;
+var data=null, settings=null, summary=null;
+
+function ago(iso){
+  if(!iso)return 'never';
+  var m=Math.max(0,(Date.now()-new Date(iso).getTime())/60000);
+  if(m<1)return 'just now';
+  if(m<60)return Math.round(m)+'m ago';
+  if(m<1440)return Math.round(m/60)+'h ago';
+  return Math.round(m/1440)+'d ago';
+}
 
 function load(){
   Promise.all([
     fetch('/api/sync').then(function(r){return r.json();}),
-    fetch('/api/settings/servicetrade').then(function(r){return r.json();})
-  ]).then(function(res){data=res[0];settings=res[1];render();});
+    fetch('/api/settings/servicetrade').then(function(r){return r.json();}),
+    fetch('/api/settings/servicetrade/sync-summary').then(function(r){return r.json();})
+  ]).then(function(res){data=res[0];settings=res[1];summary=res[2];render();});
 }
 
 /* Connection + the read-only/write safety toggle — the real, live control. */
@@ -120,6 +130,7 @@ function safetyCard(s){
     +'<div class="sy-mid">'
       +'<div class="sy-titlerow"><span class="sy-h">'+esc(title)+'</span>'+connPill+modePill+'</div>'
       +'<p>'+esc(para)+'</p>'
+      +(connected&&summary&&summary.entities?('<div class="sy-testout" style="color:var(--muted)">Auto-syncs every 15 min · accounts '+esc(ago(summary.entities.accounts.lastSynced))+' · sites '+esc(ago(summary.entities.sites.lastSynced))+' · invoices '+esc(ago(summary.entities.invoices.lastSynced))+'</div>'):'')
       +'<div class="sy-testout" id="test-out"></div>'
     +'</div>'
     +'<div class="sy-modewrap">'

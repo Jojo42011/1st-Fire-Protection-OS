@@ -10,6 +10,7 @@ import { runDailyCollection } from './services/collectionWorkflow';
 import { syncFromVapi } from './services/receptionist';
 import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
+import { runScheduledSync } from './services/servicetradeSync';
 
 import health from './routes/health';
 import brain from './routes/brain';
@@ -191,6 +192,20 @@ if (process.env.VAPI_API_KEY) {
   setInterval(runSync, VAPI_SYNC_MS).unref();
   console.log('[vapi] tracking enabled — auto-syncing calls every 5 min');
 }
+
+// ---- ServiceTrade incremental sync (v2) ----
+// When connected, refreshes accounts/sites incrementally (updatedAfter) + invoices in full on a
+// cadence, so the mirror stays fresh without anyone pressing a button. Read-only; never overlaps
+// a manual pull; no-op until a first full pull has set the cursors. Failures are swallowed.
+const ST_SYNC_MS = 1000 * 60 * 15; // every 15 minutes
+const runStSync = () =>
+  void runScheduledSync()
+    .then((r) => {
+      if (r && (r.accounts || r.sites || r.invoices)) console.log('[st-sync] incremental cycle complete');
+    })
+    .catch((err) => console.warn('[st-sync] cycle error:', (err as Error).message));
+setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
+setInterval(runStSync, ST_SYNC_MS).unref();
 
 server.listen(PORT, () => {
   console.log(`\n  1st FP Operating System`);
