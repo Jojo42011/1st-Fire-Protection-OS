@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { hasRealAccounts } from '../services/servicetradeSync';
+import { runList, countWith, type ListSpec } from '../services/listQuery';
 
 /**
  * CRM (Signal Phase 4) — Accounts, Account detail and Pipeline. Shell only: everything
@@ -51,67 +52,99 @@ interface Acc {
   risk: string | null; last_touch_at: string | null; last_touch_kind: string | null;
 }
 
+// One row → the Accounts list display shape (shared by real + demo modes).
+function mapAccount(db: ReturnType<typeof getDb>, a: Acc) {
+  const sites = (db.prepare(`SELECT COUNT(*) AS v FROM sites WHERE account_id = ?`).get(a.id) as { v: number }).v;
+  const nextSite = db
+    .prepare(`SELECT next_service_at FROM sites WHERE account_id = ? AND next_service_at IS NOT NULL ORDER BY next_service_at ASC LIMIT 1`)
+    .get(a.id) as { next_service_at: string } | undefined;
+  const next = nextSite
+    ? 'Inspection due ' + fmtDate(nextSite.next_service_at)
+    : a.contract_type === 'prospect'
+    ? 'Quote to send'
+    : a.risk === 'at_risk'
+    ? 'Follow-up due'
+    : a.balance_cents > 0
+    ? 'Balance due'
+    : 'Scheduled';
+  const tint = SEG_TINT[a.segment] || ['var(--fill)', 'var(--ink-2)'];
+  const seg = a.segment ? `${a.segment} · since ${a.customer_since || '—'}` : `Customer since ${a.customer_since || '—'}`;
+  return {
+    id: a.id,
+    initials: initials(a.name),
+    name: a.name,
+    segment: seg,
+    tintBg: tint[0],
+    tintFg: tint[1],
+    sites: sites ? `${sites} site${sites === 1 ? '' : 's'}` : '—',
+    contract: CONTRACT(a.contract_type),
+    contractKind: a.contract_type === 'prospect' ? 'indigo' : a.contract_type === 'tm' ? 'gray' : 'green',
+    next,
+    balance: money(a.balance_cents),
+    balanceOverdue: a.balance_cents > 0 && a.risk === 'at_risk',
+    touch: a.last_touch_kind === 'autopilot' ? 'Autopilot · today' : a.last_touch_kind ? `${TOUCH(a.last_touch_kind)} · ${ago(a.last_touch_at)}` : '—',
+  };
+}
+
+// The list contract for real (ServiceTrade-backed) accounts: search by name, filter chips,
+// sortable columns, paginated — all server-side.
+const ACCOUNTS_SPEC: ListSpec = {
+  table: 'accounts',
+  baseWhere: "source = 'servicetrade'",
+  searchCols: ['name'],
+  filters: {
+    all: '1 = 1',
+    contract: "contract_type = 'contract'",
+    due: 'balance_cents > 0',
+    risk: "risk = 'at_risk'",
+  },
+  sorts: { name: 'name', balance: 'balance_cents', lifetime: 'lifetime_cents', since: 'customer_since' },
+  defaultSort: 'name ASC',
+};
+
 router.get('/api/accounts', (req, res) => {
   const db = getDb();
+
+  // Real mode: once ServiceTrade customers are pulled, the screen is fully server-driven —
+  // search / filter / sort / paginate against the live data.
+  if (hasRealAccounts()) {
+    const result = runList<Acc>(ACCOUNTS_SPEC, {
+      q: req.query.q as string,
+      filter: req.query.filter as string,
+      sort: req.query.sort as string,
+      order: req.query.order as string,
+      page: req.query.page as string,
+      pageSize: req.query.pageSize as string,
+    });
+    const accounts = result.rows.map((a) => mapAccount(db, a));
+    const counts = {
+      all: countWith(ACCOUNTS_SPEC, 'all'),
+      contract: countWith(ACCOUNTS_SPEC, 'contract'),
+      due: countWith(ACCOUNTS_SPEC, 'due'),
+      risk: countWith(ACCOUNTS_SPEC, 'risk'),
+    };
+    return res.json({
+      accounts,
+      counts,
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      pages: result.pages,
+      showing: accounts.length,
+      live: true,
+    });
+  }
+
+  // Demo mode (keyless): the seeded fixtures, unchanged.
   const filter = String(req.query.filter || 'all');
-  const limit = Math.min(Number(req.query.limit) || 8, 50);
-
-  // Once real ServiceTrade customers have been pulled, the screen shows ONLY those (live);
-  // until then it serves the keyless demo seed (fixtures).
-  const real = hasRealAccounts();
-  const all = (real
-    ? db.prepare(`SELECT * FROM accounts WHERE source = 'servicetrade' ORDER BY name ASC`).all()
-    : db.prepare(`SELECT * FROM accounts ORDER BY id ASC`).all()) as Acc[];
-  const counts = real
-    ? {
-        all: all.length,
-        contract: all.filter((a) => a.contract_type === 'contract').length,
-        due: all.filter((a) => a.balance_cents > 0).length,
-        risk: all.filter((a) => a.risk === 'at_risk').length,
-      }
-    : {
-        all: 412,
-        contract: 118,
-        due: 34,
-        risk: all.filter((a) => a.risk === 'at_risk').length || 9,
-      };
-
+  const limit = Math.min(Number(req.query.pageSize) || Number(req.query.limit) || 8, 50);
+  const all = db.prepare(`SELECT * FROM accounts ORDER BY id ASC`).all() as Acc[];
+  const counts = { all: 412, contract: 118, due: 34, risk: all.filter((a) => a.risk === 'at_risk').length || 9 };
   let list = all;
   if (filter === 'contract') list = all.filter((a) => a.contract_type === 'contract');
   else if (filter === 'risk') list = all.filter((a) => a.risk === 'at_risk');
-  const sliced = list.slice(0, limit);
-
-  const accounts = sliced.map((a) => {
-    const sites = (db.prepare(`SELECT COUNT(*) AS v FROM sites WHERE account_id = ?`).get(a.id) as { v: number }).v;
-    const nextSite = db
-      .prepare(`SELECT next_service_at FROM sites WHERE account_id = ? AND next_service_at IS NOT NULL ORDER BY next_service_at ASC LIMIT 1`)
-      .get(a.id) as { next_service_at: string } | undefined;
-    const next = nextSite
-      ? 'Inspection due ' + fmtDate(nextSite.next_service_at)
-      : a.contract_type === 'prospect'
-      ? 'Quote to send'
-      : a.risk === 'at_risk'
-      ? 'Follow-up due'
-      : 'Scheduled';
-    const tint = SEG_TINT[a.segment] || ['var(--fill)', 'var(--ink-2)'];
-    return {
-      id: a.id,
-      initials: initials(a.name),
-      name: a.name,
-      segment: `${a.segment} · since ${a.customer_since}`,
-      tintBg: tint[0],
-      tintFg: tint[1],
-      sites: sites ? `${sites} site${sites === 1 ? '' : 's'}` : '—',
-      contract: CONTRACT(a.contract_type),
-      contractKind: a.contract_type === 'prospect' ? 'indigo' : a.contract_type === 'tm' ? 'gray' : 'green',
-      next,
-      balance: money(a.balance_cents),
-      balanceOverdue: a.balance_cents > 0 && a.risk === 'at_risk',
-      touch: a.last_touch_kind === 'autopilot' ? 'Autopilot · today' : `${TOUCH(a.last_touch_kind)} · ${ago(a.last_touch_at)}`,
-    };
-  });
-
-  res.json({ accounts, counts, total: real ? all.length : 412, showing: accounts.length, live: real });
+  const accounts = list.slice(0, limit).map((a) => mapAccount(db, a));
+  res.json({ accounts, counts, total: 412, showing: accounts.length, page: 1, pages: 1, live: false });
 });
 
 router.get('/api/accounts/:id', (req, res) => {
