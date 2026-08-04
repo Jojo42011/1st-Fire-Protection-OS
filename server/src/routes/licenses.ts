@@ -10,6 +10,7 @@ import {
 } from '../services/licenseAgent';
 import { fetchDirectory, fetchTerminated, bambooConfigured } from '../services/bamboo';
 import { fetchAllVendorSeats, configuredVendors } from '../services/licenseSources';
+import { parseCsv, importManualSeats, isVendor } from '../services/licenseImport';
 import { createApproval } from './approvals';
 
 const router = Router();
@@ -78,6 +79,41 @@ router.post('/api/licenses/reclaims/:id/approve', (req, res) => {
 });
 
 /**
+ * Universal seat import — CSV / admin-export → license_seats (source='manual'). Works for every
+ * vendor with no credentials (the only path for Bluebeam/HydraCAD/HFSS). Body accepts either
+ * raw `csv` text or a pre-parsed `seats` array, plus the target `vendor`. Idempotent per vendor:
+ * re-importing replaces that vendor's manual inventory rather than duplicating it.
+ */
+router.post('/api/licenses/import', (req, res) => {
+  try {
+    const vendor = String(req.body?.vendor || '').toLowerCase();
+    if (!isVendor(vendor)) return res.status(400).json({ ok: false, error: 'unknown vendor' });
+    const product = VENDORS.find((v) => v.key === vendor)!.product;
+
+    let rows;
+    if (typeof req.body?.csv === 'string' && req.body.csv.trim()) {
+      rows = parseCsv(req.body.csv, vendor, product);
+    } else if (Array.isArray(req.body?.seats)) {
+      rows = req.body.seats.map((s: any) => ({
+        assignee_email: s.assignee_email ? String(s.assignee_email).toLowerCase() : s.email ? String(s.email).toLowerCase() : null,
+        assignee_name: s.assignee_name || s.name || s.email || null,
+        product: s.product || product,
+        cost_monthly: Number(s.cost_monthly ?? s.cost ?? 0) || 0,
+        assigned_at: s.assigned_at || null,
+      }));
+    } else {
+      return res.status(400).json({ ok: false, error: 'provide csv text or a seats array' });
+    }
+
+    if (!rows.length) return res.status(400).json({ ok: false, error: 'no seats parsed — check the header row (needs an email or name column)' });
+    const { imported } = importManualSeats(vendor, rows, product);
+    res.json({ ok: true, vendor, imported, totals: reconcile().totals });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/**
  * Pull from BambooHR (+ the vendor adapters) and re-reconcile. Keyless-safe: with no keys the
  * adapters return null/[] and this is a graceful no-op that just re-runs the reconciliation on
  * the seeded data. Never throws.
@@ -110,7 +146,9 @@ router.post('/api/licenses/sync', async (_req, res) => {
     console.warn('[licenses] bamboo sync degraded:', (err as Error).message);
   }
 
-  // ── seats from the vendor adapters (all stubbed until keyed; degrade to seed) ──
+  // ── seats from the vendor adapters (env-gated; unkeyed vendors are skipped) ──
+  // Replace-by-vendor so a re-sync REFRESHES each keyed vendor's API seats instead of
+  // duplicating them; seed and manually-imported (CSV) seats are always preserved.
   try {
     const seats = await fetchAllVendorSeats();
     if (seats.length) {
@@ -118,10 +156,15 @@ router.post('/api/licenses/sync', async (_req, res) => {
         `INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source)
          VALUES (@vendor, @product, @assignee_email, @assignee_name, @cost_monthly, @assigned_at, @source)`
       );
-      for (const s of seats) {
-        ins.run(s);
-        seatsSynced += 1;
-      }
+      // Real API data supersedes the demo seed and any prior API pull for that vendor; a
+      // manually-imported (CSV) roster for the same vendor is left in place.
+      const del = db.prepare(`DELETE FROM license_seats WHERE vendor = ? AND source != 'manual'`);
+      const byVendor = new Set(seats.map((s) => s.vendor));
+      const tx = db.transaction(() => {
+        for (const v of byVendor) del.run(v);
+        for (const s of seats) { ins.run(s); seatsSynced += 1; }
+      });
+      tx();
     }
   } catch (err) {
     console.warn('[licenses] vendor seat sync degraded:', (err as Error).message);

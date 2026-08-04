@@ -23,13 +23,95 @@ export interface SeatRecord {
 
 /* ── Microsoft 365 (Microsoft Graph: /subscribedSkus + /users assignedLicenses) ── */
 export function microsoftConfigured(): boolean {
-  return !!process.env.MS_GRAPH_TOKEN;
+  // Either a static bearer token, or an Entra app-registration client-credentials trio.
+  return !!(process.env.MS_GRAPH_TOKEN || (process.env.MS_GRAPH_TENANT && process.env.MS_GRAPH_CLIENT_ID && process.env.MS_GRAPH_CLIENT_SECRET));
 }
+
+/** Default monthly list price per SKU part number; override with MS_SKU_COST_JSON (a JSON map). */
+const MS_SKU_COST: Record<string, number> = {
+  ENTERPRISEPACK: 36, // Microsoft 365 E3
+  SPE_E3: 36,
+  ENTERPRISEPREMIUM: 57, // E5
+  SPE_E5: 57,
+  O365_BUSINESS_PREMIUM: 22,
+  O365_BUSINESS_ESSENTIALS: 6,
+  SPB: 22, // Business Premium
+  EXCHANGESTANDARD: 4,
+  POWER_BI_PRO: 10,
+  PROJECTPROFESSIONAL: 30,
+  VISIOCLIENT: 15,
+};
+function skuCost(part: string): number {
+  try {
+    const override = process.env.MS_SKU_COST_JSON ? (JSON.parse(process.env.MS_SKU_COST_JSON) as Record<string, number>) : {};
+    if (override[part] != null) return override[part];
+  } catch { /* bad JSON → defaults */ }
+  return MS_SKU_COST[part] != null ? MS_SKU_COST[part] : 20; // conservative fallback
+}
+
+/** Acquire a Graph bearer token: static token if given, else client-credentials against Entra. */
+async function graphToken(): Promise<string | null> {
+  if (process.env.MS_GRAPH_TOKEN) return process.env.MS_GRAPH_TOKEN as string;
+  const tenant = process.env.MS_GRAPH_TENANT as string;
+  const body = new URLSearchParams({
+    client_id: process.env.MS_GRAPH_CLIENT_ID as string,
+    client_secret: process.env.MS_GRAPH_CLIENT_SECRET as string,
+    scope: 'https://graph.microsoft.com/.default',
+    grant_type: 'client_credentials',
+  });
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error(`graph token ${res.status}: ${await res.text()}`);
+  const j = (await res.json()) as { access_token?: string };
+  return j.access_token || null;
+}
+
+async function graphGet(url: string, token: string): Promise<any> {
+  const res = await fetch(url, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' } });
+  if (!res.ok) throw new Error(`graph ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
 export async function fetchMicrosoftSeats(): Promise<SeatRecord[] | null> {
   if (!microsoftConfigured()) return null; // -> seeded inventory
-  // TODO: Microsoft Graph - GET /subscribedSkus for the plan cost, GET /users?$select=
-  //       assignedLicenses,userPrincipalName to map each E3/E5 seat to a person.
-  return [];
+  try {
+    const token = await graphToken();
+    if (!token) return null;
+
+    // skuId → skuPartNumber, so each assigned license maps to a friendly product + a cost.
+    const skus = (await graphGet('https://graph.microsoft.com/v1.0/subscribedSkus', token)) as { value?: any[] };
+    const skuById = new Map<string, string>();
+    for (const s of skus.value || []) if (s.skuId) skuById.set(s.skuId, s.skuPartNumber || s.skuId);
+
+    // page through all users, one seat per assigned license
+    const out: SeatRecord[] = [];
+    let url: string | null = 'https://graph.microsoft.com/v1.0/users?$select=displayName,userPrincipalName,assignedLicenses&$top=999';
+    while (url) {
+      const page: { value?: any[]; '@odata.nextLink'?: string } = await graphGet(url, token);
+      for (const u of page.value || []) {
+        for (const lic of u.assignedLicenses || []) {
+          const part = skuById.get(lic.skuId) || lic.skuId || 'Microsoft 365';
+          out.push({
+            vendor: 'microsoft',
+            product: part,
+            assignee_email: u.userPrincipalName ? String(u.userPrincipalName).toLowerCase() : null,
+            assignee_name: u.displayName || u.userPrincipalName || null,
+            cost_monthly: skuCost(part),
+            assigned_at: null,
+            source: 'graph',
+          });
+        }
+      }
+      url = page['@odata.nextLink'] || null;
+    }
+    return out;
+  } catch (err) {
+    console.warn('[licenses] microsoft graph pull failed, degrading to seed:', (err as Error).message);
+    return null;
+  }
 }
 
 /* ── Adobe (Adobe User Management API - UMAPI) ── */

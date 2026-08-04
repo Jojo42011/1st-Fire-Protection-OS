@@ -79,6 +79,34 @@ export async function fetchDirectory(): Promise<DirectoryEmployee[] | null> {
  */
 export async function fetchTerminated(): Promise<DirectoryEmployee[]> {
   if (!bambooConfigured()) return [];
-  // TODO: BambooHR reports API (POST /v1/reports/custom) for terminated status + dates.
-  return [];
+  const sub = process.env.BAMBOO_SUBDOMAIN as string;
+  const url = `https://api.bamboohr.com/api/gateway.php/${encodeURIComponent(sub)}/v1/reports/custom?format=JSON&onlyCurrent=false`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: authHeader(), accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Terminated roster (license reconciliation)',
+        fields: ['displayName', 'firstName', 'lastName', 'workEmail', 'department', 'jobTitle', 'status', 'terminationDate', 'hireDate'],
+      }),
+    });
+    if (!res.ok) throw new Error(`bamboo report ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as { employees?: any[] };
+    const rows = Array.isArray(data.employees) ? data.employees : [];
+    return rows
+      .filter((e) => String(e.status || '').toLowerCase().includes('terminated') || e.terminationDate)
+      .map((e) => ({
+        full_name: e.displayName || [e.firstName, e.lastName].filter(Boolean).join(' ') || String(e.id || 'Unknown'),
+        email: e.workEmail || null,
+        department: e.department || null,
+        title: e.jobTitle || null,
+        status: 'terminated' as const,
+        hired_at: e.hireDate || null,
+        terminated_at: e.terminationDate || null,
+        source: 'bamboo' as const,
+      }));
+  } catch (err) {
+    console.warn('[bamboo] terminated report failed, degrading:', (err as Error).message);
+    return [];
+  }
 }

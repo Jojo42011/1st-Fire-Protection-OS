@@ -45,8 +45,8 @@
     <div style="width:1px;height:52px;background:var(--divider)"></div>
     <div id="headline-side" style="flex:1;min-width:240px;font-weight:500;font-size:13px;line-height:1.65;color:var(--ink-3)">Reconciling the roster against your license seats&hellip;</div>
     <div style="text-align:right">
-      <div class="num" style="font-weight:800;font-size:20px;color:var(--green)">$18,240</div>
-      <div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">recovered so far</div>
+      <div id="hl-approved" class="num" style="font-weight:800;font-size:20px;color:var(--green)">$0</div>
+      <div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">approved to reclaim</div>
     </div>
   </div>
 
@@ -56,11 +56,29 @@
   <!-- per-vendor cards -->
   <div class="kpis" id="vendors"></div>
 
+  <!-- import seats: universal CSV / admin-export path (works for all six vendors, no keys) -->
+  <div class="card" style="padding:16px 18px">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:11px">
+      <span class="sect-h" style="padding:0">Import seats</span>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">Paste a CSV export from any vendor console — flexible columns like <span class="key">email</span>, <span class="key">name</span>, <span class="key">product</span>, <span class="key">cost_monthly</span>. Re-importing replaces that vendor's manual seats.</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+      <select id="imp-vendor" class="btn" style="min-width:150px"></select>
+      <textarea id="imp-csv" placeholder="email,name,product,cost_monthly&#10;jdoe@1stfp.com,Jane Doe,Bluebeam Revu,30" style="flex:1;min-width:260px;min-height:78px;font-family:monospace;font-size:12px;padding:10px 12px;border:1px solid var(--divider);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical"></textarea>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input type="file" id="imp-file" accept=".csv,text/csv" style="display:none" />
+        <button class="btn" onclick="document.getElementById('imp-file').click()">Choose file…</button>
+        <button class="btn-primary" id="imp-go" onclick="doImport(this)">Import</button>
+      </div>
+    </div>
+    <div id="imp-msg" style="font-weight:500;font-size:12px;color:var(--muted);margin-top:9px">&nbsp;</div>
+  </div>
+
   <!-- the featured design table: Seats to reclaim (fed by d.reclaimable) -->
   <div class="card card-clip">
     <div class="card-head">
       <h2>Seats to reclaim</h2>
-      <span style="font-weight:500;font-size:12px;color:var(--muted)">27 found</span>
+      <span id="reclaim-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
       <span style="flex:1"></span>
       <span class="btn-tint" style="cursor:default">Flag all terminated</span>
     </div>
@@ -87,7 +105,7 @@
         <div id="queue" class="stack"></div>
       </div>
       <div class="card conn" style="padding:14px 16px;border-left:3px solid var(--indigo)">
-        <b>Connect BambooHR to go live:</b> add <span class="key">BAMBOO_SUBDOMAIN</span> + <span class="key">BAMBOO_API_KEY</span> and Sync to pull your real active roster. Vendor seat lists (Adobe, Bluebeam, AutoCAD, HydraCAD, HFSS, Microsoft 365) load from your inventory today.
+        <b>Go live:</b> <span class="key">BAMBOO_*</span> pulls your real active + terminated roster; <span class="key">MS_GRAPH_*</span> pulls Microsoft 365 seats via Graph. Adobe (UMAPI) and Autodesk have APIs too. <b>Bluebeam, HydraCAD and HFSS have no public API</b> — import those by CSV above. Every vendor works by CSV today.
       </div>
     </div>
   </div>
@@ -103,6 +121,21 @@ function load(){
   fetch('/api/licenses').then(function(r){return r.json();}).then(function(d){
     var s=d.summary, t=d.totals;
     if(d.bamboo&&d.bamboo.connected){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>BambooHR · Connected';}
+
+    // populate the import vendor picker once, from the canonical vendor list
+    var sel=document.getElementById('imp-vendor');
+    if(sel&&!sel.options.length&&(d.vendors||[]).length){
+      sel.innerHTML=(d.vendors||[]).map(function(v){return '<option value="'+esc(v.key)+'">'+esc(v.label)+'</option>';}).join('');
+    }
+
+    // per-vendor connection state: live API key present, CSV-imported, or seed/demo
+    var LIVE={}; (d.liveVendors||[]).forEach(function(k){LIVE[k]=1;});
+    var MANUAL={}; (d.seats||[]).forEach(function(x){if(x.source==='manual')MANUAL[x.vendor]=1;});
+
+    // approved-to-reclaim total (real; replaces the old hardcoded "recovered" figure)
+    var approvedYr=(d.reclaims||[]).filter(function(x){return x.status==='approved';})
+      .reduce(function(a,x){return a+(x.savings_monthly||0)*12;},0);
+    document.getElementById('hl-approved').textContent=money(approvedYr);
 
     document.getElementById('headline-savings').innerHTML=money(s.savingsAnnual)+'<small>Reclaimable per year</small>';
     document.getElementById('headline-side').innerHTML=
@@ -121,9 +154,10 @@ function load(){
     document.getElementById('vendors').innerHTML=(d.byVendor||[]).map(function(v){
       var hit=v.reclaimable>0;
       var pct=v.seats?Math.round(v.reclaimable/v.seats*100):0;
+      var src=LIVE[v.vendor]?['live','green']:(MANUAL[v.vendor]?['csv','indigo']:['seed','gray']);
       return '<div class="card" style="padding:16px 18px">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'+
-          '<span style="font-weight:700;font-size:12.5px;color:var(--ink)">'+esc(v.label)+'</span>'+
+          '<span style="font-weight:700;font-size:12.5px;color:var(--ink)">'+esc(v.label)+' <span class="pill '+src[1]+'" style="font-size:9px;padding:2px 6px;vertical-align:middle">'+src[0]+'</span></span>'+
           '<span class="pill '+(hit?'money':'gray')+'">'+(hit?(v.reclaimable+' dead'):'clean')+'</span>'+
         '</div>'+
         '<div class="num" style="font-weight:800;font-size:22px;margin-top:11px;color:'+(hit?'var(--money)':'var(--ink)')+'">'+money(v.savings_annual)+'</div>'+
@@ -137,6 +171,7 @@ function load(){
     });});
 
     var rec=d.reclaimable||[];
+    document.getElementById('reclaim-count').textContent=rec.length+' found';
     document.getElementById('reclaim-rows').innerHTML= rec.length? rec.map(function(x){
       var terminated = x.reason_kind==='terminated';
       var left = terminated ? (x.terminated_at||'terminated') : 'off roster';
@@ -182,6 +217,26 @@ function load(){
 }
 function flag(seatId,btn){btn.disabled=true;btn.textContent='Drafting…';fetch('/api/licenses/'+seatId+'/flag',{method:'POST'}).then(function(r){return r.json();}).then(load);}
 function approve(id,btn){btn.disabled=true;btn.textContent='Approving…';fetch('/api/licenses/reclaims/'+id+'/approve',{method:'POST'}).then(function(r){return r.json();}).then(load);}
+
+function doImport(btn){
+  var vendor=document.getElementById('imp-vendor').value;
+  var csv=document.getElementById('imp-csv').value;
+  var msg=document.getElementById('imp-msg');
+  if(!csv.trim()){msg.style.color='var(--money)';msg.textContent='Paste CSV or choose a file first.';return;}
+  btn.disabled=true;btn.textContent='Importing…';
+  fetch('/api/licenses/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({vendor:vendor,csv:csv})})
+    .then(function(r){return r.json();}).then(function(res){
+      btn.disabled=false;btn.textContent='Import';
+      if(res.ok){msg.style.color='var(--green)';msg.textContent='Imported '+res.imported+' '+vendor+' seat'+(res.imported===1?'':'s')+'.';document.getElementById('imp-csv').value='';load();}
+      else{msg.style.color='var(--money)';msg.textContent=res.error||'Import failed.';}
+    }).catch(function(){btn.disabled=false;btn.textContent='Import';msg.style.color='var(--money)';msg.textContent='Import failed.';});
+}
+document.getElementById('imp-file').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){document.getElementById('imp-csv').value=rd.result;var m=document.getElementById('imp-msg');m.style.color='var(--muted)';m.textContent=f.name+' loaded — pick the vendor and Import.';};
+  rd.readAsText(f);
+});
 load();
 </script>
 </body>
