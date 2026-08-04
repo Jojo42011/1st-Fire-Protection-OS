@@ -43,6 +43,16 @@ router.post('/api/reviews/mode', (req, res) => {
   res.json({ ok: true, mode });
 });
 
+// Send a one-off test email to confirm Graph Mail.Send + the access policy work end to end.
+router.post('/api/reviews/test-send', async (req, res) => {
+  const { mailConfigured, mailFrom, sendMail } = await import('../services/msGraphMail');
+  if (!mailConfigured()) return res.status(400).json({ ok: false, error: 'mail not configured (need MS_MAIL_FROM + Mail.Send)' });
+  const to = String(req.body?.to || mailFrom() || '').trim();
+  if (!to) return res.status(400).json({ ok: false, error: 'no recipient' });
+  const r = await sendMail(to, 'Test — 1st FP OS review sender', '<p>This is a test from the 1st FP OS review-request sender. If you got this, sending works.</p>');
+  res.json(r.ok ? { ok: true, to } : { ok: false, error: r.error });
+});
+
 // Backfill completed jobs (last ~90 days) so offices + contacts populate, then sweep. One-time
 // bootstrap; after this the scheduled sync keeps completed jobs current incrementally.
 router.post('/api/reviews/backfill', async (_req, res) => {
