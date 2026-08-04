@@ -23,8 +23,8 @@ export const COMPANY = {
   phone: '210-377-3473', // 210-377-FIRE (San Antonio primary)
   phonePretty: '210-377-FIRE',
   emergency: '844-701-3964',
-  email: 'dispatch@1stfpcompanies.com',
-  site: '1stfpcompanies.com',
+  email: 'dispatch@1stfpservices.com',
+  site: '1stfpservices.com',
   hours: 'Mon–Fri 7:00a–5:00p CT · 24-hr emergency & monitoring',
   certs: ['SCTRCA', 'MBE', 'SBE', 'HUB', 'NFPA', 'NAFED'],
   services: [
