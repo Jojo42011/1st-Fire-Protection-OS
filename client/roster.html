@@ -65,6 +65,7 @@ function isBuilding(s){return ['building','in_progress','draft','proposed','pend
 
 fetch('/api/roster').then(function(r){return r.json();}).then(function(d){
   var agents=(d.agents||[]);
+  var LIVE=d.stats||{}; /* server-computed real stats override the shell figures */
   var building=agents.filter(function(a){return isBuilding(a.status);}).length;
   var built=agents.length-building;
   document.getElementById('strip').innerHTML=
@@ -79,7 +80,7 @@ fetch('/api/roster').then(function(r){return r.json();}).then(function(d){
     var t=TINT[a.key]||FALLBACK_TINTS[i%FALLBACK_TINTS.length];
     var b=isBuilding(a.status);
     var st=b?['Building','var(--indigo)','var(--indigo-bg-2)']:['Live','var(--green)','var(--green-bg)'];
-    var stat=STAT[a.key]||(b?['Building','']:['Active','']);
+    var stat=LIVE[a.key]||STAT[a.key]||(b?['Building','']:['Active','']);
     var openTab=OPEN[a.key]||'operator';
     return '<div class="tm-card">'+
       '<div class="hd"><span class="mono34" style="background:'+t[0]+';color:'+t[1]+'">'+esc(initials(a.name))+'</span>'+

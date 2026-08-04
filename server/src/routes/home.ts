@@ -103,10 +103,10 @@ router.get('/api/home', (_req, res) => {
     pendingLine,
     cashAtRisk: { amount: risk90, accounts: risk90Count, pct: outstanding > 0 ? Math.round((risk90 / outstanding) * 100) : 0 },
     kpis: {
-      money: { value: outstanding, sub: `${openCount} open · DSO 47 days` },
+      money: { value: outstanding, sub: `${openCount} open invoice${openCount === 1 ? '' : 's'}` },
       phones: { value: cm.callsToday, sub: `${cm.transferred} routed · ${cm.leadsCaptured} new leads` },
       reputation: { value: avgStars, sub: `${reviewCount} reviews · +${reviewsMonth} this month` },
-      spend: { value: reclaimYr, sub: `${reclaimSeats} seats · $18,240 recovered` },
+      spend: { value: reclaimYr, sub: `${reclaimSeats} seat${reclaimSeats === 1 ? '' : 's'} to reclaim` },
     },
     topInvoices,
     approvals,

@@ -53,11 +53,12 @@ fetch('/api/closer').then(function(r){return r.json();}).then(function(d){DATA=d
 function render(){
   var d=DATA, s=d.summary;
   document.getElementById('stats').innerHTML=
-    fig('Value at risk', s.valueAtRisk, 'var(--ink)')+
+    fig(d.live?'Open value in play':'Value at risk', s.valueAtRisk, 'var(--ink)')+
     fig('Stalled past 7 days', s.stalled, 'var(--money)')+
     fig('Win rate', s.winRate, 'var(--green)')+
-    fig('Avg days to close', s.avgDays, 'var(--ink)')+
-    '<p>Every open quote gets followed on a cadence until it books or gets a hard no: <b style="color:var(--ink)">day 1 a nudge, day 3 the value, day 7 last call</b>. Then it’s marked stalled and you decide.</p>';
+    fig(d.live?'Avg days open':'Avg days to close', s.avgDays, 'var(--ink)')+
+    (d.live?'<p><b style="color:var(--ink)">Live from ServiceTrade quotes.</b> Every open quote gets followed on a cadence until it books or gets a hard no: <b style="color:var(--ink)">day 1 a nudge, day 3 the value, day 7 last call</b>.</p>'
+           :'<p>Every open quote gets followed on a cadence until it books or gets a hard no: <b style="color:var(--ink)">day 1 a nudge, day 3 the value, day 7 last call</b>. Then it’s marked stalled and you decide.</p>');
 
   var chips=[['needs','Needs a touch',s.needsTouch],['cadence','On cadence',''],['stalled','Stalled','']];
   var vis=d.quotes.filter(function(q){return filter==='stalled'?grp(q.tier)==='stalled':grp(q.tier)===filter;});

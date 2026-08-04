@@ -139,8 +139,127 @@ const REASONS: { key: string; label: string; tone: string }[] = [
   { key: 'none', label: 'No reason given', tone: 'var(--muted)' },
 ];
 
+// Raw ServiceTrade quote statuses, bucketed the same way crm.ts mapQuoteStage does.
+// Pulled quotes store the RAW status in quotes.stage (not the seed vocabulary), so the
+// Closer has to read them through the same lens the pipeline board does.
+const ST_OPEN = ['draft', 'submitted', 'pending', 'reviewed', 'contingent'];
+const ST_WON = ['accepted', 'approved', 'won'];
+const ST_LOST = ['rejected', 'lost', 'canceled', 'cancelled', 'expired', 'void'];
+const sqlList = (arr: string[]) => arr.map((s) => `'${s}'`).join(',');
+
+/** Shape one open quote into the row the Closer screen renders (tier, next move, cta). */
+function shapeQuoteRow(q: QuoteRow & { customer: string | null }) {
+  const days = daysSince(q.sent_at);
+  const touches = touchCount(q.id);
+  const tier = tierFor(days, touches);
+  const meta = TIER_META[tier];
+  const nm = NEXT_MOVE[tier];
+  return {
+    id: q.id,
+    customer: q.customer || q.title || 'Prospect',
+    work: q.title || '',
+    value: money(q.amount_cents),
+    age: days == null ? 'not sent' : `day ${days}`,
+    ageTone: tier === 'last_call' || tier === 'stalled' ? 'var(--money)' : 'var(--muted)',
+    tier: meta.label,
+    tierPill: meta.pill,
+    touches,
+    next: nm.next,
+    cta: nm.cta,
+    ctaDark: tier === 'last_call',
+  };
+}
+
+/** Real Closer summary computed off pulled ServiceTrade quotes. */
+function realPipelineSummary() {
+  const db = getDb();
+  const scalar = (sql: string) => (db.prepare(sql).get() as { v: number }).v || 0;
+
+  // headline win rate is real: decided = won + lost across all pulled quotes
+  const won = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_WON)})`);
+  const lost = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_LOST)})`);
+  const decided = won + lost;
+  const winRate = decided > 0 ? Math.round((won / decided) * 100) + '%' : '—';
+
+  // open aggregates over the whole open book
+  const openCount = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})`);
+  const valueInPlay = scalar(`SELECT COALESCE(SUM(amount_cents), 0) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})`);
+
+  // the open book itself, oldest-sent first (nulls last), capped so the screen stays snappy
+  const rows = db
+    .prepare(
+      `SELECT q.id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
+         FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
+        WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})
+        ORDER BY (q.sent_at IS NULL), q.sent_at ASC
+        LIMIT 80`
+    )
+    .all() as (QuoteRow & { customer: string | null })[];
+
+  const { stalledAfterDays } = TRADE_CONFIG.closer;
+  let stalled = 0;
+  let agedSum = 0;
+  let agedN = 0;
+  for (const q of rows) {
+    const d = daysSince(q.sent_at);
+    if (d != null) {
+      agedSum += d;
+      agedN++;
+      if (d >= stalledAfterDays) stalled++;
+    }
+  }
+  const avgDays = agedN > 0 ? String(Math.round(agedSum / agedN)) : '—';
+
+  const quotes = rows.map(shapeQuoteRow);
+  const needsGrp = new Set(['awaiting price', 'last call', 'stalled']);
+  const needsTouch = quotes.filter((q) => needsGrp.has(q.tier)).length;
+
+  // active draft: the highest-value quote already in last-call/stalled tier
+  const urgent = rows
+    .filter((q) => {
+      const t = tierFor(daysSince(q.sent_at), touchCount(q.id));
+      return t === 'last_call' || t === 'stalled';
+    })
+    .sort((a, b) => (b.amount_cents || 0) - (a.amount_cents || 0))[0];
+  let activeDraft = null;
+  if (urgent) {
+    const value = money(urgent.amount_cents);
+    const customer = urgent.customer || urgent.title || 'the customer';
+    activeDraft = {
+      quoteId: urgent.id,
+      title: `${customer} — ${urgent.title || 'quoted work'}`,
+      value: `${value} on the line`,
+      tier: 'last call',
+      body: templateFollowup('last_call', customer, urgent.title || 'the quoted work', value),
+    };
+  }
+
+  // why we lose — real counts from lost_reasons (empty until outcomes get logged: honest zeros)
+  const counts: Record<string, number> = {};
+  (db.prepare(`SELECT reason, COUNT(*) AS c FROM lost_reasons GROUP BY reason`).all() as { reason: string; c: number }[]).forEach((r) => {
+    counts[r.reason] = r.c;
+  });
+  const totalLost = Object.values(counts).reduce((s, n) => s + n, 0) || 1;
+  const lostReasons = REASONS.map((r) => {
+    const count = counts[r.key] || 0;
+    return { label: r.label, tone: r.tone, count, pct: Math.round((count / totalLost) * 100) + '%' };
+  });
+
+  return {
+    summary: { valueAtRisk: money(valueInPlay), stalled, winRate, avgDays, openCount, needsTouch },
+    quotes,
+    activeDraft,
+    lostReasons,
+    lostFooter: 'Win rate and open value are live from ServiceTrade; loss reasons fill in as you mark outcomes.',
+    live: true,
+  };
+}
+
 export function getPipelineSummary() {
   const db = getDb();
+  const realN = (db.prepare(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade'`).get() as { v: number }).v || 0;
+  if (realN > 0) return realPipelineSummary();
+
   const rows = db
     .prepare(
       `SELECT q.id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
