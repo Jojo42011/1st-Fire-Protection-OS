@@ -136,11 +136,18 @@ router.post('/api/licenses/sync', async (_req, res) => {
            status=excluded.status, hired_at=excluded.hired_at, terminated_at=excluded.terminated_at,
            source='bamboo'`
       );
-      for (const e of [...directory, ...terminated]) {
-        if (!e.email) continue; // email is the reconciliation key
-        upsert.run(e);
-        employeesSynced += 1;
-      }
+      // Clean rebuild of the BambooHR-sourced roster each sync, so a corrected pull fully
+      // replaces any earlier rows (no stale statuses linger). Directory rows are active;
+      // terminated rows overwrite by email. Seeded demo employees are left untouched.
+      const rebuild = db.transaction(() => {
+        db.prepare(`DELETE FROM hr_employees WHERE source = 'bamboo'`).run();
+        for (const e of [...directory, ...terminated]) {
+          if (!e.email) continue; // email is the reconciliation key
+          upsert.run(e);
+          employeesSynced += 1;
+        }
+      });
+      rebuild();
     }
   } catch (err) {
     console.warn('[licenses] bamboo sync degraded:', (err as Error).message);

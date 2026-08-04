@@ -93,16 +93,23 @@ export async function fetchTerminated(): Promise<DirectoryEmployee[]> {
     if (!res.ok) throw new Error(`bamboo report ${res.status}: ${await res.text()}`);
     const data = (await res.json()) as { employees?: any[] };
     const rows = Array.isArray(data.employees) ? data.employees : [];
+    // BambooHR marks former employees status='Inactive' (not 'Terminated'), and returns a
+    // placeholder terminationDate of '0000-00-00' for ACTIVE staff — so filter on status, not
+    // on the presence of a date, and null out the placeholder.
+    const cleanDate = (d: string | null | undefined): string | null => (d && d !== '0000-00-00' ? d : null);
     return rows
-      .filter((e) => String(e.status || '').toLowerCase().includes('terminated') || e.terminationDate)
+      .filter((e) => {
+        const s = String(e.status || '').toLowerCase();
+        return s === 'inactive' || s === 'terminated';
+      })
       .map((e) => ({
         full_name: e.displayName || [e.firstName, e.lastName].filter(Boolean).join(' ') || String(e.id || 'Unknown'),
         email: e.workEmail || null,
         department: e.department || null,
         title: e.jobTitle || null,
         status: 'terminated' as const,
-        hired_at: e.hireDate || null,
-        terminated_at: e.terminationDate || null,
+        hired_at: cleanDate(e.hireDate),
+        terminated_at: cleanDate(e.terminationDate),
         source: 'bamboo' as const,
       }));
   } catch (err) {
