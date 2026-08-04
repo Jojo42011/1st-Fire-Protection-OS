@@ -100,6 +100,7 @@ app.get('/operator', page('operator.html'));
 app.get('/calls', page('calls.html'));
 app.get('/invoices', page('invoices.html'));
 app.get('/reviews', page('reviews.html'));
+app.get('/review-requests', page('review-requests.html'));
 app.get('/executive', page('executive.html'));
 app.get('/harness', page('harness.html'));
 app.get('/roster', page('roster.html'));

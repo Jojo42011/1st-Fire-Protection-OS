@@ -153,6 +153,11 @@
           <span class="grow">Reputation</span>
           <span class="count" id="c-reviews"></span>
         </button>
+        <button class="nav-item" data-key="review-requests">
+          <span class="sq" style="background:var(--amber)"></span>
+          <span class="grow">Review requests</span>
+          <span class="count" id="c-review-requests"></span>
+        </button>
         <button class="nav-item" data-key="spend">
           <span class="sq" style="background:var(--indigo)"></span>
           <span class="grow">Wasted spend</span>
@@ -283,6 +288,7 @@ var SCREENS = {
   phones:   { src:'/calls',                        title:'Phones',            sub:'210-377-FIRE · answered 24/7' },
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews',                      title:'Reputation',        sub:'Turns finished jobs into reviews, drafts every reply' },
+  'review-requests':{ src:'/review-requests',      title:'Review requests',   sub:'Completed jobs route a Google review request to the servicing office' },
   spend:    { src:'/licenses',                     title:'Wasted spend',      sub:'Finds the seats you pay for but nobody uses' },
   estimator:{ src:'/estimates',                    title:'Estimates',         sub:'Photos in, a priced quote out — demo, no ServiceTrade source yet' },
   closer:   { src:'/closer',                       title:'Follow-ups',        sub:'Every open ServiceTrade quote chased on a cadence until it books or dies' },
@@ -396,6 +402,7 @@ function refreshCounts(){
   fetch('/api/nav-counts').then(function(r){return r.json();}).then(function(c){
     function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
     set('c-phones',c.phones||0); set('c-money',c.money||0); set('c-reviews',c.reviews||0);
+    set('c-review-requests',c.reviewRequests||'');
     set('c-spend',c.spend||0); set('c-accounts',c.accounts||''); set('c-pipeline',c.pipeline||'');
     set('c-sites',c.sites||''); set('c-jobs',c.jobs||''); set('c-quotes',c.quotes||'');
     var badge=document.getElementById('c-approve');

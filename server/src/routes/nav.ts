@@ -40,6 +40,7 @@ router.get('/api/nav-counts', (_req, res) => {
     phones: num(`SELECT COUNT(*) AS v FROM calls WHERE date(started_at) = date('now')`),
     money: num(`SELECT COUNT(*) AS v FROM invoices WHERE status != 'paid'`),
     reviews: num(`SELECT COUNT(*) AS v FROM reviews WHERE reply_status IN ('none','draft') AND stars <= 3`),
+    reviewRequests: (() => { const n = num(`SELECT COUNT(*) AS v FROM review_requests WHERE source = 'servicetrade' AND status = 'held'`); return n > 0 ? String(n) : ''; })(),
     spend: num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status = 'proposed'`),
     accounts: real ? loc(acctCount) : '412',
     sites: real ? loc(num(`SELECT COUNT(*) AS v FROM sites WHERE source = 'servicetrade'`)) : '',

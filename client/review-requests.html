@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Review requests · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .rr-note{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;
+    padding:10px 14px;margin-bottom:12px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
+  .rr-note svg{width:15px;height:15px;flex:none;margin-top:1px}
+  .rr-in{width:100%;font-size:12px;padding:7px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink)}
+  .rr-msg{font-weight:500;font-size:12px;line-height:1.5;color:var(--ink-3);white-space:pre-wrap;max-width:60ch}
+  .sect-h{font-weight:800;font-size:14px;color:var(--ink);padding:2px 2px 10px}
+  .pill.hold{color:var(--amber-ink);background:var(--amber-bg)}
+  .pill.auto{color:var(--green);background:var(--green-bg)}
+  .rr-mode{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div>
+      <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Reputation · ServiceTrade × Google</p>
+      <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Review requests</h1>
+      <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:74ch">When a job completes in ServiceTrade, a request goes to that customer with the Google link for the <b>office that serviced them</b>, so the review lands on the right profile. Email via Microsoft 365. Nothing sends until you approve the first batch.</p>
+    </div>
+    <div class="rr-mode">
+      <span id="mail-badge" class="badge demo"><span class="d"></span>Mail</span>
+      <span id="mode-badge" class="pill hold">hold</span>
+      <button class="btn" id="mode-btn" onclick="toggleMode()">Switch to auto-send</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis" style="margin-top:14px"></div>
+
+  <!-- office → Google link mapping -->
+  <div class="card card-clip" style="margin-top:6px">
+    <div class="card-head"><h2>Offices → Google review link</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">each ServiceTrade office routes to its own profile</span></div>
+    <table>
+      <thead><tr><th>Office</th><th class="right">Completed</th><th class="right">Emails</th><th>Google review link</th><th></th><th></th></tr></thead>
+      <tbody id="office-rows"></tbody>
+    </table>
+  </div>
+
+  <!-- held batch to review -->
+  <div class="card card-clip" style="margin-top:14px">
+    <div class="card-head">
+      <h2>Held for your review</h2>
+      <span id="held-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="runSweep(this)">Refresh from ServiceTrade</button>
+      <button class="btn-primary" id="sendall" onclick="sendAll(this)">Send all held</button>
+    </div>
+    <table>
+      <thead><tr><th>Customer</th><th>Office</th><th>Send to</th><th>Message</th><th></th></tr></thead>
+      <tbody id="held-rows"></tbody>
+    </table>
+  </div>
+
+  <!-- sent log -->
+  <div style="margin-top:16px">
+    <div class="sect-h">Recently sent</div>
+    <div id="sent" class="card card-clip"><table><tbody id="sent-rows"></tbody></table></div>
+  </div>
+</div>
+
+<script>
+function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function kpi(l,v,s,hot){return '<div class="kpi"><div class="top"><div class="lab">'+l+'</div></div><div class="val'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+esc(s)+'</div></div>';}
+var MODE='hold';
+
+function load(){
+  Promise.all([
+    fetch('/api/reviews/targets').then(function(r){return r.json();}),
+    fetch('/api/reviews/queue').then(function(r){return r.json();})
+  ]).then(function(res){
+    var t=res[0], q=res[1], s=t.summary;
+    MODE=s.mode;
+
+    var mb=document.getElementById('mail-badge');
+    if(s.mailReady){mb.className='badge live';mb.innerHTML='<span class="d"></span>Microsoft 365 · ready';}
+    else{mb.className='badge demo';mb.innerHTML='<span class="d"></span>Mail not configured';}
+
+    var modeBadge=document.getElementById('mode-badge');
+    modeBadge.className='pill '+(MODE==='auto'?'auto':'hold');
+    modeBadge.textContent=MODE==='auto'?'auto-send':'hold';
+    document.getElementById('mode-btn').textContent=MODE==='auto'?'Switch to hold':'Switch to auto-send';
+
+    document.getElementById('kpis').innerHTML=[
+      kpi('Offices mapped',s.officesMapped+' / '+s.officesTotal,'ServiceTrade offices',false),
+      kpi('Eligible jobs',s.eligible,'completed, with a contact',false),
+      kpi('Held for review',s.held,'awaiting your yes',s.held>0),
+      kpi('Sent',s.sent,'requests delivered',false)
+    ].join('');
+
+    // offices
+    document.getElementById('office-rows').innerHTML=(t.offices||[]).map(function(o){
+      var mapped=o.mapped;
+      var link=o.review_url||'';
+      return '<tr>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(o.office_name||o.office_id)+
+          (mapped?' <span class="pill green" style="font-size:9px;padding:2px 6px">mapped</span>':' <span class="pill gray" style="font-size:9px;padding:2px 6px">unmapped</span>')+'</td>'+
+        '<td class="right num">'+o.completed+'</td>'+
+        '<td class="right num" style="color:'+(o.with_contact?'var(--ink)':'var(--faint)')+'">'+o.with_contact+'</td>'+
+        '<td><input class="rr-in" id="lnk-'+o.office_id+'" value="'+esc(link)+'" placeholder="https://g.page/r/…/review" /></td>'+
+        '<td><button class="btn btn-sm" onclick="saveLink(\''+o.office_id+'\',this)">Save</button></td>'+
+        '<td class="right">'+(mapped?'<button class="btn btn-sm" onclick="toggleActive(\''+o.office_id+'\','+(o.active?0:1)+',this)">'+(o.active?'Pause':'Resume')+'</button>':'')+'</td>'+
+      '</tr>';
+    }).join('');
+
+    // held queue
+    var held=(q.requests||[]).filter(function(x){return x.status==='held'||x.status==='approved';});
+    document.getElementById('held-count').textContent=held.length+' held';
+    document.getElementById('sendall').style.display=(held.length&&s.mailReady)?'':'none';
+    document.getElementById('held-rows').innerHTML= held.length? held.map(function(x){
+      return '<tr>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(x.customer||'')+(x.error?'<div style="font-weight:500;font-size:11px;color:var(--money);margin-top:2px">'+esc(x.error)+'</div>':'')+'</td>'+
+        '<td>'+esc(x.office_name||'')+'</td>'+
+        '<td class="mono" style="font-size:11.5px;color:var(--ink-3)">'+esc(x.recipient_email||'')+'</td>'+
+        '<td><div class="rr-msg">'+esc(x.body||'')+'</div></td>'+
+        '<td class="right" style="white-space:nowrap"><button class="btn-primary btn-sm" onclick="sendOne('+x.id+',this)">Send</button></td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="5" class="empty">Nothing held. Map offices above and click “Refresh from ServiceTrade,” or you’re on auto-send.</td></tr>';
+
+    // sent
+    var sent=(q.requests||[]).filter(function(x){return x.status==='sent';}).slice(0,25);
+    document.getElementById('sent-rows').innerHTML= sent.length? sent.map(function(x){
+      return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(x.customer||'')+'</td><td>'+esc(x.office_name||'')+'</td>'+
+        '<td class="mono" style="font-size:11px;color:var(--faint)">'+esc(x.recipient_email||'')+'</td>'+
+        '<td class="right"><span class="pill green">sent</span></td></tr>';
+    }).join('') : '<tr><td class="empty" colspan="4">No requests sent yet.</td></tr>';
+  });
+}
+
+function saveLink(officeId,btn){
+  var v=document.getElementById('lnk-'+officeId).value.trim();
+  if(!v){alert('Paste a Google review link first.');return;}
+  btn.disabled=true;btn.textContent='…';
+  fetch('/api/reviews/targets',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({office_id:officeId,link:v})})
+    .then(function(r){return r.json();}).then(function(){load();});
+}
+function toggleActive(officeId,active,btn){
+  btn.disabled=true;
+  fetch('/api/reviews/targets/'+officeId+'/active',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({active:!!active})})
+    .then(function(){load();});
+}
+function toggleMode(){
+  var next=MODE==='auto'?'hold':'auto';
+  if(next==='auto'&&!confirm('Switch to auto-send? New completed jobs will email the customer automatically (one per customer / 90 days).'))return;
+  fetch('/api/reviews/mode',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:next})}).then(function(){load();});
+}
+function runSweep(btn){btn.disabled=true;btn.textContent='Refreshing…';fetch('/api/reviews/backfill',{method:'POST'}).then(function(r){return r.json();}).then(function(){btn.disabled=false;btn.textContent='Refresh from ServiceTrade';load();});}
+function sendOne(id,btn){btn.disabled=true;btn.textContent='Sending…';fetch('/api/reviews/queue/'+id+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(res){if(!res.ok){btn.disabled=false;btn.textContent='Send';}load();});}
+function sendAll(btn){
+  btn.disabled=true;btn.textContent='Sending…';
+  fetch('/api/reviews/queue').then(function(r){return r.json();}).then(function(q){
+    var held=(q.requests||[]).filter(function(x){return x.status==='held'||x.status==='approved';});
+    var i=0;
+    function next(){ if(i>=held.length){btn.disabled=false;btn.textContent='Send all held';load();return;}
+      fetch('/api/reviews/queue/'+held[i].id+'/send',{method:'POST'}).then(function(){i++;next();}); }
+    next();
+  });
+}
+load();
+</script>
+</body>
+</html>
