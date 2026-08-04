@@ -159,7 +159,8 @@ export function hasRealQuotes(): boolean {
 interface StJob {
   id: number; number?: number | null; name?: string; type?: string; status?: string; displayStatus?: string;
   serviceLine?: string; scheduledDate?: number | null; completedOn?: number | null;
-  customer?: { id?: number }; location?: { id?: number }; updated?: number;
+  customer?: { id?: number }; updated?: number;
+  location?: { id?: number; email?: string; primaryContact?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string } } | null;
   assignedOffice?: { id?: number; name?: string; phoneNumber?: string } | null;
   primaryContact?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string } | null;
 }
@@ -252,8 +253,14 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
         if (j?.id == null || j.completedOn == null) continue; // completed jobs only
         const a = idOf(j.customer) ? (acctBy.get(idOf(j.customer)) as { id: number } | undefined) : undefined;
         const s = idOf(j.location) ? (siteBy.get(idOf(j.location)) as { id: number } | undefined) : undefined;
+        // Best available customer email: job primary contact → site facility contact → site email.
         const pc = j.primaryContact || null;
-        const cname = pc ? [pc.firstName, pc.lastName].filter(Boolean).join(' ') || null : null;
+        const lc = j.location?.primaryContact || null;
+        const fullName = (c: any) => (c ? [c.firstName, c.lastName].filter(Boolean).join(' ') || null : null);
+        let cEmail: string | null = null, cName: string | null = null, cPhone: string | null = null;
+        if (pc?.email) { cEmail = pc.email; cName = fullName(pc); cPhone = pc.mobile || pc.phone || null; }
+        else if (lc?.email) { cEmail = lc.email; cName = fullName(lc); cPhone = lc.mobile || lc.phone || null; }
+        else if (j.location?.email) { cEmail = j.location.email; cName = fullName(pc) || fullName(lc); cPhone = pc?.mobile || pc?.phone || null; }
         upsert.run({
           st_id: String(j.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
           number: j.number != null ? String(j.number) : j.name || null,
@@ -262,9 +269,9 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
           office_id: j.assignedOffice && j.assignedOffice.id != null ? String(j.assignedOffice.id) : null,
           office_name: j.assignedOffice ? j.assignedOffice.name || null : null,
           office_phone: j.assignedOffice ? j.assignedOffice.phoneNumber || null : null,
-          contact_name: cname,
-          contact_email: pc && pc.email ? String(pc.email).toLowerCase() : null,
-          contact_phone: pc ? pc.mobile || pc.phone || null : null,
+          contact_name: cName,
+          contact_email: cEmail ? String(cEmail).toLowerCase() : null,
+          contact_phone: cPhone,
         });
         pulled++;
       }
