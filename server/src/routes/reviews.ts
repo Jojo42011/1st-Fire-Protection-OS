@@ -61,13 +61,16 @@ router.post('/api/reviews/regenerate', async (_req, res) => {
   }
 });
 
-// Send a one-off test email to confirm Graph Mail.Send + the access policy work end to end.
+// Send the exact branded customer email as a preview (default) to confirm how it looks + that
+// Graph Mail.Send works. Pass {to} to choose a recipient (defaults to the from-mailbox).
 router.post('/api/reviews/test-send', async (req, res) => {
   const { mailConfigured, mailFrom, sendMail } = await import('../services/msGraphMail');
+  const { renderSample } = await import('../services/reviewRequests');
   if (!mailConfigured()) return res.status(400).json({ ok: false, error: 'mail not configured (need MS_MAIL_FROM + Mail.Send)' });
   const to = String(req.body?.to || mailFrom() || '').trim();
   if (!to) return res.status(400).json({ ok: false, error: 'no recipient' });
-  const r = await sendMail(to, 'Test — 1st FP OS review sender', '<p>This is a test from the 1st FP OS review-request sender. If you got this, sending works.</p>');
+  const sample = renderSample(req.body?.office_name);
+  const r = await sendMail(to, `[PREVIEW] ${sample.subject}`, sample.html, sample.fromName);
   res.json(r.ok ? { ok: true, to } : { ok: false, error: r.error });
 });
 

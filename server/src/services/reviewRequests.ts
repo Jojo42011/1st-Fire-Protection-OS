@@ -213,6 +213,16 @@ export async function queueReviewRequest(jobId: number, opts: { forceSend?: bool
   return { ok: true, status, error: error || undefined };
 }
 
+/** Render a sample of the exact customer email (for a test send / preview). */
+export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
+  return buildMessage({
+    id: 0, number: null, kind: null, completed_at: null,
+    office_id: null, office_name: officeName || '1st FP Houston LLC',
+    contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
+    account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
+  });
+}
+
 /** Sweep newly completed jobs into requests. Returns per-status counts. Bounded per run. */
 export async function runReviewSweep(max = 200): Promise<{ queued: number; sent: number; held: number; skipped: number }> {
   const jobs = pendingReviewJobs(max);
