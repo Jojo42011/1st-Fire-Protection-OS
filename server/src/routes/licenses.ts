@@ -115,6 +115,19 @@ router.post('/api/licenses/import', (req, res) => {
 });
 
 /**
+ * Clear demo seed data (seats + employees) once the install is running on real sources, so the
+ * seeded fixtures stop mixing into the real reconciliation. Only rows with source='seed' are
+ * removed; real data (graph/manual/bamboo) is untouched. Guarded by ?confirm=purge.
+ */
+router.post('/api/licenses/purge-demo', (req, res) => {
+  if (String(req.query.confirm) !== 'purge') return res.status(400).json({ ok: false, error: 'add ?confirm=purge' });
+  const db = getDb();
+  const seatsRemoved = db.prepare(`DELETE FROM license_seats WHERE source = 'seed'`).run().changes;
+  const employeesRemoved = db.prepare(`DELETE FROM hr_employees WHERE source = 'seed'`).run().changes;
+  res.json({ ok: true, seatsRemoved, employeesRemoved, totals: reconcile().totals });
+});
+
+/**
  * Pull from BambooHR (+ the vendor adapters) and re-reconcile. Keyless-safe: with no keys the
  * adapters return null/[] and this is a graceful no-op that just re-runs the reconciliation on
  * the seeded data. Never throws.
