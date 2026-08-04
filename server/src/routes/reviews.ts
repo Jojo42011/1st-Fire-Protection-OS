@@ -24,7 +24,8 @@ router.post('/api/reviews/targets', (req, res) => {
     const officeId = String(req.body?.office_id || '').trim();
     const link = String(req.body?.link || '').trim();
     if (!officeId || !link) return res.status(400).json({ ok: false, error: 'office_id and link required' });
-    const t = setTarget(officeId, req.body?.office_name != null ? String(req.body.office_name) : null, link);
+    const phone = req.body?.phone != null ? String(req.body.phone) : null;
+    const t = setTarget(officeId, req.body?.office_name != null ? String(req.body.office_name) : null, link, phone);
     res.json({ ok: true, target: t });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });

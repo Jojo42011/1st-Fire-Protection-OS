@@ -41,7 +41,7 @@
   <div class="card card-clip" style="margin-top:6px">
     <div class="card-head"><h2>Offices → Google review link</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">each ServiceTrade office routes to its own profile</span></div>
     <table>
-      <thead><tr><th>Office</th><th class="right">Completed</th><th class="right">Emails</th><th>Google review link</th><th></th><th></th></tr></thead>
+      <thead><tr><th>Office</th><th class="right">Completed</th><th class="right">Emails</th><th>Google review link</th><th>Phone</th><th></th><th></th></tr></thead>
       <tbody id="office-rows"></tbody>
     </table>
   </div>
@@ -107,6 +107,7 @@ function load(){
         '<td class="right num">'+o.completed+'</td>'+
         '<td class="right num" style="color:'+(o.with_contact?'var(--ink)':'var(--faint)')+'">'+o.with_contact+'</td>'+
         '<td><input class="rr-in" id="lnk-'+o.office_id+'" value="'+esc(link)+'" placeholder="https://g.page/r/…/review" /></td>'+
+        '<td><input class="rr-in" id="ph-'+o.office_id+'" style="min-width:120px" value="'+esc(o.phone||'')+'" placeholder="office #" /></td>'+
         '<td><button class="btn btn-sm" onclick="saveLink(\''+o.office_id+'\',this)">Save</button></td>'+
         '<td class="right">'+(mapped?'<button class="btn btn-sm" onclick="toggleActive(\''+o.office_id+'\','+(o.active?0:1)+',this)">'+(o.active?'Pause':'Resume')+'</button>':'')+'</td>'+
       '</tr>';
@@ -138,9 +139,10 @@ function load(){
 
 function saveLink(officeId,btn){
   var v=document.getElementById('lnk-'+officeId).value.trim();
+  var ph=document.getElementById('ph-'+officeId).value.trim();
   if(!v){alert('Paste a Google review link first.');return;}
   btn.disabled=true;btn.textContent='…';
-  fetch('/api/reviews/targets',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({office_id:officeId,link:v})})
+  fetch('/api/reviews/targets',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({office_id:officeId,link:v,phone:ph})})
     .then(function(r){return r.json();}).then(function(){load();});
 }
 function toggleActive(officeId,active,btn){

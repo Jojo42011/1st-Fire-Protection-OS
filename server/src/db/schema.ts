@@ -790,10 +790,12 @@ export function initDb(): void {
       office_name TEXT,
       place_id    TEXT,                       -- Google place id (if known)
       review_url  TEXT,                       -- the public "write a review" link the request points to
+      phone       TEXT,                       -- office's customer-facing number (overrides ServiceTrade's)
       active      INTEGER DEFAULT 1,          -- 0 pauses requests for this office
       updated_at  TEXT DEFAULT (datetime('now'))
     );
   `);
+  addColumn('review_targets', 'phone', 'TEXT'); // per-office customer-facing number override
   // review_requests gains routing + delivery columns (was: draft only, off the old jobs fixture).
   addColumn('review_requests', 'office_name', 'TEXT');
   addColumn('review_requests', 'review_url', 'TEXT');

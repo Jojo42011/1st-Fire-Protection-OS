@@ -22,6 +22,7 @@ export interface ReviewTarget {
   office_name: string | null;
   place_id: string | null;
   review_url: string | null;
+  phone: string | null;
   active: number;
 }
 
@@ -52,16 +53,17 @@ export function discoverOffices() {
     .prepare(
       `SELECT office_id, MAX(office_name) AS office_name, COUNT(*) AS jobs,
               SUM(CASE WHEN lower(status) LIKE '%complete%' THEN 1 ELSE 0 END) AS completed,
-              SUM(CASE WHEN contact_email IS NOT NULL THEN 1 ELSE 0 END) AS with_contact
+              SUM(CASE WHEN contact_email IS NOT NULL THEN 1 ELSE 0 END) AS with_contact,
+              MAX(office_phone) AS st_phone
          FROM crm_jobs
         WHERE source = 'servicetrade' AND office_id IS NOT NULL
         GROUP BY office_id ORDER BY jobs DESC`
     )
-    .all() as { office_id: string; office_name: string; jobs: number; completed: number; with_contact: number }[];
+    .all() as { office_id: string; office_name: string; jobs: number; completed: number; with_contact: number; st_phone: string | null }[];
   const map = targetsMap();
   return rows.map((r) => {
     const t = map[r.office_id];
-    return { ...r, review_url: t ? t.review_url : null, active: t ? t.active : 1, mapped: !!(t && t.review_url) };
+    return { ...r, review_url: t ? t.review_url : null, phone: (t && t.phone) || r.st_phone || null, active: t ? t.active : 1, mapped: !!(t && t.review_url) };
   });
 }
 
@@ -69,17 +71,18 @@ export function getTargets(): ReviewTarget[] {
   return getDb().prepare(`SELECT * FROM review_targets ORDER BY office_name`).all() as ReviewTarget[];
 }
 
-/** Map (or re-map) an office to a Google review link. */
-export function setTarget(officeId: string, officeName: string | null, link: string): ReviewTarget {
+/** Map (or re-map) an office to a Google review link, with an optional phone override. */
+export function setTarget(officeId: string, officeName: string | null, link: string, phone?: string | null): ReviewTarget {
   const { review_url, place_id } = parseReviewLink(link);
+  const ph = phone != null && String(phone).trim() !== '' ? String(phone).trim() : null;
   getDb()
     .prepare(
-      `INSERT INTO review_targets (office_id, office_name, place_id, review_url, active, updated_at)
-       VALUES (?, ?, ?, ?, 1, datetime('now'))
+      `INSERT INTO review_targets (office_id, office_name, place_id, review_url, phone, active, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
        ON CONFLICT(office_id) DO UPDATE SET office_name=excluded.office_name, place_id=excluded.place_id,
-         review_url=excluded.review_url, updated_at=datetime('now')`
+         review_url=excluded.review_url, phone=excluded.phone, updated_at=datetime('now')`
     )
-    .run(officeId, officeName, place_id, review_url);
+    .run(officeId, officeName, place_id, review_url, ph);
   return getDb().prepare(`SELECT * FROM review_targets WHERE office_id = ?`).get(officeId) as ReviewTarget;
 }
 
@@ -114,6 +117,7 @@ interface JobForReview {
   office_id: string | null;
   office_name: string | null;
   office_phone: string | null;
+  target_phone: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -126,6 +130,7 @@ export function pendingReviewJobs(limit = 200): JobForReview[] {
   return getDb()
     .prepare(
       `SELECT j.id, j.number, j.kind, j.completed_at, j.office_id, j.office_name, j.office_phone,
+              t.phone AS target_phone,
               j.contact_name, j.contact_email, j.contact_phone, a.name AS account_name, t.review_url
          FROM crm_jobs j
          JOIN review_targets t ON t.office_id = j.office_id AND t.active = 1 AND t.review_url IS NOT NULL
@@ -169,7 +174,7 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
   const city = office.replace(/1st Fire Protection/i, '').trim(); // "Houston", "Services", ...
-  const phone = formatPhone(job.office_phone) || COMPANY.phonePretty; // office's own number, else the main line
+  const phone = formatPhone(job.target_phone || job.office_phone) || COMPANY.phonePretty; // override > ServiceTrade > main line
   const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
   const body =
@@ -272,7 +277,7 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
 export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
   return buildMessage({
     id: 0, number: null, kind: null, completed_at: null,
-    office_id: null, office_name: officeName || '1st FP Houston LLC', office_phone: '2813334444',
+    office_id: null, office_name: officeName || '1st FP Houston LLC', office_phone: '2813334444', target_phone: null,
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
     account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
   });
