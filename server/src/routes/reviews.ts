@@ -43,6 +43,24 @@ router.post('/api/reviews/mode', (req, res) => {
   res.json({ ok: true, mode });
 });
 
+// Rebuild all UNSENT held/approved requests with the current message template (leaves sent ones
+// alone), then re-sweep. Safe cleanup after a copy change.
+router.post('/api/reviews/regenerate', async (_req, res) => {
+  try {
+    const db = getDb();
+    db.prepare(`DELETE FROM review_requests WHERE source = 'servicetrade' AND status != 'sent'`).run();
+    db.prepare(
+      `UPDATE crm_jobs SET review_requested = 0
+        WHERE source = 'servicetrade' AND id NOT IN (
+          SELECT job_id FROM review_requests WHERE status = 'sent' AND job_id IS NOT NULL)`
+    ).run();
+    const sweep = await runReviewSweep();
+    res.json({ ok: true, ...sweep, summary: reviewRequestSummary() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 // Send a one-off test email to confirm Graph Mail.Send + the access policy work end to end.
 router.post('/api/reviews/test-send', async (req, res) => {
   const { mailConfigured, mailFrom, sendMail } = await import('../services/msGraphMail');

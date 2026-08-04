@@ -799,6 +799,7 @@ export function initDb(): void {
   addColumn('review_requests', 'recipient_email', 'TEXT');
   addColumn('review_requests', 'recipient_phone', 'TEXT');
   addColumn('review_requests', 'subject', 'TEXT');
+  addColumn('review_requests', 'html', 'TEXT'); // the rendered HTML body actually sent
   addColumn('review_requests', 'sent_at', 'TEXT');
   addColumn('review_requests', 'error', 'TEXT');
   addColumn('review_requests', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'

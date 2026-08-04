@@ -136,22 +136,35 @@ function recentlyAsked(email: string): boolean {
   return !!row;
 }
 
-function buildMessage(job: JobForReview): { subject: string; body: string; html: string } {
+/** Friendly, recognizable office name for the From line + signature ("1st Fire Protection Houston"). */
+export function officeDisplay(officeName: string | null): string {
+  if (!officeName) return COMPANY.name;
+  const clean = officeName.replace(/\bLLC\b/gi, '').replace(/1st FP/gi, '1st Fire Protection').replace(/\s+/g, ' ').trim();
+  return clean || COMPANY.name;
+}
+
+function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
-  const office = job.office_name || COMPANY.name;
-  const work = (job.kind || 'service').toLowerCase();
-  const subject = `How did we do? — ${office}`;
+  const office = officeDisplay(job.office_name);
+  const url = job.review_url || '#';
+  const subject = `How was your recent service with ${office}?`;
+  const sig = `${office}\n${COMPANY.phonePretty} · ${COMPANY.site}`;
   const body =
-    `Hi ${first}, thanks for trusting ${COMPANY.name} (${office}) with your recent ${work}. ` +
-    `If we did right by you, a quick Google review would mean a lot and helps other Texas businesses find us. ` +
-    `It takes about a minute: ${job.review_url}\n\nThank you,\n${office} — ${COMPANY.name}`;
+    `Hi ${first},\n\n` +
+    `Thank you for choosing ${COMPANY.name} for your recent service. We hope our ${office} team took great care of you.\n\n` +
+    `If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection. It opens Google and takes about a minute:\n${url}\n\n` +
+    `If anything fell short, just reply to this email and we will make it right.\n\n` +
+    `Thank you,\n${sig}`;
   const html =
+    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;max-width:520px">` +
     `<p>Hi ${escapeHtml(first)},</p>` +
-    `<p>Thanks for trusting <b>${escapeHtml(COMPANY.name)}</b> (${escapeHtml(office)}) with your recent ${escapeHtml(work)}. ` +
-    `If we did right by you, a quick Google review would mean a lot and helps other Texas businesses find us.</p>` +
-    `<p><a href="${escapeAttr(job.review_url || '#')}" style="display:inline-block;background:#1E8E96;color:#fff;padding:11px 20px;border-radius:8px;text-decoration:none;font-weight:600">Leave a review</a></p>` +
-    `<p>Thank you,<br>${escapeHtml(office)} — ${escapeHtml(COMPANY.name)}</p>`;
-  return { subject, body, html };
+    `<p>Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
+    `<p>If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>` +
+    `<p style="margin:24px 0"><a href="${escapeAttr(url)}" style="display:inline-block;background:#4285F4;color:#ffffff;padding:13px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">Leave a Google review</a></p>` +
+    `<p style="font-size:13px;color:#666">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p>` +
+    `<p style="margin-top:22px">Thank you,<br><b>${escapeHtml(office)}</b><br>${escapeHtml(COMPANY.name)}<br>${escapeHtml(COMPANY.phonePretty)} &middot; ${escapeHtml(COMPANY.site)}</p>` +
+    `</div>`;
+  return { subject, body, html, fromName: office };
 }
 
 function escapeHtml(s: string): string {
@@ -175,24 +188,24 @@ export async function queueReviewRequest(jobId: number, opts: { forceSend?: bool
     return { ok: false, status: 'skipped', error: 'contact already asked within 90 days' };
   }
 
-  const { subject, body, html } = buildMessage(job);
+  const { subject, body, html, fromName } = buildMessage(job);
   const auto = opts.forceSend || getMode() === 'auto';
   let status = auto ? 'approved' : 'held';
   let sentAt: string | null = null;
   let error: string | null = null;
 
   if (auto && mailConfigured()) {
-    const r = await sendMail(job.contact_email, subject, html);
+    const r = await sendMail(job.contact_email, subject, html, fromName);
     if (r.ok) { status = 'sent'; sentAt = new Date().toISOString(); }
     else { status = 'approved'; error = r.error || 'send failed'; }
   }
 
   db.prepare(
-    `INSERT INTO review_requests (job_id, customer, job_desc, channel, body, status, office_name, review_url,
+    `INSERT INTO review_requests (job_id, customer, job_desc, channel, body, html, status, office_name, review_url,
        recipient_email, recipient_phone, subject, sent_at, error, source)
-     VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'servicetrade')`
+     VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'servicetrade')`
   ).run(
-    jobId, job.account_name || job.contact_name || 'Customer', job.kind || null, body, status,
+    jobId, job.account_name || job.contact_name || 'Customer', job.kind || null, body, html, status,
     job.office_name || null, job.review_url || null, job.contact_email, job.contact_phone || null,
     subject, sentAt, error
   );
@@ -221,9 +234,10 @@ export async function sendReviewRequest(id: number): Promise<{ ok: boolean; stat
   if (!r) return { ok: false, status: 'error', error: 'request not found' };
   if (r.status === 'sent') return { ok: true, status: 'sent' };
   if (!r.recipient_email) return { ok: false, status: 'error', error: 'no recipient email' };
-  const subject = r.subject || `How did we do? — ${r.office_name || COMPANY.name}`;
-  const html = (r.body || '').replace(/\n/g, '<br>');
-  const res = await sendMail(r.recipient_email, subject, html);
+  const office = officeDisplay(r.office_name);
+  const subject = r.subject || `How was your recent service with ${office}?`;
+  const html = r.html || (r.body || '').replace(/\n/g, '<br>');
+  const res = await sendMail(r.recipient_email, subject, html, office);
   if (res.ok) {
     db.prepare(`UPDATE review_requests SET status='sent', sent_at=?, error=NULL WHERE id=?`).run(new Date().toISOString(), id);
     return { ok: true, status: 'sent' };
