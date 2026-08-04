@@ -64,9 +64,9 @@ function mapAccount(db: ReturnType<typeof getDb>, a: Acc) {
     : a.contract_type === 'prospect'
     ? 'Quote to send'
     : a.risk === 'at_risk'
-    ? 'Follow-up due'
+    ? 'Overdue in ST'
     : a.balance_cents > 0
-    ? 'Balance due'
+    ? 'Open balance (ST)'
     : 'Scheduled';
   const tint = SEG_TINT[a.segment] || ['var(--fill)', 'var(--ink-2)'];
   const seg = a.segment ? `${a.segment} · since ${a.customer_since || '—'}` : `Customer since ${a.customer_since || '—'}`;
@@ -397,37 +397,66 @@ function dealChip(q: any): { text: string; tone: string } {
   return q.origin === 'call' ? { text: 'from a call', tone: 'green' } : { text: q.origin || 'lead', tone: 'gray' };
 }
 
+// ServiceTrade quote statuses (draft/submitted/accepted/rejected/canceled…) → the board's five
+// stages. This one mapping is what makes real quotes visible on the pipeline (and the Closer).
+export function mapQuoteStage(status: string | null): string {
+  const s = (status || '').toLowerCase();
+  if (s === 'draft') return 'lead';
+  if (s === 'submitted' || s === 'pending' || s === 'reviewed' || s === 'contingent') return 'quoted';
+  if (s === 'accepted' || s === 'approved' || s === 'won') return 'won';
+  if (s === 'rejected' || s === 'lost' || s === 'canceled' || s === 'cancelled' || s === 'expired' || s === 'void') return 'lost';
+  return 'quoted';
+}
+function realChip(q: any, stageKey: string): { text: string; tone: string } {
+  const s = (q.stage || '').toLowerCase();
+  if (stageKey === 'won') return { text: 'accepted', tone: 'green' };
+  if (stageKey === 'lost') return { text: s === 'rejected' ? 'rejected' : s === 'canceled' || s === 'cancelled' ? 'canceled' : s || 'lost', tone: 'gray' };
+  if (s === 'draft') return { text: 'draft', tone: 'gray' };
+  if (s === 'submitted') return { text: 'submitted', tone: 'indigo' };
+  return { text: s || 'open', tone: 'gray' };
+}
+
 router.get('/api/pipeline', (_req, res) => {
   const db = getDb();
+  const real = hasRealQuotes();
   const rows = db
     .prepare(
-      `SELECT q.*, a.name AS customer FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id ORDER BY q.amount_cents DESC`
+      real
+        ? `SELECT q.*, a.name AS customer FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id WHERE q.source = 'servicetrade' ORDER BY q.amount_cents DESC`
+        : `SELECT q.*, a.name AS customer FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id ORDER BY q.amount_cents DESC`
     )
     .all() as any[];
+  const stageOf = (q: any): string => (real ? mapQuoteStage(q.stage) : q.stage);
 
   const stages = STAGES.map((s) => {
-    const deals = rows
-      .filter((q) => q.stage === s.key)
-      .map((q) => {
-        const chip = dealChip(q);
-        return {
-          id: q.id,
-          customer: q.customer || 'Prospect',
-          detail: q.title,
-          amount: money(q.amount_cents),
-          chip: chip.text,
-          chipTone: chip.tone,
-          lost: s.key === 'lost',
-        };
-      });
-    return { key: s.key, label: s.label, sq: s.sq, count: s.count, total: money(s.total), deals };
+    const inStage = rows.filter((q) => stageOf(q) === s.key);
+    // real boards can have hundreds per column — show the top 25 by value, count is the real total.
+    const shown = real ? inStage.slice(0, 25) : inStage;
+    const deals = shown.map((q) => {
+      const chip = real ? realChip(q, s.key) : dealChip(q);
+      return { id: q.id, customer: q.customer || 'Prospect', detail: q.title, amount: money(q.amount_cents), chip: chip.text, chipTone: chip.tone, lost: s.key === 'lost' };
+    });
+    const count = real ? inStage.length : s.count;
+    const total = real ? inStage.reduce((a, q) => a + (q.amount_cents || 0), 0) : s.total;
+    return { key: s.key, label: s.label, sq: s.sq, count, total: money(total), deals };
   });
 
-  res.json({
-    stats: { open: '$412,300', aging: 11, winRate: '38%', fromDeficiencies: '$96,400' },
-    stages,
-    live: false,
-  });
+  let stats;
+  if (real) {
+    const openCents = rows.filter((q) => ['lead', 'quoted', 'following_up'].includes(mapQuoteStage(q.stage))).reduce((a, q) => a + (q.amount_cents || 0), 0);
+    const won = rows.filter((q) => mapQuoteStage(q.stage) === 'won').length;
+    const lost = rows.filter((q) => mapQuoteStage(q.stage) === 'lost').length;
+    stats = {
+      open: money(openCents),
+      aging: rows.filter((q) => mapQuoteStage(q.stage) === 'quoted').length,
+      winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) + '%' : '—',
+      fromDeficiencies: '—',
+    };
+  } else {
+    stats = { open: '$412,300', aging: 11, winRate: '38%', fromDeficiencies: '$96,400' };
+  }
+
+  res.json({ stats, stages, live: real });
 });
 
 router.post('/api/pipeline/:quoteId/stage', (req, res) => {

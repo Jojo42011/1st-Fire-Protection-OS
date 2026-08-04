@@ -289,12 +289,12 @@ var SCREENS = {
   dispatch: { src:'/schedule',                     title:'Schedule',          sub:'Jobs matched to crews, no-shows cut, cancellations backfilled' },
   plans:    { src:'/plans',                        title:'Service plans',     sub:'Jobs become recurring agreements, renewed before they lapse' },
   costing:  { src:'/costing',                      title:'Job margins',       sub:'Real cost tracked against the quote, margin bleed flagged' },
-  crm:      { src:'/accounts',                     title:'Accounts',          sub:'412 customers, live from ServiceTrade' },
+  crm:      { src:'/accounts',                     title:'Accounts',          sub:'Customers, live from ServiceTrade' },
   sites:    { src:'/sites',                         title:'Sites',             sub:'Every service location, searchable' },
   jobs:     { src:'/jobs',                           title:'Jobs',              sub:'Every job, live from ServiceTrade' },
   quotes:   { src:'/quotes',                         title:'Quotes',            sub:'Every quote, searchable by value' },
   account:  { src:'/account',                      title:'Account',           sub:'Customer detail', detail:true },
-  pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'$412,300 open across 39 quotes' },
+  pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'Open quotes by stage, live from ServiceTrade' },
   sync:     { src:'/sync',                          title:'ServiceTrade sync', sub:'Two-way, every 15 minutes' },
   team:     { src:'/roster',                       title:'Your team',         sub:'9 agents, one job each' },
   hire:     { src:'/harness',                      title:'Hire a new agent',  sub:'Describe the gap in your own words' }
@@ -397,6 +397,7 @@ function refreshCounts(){
     function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
     set('c-phones',c.phones||0); set('c-money',c.money||0); set('c-reviews',c.reviews||0);
     set('c-spend',c.spend||0); set('c-accounts',c.accounts||''); set('c-pipeline',c.pipeline||'');
+    set('c-sites',c.sites||''); set('c-jobs',c.jobs||''); set('c-quotes',c.quotes||'');
     var badge=document.getElementById('c-approve');
     if(badge){if(c.approvals>0){badge.textContent=c.approvals;badge.style.display='';}else{badge.style.display='none';}}
   }).catch(function(){});

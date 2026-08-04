@@ -19,16 +19,19 @@ const DIR = (d: string): { text: string; tone: string } =>
     ? { text: '→ to ST', tone: 'green' }
     : { text: 'off', tone: 'gray' };
 
-// per-object count strings (fixtures matching the design)
-const COUNT: Record<string, string> = {
-  accounts: '412 / 908',
-  equipment: '14,220',
-  jobs: '1,904 open',
-  quotes: '39 open',
-  invoices: '23 open',
-  contacts: '1,166',
-  agent_output: '96 today',
-};
+// per-object counts, live from the mirror where we have a table (accounts/sites/jobs/quotes);
+// '—' for objects not row-mirrored (equipment/contacts not pulled; invoices roll into balances).
+function liveCounts(): Record<string, string> {
+  const db = getDb();
+  const c = (t: string) => {
+    try { return ((db.prepare(`SELECT COUNT(*) AS v FROM ${t} WHERE source = 'servicetrade'`).get() as { v: number }).v || 0).toLocaleString('en-US'); }
+    catch { return '—'; }
+  };
+  const acc = c('accounts');
+  return acc === '0' || acc === '—'
+    ? { accounts: '412 / 908', equipment: '14,220', jobs: '1,904 open', quotes: '39 open', invoices: '23 open', contacts: '1,166', agent_output: '96 today' }
+    : { accounts: `${acc} / ${c('sites')}`, equipment: '—', jobs: `${c('crm_jobs')} open`, quotes: c('quotes'), invoices: '— (in balances)', contacts: '—', agent_output: '—' };
+}
 
 const ago = (iso: string | null): string => {
   if (!iso) return '';
@@ -51,10 +54,14 @@ const FIELD_LABEL: Record<string, string> = { billing_email: 'billing email', st
 router.get('/api/sync', (_req, res) => {
   const db = getDb();
 
+  const COUNT = liveCounts();
   const objects = (db.prepare(`SELECT * FROM sync_objects ORDER BY rowid`).all() as any[]).map((o) => {
     const dir = DIR(o.direction);
     return { object: o.object, label: o.label, detail: o.detail, direction: o.direction, dir: dir.text, dirTone: dir.tone, count: COUNT[o.object] || String(o.record_count) };
   });
+  const n = (t: string) => { try { return (db.prepare(`SELECT COUNT(*) AS v FROM ${t} WHERE source = 'servicetrade'`).get() as { v: number }).v || 0; } catch { return 0; } };
+  const real = n('accounts') > 0;
+  const mirrored = n('accounts') + n('sites') + n('crm_jobs') + n('quotes');
 
   const conflicts = (db.prepare(`SELECT * FROM sync_conflicts WHERE status = 'open' ORDER BY id`).all() as any[]).map((c) => {
     const acc = db.prepare(`SELECT name FROM accounts WHERE id = ?`).get(c.local_id) as { name: string } | undefined;
@@ -77,14 +84,18 @@ router.get('/api/sync', (_req, res) => {
   });
 
   res.json({
-    connected: false,
+    connected: real,
     mode: 'two-way',
-    volumes: '412 customers, 908 sites, 14,220 pieces of equipment',
-    counters: { pulled: '1,482', pushed: '96', conflicts: conflicts.length },
+    volumes: real
+      ? `${n('accounts').toLocaleString('en-US')} customers, ${n('sites').toLocaleString('en-US')} sites, ${n('crm_jobs').toLocaleString('en-US')} jobs, ${n('quotes').toLocaleString('en-US')} quotes`
+      : '412 customers, 908 sites, 14,220 pieces of equipment',
+    counters: real
+      ? { pulled: mirrored.toLocaleString('en-US'), pushed: '0', conflicts: conflicts.length }
+      : { pulled: '1,482', pushed: '96', conflicts: conflicts.length },
     objects,
     conflicts,
     log,
-    live: false,
+    live: real,
   });
 });
 

@@ -20,9 +20,20 @@ const num = (sql: string): number => {
   }
 };
 
+const fmtMoney = (dollars: number): string =>
+  dollars >= 1e6 ? '$' + (dollars / 1e6).toFixed(1) + 'M' : dollars >= 1e3 ? '$' + Math.round(dollars / 1e3) + 'k' : '$' + Math.round(dollars);
+
 router.get('/api/nav-counts', (_req, res) => {
   // "Needs your yes" reads from the unified approvals inbox (Phase 3 source of truth).
   const approvals = num(`SELECT COUNT(*) AS v FROM approvals WHERE status = 'pending'`);
+
+  // Live CRM counts once ServiceTrade data is mirrored; the old fixtures only for keyless demo.
+  const acctCount = num(`SELECT COUNT(*) AS v FROM accounts WHERE source = 'servicetrade'`);
+  const real = acctCount > 0;
+  const loc = (n: number) => n.toLocaleString('en-US');
+  const openQuoteCents = num(
+    `SELECT COALESCE(SUM(amount_cents), 0) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN ('draft','submitted','pending','reviewed')`
+  );
 
   res.json({
     approvals,
@@ -30,9 +41,12 @@ router.get('/api/nav-counts', (_req, res) => {
     money: num(`SELECT COUNT(*) AS v FROM invoices WHERE status != 'paid'`),
     reviews: num(`SELECT COUNT(*) AS v FROM reviews WHERE reply_status IN ('none','draft') AND stars <= 3`),
     spend: num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status = 'proposed'`),
-    accounts: 412, // fixture — the accounts table lands in Phase 4
-    pipeline: '$412k', // fixture — the pipeline lands in Phase 4
-    live: false,
+    accounts: real ? loc(acctCount) : '412',
+    sites: real ? loc(num(`SELECT COUNT(*) AS v FROM sites WHERE source = 'servicetrade'`)) : '',
+    jobs: real ? loc(num(`SELECT COUNT(*) AS v FROM crm_jobs WHERE source = 'servicetrade'`)) : '',
+    quotes: real ? loc(num(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade'`)) : '',
+    pipeline: real ? fmtMoney(openQuoteCents / 100) : '$412k',
+    live: real,
   });
 });
 

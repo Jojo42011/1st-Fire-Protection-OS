@@ -14,10 +14,20 @@
   .ac-cust{display:flex;align-items:center;gap:10px}
   .ac-name{display:block;font-weight:700;font-size:13px;color:var(--ink)}
   .ac-seg{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .ac-arnote{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;
+    padding:10px 14px;margin-bottom:12px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
+  .ac-arnote svg{width:15px;height:15px;flex:none;margin-top:1px}
+  .ac-arnote b{font-weight:700}
 </style>
 </head>
 <body>
-<div class="screen view" id="root"></div>
+<div class="screen view">
+  <div class="ac-arnote">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
+    <span>Balances are <b>ServiceTrade billing</b>, not confirmed receivables — ServiceTrade has no recorded payments, so “overdue” means <b>unreconciled in ServiceTrade</b>. Real A/R (and the Invoice Collector) arrives when Sage Intacct is connected.</span>
+  </div>
+  <div id="root"></div>
+</div>
 <script src="/list-view.js"></script>
 <script>
 var esc=ListView.esc;
@@ -28,7 +38,7 @@ ListView({
   mount:document.getElementById('root'),
   endpoint:'/api/accounts', dataKey:'accounts', noun:'customers',
   searchPlaceholder:'Search customers…',
-  filters:[['all','All'],['contract','Under contract'],['due','Balance due'],['risk','At risk']],
+  filters:[['all','All'],['contract','Under contract'],['due','Open (billed)'],['risk','Overdue in ST']],
   defaultSort:'name', sortDefaults:{name:'asc',balance:'desc'},
   onRow:function(a){ nav(a.id); },
   columns:[
