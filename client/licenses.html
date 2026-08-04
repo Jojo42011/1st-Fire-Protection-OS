@@ -90,6 +90,20 @@
     </table>
   </div>
 
+  <!-- off-roster: seats with no matching employee (shared mailboxes or missing work email) -->
+  <div class="card card-clip" id="review-card" style="display:none">
+    <div class="card-head">
+      <h2>Not on your roster</h2>
+      <span id="review-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
+      <span style="flex:1"></span>
+      <span style="font-weight:500;font-size:11.5px;color:var(--muted);max-width:52ch;text-align:right">Assigned to accounts with no match in HR. Usually shared mailboxes (reception, accounting) or staff missing a work email in BambooHR. <b style="color:var(--ink)">Not counted as savings</b> until you confirm.</span>
+    </div>
+    <table>
+      <thead><tr><th>Software</th><th>Assigned to</th><th class="right">Per year</th><th></th></tr></thead>
+      <tbody id="review-rows"></tbody>
+    </table>
+  </div>
+
   <!-- full inventory (left) + reclaim queue & connect hint (rail) -->
   <div class="split">
     <div class="card card-clip">
@@ -138,17 +152,18 @@ function load(){
     document.getElementById('hl-approved').textContent=money(approvedYr);
 
     document.getElementById('headline-savings').innerHTML=money(s.savingsAnnual)+'<small>Reclaimable per year</small>';
+    var reviewNote = s.reviewSeats ? ' <b style="color:var(--navy)">'+s.reviewSeats+'</b> more seats are not matched to your roster (shared mailboxes or staff missing a work email) and are listed separately for review.' : '';
     document.getElementById('headline-side').innerHTML=
-      '<b style="color:var(--navy)">'+s.reclaimableSeats+'</b> seats are still assigned to people who have left, costing <b style="color:var(--accent)">'+money(s.savingsMonthly)+'/mo</b>. Reconciled '+
+      '<b style="color:var(--navy)">'+s.reclaimableSeats+'</b> confirmed seats are still assigned to terminated employees, costing <b style="color:var(--accent)">'+money(s.savingsMonthly)+'/mo</b>. Reconciled '+
       '<b style="color:var(--navy)">'+s.totalSeats+'</b> seats against '+
       '<b style="color:var(--navy)">'+s.activeEmployees+'</b> active and '+
-      '<b style="color:var(--navy)">'+s.terminatedEmployees+'</b> terminated employees.';
+      '<b style="color:var(--navy)">'+s.terminatedEmployees+'</b> terminated employees.'+reviewNote;
 
     document.getElementById('kpis').innerHTML=[
-      kpi('Reclaimable / yr',money(s.savingsAnnual),s.reclaimableSeats+' unused seats',true),
+      kpi('Confirmed / yr',money(s.savingsAnnual),s.reclaimableSeats+' seats, terminated staff',true),
       kpi('Total Seats',s.totalSeats,s.assignedSeats+' assigned',false),
       kpi('Under Management',money(s.spendMonthly)+'/mo',money(s.spendAnnual)+'/yr all seats',false),
-      kpi('Reclaimable Seats',s.reclaimableSeats,'from '+s.terminatedEmployees+' people who left',false)
+      kpi('Needs Review',(s.reviewSeats||0),'not matched to roster',false)
     ].join('');
 
     document.getElementById('vendors').innerHTML=(d.byVendor||[]).map(function(v){
@@ -171,7 +186,7 @@ function load(){
     });});
 
     var rec=d.reclaimable||[];
-    document.getElementById('reclaim-count').textContent=rec.length+' found';
+    document.getElementById('reclaim-count').textContent=rec.length+' confirmed';
     document.getElementById('reclaim-rows').innerHTML= rec.length? rec.map(function(x){
       var terminated = x.reason_kind==='terminated';
       var left = terminated ? (x.terminated_at||'terminated') : 'off roster';
@@ -187,7 +202,23 @@ function load(){
         '<td class="right num">'+money(x.cost_monthly*12)+'</td>'+
         '<td class="right" style="white-space:nowrap">'+act+'</td>'+
       '</tr>';
-    }).join('') : '<tr><td colspan="6" class="empty">No reclaimable seats — every license is assigned to an active employee.</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">No confirmed reclaims — no active license is assigned to a terminated employee.</td></tr>';
+
+    // off-roster review list (shown but never counted as savings)
+    var rev=d.review||[];
+    var revCard=document.getElementById('review-card');
+    if(rev.length){
+      revCard.style.display='';
+      document.getElementById('review-count').textContent=rev.length+' to review';
+      document.getElementById('review-rows').innerHTML=rev.map(function(x){
+        return '<tr>'+
+          '<td>'+esc(x.vendor_label)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
+          '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name)+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
+          '<td class="right num" style="color:var(--muted)">'+money(x.cost_monthly*12)+'</td>'+
+          '<td class="right" style="white-space:nowrap"><button class="btn btn-sm" onclick="flag('+x.seat_id+',this)">Reclaim anyway</button></td>'+
+        '</tr>';
+      }).join('');
+    } else { revCard.style.display='none'; }
 
     var q=d.reclaims||[];
     document.getElementById('queue').innerHTML= q.length? q.map(function(x){

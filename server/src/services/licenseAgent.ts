@@ -69,8 +69,9 @@ export interface VendorBreakdown {
   label: string;
   seats: number;
   assigned: number;
-  reclaimable: number;
-  savings_monthly: number;
+  reclaimable: number; // CONFIRMED only (assignee matches a terminated employee)
+  review: number; // off-roster: no matching employee (shared mailbox or missing work email)
+  savings_monthly: number; // confirmed reclaims only
   savings_annual: number;
 }
 
@@ -111,8 +112,9 @@ function reclaimsBySeat(): Map<number, { id: number; status: string }> {
  */
 export function reconcile(): {
   reclaimable: ReclaimableSeat[];
+  review: ReclaimableSeat[];
   byVendor: VendorBreakdown[];
-  totals: { seats: number; reclaimableSeats: number; savingsMonthly: number; savingsAnnual: number };
+  totals: { seats: number; reclaimableSeats: number; reviewSeats: number; savingsMonthly: number; savingsAnnual: number };
 } {
   const db = getDb();
   const seats = db.prepare(`SELECT * FROM license_seats`).all() as LicenseSeat[];
@@ -120,7 +122,8 @@ export function reconcile(): {
   const byEmail = employeeByEmail();
   const openReclaims = reclaimsBySeat();
 
-  const reclaimable: ReclaimableSeat[] = [];
+  const reclaimable: ReclaimableSeat[] = []; // CONFIRMED: assignee is a terminated employee
+  const review: ReclaimableSeat[] = []; // off-roster: no matching employee (needs a human look)
   // seed the per-vendor tallies for all six vendors so every vendor renders even at zero
   const vb = new Map<string, VendorBreakdown>();
   for (const v of VENDORS)
@@ -130,6 +133,7 @@ export function reconcile(): {
       seats: 0,
       assigned: 0,
       reclaimable: 0,
+      review: 0,
       savings_monthly: 0,
       savings_annual: 0,
     });
@@ -143,6 +147,7 @@ export function reconcile(): {
         seats: 0,
         assigned: 0,
         reclaimable: 0,
+        review: 0,
         savings_monthly: 0,
         savings_annual: 0,
       }),
@@ -158,7 +163,7 @@ export function reconcile(): {
     const reasonKind: 'terminated' | 'off_roster' = emp ? 'terminated' : 'off_roster';
     const open = openReclaims.get(seat.id) || null;
 
-    reclaimable.push({
+    const item: ReclaimableSeat = {
       seat_id: seat.id,
       vendor: seat.vendor,
       vendor_label: vendorLabel(seat.vendor),
@@ -171,17 +176,28 @@ export function reconcile(): {
       cost_monthly: seat.cost_monthly || 0,
       reclaim_status: open ? open.status : null,
       reclaim_id: open ? open.id : null,
-    });
+    };
 
-    row.reclaimable += 1;
-    row.savings_monthly += seat.cost_monthly || 0;
+    // CONFIRMED reclaim only when the assignee matches a terminated employee. An "off-roster"
+    // seat (no matching employee) is a shared mailbox or someone missing a work email in HR —
+    // it goes to a REVIEW list and is NOT counted as recoverable savings, so the headline
+    // number stays defensible.
+    if (reasonKind === 'terminated') {
+      reclaimable.push(item);
+      row.reclaimable += 1;
+      row.savings_monthly += seat.cost_monthly || 0;
+    } else {
+      review.push(item);
+      row.review += 1;
+    }
   }
 
   // finalize annualized savings per vendor
   for (const row of vb.values()) row.savings_annual = row.savings_monthly * 12;
 
-  // reclaimable sorted by biggest single-seat cost first (the fastest wins on top)
+  // biggest single-seat cost first (the fastest wins on top)
   reclaimable.sort((a, b) => b.cost_monthly - a.cost_monthly);
+  review.sort((a, b) => b.cost_monthly - a.cost_monthly);
 
   const savingsMonthly = reclaimable.reduce((s, r) => s + r.cost_monthly, 0);
   const byVendor = VENDORS.map((v) => vb.get(v.key)!).concat(
@@ -191,10 +207,12 @@ export function reconcile(): {
 
   return {
     reclaimable,
+    review,
     byVendor,
     totals: {
       seats: seats.length,
       reclaimableSeats: reclaimable.length,
+      reviewSeats: review.length,
       savingsMonthly,
       savingsAnnual: savingsMonthly * 12,
     },
@@ -204,10 +222,11 @@ export function reconcile(): {
 export interface LicenseSummary {
   totalSeats: number;
   assignedSeats: number;
-  reclaimableSeats: number;
+  reclaimableSeats: number; // confirmed (terminated-employee matches)
+  reviewSeats: number; // off-roster, needs a human look (not counted as savings)
   spendMonthly: number; // $ under management across every seat
   spendAnnual: number;
-  savingsMonthly: number; // $ at risk / recoverable
+  savingsMonthly: number; // $ recoverable from CONFIRMED reclaims only
   savingsAnnual: number;
   activeEmployees: number;
   terminatedEmployees: number;
@@ -235,6 +254,7 @@ export function getLicenseSummary(): LicenseSummary {
     totalSeats: seats.length,
     assignedSeats,
     reclaimableSeats: rec.totals.reclaimableSeats,
+    reviewSeats: rec.totals.reviewSeats,
     spendMonthly,
     spendAnnual: spendMonthly * 12,
     savingsMonthly: rec.totals.savingsMonthly,
@@ -255,7 +275,8 @@ const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 export function proposeReclaim(seatId: number): { id: number; status: string; reason: string; savings_monthly: number } {
   const db = getDb();
   const rec = reconcile();
-  const target = rec.reclaimable.find((r) => r.seat_id === seatId);
+  // Accept a confirmed reclaim OR an off-roster seat the human explicitly chose to reclaim.
+  const target = rec.reclaimable.find((r) => r.seat_id === seatId) || rec.review.find((r) => r.seat_id === seatId);
   if (!target) throw new Error(`seat ${seatId} is not reclaimable (assignee is on the active roster)`);
 
   const existing = db

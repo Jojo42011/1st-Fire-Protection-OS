@@ -23,6 +23,7 @@ router.get('/api/licenses', (_req, res) => {
   res.json({
     summary: getLicenseSummary(),
     reclaimable: rec.reclaimable,
+    review: rec.review,
     byVendor: rec.byVendor,
     totals: rec.totals,
     seats,
