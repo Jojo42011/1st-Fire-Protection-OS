@@ -779,6 +779,7 @@ export function initDb(): void {
    * review link, and send "how did we do?" so the review lands on the right profile. */
   addColumn('crm_jobs', 'office_id', 'TEXT');
   addColumn('crm_jobs', 'office_name', 'TEXT');
+  addColumn('crm_jobs', 'office_phone', 'TEXT');
   addColumn('crm_jobs', 'contact_name', 'TEXT');
   addColumn('crm_jobs', 'contact_email', 'TEXT');
   addColumn('crm_jobs', 'contact_phone', 'TEXT');

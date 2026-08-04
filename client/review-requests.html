@@ -92,9 +92,9 @@ function load(){
 
     document.getElementById('kpis').innerHTML=[
       kpi('Offices mapped',s.officesMapped+' / '+s.officesTotal,'ServiceTrade offices',false),
-      kpi('Eligible jobs',s.eligible,'completed, with a contact',false),
-      kpi('Held for review',s.held,'awaiting your yes',s.held>0),
-      kpi('Sent',s.sent,'requests delivered',false)
+      kpi('Held / queued',s.held,'awaiting send',s.held>0),
+      kpi('Sent today',(s.dailySent||0)+' / '+(s.dailyCap||40),'daily cap',false),
+      kpi('Sent total',s.sent,'requests delivered',false)
     ].join('');
 
     // offices
@@ -157,12 +157,10 @@ function runSweep(btn){btn.disabled=true;btn.textContent='Refreshing…';fetch('
 function sendOne(id,btn){btn.disabled=true;btn.textContent='Sending…';fetch('/api/reviews/queue/'+id+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(res){if(!res.ok){btn.disabled=false;btn.textContent='Send';}load();});}
 function sendAll(btn){
   btn.disabled=true;btn.textContent='Sending…';
-  fetch('/api/reviews/queue').then(function(r){return r.json();}).then(function(q){
-    var held=(q.requests||[]).filter(function(x){return x.status==='held'||x.status==='approved';});
-    var i=0;
-    function next(){ if(i>=held.length){btn.disabled=false;btn.textContent='Send all held';load();return;}
-      fetch('/api/reviews/queue/'+held[i].id+'/send',{method:'POST'}).then(function(){i++;next();}); }
-    next();
+  fetch('/api/reviews/send-batch',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false;btn.textContent='Send all held';
+    if(res.capped){alert('Sent '+res.sent+' today. Daily cap reached — the rest go out tomorrow to protect deliverability.');}
+    load();
   });
 }
 load();

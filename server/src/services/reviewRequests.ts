@@ -94,6 +94,18 @@ export function setMode(mode: 'hold' | 'auto'): void {
   setState('review_send_mode', mode === 'auto' ? 'auto' : 'hold');
 }
 
+/** Daily send cap protects the sending domain's reputation when draining a backlog. */
+export function dailyCap(): number {
+  const n = parseInt(process.env.REVIEW_DAILY_CAP || '', 10);
+  return isFinite(n) && n > 0 ? n : 40;
+}
+export function dailySent(): number {
+  return (getDb().prepare(`SELECT COUNT(*) AS v FROM review_requests WHERE status = 'sent' AND date(sent_at) = date('now')`).get() as { v: number }).v || 0;
+}
+function remainingToday(): number {
+  return Math.max(0, dailyCap() - dailySent());
+}
+
 interface JobForReview {
   id: number;
   number: string | null;
@@ -101,6 +113,7 @@ interface JobForReview {
   completed_at: string | null;
   office_id: string | null;
   office_name: string | null;
+  office_phone: string | null;
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
@@ -112,7 +125,7 @@ interface JobForReview {
 export function pendingReviewJobs(limit = 200): JobForReview[] {
   return getDb()
     .prepare(
-      `SELECT j.id, j.number, j.kind, j.completed_at, j.office_id, j.office_name,
+      `SELECT j.id, j.number, j.kind, j.completed_at, j.office_id, j.office_name, j.office_phone,
               j.contact_name, j.contact_email, j.contact_phone, a.name AS account_name, t.review_url
          FROM crm_jobs j
          JOIN review_targets t ON t.office_id = j.office_id AND t.active = 1 AND t.review_url IS NOT NULL
@@ -143,12 +156,20 @@ export function officeDisplay(officeName: string | null): string {
   return clean || COMPANY.name;
 }
 
-const LOGO_URL = (process.env.APP_PUBLIC_URL || 'https://first-fp-os.fly.dev') + '/brand/logo-email.png';
+/** Format a raw ServiceTrade phone into (xxx) xxx-xxxx when it is a clean 10-digit US number. */
+function formatPhone(raw: string | null): string | null {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, '');
+  if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  if (d.length === 11 && d[0] === '1') return `${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7)}`;
+  return raw.trim(); // already formatted or unusual — leave as-is
+}
 
 function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
   const city = office.replace(/1st Fire Protection/i, '').trim(); // "Houston", "Services", ...
+  const phone = formatPhone(job.office_phone) || COMPANY.phonePretty; // office's own number, else the main line
   const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
   const body =
@@ -156,39 +177,28 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
     `Thank you for choosing ${COMPANY.name} for your recent service. We hope our ${office} team took great care of you.\n\n` +
     `If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection. It opens Google and takes about a minute:\n${job.review_url || ''}\n\n` +
     `If anything fell short, just reply to this email and we will make it right.\n\n` +
-    `Thank you,\n${office}\n${COMPANY.phonePretty} · ${COMPANY.site}`;
+    `Thank you,\n${office}\n${phone} · ${COMPANY.site}`;
 
   // Table-based, inline-styled email in the 1st FP palette (navy #1E2D40, red #E53935, gold #F5B81B).
+  const gold = city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : '';
   const html =
-`<div style="margin:0;padding:0;background:#F5F7F9;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">
-  <tr><td style="background:#1E2D40;padding:18px 26px;">
-    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-      <td style="vertical-align:middle;"><img src="${LOGO_URL}" width="46" height="46" alt="1st Fire Protection" style="display:block;border:0;border-radius:8px;"></td>
-      <td style="vertical-align:middle;padding-left:13px;font-family:Arial,Helvetica,sans-serif;">
-        <div style="color:#FFFFFF;font-weight:800;font-size:16px;letter-spacing:.03em;">1ST FIRE PROTECTION</div>
-        ${city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : ''}
-      </td>
-    </tr></table>
-  </td></tr>
-  <tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>
-  <tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">
-    <p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>
-    <p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>
-    <p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>
-    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#E53935;">
-      <a href="${url}" style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">Leave a Google review</a>
-    </td></tr></table>
-    <p style="margin:18px 0 0;font-size:13px;color:#6B7683;">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p>
-  </td></tr>
-  <tr><td style="padding:22px 30px 26px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1E2D40;border-top:1px solid #EDF1F4;margin-top:10px;">
-    <div style="font-weight:800;">${escapeHtml(office)}</div>
-    <div style="color:#6B7683;">${escapeHtml(COMPANY.name)} &middot; ${escapeHtml(COMPANY.phonePretty)} &middot; ${escapeHtml(COMPANY.site)}</div>
-  </td></tr>
-</table>
-</td></tr></table>
-</div>`;
+`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">` +
+`<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">` +
+`<tr><td style="background:#1E2D40;padding:20px 28px;font-family:Arial,Helvetica,sans-serif;">` +
+`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">1ST FIRE PROTECTION</div>${gold}</td></tr>` +
+`<tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>` +
+`<tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">` +
+`<p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>` +
+`<p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
+`<p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>` +
+`<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#E53935;">` +
+`<a href="${url}" style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">Leave a Google review</a>` +
+`</td></tr></table>` +
+`<p style="margin:18px 0 0;font-size:13px;color:#6B7683;">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p></td></tr>` +
+`<tr><td style="padding:22px 30px 26px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1E2D40;border-top:1px solid #EDF1F4;">` +
+`<div style="font-weight:800;">${escapeHtml(office)}</div>` +
+`<div style="color:#6B7683;">${escapeHtml(COMPANY.name)} &middot; ${escapeHtml(phone)} &middot; ${escapeHtml(COMPANY.site)}</div>` +
+`</td></tr></table></td></tr></table>`;
   return { subject, body, html, fromName: office };
 }
 
@@ -203,63 +213,80 @@ function escapeAttr(s: string): string {
  * Queue a review request for one completed job. In 'auto' mode with mail configured it sends
  * immediately; otherwise it is held for review. Idempotent per job (marks review_requested).
  */
-export async function queueReviewRequest(jobId: number, opts: { forceSend?: boolean } = {}): Promise<{ ok: boolean; status: string; error?: string }> {
+/** Insert a request for an already-fetched eligible job (no re-scan). Used by the sweep. */
+function queueForJob(job: JobForReview, forceSend = false): { ok: boolean; status: string } {
   const db = getDb();
-  const job = pendingReviewJobs(100000).find((j) => j.id === jobId);
-  if (!job) return { ok: false, status: 'skipped', error: 'job not eligible (no mapped office, no contact, or already requested)' };
-  if (!job.contact_email) return { ok: false, status: 'skipped', error: 'no contact email' };
+  if (!job.contact_email) return { ok: false, status: 'skipped' };
   if (recentlyAsked(job.contact_email)) {
-    db.prepare(`UPDATE crm_jobs SET review_requested = 1 WHERE id = ?`).run(jobId);
-    return { ok: false, status: 'skipped', error: 'contact already asked within 90 days' };
+    db.prepare(`UPDATE crm_jobs SET review_requested = 1 WHERE id = ?`).run(job.id);
+    return { ok: false, status: 'skipped' };
   }
-
-  const { subject, body, html, fromName } = buildMessage(job);
-  const auto = opts.forceSend || getMode() === 'auto';
-  let status = auto ? 'approved' : 'held';
-  let sentAt: string | null = null;
-  let error: string | null = null;
-
-  if (auto && mailConfigured()) {
-    const r = await sendMail(job.contact_email, subject, html, fromName);
-    if (r.ok) { status = 'sent'; sentAt = new Date().toISOString(); }
-    else { status = 'approved'; error = r.error || 'send failed'; }
-  }
-
+  const { subject, body, html } = buildMessage(job);
+  // Queue only. Sending is decoupled (drained by sendPending under the daily cap): auto mode
+  // marks 'approved' (ready to send), hold mode marks 'held' (awaits your review).
+  const status = forceSend || getMode() === 'auto' ? 'approved' : 'held';
   db.prepare(
     `INSERT INTO review_requests (job_id, customer, job_desc, channel, body, html, status, office_name, review_url,
-       recipient_email, recipient_phone, subject, sent_at, error, source)
-     VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'servicetrade')`
+       recipient_email, recipient_phone, subject, source)
+     VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?, ?, ?, 'servicetrade')`
   ).run(
-    jobId, job.account_name || job.contact_name || 'Customer', job.kind || null, body, html, status,
-    job.office_name || null, job.review_url || null, job.contact_email, job.contact_phone || null,
-    subject, sentAt, error
+    job.id, job.account_name || job.contact_name || 'Customer', job.kind || null, body, html, status,
+    job.office_name || null, job.review_url || null, job.contact_email, job.contact_phone || null, subject
   );
-  db.prepare(`UPDATE crm_jobs SET review_requested = 1 WHERE id = ?`).run(jobId);
-  return { ok: true, status, error: error || undefined };
+  db.prepare(`UPDATE crm_jobs SET review_requested = 1 WHERE id = ?`).run(job.id);
+  return { ok: true, status };
+}
+
+export async function queueReviewRequest(jobId: number, opts: { forceSend?: boolean } = {}): Promise<{ ok: boolean; status: string; error?: string }> {
+  const job = pendingReviewJobs(100000).find((j) => j.id === jobId);
+  if (!job) return { ok: false, status: 'skipped', error: 'job not eligible (no mapped office, no contact, or already requested)' };
+  return queueForJob(job, opts.forceSend);
+}
+
+/**
+ * Send queued requests (oldest first), bounded by the remaining daily cap. `onlyApproved`
+ * limits it to auto-mode 'approved' items (scheduled drain); otherwise it also sends 'held'
+ * items (the human clicked "Send all held"). Returns how many actually went out.
+ */
+export async function sendPending(onlyApproved = false): Promise<{ sent: number; capped: boolean; remaining: number }> {
+  const db = getDb();
+  if (!mailConfigured()) return { sent: 0, capped: false, remaining: remainingToday() };
+  const statuses = onlyApproved ? `('approved')` : `('held','approved')`;
+  const room = remainingToday();
+  if (room <= 0) return { sent: 0, capped: true, remaining: 0 };
+  const rows = db
+    .prepare(`SELECT * FROM review_requests WHERE source='servicetrade' AND status IN ${statuses} AND recipient_email IS NOT NULL ORDER BY created_at ASC LIMIT ?`)
+    .all(room) as any[];
+  let sent = 0;
+  for (const r of rows) {
+    const office = officeDisplay(r.office_name);
+    const html = r.html || (r.body || '').replace(/\n/g, '<br>');
+    const res = await sendMail(r.recipient_email, r.subject || `How was your recent service with ${office}?`, html, office);
+    if (res.ok) { db.prepare(`UPDATE review_requests SET status='sent', sent_at=?, error=NULL WHERE id=?`).run(new Date().toISOString(), r.id); sent++; }
+    else { db.prepare(`UPDATE review_requests SET error=? WHERE id=?`).run(res.error || 'send failed', r.id); }
+  }
+  return { sent, capped: rows.length >= room, remaining: remainingToday() };
 }
 
 /** Render a sample of the exact customer email (for a test send / preview). */
 export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
   return buildMessage({
     id: 0, number: null, kind: null, completed_at: null,
-    office_id: null, office_name: officeName || '1st FP Houston LLC',
+    office_id: null, office_name: officeName || '1st FP Houston LLC', office_phone: '2813334444',
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
     account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
   });
 }
 
 /** Sweep newly completed jobs into requests. Returns per-status counts. Bounded per run. */
-export async function runReviewSweep(max = 200): Promise<{ queued: number; sent: number; held: number; skipped: number }> {
+export async function runReviewSweep(max = 5000): Promise<{ queued: number; skipped: number }> {
   const jobs = pendingReviewJobs(max);
-  let sent = 0, held = 0, skipped = 0, queued = 0;
+  let skipped = 0, queued = 0;
   for (const j of jobs) {
-    const r = await queueReviewRequest(j.id);
-    if (!r.ok) { skipped++; continue; }
-    queued++;
-    if (r.status === 'sent') sent++;
-    else held++;
+    const r = queueForJob(j); // uses the already-fetched job — no per-job re-scan
+    if (r.ok) queued++; else skipped++;
   }
-  return { queued, sent, held, skipped };
+  return { queued, skipped };
 }
 
 /** Send a specific held/approved request now (the manual "approve & send"). */
@@ -300,7 +327,9 @@ export function reviewRequestSummary() {
     officesTotal: n(`SELECT COUNT(DISTINCT office_id) AS v FROM crm_jobs WHERE source='servicetrade' AND office_id IS NOT NULL`),
     officesMapped: n(`SELECT COUNT(*) AS v FROM review_targets WHERE review_url IS NOT NULL AND active=1`),
     eligible: pendingReviewJobs(100000).length,
-    held: n(`SELECT COUNT(*) AS v FROM review_requests WHERE source='servicetrade' AND status='held'`),
+    held: n(`SELECT COUNT(*) AS v FROM review_requests WHERE source='servicetrade' AND status IN ('held','approved')`),
     sent: n(`SELECT COUNT(*) AS v FROM review_requests WHERE source='servicetrade' AND status='sent'`),
+    dailyCap: dailyCap(),
+    dailySent: dailySent(),
   };
 }

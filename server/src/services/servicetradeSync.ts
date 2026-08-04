@@ -1,7 +1,7 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { stGet, stConfigured } from './servicetrade';
-import { runReviewSweep } from './reviewRequests';
+import { runReviewSweep, sendPending, getMode } from './reviewRequests';
 
 /**
  * The pull path — reads real records FROM ServiceTrade into our local mirror tables. Every call
@@ -160,7 +160,7 @@ interface StJob {
   id: number; number?: number | null; name?: string; type?: string; status?: string; displayStatus?: string;
   serviceLine?: string; scheduledDate?: number | null; completedOn?: number | null;
   customer?: { id?: number }; location?: { id?: number }; updated?: number;
-  assignedOffice?: { id?: number; name?: string } | null;
+  assignedOffice?: { id?: number; name?: string; phoneNumber?: string } | null;
   primaryContact?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string } | null;
 }
 
@@ -172,13 +172,13 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
   const upsert = db.prepare(
     `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source,
-       office_id, office_name, contact_name, contact_email, contact_phone)
+       office_id, office_name, office_phone, contact_name, contact_email, contact_phone)
      VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade',
-       @office_id, @office_name, @contact_name, @contact_email, @contact_phone)
+       @office_id, @office_name, @office_phone, @contact_name, @contact_email, @contact_phone)
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
        kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
        st_updated_at=excluded.st_updated_at, source='servicetrade',
-       office_id=excluded.office_id, office_name=excluded.office_name, contact_name=excluded.contact_name,
+       office_id=excluded.office_id, office_name=excluded.office_name, office_phone=excluded.office_phone, contact_name=excluded.contact_name,
        contact_email=excluded.contact_email, contact_phone=excluded.contact_phone`
   );
   let page = 1, totalPages = 1, pulled = 0;
@@ -201,6 +201,7 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
           sched: isoFromUnix(j.scheduledDate), completed: isoFromUnix(j.completedOn), updated: isoFromUnix(j.updated),
           office_id: j.assignedOffice && j.assignedOffice.id != null ? String(j.assignedOffice.id) : null,
           office_name: j.assignedOffice ? j.assignedOffice.name || null : null,
+          office_phone: j.assignedOffice ? j.assignedOffice.phoneNumber || null : null,
           contact_name: cname,
           contact_email: pc && pc.email ? String(pc.email).toLowerCase() : null,
           contact_phone: pc ? pc.mobile || pc.phone || null : null,
@@ -230,16 +231,16 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
   const upsert = db.prepare(
     `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source,
-       office_id, office_name, contact_name, contact_email, contact_phone)
+       office_id, office_name, office_phone, contact_name, contact_email, contact_phone)
      VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade',
-       @office_id, @office_name, @contact_name, @contact_email, @contact_phone)
+       @office_id, @office_name, @office_phone, @contact_name, @contact_email, @contact_phone)
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
        kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
        st_updated_at=excluded.st_updated_at, source='servicetrade',
-       office_id=excluded.office_id, office_name=excluded.office_name, contact_name=excluded.contact_name,
+       office_id=excluded.office_id, office_name=excluded.office_name, office_phone=excluded.office_phone, contact_name=excluded.contact_name,
        contact_email=excluded.contact_email, contact_phone=excluded.contact_phone`
   );
-  const windowStart = since ? '' : `&completedOnBegin=${startedAt - 90 * 86400}`;
+  const windowStart = since ? '' : `&completedOnBegin=${startedAt - 180 * 86400}`;
   const sinceQ = since ? `&updatedAfter=${since}` : '';
   let page = 1, totalPages = 1, pulled = 0;
   do {
@@ -260,6 +261,7 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
           sched: isoFromUnix(j.scheduledDate), completed: isoFromUnix(j.completedOn), updated: isoFromUnix(j.updated),
           office_id: j.assignedOffice && j.assignedOffice.id != null ? String(j.assignedOffice.id) : null,
           office_name: j.assignedOffice ? j.assignedOffice.name || null : null,
+          office_phone: j.assignedOffice ? j.assignedOffice.phoneNumber || null : null,
           contact_name: cname,
           contact_email: pc && pc.email ? String(pc.email).toLowerCase() : null,
           contact_phone: pc ? pc.mobile || pc.phone || null : null,
@@ -349,7 +351,11 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     // Completed jobs (the review trigger) — incremental once the cursor is bootstrapped.
     if (getCursor('completed_jobs')) { runningEntity = 'jobs'; progress = { page: 0, totalPages: 1, count: 0 }; (out as any).completed = await pullCompletedJobs(getCursor('completed_jobs')); }
     // Newly-completed jobs flow into Google review requests (held or auto-sent per mode).
-    try { (out as any).reviews = await runReviewSweep(); } catch { /* review sweep is best-effort */ }
+    try {
+      (out as any).reviews = await runReviewSweep();
+      // In auto mode, drain approved requests up to the daily cap (protects deliverability).
+      if (getMode() === 'auto') (out as any).reviewsSent = await sendPending(true);
+    } catch { /* review sweep is best-effort */ }
     lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
     return out;
   } catch (err) {

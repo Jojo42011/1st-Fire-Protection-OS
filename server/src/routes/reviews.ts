@@ -5,7 +5,7 @@ import { integrationConnected } from '../config/integrations';
 import { createApproval } from './approvals';
 import {
   discoverOffices, getTargets, setTarget, setTargetActive, getMode, setMode,
-  runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest,
+  runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest, sendPending,
 } from '../services/reviewRequests';
 import { pullCompletedJobs } from '../services/servicetradeSync';
 
@@ -99,6 +99,16 @@ router.post('/api/reviews/sweep', async (_req, res) => {
 // The routed request queue (held / sent).
 router.get('/api/reviews/queue', (_req, res) => {
   res.json({ requests: reviewRequestQueue(), summary: reviewRequestSummary() });
+});
+
+// Send queued requests up to today's remaining cap (the "Send all held" button).
+router.post('/api/reviews/send-batch', async (_req, res) => {
+  try {
+    const r = await sendPending(false);
+    res.json({ ok: true, ...r, summary: reviewRequestSummary() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 // Approve & send one request now (via Microsoft 365 Graph).
