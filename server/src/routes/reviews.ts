@@ -7,6 +7,7 @@ import {
   discoverOffices, getTargets, setTarget, setTargetActive, getMode, setMode,
   runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest,
 } from '../services/reviewRequests';
+import { pullCompletedJobs } from '../services/servicetradeSync';
 
 const router = Router();
 
@@ -40,6 +41,18 @@ router.post('/api/reviews/mode', (req, res) => {
   const mode = req.body?.mode === 'auto' ? 'auto' : 'hold';
   setMode(mode);
   res.json({ ok: true, mode });
+});
+
+// Backfill completed jobs (last ~90 days) so offices + contacts populate, then sweep. One-time
+// bootstrap; after this the scheduled sync keeps completed jobs current incrementally.
+router.post('/api/reviews/backfill', async (_req, res) => {
+  try {
+    const pull = await pullCompletedJobs();
+    const sweep = await runReviewSweep();
+    res.json({ ok: true, pulled: pull.pulled, ...sweep, summary: reviewRequestSummary() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 // Queue completed jobs into requests (held or auto-sent per mode). Manual trigger for the screen.

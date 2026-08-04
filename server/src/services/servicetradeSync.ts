@@ -18,7 +18,7 @@ const isoFromUnix = (s?: number | null): string | null => (s ? new Date(s * 1000
 // Big pulls (locations paginate ~10/page → hundreds of pages) can't ride a single HTTP
 // request, so pulls run in the background: start one, poll status. One pull at a time.
 const MAX_PAGES = 5000; // safety backstop, high enough not to truncate real data
-type Entity = 'accounts' | 'sites' | 'invoices' | 'jobs' | 'quotes';
+type Entity = 'accounts' | 'sites' | 'invoices' | 'jobs' | 'quotes' | 'completed_jobs';
 let runningEntity: Entity | null = null;
 let progress: { page: number; totalPages: number; count: number } | null = null;
 let lastStatus: { entity: Entity; state: 'done' | 'error'; counts?: any; error?: string; at: string } | null = null;
@@ -218,6 +218,64 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
   return { pulled, pages: totalPages };
 }
 
+/**
+ * Pull COMPLETED jobs (the review-request trigger). The default /job list returns open jobs,
+ * so we filter to completed and use longForm=true to get assignedOffice + primaryContact. On
+ * first run it backfills the last ~90 days; after that it is incremental on updatedAfter.
+ */
+export async function pullCompletedJobs(since?: number): Promise<{ pulled: number; pages: number }> {
+  const db = getDb();
+  const startedAt = Math.floor(Date.now() / 1000);
+  const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
+  const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
+  const upsert = db.prepare(
+    `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source,
+       office_id, office_name, contact_name, contact_email, contact_phone)
+     VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade',
+       @office_id, @office_name, @contact_name, @contact_email, @contact_phone)
+     ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
+       kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
+       st_updated_at=excluded.st_updated_at, source='servicetrade',
+       office_id=excluded.office_id, office_name=excluded.office_name, contact_name=excluded.contact_name,
+       contact_email=excluded.contact_email, contact_phone=excluded.contact_phone`
+  );
+  const windowStart = since ? '' : `&completedOnBegin=${startedAt - 90 * 86400}`;
+  const sinceQ = since ? `&updatedAfter=${since}` : '';
+  let page = 1, totalPages = 1, pulled = 0;
+  do {
+    const resp = await stGet(`/job?status=*&longForm=true${windowStart}${sinceQ}&page=${page}`);
+    const { rows, totalPages: tp } = unwrap<StJob>(resp, 'jobs');
+    totalPages = tp;
+    const tx = db.transaction((js: StJob[]) => {
+      for (const j of js) {
+        if (j?.id == null || j.completedOn == null) continue; // completed jobs only
+        const a = idOf(j.customer) ? (acctBy.get(idOf(j.customer)) as { id: number } | undefined) : undefined;
+        const s = idOf(j.location) ? (siteBy.get(idOf(j.location)) as { id: number } | undefined) : undefined;
+        const pc = j.primaryContact || null;
+        const cname = pc ? [pc.firstName, pc.lastName].filter(Boolean).join(' ') || null : null;
+        upsert.run({
+          st_id: String(j.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
+          number: j.number != null ? String(j.number) : j.name || null,
+          kind: j.serviceLine || j.type || null, status: j.displayStatus || j.status || 'Completed',
+          sched: isoFromUnix(j.scheduledDate), completed: isoFromUnix(j.completedOn), updated: isoFromUnix(j.updated),
+          office_id: j.assignedOffice && j.assignedOffice.id != null ? String(j.assignedOffice.id) : null,
+          office_name: j.assignedOffice ? j.assignedOffice.name || null : null,
+          contact_name: cname,
+          contact_email: pc && pc.email ? String(pc.email).toLowerCase() : null,
+          contact_phone: pc ? pc.mobile || pc.phone || null : null,
+        });
+        pulled++;
+      }
+    });
+    tx(rows);
+    progress = { page, totalPages, count: pulled };
+    page++;
+  } while (page <= totalPages && page <= MAX_PAGES);
+  setCursor('completed_jobs', startedAt);
+  try { db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', ?, 'applied', 'jobs')`).run(`${since ? 'Synced' : 'Pulled'} ${pulled} completed job${pulled === 1 ? '' : 's'} from ServiceTrade`); } catch { /* */ }
+  return { pulled, pages: totalPages };
+}
+
 interface StQuote {
   id: number; refNumber?: string; name?: string; status?: string; totalPrice?: string;
   customer?: { id?: number }; location?: { id?: number }; latestSubmission?: number | null; updated?: number;
@@ -288,6 +346,8 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     if (getCursor('jobs')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).jobs = await pullJobs(getCursor('jobs')); }
     runningEntity = 'quotes';
     if (getCursor('quotes')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).quotes = await pullQuotes(getCursor('quotes')); }
+    // Completed jobs (the review trigger) — incremental once the cursor is bootstrapped.
+    if (getCursor('completed_jobs')) { runningEntity = 'jobs'; progress = { page: 0, totalPages: 1, count: 0 }; (out as any).completed = await pullCompletedJobs(getCursor('completed_jobs')); }
     // Newly-completed jobs flow into Google review requests (held or auto-sent per mode).
     try { (out as any).reviews = await runReviewSweep(); } catch { /* review sweep is best-effort */ }
     lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
