@@ -143,27 +143,52 @@ export function officeDisplay(officeName: string | null): string {
   return clean || COMPANY.name;
 }
 
+const LOGO_URL = (process.env.APP_PUBLIC_URL || 'https://first-fp-os.fly.dev') + '/brand/logo-email.png';
+
 function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
-  const url = job.review_url || '#';
+  const city = office.replace(/1st Fire Protection/i, '').trim(); // "Houston", "Services", ...
+  const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
-  const sig = `${office}\n${COMPANY.phonePretty} · ${COMPANY.site}`;
   const body =
     `Hi ${first},\n\n` +
     `Thank you for choosing ${COMPANY.name} for your recent service. We hope our ${office} team took great care of you.\n\n` +
-    `If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection. It opens Google and takes about a minute:\n${url}\n\n` +
+    `If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection. It opens Google and takes about a minute:\n${job.review_url || ''}\n\n` +
     `If anything fell short, just reply to this email and we will make it right.\n\n` +
-    `Thank you,\n${sig}`;
+    `Thank you,\n${office}\n${COMPANY.phonePretty} · ${COMPANY.site}`;
+
+  // Table-based, inline-styled email in the 1st FP palette (navy #1E2D40, red #E53935, gold #F5B81B).
   const html =
-    `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;max-width:520px">` +
-    `<p>Hi ${escapeHtml(first)},</p>` +
-    `<p>Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
-    `<p>If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>` +
-    `<p style="margin:24px 0"><a href="${escapeAttr(url)}" style="display:inline-block;background:#4285F4;color:#ffffff;padding:13px 26px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">Leave a Google review</a></p>` +
-    `<p style="font-size:13px;color:#666">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p>` +
-    `<p style="margin-top:22px">Thank you,<br><b>${escapeHtml(office)}</b><br>${escapeHtml(COMPANY.name)}<br>${escapeHtml(COMPANY.phonePretty)} &middot; ${escapeHtml(COMPANY.site)}</p>` +
-    `</div>`;
+`<div style="margin:0;padding:0;background:#F5F7F9;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">
+  <tr><td style="background:#1E2D40;padding:18px 26px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td style="vertical-align:middle;"><img src="${LOGO_URL}" width="46" height="46" alt="1st Fire Protection" style="display:block;border:0;border-radius:8px;"></td>
+      <td style="vertical-align:middle;padding-left:13px;font-family:Arial,Helvetica,sans-serif;">
+        <div style="color:#FFFFFF;font-weight:800;font-size:16px;letter-spacing:.03em;">1ST FIRE PROTECTION</div>
+        ${city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : ''}
+      </td>
+    </tr></table>
+  </td></tr>
+  <tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">
+    <p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>
+    <p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>
+    <p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#E53935;">
+      <a href="${url}" style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">Leave a Google review</a>
+    </td></tr></table>
+    <p style="margin:18px 0 0;font-size:13px;color:#6B7683;">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p>
+  </td></tr>
+  <tr><td style="padding:22px 30px 26px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1E2D40;border-top:1px solid #EDF1F4;margin-top:10px;">
+    <div style="font-weight:800;">${escapeHtml(office)}</div>
+    <div style="color:#6B7683;">${escapeHtml(COMPANY.name)} &middot; ${escapeHtml(COMPANY.phonePretty)} &middot; ${escapeHtml(COMPANY.site)}</div>
+  </td></tr>
+</table>
+</td></tr></table>
+</div>`;
   return { subject, body, html, fromName: office };
 }
 
