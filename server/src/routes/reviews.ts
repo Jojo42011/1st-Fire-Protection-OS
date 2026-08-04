@@ -44,6 +44,39 @@ router.post('/api/reviews/mode', (req, res) => {
   res.json({ ok: true, mode });
 });
 
+// Diagnostic: for an office, where do customer emails live (job primaryContact vs location)?
+router.get('/api/reviews/diag/:officeId', async (req, res) => {
+  try {
+    const { stGet } = await import('../services/servicetrade');
+    const officeId = String(req.params.officeId);
+    const since = Math.floor(Date.now() / 1000) - 180 * 86400;
+    let page = 1, totalPages = 1;
+    let jobs = 0, jobEmail = 0, locEmail = 0, locContactEmail = 0, anyEmail = 0;
+    const samples: any[] = [];
+    do {
+      const r: any = await stGet(`/job?status=*&longForm=true&assignedOfficeIds=${officeId}&completedOnBegin=${since}&page=${page}`);
+      const data = r?.data || r;
+      totalPages = data?.totalPages || 1;
+      for (const j of data?.jobs || []) {
+        if (j.completedOn == null) continue;
+        jobs++;
+        const je = j.primaryContact?.email || null;
+        const le = j.location?.email || null;
+        const lce = j.location?.primaryContact?.email || null;
+        if (je) jobEmail++;
+        if (le) locEmail++;
+        if (lce) locContactEmail++;
+        if (je || le || lce) anyEmail++;
+        if (samples.length < 5) samples.push({ job: j.id, jobContactEmail: je, locationEmail: le, locationContactEmail: lce });
+      }
+      page++;
+    } while (page <= totalPages && page <= 30);
+    res.json({ officeId, jobs, jobEmail, locEmail, locContactEmail, anyEmail, samples });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 // Rebuild all UNSENT held/approved requests with the current message template (leaves sent ones
 // alone), then re-sweep. Safe cleanup after a copy change.
 router.post('/api/reviews/regenerate', async (_req, res) => {
