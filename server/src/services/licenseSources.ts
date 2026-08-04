@@ -50,7 +50,7 @@ function skuCost(part: string): number {
 }
 
 /** Acquire a Graph bearer token: static token if given, else client-credentials against Entra. */
-async function graphToken(): Promise<string | null> {
+export async function graphToken(): Promise<string | null> {
   if (process.env.MS_GRAPH_TOKEN) return process.env.MS_GRAPH_TOKEN as string;
   const tenant = process.env.MS_GRAPH_TENANT as string;
   const body = new URLSearchParams({

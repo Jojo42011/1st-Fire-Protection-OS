@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { stGet, stConfigured } from './servicetrade';
+import { runReviewSweep } from './reviewRequests';
 
 /**
  * The pull path — reads real records FROM ServiceTrade into our local mirror tables. Every call
@@ -159,6 +160,8 @@ interface StJob {
   id: number; number?: number | null; name?: string; type?: string; status?: string; displayStatus?: string;
   serviceLine?: string; scheduledDate?: number | null; completedOn?: number | null;
   customer?: { id?: number }; location?: { id?: number }; updated?: number;
+  assignedOffice?: { id?: number; name?: string } | null;
+  primaryContact?: { firstName?: string; lastName?: string; email?: string; phone?: string; mobile?: string } | null;
 }
 
 /** Pull jobs into the crm_jobs mirror, linked to account + site. Incremental with `since`. */
@@ -168,11 +171,15 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
   const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
   const upsert = db.prepare(
-    `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source)
-     VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade')
+    `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source,
+       office_id, office_name, contact_name, contact_email, contact_phone)
+     VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade',
+       @office_id, @office_name, @contact_name, @contact_email, @contact_phone)
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
        kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
-       st_updated_at=excluded.st_updated_at, source='servicetrade'`
+       st_updated_at=excluded.st_updated_at, source='servicetrade',
+       office_id=excluded.office_id, office_name=excluded.office_name, contact_name=excluded.contact_name,
+       contact_email=excluded.contact_email, contact_phone=excluded.contact_phone`
   );
   let page = 1, totalPages = 1, pulled = 0;
   const sinceQ = since ? `&updatedAfter=${since}` : '';
@@ -185,11 +192,18 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
         if (j?.id == null) continue;
         const a = idOf(j.customer) ? (acctBy.get(idOf(j.customer)) as { id: number } | undefined) : undefined;
         const s = idOf(j.location) ? (siteBy.get(idOf(j.location)) as { id: number } | undefined) : undefined;
+        const pc = j.primaryContact || null;
+        const cname = pc ? [pc.firstName, pc.lastName].filter(Boolean).join(' ') || null : null;
         upsert.run({
           st_id: String(j.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
           number: j.number != null ? String(j.number) : j.name || null,
           kind: j.serviceLine || j.type || null, status: j.displayStatus || j.status || null,
           sched: isoFromUnix(j.scheduledDate), completed: isoFromUnix(j.completedOn), updated: isoFromUnix(j.updated),
+          office_id: j.assignedOffice && j.assignedOffice.id != null ? String(j.assignedOffice.id) : null,
+          office_name: j.assignedOffice ? j.assignedOffice.name || null : null,
+          contact_name: cname,
+          contact_email: pc && pc.email ? String(pc.email).toLowerCase() : null,
+          contact_phone: pc ? pc.mobile || pc.phone || null : null,
         });
         pulled++;
       }
@@ -274,6 +288,8 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     if (getCursor('jobs')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).jobs = await pullJobs(getCursor('jobs')); }
     runningEntity = 'quotes';
     if (getCursor('quotes')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).quotes = await pullQuotes(getCursor('quotes')); }
+    // Newly-completed jobs flow into Google review requests (held or auto-sent per mode).
+    try { (out as any).reviews = await runReviewSweep(); } catch { /* review sweep is best-effort */ }
     lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
     return out;
   } catch (err) {

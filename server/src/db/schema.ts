@@ -773,6 +773,37 @@ export function initDb(): void {
   addColumn('crm_jobs', 'local_updated_at', 'TEXT');
   addColumn('quotes', 'source', "TEXT DEFAULT 'seed'");
 
+  /* ---------- Google review requests (per-office routing) ----------
+   * A completed ServiceTrade job carries assignedOffice (which 1st FP branch) and
+   * primaryContact (who to ask). We capture both on the job, map each office to its Google
+   * review link, and send "how did we do?" so the review lands on the right profile. */
+  addColumn('crm_jobs', 'office_id', 'TEXT');
+  addColumn('crm_jobs', 'office_name', 'TEXT');
+  addColumn('crm_jobs', 'contact_name', 'TEXT');
+  addColumn('crm_jobs', 'contact_email', 'TEXT');
+  addColumn('crm_jobs', 'contact_phone', 'TEXT');
+  addColumn('crm_jobs', 'review_requested', 'INTEGER DEFAULT 0'); // 1 once a request has been queued/sent
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_targets (
+      office_id   TEXT PRIMARY KEY,          -- ServiceTrade assignedOffice id
+      office_name TEXT,
+      place_id    TEXT,                       -- Google place id (if known)
+      review_url  TEXT,                       -- the public "write a review" link the request points to
+      active      INTEGER DEFAULT 1,          -- 0 pauses requests for this office
+      updated_at  TEXT DEFAULT (datetime('now'))
+    );
+  `);
+  // review_requests gains routing + delivery columns (was: draft only, off the old jobs fixture).
+  addColumn('review_requests', 'office_name', 'TEXT');
+  addColumn('review_requests', 'review_url', 'TEXT');
+  addColumn('review_requests', 'recipient_email', 'TEXT');
+  addColumn('review_requests', 'recipient_phone', 'TEXT');
+  addColumn('review_requests', 'subject', 'TEXT');
+  addColumn('review_requests', 'sent_at', 'TEXT');
+  addColumn('review_requests', 'error', 'TEXT');
+  addColumn('review_requests', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_office ON crm_jobs(office_id);`);
+
   // Indexes for the v2 server-side list query (search / filter / sort / paginate at scale).
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_accounts_source  ON accounts(source);

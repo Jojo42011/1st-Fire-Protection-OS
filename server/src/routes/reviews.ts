@@ -3,8 +3,69 @@ import { getDb } from '../db/index';
 import { draftReviewRequest, draftReviewReply, getReputationSummary } from '../services/reviewAgent';
 import { integrationConnected } from '../config/integrations';
 import { createApproval } from './approvals';
+import {
+  discoverOffices, getTargets, setTarget, setTargetActive, getMode, setMode,
+  runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest,
+} from '../services/reviewRequests';
 
 const router = Router();
+
+/* ---------- Google review requests, routed per office (live ServiceTrade) ---------- */
+
+// Offices discovered from real jobs + their Google-link mapping state + queue summary.
+router.get('/api/reviews/targets', (_req, res) => {
+  res.json({ offices: discoverOffices(), targets: getTargets(), summary: reviewRequestSummary() });
+});
+
+// Map an office to its Google review link (accepts a review URL or a bare place id).
+router.post('/api/reviews/targets', (req, res) => {
+  try {
+    const officeId = String(req.body?.office_id || '').trim();
+    const link = String(req.body?.link || '').trim();
+    if (!officeId || !link) return res.status(400).json({ ok: false, error: 'office_id and link required' });
+    const t = setTarget(officeId, req.body?.office_name != null ? String(req.body.office_name) : null, link);
+    res.json({ ok: true, target: t });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+router.post('/api/reviews/targets/:officeId/active', (req, res) => {
+  setTargetActive(String(req.params.officeId), !!req.body?.active);
+  res.json({ ok: true });
+});
+
+// Switch hold <-> auto send.
+router.post('/api/reviews/mode', (req, res) => {
+  const mode = req.body?.mode === 'auto' ? 'auto' : 'hold';
+  setMode(mode);
+  res.json({ ok: true, mode });
+});
+
+// Queue completed jobs into requests (held or auto-sent per mode). Manual trigger for the screen.
+router.post('/api/reviews/sweep', async (_req, res) => {
+  try {
+    const r = await runReviewSweep();
+    res.json({ ok: true, ...r, summary: reviewRequestSummary() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+// The routed request queue (held / sent).
+router.get('/api/reviews/queue', (_req, res) => {
+  res.json({ requests: reviewRequestQueue(), summary: reviewRequestSummary() });
+});
+
+// Approve & send one request now (via Microsoft 365 Graph).
+router.post('/api/reviews/queue/:id/send', async (req, res) => {
+  try {
+    const r = await sendReviewRequest(Number(req.params.id));
+    res.json(r);
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
 
 router.get('/api/reviews', (_req, res) => {
   const db = getDb();
