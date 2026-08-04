@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db/index';
 import { hasRealAccounts, hasRealSites, hasRealJobs, hasRealQuotes } from '../services/servicetradeSync';
 import { runList, countWith, type ListSpec } from '../services/listQuery';
+import { stGet, stConfigured } from '../services/servicetrade';
 
 /**
  * CRM (Signal Phase 4) — Accounts, Account detail and Pipeline. Shell only: everything
@@ -282,6 +283,45 @@ router.get('/api/quotes', (req, res) => {
     });
   }
   res.json({ quotes: [], counts: { all: 0, valued: 0 }, total: 0, page: 1, pages: 1, showing: 0, live: false });
+});
+
+// An account's real ServiceTrade invoices (read-only, live). Powers real balances on the
+// account detail and lets us see WHY an account is overdue (invoice ages, paid vs open).
+router.get('/api/accounts/:id/invoices', async (req, res) => {
+  const db = getDb();
+  const a = db.prepare(`SELECT st_id, name FROM accounts WHERE id = ?`).get(Number(req.params.id)) as { st_id: string | null; name: string } | undefined;
+  if (!a) return res.status(404).json({ ok: false, error: 'not found' });
+  if (!a.st_id || !stConfigured()) return res.json({ live: false, account: a.name, invoices: [], summary: {} });
+  try {
+    const resp = await stGet(`/invoice?customerId=${encodeURIComponent(a.st_id)}`);
+    const body = (resp as any)?.data ?? resp ?? {};
+    const nowSec = Math.floor(Date.now() / 1000);
+    const invoices = ((body.invoices as any[]) || []).map((inv) => {
+      const total = Number(inv.totalPrice) || 0;
+      const paidAmt = Number(inv.totalPaidAmount) || 0;
+      const open = Math.max(0, total - paidAmt);
+      const overdue = inv.dueDate != null && Number(inv.dueDate) < nowSec && !inv.paid && open > 0;
+      const ageDays = inv.dueDate != null ? Math.round((nowSec - Number(inv.dueDate)) / 86400) : null;
+      return {
+        number: inv.invoiceNumber, status: inv.status, substatus: inv.substatus, paid: !!inv.paid,
+        total, paidAmount: paidAmt, open,
+        dueDate: inv.dueDate ? new Date(inv.dueDate * 1000).toISOString().slice(0, 10) : null,
+        transactionDate: inv.transactionDate ? new Date(inv.transactionDate * 1000).toISOString().slice(0, 10) : null,
+        overdue, ageDays,
+      };
+    });
+    const openInv = invoices.filter((i) => i.open > 0);
+    const summary = {
+      count: invoices.length,
+      openCount: openInv.length,
+      openTotal: openInv.reduce((s, i) => s + i.open, 0),
+      overdueCount: invoices.filter((i) => i.overdue).length,
+      oldestOverdueDays: Math.max(0, ...invoices.filter((i) => i.overdue).map((i) => i.ageDays || 0)),
+    };
+    res.json({ live: true, account: a.name, summary, invoices });
+  } catch (err) {
+    res.status(502).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 router.get('/api/accounts/:id', (req, res) => {
