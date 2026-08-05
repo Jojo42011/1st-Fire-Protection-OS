@@ -179,8 +179,8 @@ function shapeQuoteRow(q: QuoteRow & { customer: string | null; st_id?: string |
 function realPipelineSummary(office = '') {
   const db = getDb();
   const oc = office ? ' AND office = @office' : '';
-  const p = office ? { office } : undefined;
-  const scalar = (sql: string) => (db.prepare(sql).get(p as any) as { v: number }).v || 0;
+  // better-sqlite3 rejects an explicit `undefined` bind, so pass args only when scoping.
+  const scalar = (sql: string) => (db.prepare(sql).get(...(office ? [{ office }] : [])) as { v: number }).v || 0;
 
   // headline win rate is real: decided = won + lost across all pulled quotes (in scope)
   const won = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_WON)})${oc}`);
