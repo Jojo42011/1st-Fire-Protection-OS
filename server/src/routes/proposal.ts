@@ -171,4 +171,31 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
+// temp: inspect what the ServiceTrade<->Intacct connector is actually syncing (externalIds footprint)
+router.get('/api/proposal/intacct-probe', async (_req, res) => {
+  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
+  const out: any = {};
+  const look = async (label: string, path: string, extraKeys: string[] = []) => {
+    try {
+      const r: any = await stGet(path);
+      const d = r?.data || r;
+      const k = Object.keys(d || {}).find((x) => Array.isArray((d as any)[x]));
+      const arr: any[] = k ? (d as any)[k] : [];
+      const withExt = arr.filter((x) => x.externalIds && (Array.isArray(x.externalIds) ? x.externalIds.length : Object.keys(x.externalIds || {}).length));
+      out[label] = {
+        totalPages: d?.totalPages,
+        inPage: arr.length,
+        withExternalIds: withExt.length,
+        externalIdSample: withExt[0]?.externalIds ?? arr[0]?.externalIds ?? null,
+        keys: arr[0] ? Object.keys(arr[0]) : [],
+        sample: arr[0] ? Object.fromEntries(['id', 'refNumber', 'status', 'totalPrice', ...extraKeys].map((kk) => [kk, arr[0][kk]])) : null,
+      };
+    } catch (e) { out[label] = { error: String((e as Error).message).slice(0, 120) }; }
+  };
+  await look('invoices', '/invoice?limit=8&longForm=true', ['transactionId', 'invoiceNumber']);
+  await look('companies', '/company?limit=6&longForm=true', ['name']);
+  await look('jobs', '/job?limit=6&longForm=true', ['name']);
+  res.json(out);
+});
+
 export default router;
