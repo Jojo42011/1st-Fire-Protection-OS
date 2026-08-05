@@ -171,4 +171,32 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
+// temp: probe ServiceTrade for the real recurring-service source (contracts / job types / recurrence)
+router.get('/api/proposal/plans-probe', async (_req, res) => {
+  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
+  const out: any = {};
+  const tryGet = async (label: string, path: string) => {
+    try {
+      const r: any = await stGet(path);
+      const d = r?.data || r;
+      const key = Object.keys(d || {}).find((k) => Array.isArray((d as any)[k]));
+      const arr = key ? (d as any)[key] : Array.isArray(d) ? d : [];
+      out[label] = { ok: true, totalPages: d?.totalPages, count: arr.length, keys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}), sample: arr[0] };
+    } catch (e) { out[label] = { ok: false, error: (e as Error).message }; }
+  };
+  await tryGet('servicecontract', '/servicecontract?limit=2');
+  await tryGet('recurringService', '/recurringservice?limit=2');
+  // job types distribution over a page
+  try {
+    const r: any = await stGet('/job?limit=100');
+    const d = r?.data || r;
+    const jobs = d?.jobs || [];
+    const byType: Record<string, number> = {};
+    for (const j of jobs) byType[j.type || j.jobType || 'unknown'] = (byType[j.type || j.jobType || 'unknown'] || 0) + 1;
+    out.jobTypes = byType;
+  } catch (e) { out.jobTypes = { error: (e as Error).message }; }
+  await tryGet('serviceRequest', '/servicerequest?limit=2');
+  res.json(out);
+});
+
 export default router;
