@@ -62,6 +62,14 @@ Austin 558 · Waco 520 · College Station 202 · Lubbock 166 · Accounting 137 �
    (San Antonio, Waco, Austin, McAllen). The other offices have little/no after-hours coverage.
    Fire protection is 24/7 emergency work — these are the highest-stakes calls, handled by a vendor
    Devon rates as poor.
+   - **Vendor cost (real):** Dispatch Center, Ltd. bills **$115.30/mo** (invoice 0058772-IN,
+     7/25/2026: $50 custom line + seven 800-number receivers + voicemail-to-email + misc), covering
+     **only those four offices**, after-hours only. So this is **not a cost-savings play** — the
+     vendor is cheap. The case is (a) coverage for all **eight** offices, (b) lead capture, and
+     (c) quality/instrumentation. For the apples-to-apples after-hours slice, an AI dispatch runs
+     ~$20–30/mo (≈72 calls × ~2.5 min × ~$0.12/min all-in) — under the vendor while covering twice
+     the offices. The ROI is the **recovered job**: one booked emergency job (~$3,120 avg, ServiceTrade)
+     is worth ~27 months of the vendor.
 
 ### Ground truth from the frontline (correction to #1)
 The Teams **queue config understates real coverage.** The McAllen front-desk receptionist reports
