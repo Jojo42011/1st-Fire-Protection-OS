@@ -63,6 +63,21 @@ Austin 558 · Waco 520 · College Station 202 · Lubbock 166 · Accounting 137 �
    Fire protection is 24/7 emergency work — these are the highest-stakes calls, handled by a vendor
    Devon rates as poor.
 
+### Ground truth from the frontline (correction to #1)
+The Teams **queue config understates real coverage.** The McAllen front-desk receptionist reports
+the main line is a **3-person serial hunt** (front desk -> Yadira Velasco -> Susie Flores ->
+voicemail), with manual break coverage, and that she **rarely misses** daytime calls. New-business
+leads are low volume there (~4 in 3 weeks). So "single-agent overflow to voicemail = lost daytime
+leads" is **not** supported at McAllen and should not be presented as fact for any office without
+measured miss data. What she did surface: **voicemails that no one can currently access** (messages
+left, never retrieved) — a real leak independent of miss rate.
+
+**Takeaway:** the defensible value is (a) after-hours/emergency coverage, (b) instrumentation and
+lead capture on calls we already answer, and (c) an always-available backup + retrievable voicemail
+— i.e. augmenting a good front-desk team, not replacing an overwhelmed one. The daytime miss rate
+must be **measured** (callRecords sessions), never inferred from queue agent counts. Best signal so
+far is talking to the receptionists directly.
+
 ---
 
 ## 3. The plan
