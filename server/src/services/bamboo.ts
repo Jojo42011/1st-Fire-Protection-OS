@@ -22,6 +22,18 @@ export interface DirectoryEmployee {
   source: 'bamboo';
 }
 
+/** A roster row that carries the employee's office/location (for location-scoped listings). */
+export interface RosterEmployee {
+  full_name: string;
+  email: string | null;
+  department: string | null;
+  title: string | null;
+  location: string | null;
+  status: 'active' | 'terminated';
+  hired_at: string | null;
+  source: 'bamboo';
+}
+
 export function bambooConfigured(): boolean {
   return !!(process.env.BAMBOO_SUBDOMAIN && process.env.BAMBOO_API_KEY);
 }
@@ -115,5 +127,49 @@ export async function fetchTerminated(): Promise<DirectoryEmployee[]> {
   } catch (err) {
     console.warn('[bamboo] terminated report failed, degrading:', (err as Error).message);
     return [];
+  }
+}
+
+/**
+ * Pull the full roster WITH each employee's office/location, so callers can list people by
+ * location (the directory endpoint above intentionally omits location). Uses the custom-report
+ * API — the authoritative source for the `location` field regardless of directory settings.
+ *
+ * `onlyCurrent` defaults to true (active employees only). Returns null when unkeyed so the caller
+ * can degrade gracefully; never throws on a transient failure.
+ */
+export async function fetchRoster(opts: { onlyCurrent?: boolean } = {}): Promise<RosterEmployee[] | null> {
+  if (!bambooConfigured()) return null;
+  const sub = process.env.BAMBOO_SUBDOMAIN as string;
+  const onlyCurrent = opts.onlyCurrent !== false; // active-only by default
+  const url = `https://api.bamboohr.com/api/gateway.php/${encodeURIComponent(sub)}/v1/reports/custom?format=JSON&onlyCurrent=${onlyCurrent ? 'true' : 'false'}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: authHeader(), accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Roster by location',
+        fields: ['displayName', 'firstName', 'lastName', 'workEmail', 'department', 'jobTitle', 'location', 'status', 'hireDate'],
+      }),
+    });
+    if (!res.ok) throw new Error(`bamboo roster ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as { employees?: any[] };
+    const rows = Array.isArray(data.employees) ? data.employees : [];
+    return rows.map((e) => {
+      const s = String(e.status || '').toLowerCase();
+      return {
+        full_name: e.displayName || [e.firstName, e.lastName].filter(Boolean).join(' ') || String(e.id || 'Unknown'),
+        email: e.workEmail || null,
+        department: e.department || null,
+        title: e.jobTitle || null,
+        location: e.location || null,
+        status: (s === 'inactive' || s === 'terminated' ? 'terminated' : 'active') as 'active' | 'terminated',
+        hired_at: e.hireDate && e.hireDate !== '0000-00-00' ? e.hireDate : null,
+        source: 'bamboo' as const,
+      };
+    });
+  } catch (err) {
+    console.warn('[bamboo] roster pull failed, degrading:', (err as Error).message);
+    return null;
   }
 }
