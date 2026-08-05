@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { stGet, stConfigured } from '../services/servicetrade';
 
 /**
  * Read-only sizing for the FIREPROSHIELD recurring-maintenance program. Segments the real
@@ -113,6 +114,57 @@ router.get('/api/proposal/tier-sizing', (_req, res) => {
           },
         ])
       ),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/**
+ * Live deficiency pull from the ServiceTrade API (deficiencies are not in the local mirror).
+ * Sizes the un-converted repair backlog: how many open deficiencies exist and the estimated
+ * repair dollars sitting in them (proposedProceeds). This is the revenue the membership would
+ * systematically convert. Read-only; pages through /deficiency and aggregates.
+ */
+router.get('/api/proposal/deficiencies', async (req, res) => {
+  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
+  try {
+    const status = String(req.query.status || '').trim(); // optional passthrough once we know valid values
+    const limit = 1000;
+    let page = 1, totalPages = 1, guard = 0;
+    const all: any[] = [];
+    while (page <= totalPages && guard++ < 80) {
+      const q = `/deficiency?limit=${limit}&page=${page}${status ? `&status=${encodeURIComponent(status)}` : ''}`;
+      const r: any = await stGet(q);
+      const d = r?.data || r;
+      const arr = d?.deficiencies || d?.data || (Array.isArray(d) ? d : []);
+      totalPages = Number(d?.totalPages || 1);
+      for (const x of arr) all.push(x);
+      page++;
+      if (!arr.length) break;
+    }
+
+    const byStatus: Record<string, number> = {};
+    const bySeverity: Record<string, number> = {};
+    let proceedsSum = 0, proceedsN = 0;
+    for (const x of all) {
+      const st = String(x.status ?? x.serviceStatus ?? 'unknown');
+      byStatus[st] = (byStatus[st] || 0) + 1;
+      const sev = String(x.severity ?? 'unspecified');
+      bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+      const pp = Number(x.proposedProceeds ?? x.proposed_proceeds ?? x.estimatedProceeds ?? 0);
+      if (isFinite(pp) && pp > 0) { proceedsSum += pp; proceedsN++; }
+    }
+
+    res.json({
+      ok: true,
+      total: all.length,
+      totalPages,
+      byStatus: Object.fromEntries(Object.entries(byStatus).sort((a, b) => b[1] - a[1])),
+      bySeverity: Object.fromEntries(Object.entries(bySeverity).sort((a, b) => b[1] - a[1])),
+      proposedProceeds: { withValue: proceedsN, sumUsd: Math.round(proceedsSum), avgUsd: proceedsN ? Math.round(proceedsSum / proceedsN) : 0 },
+      sampleKeys: all[0] ? Object.keys(all[0]) : [],
+      sample: all[0] || null,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });
