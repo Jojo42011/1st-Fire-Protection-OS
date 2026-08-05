@@ -43,10 +43,19 @@ router.get('/api/teams/pstn-analytics', async (req, res) => {
     }
 
     const orgSet = new Set(Object.keys(OFFICE_NUMBERS));
+    const TZ = 5; // Central summer (CDT, UTC-5); the data window is Jul–Aug
     const byOffice: Record<string, number> = {};
-    const byHourCentral = new Array(24).fill(0); // approx CST (UTC-6)
+    const byHourCentral = new Array(24).fill(0);
     const byDate: Record<string, number> = {};
-    let inbound = 0, outbound = 0, durSum = 0, durN = 0;
+    // after-hours = weekday before 7a or 6p+, or any weekend hour (local Central)
+    const isAfterHours = (local: Date) => {
+      const dow = local.getUTCDay(); // 0=Sun..6=Sat (local shifted)
+      const h = local.getUTCHours();
+      if (dow === 0 || dow === 6) return true;
+      return h < 7 || h >= 18;
+    };
+    const ahByOffice: Record<string, number> = {};
+    let inbound = 0, outbound = 0, durSum = 0, durN = 0, afterHours = 0, weekend = 0, overnight = 0;
 
     for (const c of calls) {
       const callee = String(c.calleeNumber || '');
@@ -55,12 +64,14 @@ router.get('/api/teams/pstn-analytics', async (req, res) => {
       const isOutbound = orgSet.has(caller);
       if (isInbound) {
         inbound++;
-        byOffice[OFFICE_NUMBERS[callee]] = (byOffice[OFFICE_NUMBERS[callee]] || 0) + 1;
-        const d = new Date(c.startDateTime);
-        const h = (d.getUTCHours() + 24 - 6) % 24;
-        byHourCentral[h]++;
-        const key = new Date(d.getTime() - 6 * 3600000).toISOString().slice(0, 10);
-        byDate[key] = (byDate[key] || 0) + 1;
+        const office = OFFICE_NUMBERS[callee];
+        byOffice[office] = (byOffice[office] || 0) + 1;
+        const local = new Date(new Date(c.startDateTime).getTime() - TZ * 3600000);
+        byHourCentral[local.getUTCHours()]++;
+        byDate[local.toISOString().slice(0, 10)] = (byDate[local.toISOString().slice(0, 10)] || 0) + 1;
+        if (isAfterHours(local)) { afterHours++; ahByOffice[office] = (ahByOffice[office] || 0) + 1; }
+        if (local.getUTCDay() === 0 || local.getUTCDay() === 6) weekend++;
+        if (local.getUTCHours() >= 22 || local.getUTCHours() < 6) overnight++;
       } else if (isOutbound) outbound++;
       const dur = Number(c.duration);
       if (isFinite(dur) && dur > 0) { durSum += dur; durN++; }
@@ -75,9 +86,9 @@ router.get('/api/teams/pstn-analytics', async (req, res) => {
       inboundPerDayAvg: Math.round((inbound / dayCount) * 10) / 10,
       inboundByOffice: Object.fromEntries(Object.entries(byOffice).sort((a, b) => b[1] - a[1])),
       inboundByHourCentral: byHourCentral,
+      afterHours: { total: afterHours, weekend, overnight, byOffice: Object.fromEntries(Object.entries(ahByOffice).sort((a, b) => b[1] - a[1])) },
       avgDurationSec: durN ? Math.round(durSum / durN) : 0,
       distinctDays: dayCount,
-      sample: calls.slice(0, 3),
     });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
