@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { pullQuotes } from '../services/servicetradeSync';
+import { deriveQuoteOffices } from '../services/servicetradeSync';
 
 /**
  * ServiceTrade sync (Signal Phase 4) — SHELL ONLY. ServiceTrade is never called: the
@@ -106,12 +106,11 @@ router.post('/api/sync/now', (_req, res) => {
   res.json({ ok: true, live: false });
 });
 
-// One-shot: full re-pull of quotes (read-only from ServiceTrade) to backfill the office field
-// onto every existing quote, so Estimates + Follow-ups can scope by location.
-router.post('/api/sync/quotes-office', async (_req, res) => {
+// One-shot: derive each quote's office from its account's jobs (no ServiceTrade calls), so
+// Estimates + Follow-ups can scope by location. Runs automatically on the sync cycle too.
+router.post('/api/sync/quotes-office', (_req, res) => {
   try {
-    const r = await pullQuotes(); // full pull (no cursor) → office populated on all rows
-    res.json({ ok: true, ...r });
+    res.json({ ok: true, ...deriveQuoteOffices() });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }

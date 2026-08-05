@@ -288,7 +288,28 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
 interface StQuote {
   id: number; refNumber?: string; name?: string; status?: string; totalPrice?: string;
   customer?: { id?: number }; location?: { id?: number }; latestSubmission?: number | null; updated?: number;
-  office?: { id?: number; name?: string } | null; assignedOffice?: { id?: number; name?: string } | null;
+}
+
+/**
+ * Give every quote an office by inheriting it from the account's jobs. ServiceTrade leaves the
+ * quote-level assignedOffice empty on almost all quotes, but jobs carry a real assignedOffice
+ * (crm_jobs.office_name), and an account is served by one office. So each quote takes the office
+ * its account's jobs most commonly ran under. Cheap SQL, no ServiceTrade calls. Returns rows set.
+ */
+export function deriveQuoteOffices(): { updated: number } {
+  const db = getDb();
+  const info = db
+    .prepare(
+      `UPDATE quotes
+          SET office = (
+            SELECT j.office_name FROM crm_jobs j
+             WHERE j.account_id = quotes.account_id AND j.office_name IS NOT NULL AND j.office_name != ''
+             GROUP BY j.office_name ORDER BY COUNT(*) DESC LIMIT 1
+          )
+        WHERE source = 'servicetrade' AND account_id IS NOT NULL`
+    )
+    .run();
+  return { updated: info.changes };
 }
 
 /** Pull quotes into the quotes mirror, linked to account + site. Incremental with `since`. */
@@ -297,17 +318,20 @@ export async function pullQuotes(since?: number): Promise<{ pulled: number; page
   const startedAt = Math.floor(Date.now() / 1000);
   const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
+  // NOTE: 'office' is intentionally NOT written here. ServiceTrade leaves assignedOffice empty on
+  // most quotes, so office is derived from the account's jobs instead (deriveQuoteOffices) and must
+  // not be clobbered to null on every sync.
   const upsert = db.prepare(
-    `INSERT INTO quotes (st_id, account_id, site_id, number, title, amount_cents, stage, office, sent_at, st_updated_at, local_updated_at, sync_state, source)
-     VALUES (@st_id, @account_id, @site_id, @number, @title, @amount, @stage, @office, @sent, @updated, datetime('now'), 'clean', 'servicetrade')
+    `INSERT INTO quotes (st_id, account_id, site_id, number, title, amount_cents, stage, sent_at, st_updated_at, local_updated_at, sync_state, source)
+     VALUES (@st_id, @account_id, @site_id, @number, @title, @amount, @stage, @sent, @updated, datetime('now'), 'clean', 'servicetrade')
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
-       title=excluded.title, amount_cents=excluded.amount_cents, stage=excluded.stage, office=excluded.office, sent_at=excluded.sent_at,
+       title=excluded.title, amount_cents=excluded.amount_cents, stage=excluded.stage, sent_at=excluded.sent_at,
        st_updated_at=excluded.st_updated_at, local_updated_at=datetime('now'), source='servicetrade'`
   );
   let page = 1, totalPages = 1, pulled = 0;
   const sinceQ = since ? `&updatedAfter=${since}` : '';
   do {
-    const resp = await stGet(`/quote?page=${page}&longForm=true${sinceQ}`);
+    const resp = await stGet(`/quote?page=${page}${sinceQ}`);
     const { rows, totalPages: tp } = unwrap<StQuote>(resp, 'quotes');
     totalPages = tp;
     const tx = db.transaction((qs: StQuote[]) => {
@@ -321,8 +345,7 @@ export async function pullQuotes(since?: number): Promise<{ pulled: number; page
           // totalPrice is a string and may be comma-grouped ("12,500.00") — strip commas so
           // parseFloat doesn't truncate high-value quotes to a few dollars.
           amount: Math.round((parseFloat(String(q.totalPrice || '0').replace(/,/g, '')) || 0) * 100),
-          stage: q.status || 'quoted', office: q.office?.name || q.assignedOffice?.name || null,
-          sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
+          stage: q.status || 'quoted', sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
         });
         pulled++;
       }
@@ -357,6 +380,8 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     if (getCursor('jobs')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).jobs = await pullJobs(getCursor('jobs')); }
     runningEntity = 'quotes';
     if (getCursor('quotes')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).quotes = await pullQuotes(getCursor('quotes')); }
+    // give quotes an office by inheriting it from their account's jobs (assignedOffice is empty on the quote)
+    deriveQuoteOffices();
     // Completed jobs (the review trigger) — incremental once the cursor is bootstrapped.
     if (getCursor('completed_jobs')) { runningEntity = 'jobs'; progress = { page: 0, totalPages: 1, count: 0 }; (out as any).completed = await pullCompletedJobs(getCursor('completed_jobs')); }
     // Newly-completed jobs flow into Google review requests (held or auto-sent per mode).

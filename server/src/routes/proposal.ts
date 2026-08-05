@@ -171,25 +171,4 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
-// temp diagnostic: office distribution on quotes + a raw ST quote shape
-router.get('/api/proposal/quote-offices', async (_req, res) => {
-  const db = getDb();
-  const rows = db.prepare(`SELECT COALESCE(office,'(null)') AS o, COUNT(*) AS c FROM quotes WHERE source='servicetrade' GROUP BY o ORDER BY c DESC LIMIT 20`).all();
-  let diag: any = {};
-  try {
-    const r: any = await stGet(`/quote?page=1&longForm=true`);
-    const d = r?.data || r;
-    const qs = d?.quotes || [];
-    diag = {
-      totalPages: d?.totalPages,
-      pageCount: qs.length,
-      withAssignedOfficeId: qs.filter((x: any) => x.assignedOffice && x.assignedOffice.id).length,
-      withAssignedOfficeName: qs.filter((x: any) => x.assignedOffice && x.assignedOffice.name).length,
-      withLocationId: qs.filter((x: any) => x.location && x.location.id).length,
-      raw3: qs.slice(0, 3).map((x: any) => ({ ao: x.assignedOffice, loc: x.location?.id })),
-    };
-  } catch (e) { diag = { error: (e as Error).message }; }
-  res.json({ rows, diag });
-});
-
 export default router;
