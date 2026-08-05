@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-  <form class="card" id="form" onsubmit="return submit()">
+  <form class="card" id="form">
     <div class="top">
       <div class="wm">1ST FIRE PROTECTION</div>
       <div class="sub">Operations OS</div>
@@ -57,7 +57,7 @@ function togglePw(){
   if(el.type==='password'){el.type='text';t.textContent='Hide';}else{el.type='password';t.textContent='Show';}
   el.focus();
 }
-function submit(){
+function doLogin(){
   var pw=document.getElementById('pw').value.trim(); // drop stray spaces/newlines from paste
   var btn=document.getElementById('btn'), err=document.getElementById('err');
   err.textContent=''; btn.disabled=true; btn.textContent='Signing in…';
@@ -68,8 +68,10 @@ function submit(){
       else { err.textContent=(res.j&&res.j.error)||'Incorrect password'; btn.disabled=false; btn.textContent='Sign in'; document.getElementById('pw').select(); }
     })
     .catch(function(){ err.textContent='Something went wrong. Try again.'; btn.disabled=false; btn.textContent='Sign in'; });
-  return false;
 }
+// Attach via addEventListener (not inline) so the handler can never collide with the form's
+// native submit() method — that collision was making the page reload instead of logging in.
+document.getElementById('form').addEventListener('submit', function(e){ e.preventDefault(); doLogin(); });
 </script>
 </body>
 </html>
