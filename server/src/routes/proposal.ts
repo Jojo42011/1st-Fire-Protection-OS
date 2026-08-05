@@ -183,9 +183,10 @@ router.get('/api/proposal/quote-offices', async (_req, res) => {
     diag = {
       totalPages: d?.totalPages,
       pageCount: qs.length,
-      withAssignedOffice: qs.filter((x: any) => x.assignedOffice && x.assignedOffice.name).length,
-      firstOffice: qs[0]?.assignedOffice?.name ?? null,
-      tenthOffice: qs[9]?.assignedOffice?.name ?? null,
+      withAssignedOfficeId: qs.filter((x: any) => x.assignedOffice && x.assignedOffice.id).length,
+      withAssignedOfficeName: qs.filter((x: any) => x.assignedOffice && x.assignedOffice.name).length,
+      withLocationId: qs.filter((x: any) => x.location && x.location.id).length,
+      raw3: qs.slice(0, 3).map((x: any) => ({ ao: x.assignedOffice, loc: x.location?.id })),
     };
   } catch (e) { diag = { error: (e as Error).message }; }
   res.json({ rows, diag });
