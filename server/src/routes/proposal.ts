@@ -171,4 +171,19 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
+// temp diagnostic: office distribution on quotes + a raw ST quote shape
+router.get('/api/proposal/quote-offices', async (_req, res) => {
+  const db = getDb();
+  const rows = db.prepare(`SELECT COALESCE(office,'(null)') AS o, COUNT(*) AS c FROM quotes WHERE source='servicetrade' GROUP BY o ORDER BY c DESC LIMIT 20`).all();
+  let sampleKeys: string[] = [], officeField: any = null;
+  try {
+    const r: any = await stGet(`/quote?limit=1&longForm=true`);
+    const d = r?.data || r;
+    const one = (d?.quotes || [])[0] || {};
+    sampleKeys = Object.keys(one);
+    officeField = { office: one.office, assignedOffice: one.assignedOffice, location: one.location };
+  } catch (e) { officeField = { error: (e as Error).message }; }
+  res.json({ rows, sampleKeys, officeField });
+});
+
 export default router;
