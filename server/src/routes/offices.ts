@@ -16,7 +16,13 @@ const shortLabel = (o: string): string => {
 router.get('/api/offices', (_req, res) => {
   const db = getDb();
   const rows = db
-    .prepare(`SELECT DISTINCT office AS o FROM sched_appointments WHERE office IS NOT NULL AND office != '' ORDER BY office`)
+    .prepare(
+      `SELECT DISTINCT o FROM (
+         SELECT office AS o FROM sched_appointments WHERE office IS NOT NULL AND office != ''
+         UNION
+         SELECT office AS o FROM quotes WHERE source='servicetrade' AND office IS NOT NULL AND office != ''
+       ) ORDER BY o`
+    )
     .all() as { o: string }[];
   const offices = rows
     .filter((r) => !/video digital|vds/i.test(r.o)) // the sister security company is not a fire office
