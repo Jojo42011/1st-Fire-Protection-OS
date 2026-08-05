@@ -821,6 +821,25 @@ export function initDb(): void {
   addColumn('crm_jobs', 'review_requested', 'INTEGER DEFAULT 0'); // 1 once a request has been queued/sent
   addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "1st FP Austin LLC"), for per-location scoping
   db.exec(`
+    /* ---------- service-plan mirror: ServiceTrade recurring services (the real agreement book) ----
+     * One row per ServiceTrade serviceRecurrence — a location serviced on a cadence. Powers the
+     * live Service plans tab. Rebuilt each sync; read-only. */
+    CREATE TABLE IF NOT EXISTS service_recurrences (
+      st_id        TEXT PRIMARY KEY,
+      description  TEXT,
+      location_id  TEXT, location_name TEXT, account_id INTEGER,
+      service_line TEXT, trade TEXT,
+      frequency    TEXT, interval INTEGER, per_year REAL,
+      cadence      TEXT,
+      price_cents  INTEGER,
+      first_start  TEXT, ends_on TEXT,
+      office       TEXT,
+      st_updated_at TEXT, synced_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_recur_office ON service_recurrences(office);
+    CREATE INDEX IF NOT EXISTS idx_recur_ends ON service_recurrences(ends_on);
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS review_targets (
       office_id   TEXT PRIMARY KEY,          -- ServiceTrade assignedOffice id
       office_name TEXT,

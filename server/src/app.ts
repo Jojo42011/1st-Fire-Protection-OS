@@ -12,6 +12,7 @@ import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
 import { runScheduledSync } from './services/servicetradeSync';
 import { syncSchedule } from './services/scheduleSync';
+import { syncPlans } from './services/planSync';
 
 import { gate, handleLogin, handleLogout, authRequired } from './auth';
 import health from './routes/health';
@@ -227,7 +228,10 @@ const runStSync = () =>
     // Refresh the schedule mirror (appointments + techs) on the same cadence.
     .then(() => syncSchedule())
     .then((s) => { if (s && s.appointments) console.log(`[st-sync] schedule: ${s.appointments} appointments, ${s.techLinks} tech links`); })
-    .catch((err) => console.warn('[st-sync] schedule error:', (err as Error).message));
+    .catch((err) => console.warn('[st-sync] schedule error:', (err as Error).message))
+    .then(() => syncPlans())
+    .then((p) => { if (p && p.recurrences) console.log(`[st-sync] plans: ${p.recurrences} recurrences, ${p.officesSet} offices set`); })
+    .catch((err) => console.warn('[st-sync] plans error:', (err as Error).message));
 setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
 setInterval(runStSync, ST_SYNC_MS).unref();
 

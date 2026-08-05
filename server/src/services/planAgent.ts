@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
+import { hasPlans } from './planSync';
 
 /**
  * The Service-Plan Manager. Pure date math finds visits due and renewals due; drafting a
@@ -124,7 +125,98 @@ export function proposePlan(index: number): { customer: string } {
   return { customer: c.customer };
 }
 
-export function getRecurringSummary() {
+// ── Live recurring agreements, from the ServiceTrade serviceRecurrence mirror ──
+interface RecRow {
+  st_id: string; description: string | null; location_name: string | null; account_id: number | null;
+  service_line: string | null; frequency: string | null; interval: number | null; per_year: number | null;
+  cadence: string | null; price_cents: number | null; first_start: string | null; ends_on: string | null; office: string | null;
+}
+
+/** Next occurrence at/after now, walking the recurrence from its first start. */
+function nextOccurrence(iso: string | null, frequency: string | null, interval: number | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const now = Date.now();
+  const n = Math.max(1, interval || 1);
+  const f = (frequency || '').toLowerCase();
+  let guard = 0;
+  while (d.getTime() <= now && guard++ < 800) {
+    if (f === 'monthly') d.setUTCMonth(d.getUTCMonth() + n);
+    else if (f === 'yearly' || f === 'annually') d.setUTCFullYear(d.getUTCFullYear() + n);
+    else if (f === 'weekly') d.setUTCDate(d.getUTCDate() + 7 * n);
+    else if (f === 'daily') d.setUTCDate(d.getUTCDate() + n);
+    else d.setUTCFullYear(d.getUTCFullYear() + 1);
+  }
+  return d.toISOString();
+}
+
+function realRecurringSummary(office = '') {
+  const db = getDb();
+  const oc = office ? ' AND office = @office' : '';
+  const nowIso = new Date().toISOString();
+  const bind: any = office ? { office, now: nowIso } : { now: nowIso };
+  const rows = db
+    .prepare(`SELECT * FROM service_recurrences WHERE (ends_on IS NULL OR ends_on > @now)${oc} ORDER BY (COALESCE(price_cents,0) * COALESCE(per_year,0)) DESC`)
+    .all(bind) as RecRow[];
+
+  const { renewSoonDays } = TRADE_CONFIG.plans;
+  let annual = 0;
+  for (const r of rows) annual += ((r.price_cents || 0) / 100) * (r.per_year || 0);
+  const endsDaysOf = (iso: string | null) => (iso ? Math.round((new Date(iso).getTime() - Date.now()) / day) : null);
+  const lapsing = rows.filter((r) => { const d = endsDaysOf(r.ends_on); return d != null && d <= renewSoonDays; }).length;
+  const unpriced = rows.filter((r) => !r.price_cents).length;
+
+  const agreements = rows.slice(0, 150).map((r) => {
+    const annualVal = ((r.price_cents || 0) / 100) * (r.per_year || 0);
+    const d = endsDaysOf(r.ends_on);
+    const soon = d != null && d <= renewSoonDays;
+    return {
+      id: r.st_id,
+      customer: r.location_name || 'Site',
+      plan: r.service_line || r.description || 'Recurring service',
+      interval: r.cadence || '',
+      price: r.price_cents ? money(Math.round(annualVal)) : '—',
+      next: fmtDate(nextOccurrence(r.first_start, r.frequency, r.interval)),
+      renews: r.ends_on ? `${fmtDate(r.ends_on)}${soon ? ` · ${d}d` : ''}` : 'ongoing',
+      renewPill: soon ? 'money' : 'gray',
+      cta: '',
+      ctaDark: false,
+    };
+  });
+
+  // Real opportunity list: accounts we work but have no recurring agreement (recurring revenue left on the table).
+  const candBind: any = office ? { office } : {};
+  const candWhere = office ? ' AND j.office_name = @office' : '';
+  const cands = db
+    .prepare(
+      `SELECT a.name AS customer, COUNT(j.id) AS jobs
+         FROM accounts a JOIN crm_jobs j ON j.account_id = a.id
+        WHERE a.source = 'servicetrade'${candWhere}
+          AND NOT EXISTS (SELECT 1 FROM service_recurrences sr WHERE sr.account_id = a.id)
+        GROUP BY a.id HAVING jobs >= 2 ORDER BY jobs DESC LIMIT 4`
+    )
+    .all(candBind) as { customer: string; jobs: number }[];
+  const candidates = cands.map((c) => ({ informational: true, customer: c.customer, detail: `${c.jobs} jobs on record, no recurring agreement — a plan would make this revenue recurring` }));
+
+  return {
+    summary: {
+      recurringRevenue: money(Math.round(annual)),
+      agreements: rows.length,
+      lapsing,
+      dueVisit: unpriced,
+      blurb: `${rows.length.toLocaleString()} recurring service agreements from ServiceTrade${office ? ' at this office' : ''}, worth ${money(Math.round(annual))} of recurring revenue a year.${unpriced ? ` ${unpriced} have no price set in ServiceTrade, so they aren't counted in that total.` : ''}`,
+      chips: [['all', 'All', rows.length], ['lapsing', 'Lapsing', lapsing], ['visit', 'No price', unpriced]],
+    },
+    agreements,
+    activeRenewal: null,
+    candidates,
+    live: true,
+  };
+}
+
+export function getRecurringSummary(office = '') {
+  if (hasPlans()) return realRecurringSummary(office);
   const db = getDb();
   const rows = db.prepare(`SELECT * FROM service_agreements WHERE status != 'cancelled' ORDER BY (renews_at IS NULL), renews_at ASC`).all() as Agreement[];
   const { renewSoonDays, renewUrgentDays } = TRADE_CONFIG.plans;

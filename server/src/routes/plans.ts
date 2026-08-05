@@ -1,15 +1,25 @@
 import { Router } from 'express';
 import { getRecurringSummary, draftRenewal, proposePlan } from '../services/planAgent';
+import { syncPlans } from '../services/planSync';
 
 /**
- * The Service-Plan Manager (Phase 4). GET serves active agreements, the soonest renewal
- * draft, and finished jobs that could become plans. Drafting a renewal or proposing a plan
- * is gated. live:false.
+ * The Service-Plan Manager (Phase 4). When ServiceTrade recurring services are mirrored, GET
+ * serves the real recurring-agreement book (office-scoped). Drafting a renewal or proposing a
+ * plan is gated. Falls back to the seeded demo with no real data.
  */
 const router = Router();
 
-router.get('/api/plans', (_req, res) => {
-  res.json(getRecurringSummary());
+router.get('/api/plans', (req, res) => {
+  res.json(getRecurringSummary(String(req.query.office || '')));
+});
+
+// Pull ServiceTrade recurring services into the mirror (read-only).
+router.post('/api/plans/sync', async (_req, res) => {
+  try {
+    res.json({ ok: true, ...(await syncPlans()) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 router.post('/api/plans/:id/renewal', (req, res) => {

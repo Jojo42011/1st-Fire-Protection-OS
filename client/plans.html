@@ -46,17 +46,21 @@ function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*
 function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
 var DATA=null, filter='all';
 
-fetch('/api/plans').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
+function load(){fetch('/api/plans'+officeParam()).then(function(r){return r.json();}).then(function(d){DATA=d;render();});}
+load();
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){filter='all';load();}});
 
 function render(){
   var d=DATA, s=d.summary;
+  var blurb=s.blurb||(s.agreements+' active agreements. Visits schedule themselves through the Dispatcher and renewals go out before they lapse — this is the revenue you’re entitled to and used to forget to bill.');
   document.getElementById('head').innerHTML=
     '<div><div class="big">'+esc(s.recurringRevenue)+'</div><div class="biglab">recurring revenue under agreement, per year</div></div>'+
     '<div class="div"></div>'+
-    '<p>'+s.agreements+' active agreements. Visits schedule themselves through the Dispatcher and renewals go out before they lapse — this is the revenue you’re entitled to and used to forget to bill.</p>'+
+    '<p>'+esc(blurb)+'</p>'+
     '<div class="lap"><div class="v">'+s.lapsing+'</div><div class="l">lapsing in 30 days</div></div>';
 
-  var chips=[['all','All',s.agreements],['lapsing','Lapsing',s.lapsing],['visit','Due a visit',s.dueVisit]];
+  var chips=s.chips||[['all','All',s.agreements],['lapsing','Lapsing',s.lapsing],['visit','Due a visit',s.dueVisit]];
   var vis=d.agreements.filter(function(a){return filter==='all'?true:filter==='lapsing'?(a.renewPill!=='gray'):true;});
   var rows=vis.map(function(a){
     var pill=({money:'money',amber:'amber',gray:'gray'})[a.renewPill]||'gray';
@@ -67,7 +71,7 @@ function render(){
       '<td class="right" style="font-weight:700;color:var(--ink)">'+esc(a.price)+'</td>'+
       '<td style="color:var(--ink-3)">'+esc(a.next)+'</td>'+
       '<td><span class="pill '+pill+'">'+esc(a.renews)+'</span></td>'+
-      '<td class="right"><button class="pl-cta'+(a.ctaDark?' dark':'')+'" data-id="'+a.id+'" data-cta="'+esc(a.cta)+'">'+esc(a.cta)+'</button></td>'+
+      '<td class="right">'+(a.cta?'<button class="pl-cta'+(a.ctaDark?' dark':'')+'" data-id="'+a.id+'" data-cta="'+esc(a.cta)+'">'+esc(a.cta)+'</button>':'')+'</td>'+
     '</tr>';
   }).join('');
   document.getElementById('agreements-card').innerHTML=
@@ -94,10 +98,10 @@ function render(){
   } else { rc.style.display='none'; }
 
   document.getElementById('candidates-card').innerHTML=
-    '<div class="card-head" style="display:block"><h2>These jobs could be agreements</h2><p style="margin:4px 0 0;font-weight:500;font-size:12px;color:var(--muted)">One-time work that finished in the last 30 days.</p></div>'+
-    d.candidates.map(function(c){
-      return '<div class="pl-cand"><div class="nm">'+esc(c.customer)+'</div><p>'+esc(c.detail)+'</p><button class="pl-propose" data-i="'+c.index+'">Propose a plan</button></div>';
-    }).join('');
+    '<div class="card-head" style="display:block"><h2>These could be agreements</h2><p style="margin:4px 0 0;font-weight:500;font-size:12px;color:var(--muted)">Recurring revenue not yet captured.</p></div>'+
+    (d.candidates.length?d.candidates.map(function(c){
+      return '<div class="pl-cand"><div class="nm">'+esc(c.customer)+'</div><p>'+esc(c.detail)+'</p>'+(c.informational?'':'<button class="pl-propose" data-i="'+c.index+'">Propose a plan</button>')+'</div>';
+    }).join(''):'<div class="pl-cand"><p>Every account here is already on a recurring plan.</p></div>');
   document.querySelectorAll('.pl-propose').forEach(function(b){b.onclick=function(){propose(+b.getAttribute('data-i'),b);};});
 }
 function renew(id,btn,raise,isCard){

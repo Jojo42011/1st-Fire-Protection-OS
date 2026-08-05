@@ -171,47 +171,4 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
-// temp: probe ServiceTrade for the real recurring-service source (contracts / job types / recurrence)
-router.get('/api/proposal/plans-probe', async (_req, res) => {
-  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
-  const out: any = {};
-  const tryGet = async (label: string, path: string) => {
-    try {
-      const r: any = await stGet(path);
-      const d = r?.data || r;
-      const key = Object.keys(d || {}).find((k) => Array.isArray((d as any)[k]));
-      const arr = key ? (d as any)[key] : Array.isArray(d) ? d : [];
-      out[label] = { ok: true, totalPages: d?.totalPages, count: arr.length, keys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}), sample: arr[0] };
-    } catch (e) { out[label] = { ok: false, error: (e as Error).message }; }
-  };
-  await tryGet('serviceRecurrence', '/servicerecurrence?limit=3');
-  // job types distribution over a page
-  try {
-    const r: any = await stGet('/job?limit=100');
-    const d = r?.data || r;
-    const jobs = d?.jobs || [];
-    const byType: Record<string, number> = {};
-    for (const j of jobs) byType[j.type || j.jobType || 'unknown'] = (byType[j.type || j.jobType || 'unknown'] || 0) + 1;
-    out.jobTypes = byType;
-  } catch (e) { out.jobTypes = { error: (e as Error).message }; }
-  // sample a page and characterize recurring service requests
-  try {
-    const r: any = await stGet('/servicerequest?limit=100');
-    const d = r?.data || r;
-    const arrKey = Object.keys(d || {}).find((k) => Array.isArray((d as any)[k]));
-    const srs = arrKey ? (d as any)[arrKey] : [];
-    const recurring = srs.filter((s: any) => s.serviceRecurrence);
-    const withContract = srs.filter((s: any) => s.contract);
-    out.srSummary = { inPage: srs.length, withRecurrence: recurring.length, withContract: withContract.length };
-    out.recurringSample = recurring[0] ? {
-      serviceLine: recurring[0].serviceLine,
-      serviceRecurrence: recurring[0].serviceRecurrence,
-      contract: recurring[0].contract,
-      location: recurring[0].location?.name,
-      status: recurring[0].status,
-    } : null;
-  } catch (e) { out.srSummary = { error: (e as Error).message }; }
-  res.json(out);
-});
-
 export default router;
