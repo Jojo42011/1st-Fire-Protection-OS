@@ -195,7 +195,22 @@ router.get('/api/proposal/plans-probe', async (_req, res) => {
     for (const j of jobs) byType[j.type || j.jobType || 'unknown'] = (byType[j.type || j.jobType || 'unknown'] || 0) + 1;
     out.jobTypes = byType;
   } catch (e) { out.jobTypes = { error: (e as Error).message }; }
-  await tryGet('serviceRequest', '/servicerequest?limit=2');
+  // sample a page and characterize recurring service requests
+  try {
+    const r: any = await stGet('/servicerequest?limit=100');
+    const d = r?.data || r;
+    const srs = d?.serviceRequest || d?.serviceRequests || [];
+    const recurring = srs.filter((s: any) => s.serviceRecurrence);
+    const withContract = srs.filter((s: any) => s.contract);
+    out.srSummary = { inPage: srs.length, withRecurrence: recurring.length, withContract: withContract.length };
+    out.recurringSample = recurring[0] ? {
+      serviceLine: recurring[0].serviceLine,
+      serviceRecurrence: recurring[0].serviceRecurrence,
+      contract: recurring[0].contract,
+      location: recurring[0].location?.name,
+      status: recurring[0].status,
+    } : null;
+  } catch (e) { out.srSummary = { error: (e as Error).message }; }
   res.json(out);
 });
 
