@@ -43,9 +43,24 @@ export function hasPlans(): boolean {
   return ((getDb().prepare(`SELECT COUNT(*) AS v FROM service_recurrences`).get() as { v: number }).v || 0) > 0;
 }
 
-/** Derive each recurrence's office from its account's jobs (the recurrence itself carries no office). */
+/**
+ * Derive each recurrence's office (recurrences carry no office). A recurrence's SITE is served by
+ * one office, so we attribute by the site's own jobs first (accurate), then fall back to the
+ * account's jobs only where the site has none. Fixes small offices being swallowed by HQ.
+ */
 export function deriveRecurrenceOffices(): { updated: number } {
   const db = getDb();
+  // 1) by the recurrence's site (location) — the physical office that services that building
+  db.prepare(
+    `UPDATE service_recurrences
+        SET office = (
+          SELECT j.office_name FROM crm_jobs j JOIN sites s ON s.id = j.site_id
+           WHERE s.st_id = service_recurrences.location_id AND j.office_name IS NOT NULL AND j.office_name != ''
+           GROUP BY j.office_name ORDER BY COUNT(*) DESC LIMIT 1
+        )
+      WHERE location_id IS NOT NULL`
+  ).run();
+  // 2) fallback: by the account's jobs, only where the site gave us nothing
   const info = db
     .prepare(
       `UPDATE service_recurrences
@@ -54,7 +69,7 @@ export function deriveRecurrenceOffices(): { updated: number } {
              WHERE j.account_id = service_recurrences.account_id AND j.office_name IS NOT NULL AND j.office_name != ''
              GROUP BY j.office_name ORDER BY COUNT(*) DESC LIMIT 1
           )
-        WHERE account_id IS NOT NULL`
+        WHERE office IS NULL AND account_id IS NOT NULL`
     )
     .run();
   return { updated: info.changes };
