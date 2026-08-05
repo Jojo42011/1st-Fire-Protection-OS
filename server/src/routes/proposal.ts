@@ -199,7 +199,8 @@ router.get('/api/proposal/plans-probe', async (_req, res) => {
   try {
     const r: any = await stGet('/servicerequest?limit=100');
     const d = r?.data || r;
-    const srs = d?.serviceRequest || d?.serviceRequests || [];
+    const arrKey = Object.keys(d || {}).find((k) => Array.isArray((d as any)[k]));
+    const srs = arrKey ? (d as any)[arrKey] : [];
     const recurring = srs.filter((s: any) => s.serviceRecurrence);
     const withContract = srs.filter((s: any) => s.contract);
     out.srSummary = { inPage: srs.length, withRecurrence: recurring.length, withContract: withContract.length };
