@@ -48,7 +48,10 @@ var DATA=null, filter='needs';
 var NEEDS=['awaiting price','last call','stalled'], CADENCE=['nudge sent','value sent','queued'];
 function grp(tier){return NEEDS.indexOf(tier)>=0?'needs':CADENCE.indexOf(tier)>=0?'cadence':'stalled';}
 
-fetch('/api/closer').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
+function load(){fetch('/api/closer'+officeParam()).then(function(r){return r.json();}).then(function(d){DATA=d;render();});}
+load();
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
 
 function render(){
   var d=DATA, s=d.summary;

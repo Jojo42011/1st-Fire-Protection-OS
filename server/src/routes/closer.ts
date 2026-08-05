@@ -8,8 +8,8 @@ import { getPipelineSummary, draftFollowup, markOutcome } from '../services/clos
  */
 const router = Router();
 
-router.get('/api/closer', (_req, res) => {
-  res.json(getPipelineSummary());
+router.get('/api/closer', (req, res) => {
+  res.json(getPipelineSummary(String(req.query.office || '')));
 });
 
 router.post('/api/closer/:quoteId/touch', (req, res) => {

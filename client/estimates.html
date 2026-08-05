@@ -49,7 +49,11 @@ function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'
 function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
 var activeId=null;
 
-fetch('/api/estimating').then(function(r){return r.json();}).then(function(d){
+function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
+function load(){fetch('/api/estimating'+officeParam()).then(function(r){return r.json();}).then(render);}
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){document.getElementById('live-main').style.display='none';document.getElementById('demo-main').style.display='none';load();}});
+load();
+function render(d){
   if(d.live){ renderLive(d); return; }
   document.getElementById('demo-main').style.display='';
   var s=d.summary;
@@ -108,7 +112,7 @@ fetch('/api/estimating').then(function(r){return r.json();}).then(function(d){
         '<span class="pill '+(t.badgeTone==='amber'?'amber':'green')+'">'+esc(t.badge)+'</span></div>';
     }).join('')+
     '<div class="es-drop" onclick="nav(\'approve\')"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M5 12h14"/></svg></span><span style="font-weight:600;font-size:12.5px;color:var(--indigo)">Drop photos or a blueprint</span></div>';
-});
+}
 
 function kpi(lab,val,sub,color){
   return '<div class="card card-pad es-kpi"><div class="lab">'+esc(lab)+'</div><div class="val" style="color:'+color+'">'+esc(val)+'</div><div class="sub">'+esc(sub)+'</div></div>';

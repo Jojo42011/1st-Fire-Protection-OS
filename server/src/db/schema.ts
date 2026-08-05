@@ -819,6 +819,7 @@ export function initDb(): void {
   addColumn('crm_jobs', 'contact_email', 'TEXT');
   addColumn('crm_jobs', 'contact_phone', 'TEXT');
   addColumn('crm_jobs', 'review_requested', 'INTEGER DEFAULT 0'); // 1 once a request has been queued/sent
+  addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "1st FP Austin LLC"), for per-location scoping
   db.exec(`
     CREATE TABLE IF NOT EXISTS review_targets (
       office_id   TEXT PRIMARY KEY,          -- ServiceTrade assignedOffice id

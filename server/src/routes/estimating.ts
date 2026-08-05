@@ -34,15 +34,15 @@ function ageInfo(iso: string | null): { days: number | null; label: string; tone
  * ($0) surface with a "needs price" flag; priced drafts are ready to send. Sorted so the biggest
  * dollars are on top, with the oldest called out in the KPIs.
  */
-function realWorklist(db: ReturnType<typeof getDb>) {
-  const rows = db
-    .prepare(
-      `SELECT q.id, q.st_id, q.number, q.title, q.amount_cents, q.st_updated_at, a.name AS customer
-         FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
-        WHERE q.source = 'servicetrade' AND lower(q.stage) = 'draft'
-        ORDER BY (q.amount_cents IS NULL OR q.amount_cents = 0) DESC, q.amount_cents DESC`
-    )
-    .all() as DraftRow[];
+function realWorklist(db: ReturnType<typeof getDb>, office = '') {
+  const officeClause = office ? ' AND q.office = @office' : '';
+  const stmt = db.prepare(
+    `SELECT q.id, q.st_id, q.number, q.title, q.amount_cents, q.st_updated_at, a.name AS customer
+       FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
+      WHERE q.source = 'servicetrade' AND lower(q.stage) = 'draft'${officeClause}
+      ORDER BY (q.amount_cents IS NULL OR q.amount_cents = 0) DESC, q.amount_cents DESC`
+  );
+  const rows = (office ? stmt.all({ office }) : stmt.all()) as DraftRow[];
 
   const totalCents = rows.reduce((a, q) => a + (q.amount_cents || 0), 0);
   const unpriced = rows.filter((q) => !q.amount_cents).length;
@@ -99,11 +99,11 @@ function queueDetail(t: Takeoff): string {
 const queueBadge = (t: Takeoff) =>
   t.status === 'flagged' ? { text: 'low scale conf.', tone: 'amber' } : { text: 'read', tone: 'green' };
 
-router.get('/api/estimating', (_req, res) => {
+router.get('/api/estimating', (req, res) => {
   const db = getDb();
 
   // Live mode: real ServiceTrade draft backlog is the estimator's worklist.
-  if (hasRealQuotes()) return res.json(realWorklist(db));
+  if (hasRealQuotes()) return res.json(realWorklist(db, String(req.query.office || '')));
 
   const active = db.prepare(`SELECT * FROM takeoffs ORDER BY id ASC LIMIT 1`).get() as Takeoff | undefined;
 

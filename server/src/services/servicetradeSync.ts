@@ -288,6 +288,7 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
 interface StQuote {
   id: number; refNumber?: string; name?: string; status?: string; totalPrice?: string;
   customer?: { id?: number }; location?: { id?: number }; latestSubmission?: number | null; updated?: number;
+  office?: { id?: number; name?: string } | null; assignedOffice?: { id?: number; name?: string } | null;
 }
 
 /** Pull quotes into the quotes mirror, linked to account + site. Incremental with `since`. */
@@ -297,16 +298,16 @@ export async function pullQuotes(since?: number): Promise<{ pulled: number; page
   const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
   const upsert = db.prepare(
-    `INSERT INTO quotes (st_id, account_id, site_id, number, title, amount_cents, stage, sent_at, st_updated_at, local_updated_at, sync_state, source)
-     VALUES (@st_id, @account_id, @site_id, @number, @title, @amount, @stage, @sent, @updated, datetime('now'), 'clean', 'servicetrade')
+    `INSERT INTO quotes (st_id, account_id, site_id, number, title, amount_cents, stage, office, sent_at, st_updated_at, local_updated_at, sync_state, source)
+     VALUES (@st_id, @account_id, @site_id, @number, @title, @amount, @stage, @office, @sent, @updated, datetime('now'), 'clean', 'servicetrade')
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
-       title=excluded.title, amount_cents=excluded.amount_cents, stage=excluded.stage, sent_at=excluded.sent_at,
+       title=excluded.title, amount_cents=excluded.amount_cents, stage=excluded.stage, office=excluded.office, sent_at=excluded.sent_at,
        st_updated_at=excluded.st_updated_at, local_updated_at=datetime('now'), source='servicetrade'`
   );
   let page = 1, totalPages = 1, pulled = 0;
   const sinceQ = since ? `&updatedAfter=${since}` : '';
   do {
-    const resp = await stGet(`/quote?page=${page}${sinceQ}`);
+    const resp = await stGet(`/quote?page=${page}&longForm=true${sinceQ}`);
     const { rows, totalPages: tp } = unwrap<StQuote>(resp, 'quotes');
     totalPages = tp;
     const tx = db.transaction((qs: StQuote[]) => {
@@ -320,7 +321,8 @@ export async function pullQuotes(since?: number): Promise<{ pulled: number; page
           // totalPrice is a string and may be comma-grouped ("12,500.00") — strip commas so
           // parseFloat doesn't truncate high-value quotes to a few dollars.
           amount: Math.round((parseFloat(String(q.totalPrice || '0').replace(/,/g, '')) || 0) * 100),
-          stage: q.status || 'quoted', sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
+          stage: q.status || 'quoted', office: q.office?.name || q.assignedOffice?.name || null,
+          sent: isoFromUnix(q.latestSubmission), updated: isoFromUnix(q.updated),
         });
         pulled++;
       }

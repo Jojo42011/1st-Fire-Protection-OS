@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { pullQuotes } from '../services/servicetradeSync';
 
 /**
  * ServiceTrade sync (Signal Phase 4) — SHELL ONLY. ServiceTrade is never called: the
@@ -103,6 +104,17 @@ router.post('/api/sync/now', (_req, res) => {
   const db = getDb();
   db.prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('in', 'Manual sync requested', 'queued', NULL)`).run();
   res.json({ ok: true, live: false });
+});
+
+// One-shot: full re-pull of quotes (read-only from ServiceTrade) to backfill the office field
+// onto every existing quote, so Estimates + Follow-ups can scope by location.
+router.post('/api/sync/quotes-office', async (_req, res) => {
+  try {
+    const r = await pullQuotes(); // full pull (no cursor) → office populated on all rows
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 router.post('/api/sync/objects/:object', (req, res) => {

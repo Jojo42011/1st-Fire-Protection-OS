@@ -175,31 +175,32 @@ function shapeQuoteRow(q: QuoteRow & { customer: string | null; st_id?: string |
   };
 }
 
-/** Real Closer summary computed off pulled ServiceTrade quotes. */
-function realPipelineSummary() {
+/** Real Closer summary computed off pulled ServiceTrade quotes. Optionally scoped to one office. */
+function realPipelineSummary(office = '') {
   const db = getDb();
-  const scalar = (sql: string) => (db.prepare(sql).get() as { v: number }).v || 0;
+  const oc = office ? ' AND office = @office' : '';
+  const p = office ? { office } : undefined;
+  const scalar = (sql: string) => (db.prepare(sql).get(p as any) as { v: number }).v || 0;
 
-  // headline win rate is real: decided = won + lost across all pulled quotes
-  const won = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_WON)})`);
-  const lost = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_LOST)})`);
+  // headline win rate is real: decided = won + lost across all pulled quotes (in scope)
+  const won = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_WON)})${oc}`);
+  const lost = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_LOST)})${oc}`);
   const decided = won + lost;
   const winRate = decided > 0 ? Math.round((won / decided) * 100) + '%' : '—';
 
-  // open aggregates over the whole open book
-  const openCount = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})`);
-  const valueInPlay = scalar(`SELECT COALESCE(SUM(amount_cents), 0) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})`);
+  // open aggregates over the open book (in scope)
+  const openCount = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})${oc}`);
+  const valueInPlay = scalar(`SELECT COALESCE(SUM(amount_cents), 0) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})${oc}`);
 
   // the open book itself, oldest-sent first (nulls last), capped so the screen stays snappy
-  const rows = db
-    .prepare(
-      `SELECT q.id, q.st_id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
-         FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
-        WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})
-        ORDER BY (q.sent_at IS NULL), q.sent_at ASC
-        LIMIT 80`
-    )
-    .all() as (QuoteRow & { customer: string | null; st_id: string | null })[];
+  const stmt = db.prepare(
+    `SELECT q.id, q.st_id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
+       FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
+      WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})${office ? ' AND q.office = @office' : ''}
+      ORDER BY (q.sent_at IS NULL), q.sent_at ASC
+      LIMIT 80`
+  );
+  const rows = (office ? stmt.all({ office }) : stmt.all()) as (QuoteRow & { customer: string | null; st_id: string | null })[];
 
   const { stalledAfterDays } = TRADE_CONFIG.closer;
   let stalled = 0;
@@ -260,10 +261,10 @@ function realPipelineSummary() {
   };
 }
 
-export function getPipelineSummary() {
+export function getPipelineSummary(office = '') {
   const db = getDb();
   const realN = (db.prepare(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade'`).get() as { v: number }).v || 0;
-  if (realN > 0) return realPipelineSummary();
+  if (realN > 0) return realPipelineSummary(office);
 
   const rows = db
     .prepare(
