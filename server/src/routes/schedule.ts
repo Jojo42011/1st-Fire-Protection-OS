@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getScheduleSummary, approveSlot, proposeSchedule, draftReminder, backfill } from '../services/dispatchAgent';
+import { syncSchedule } from '../services/scheduleSync';
 
 /**
  * The Dispatcher (Phase 5). GET serves the crew-week grid, the active proposal, the waitlist
@@ -10,6 +11,16 @@ const router = Router();
 
 router.get('/api/schedule', (_req, res) => {
   res.json(getScheduleSummary());
+});
+
+// Pull scheduled appointments + assigned techs from ServiceTrade into the mirror (read-only).
+router.post('/api/schedule/sync', async (_req, res) => {
+  try {
+    const r = await syncSchedule();
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 router.post('/api/schedule/:id/approve', (req, res) => {

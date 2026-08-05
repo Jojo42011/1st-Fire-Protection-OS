@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
+import { hasSchedule } from './scheduleSync';
 
 /**
  * The Dispatcher engine. EXTRACT vs COMPUTE: a crew/skill/zone match is a pure, deterministic
@@ -168,7 +169,129 @@ export function backfill(): { customer: string; crew: string } {
 // waitlist rank → pill colour (design: #1 money, #2 amber, rest gray).
 const RANK_PILL = (rank: number) => (rank === 1 ? 'money' : rank === 2 ? 'amber' : 'gray');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Live crew-week grid, built from the ServiceTrade appointment mirror (real techs).
+// ─────────────────────────────────────────────────────────────────────────────
+const TZ_OFFSET_H = 5; // Central (CDT); the schedule is a Texas operation
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const toCentral = (iso: string) => new Date(new Date(iso).getTime() - TZ_OFFSET_H * 3600000);
+const ymdOf = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+function weekMondayCentral(): Date {
+  const nowC = new Date(Date.now() - TZ_OFFSET_H * 3600000);
+  const dow = nowC.getUTCDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return new Date(Date.UTC(nowC.getUTCFullYear(), nowC.getUTCMonth(), nowC.getUTCDate() + diff));
+}
+function timeLabel(iso: string): string {
+  const d = toCentral(iso);
+  const h = d.getUTCHours(), m = d.getUTCMinutes();
+  const ap = h < 12 ? 'a' : 'p';
+  let hh = h % 12; if (hh === 0) hh = 12;
+  return `${hh}${m ? ':' + pad2(m) : ''}${ap}`;
+}
+const officeShort = (o: string) => (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim() || 'No office';
+
+interface SchedRow {
+  tech: string; office: string; st_id: string; customer: string | null; location_name: string | null;
+  window_start: string | null; window_end: string | null; status: string; job_type: string | null;
+}
+
+function realScheduleSummary() {
+  const db = getDb();
+  const monday = weekMondayCentral();
+  const dayDates = Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setUTCDate(d.getUTCDate() + i); return d; });
+  const dayYmds = dayDates.map(ymdOf);
+  const headerDays = dayDates.map((d, i) => `${DOW[i]} ${d.getUTCDate()}`);
+  const todayYmd = ymdOf(new Date(Date.now() - TZ_OFFSET_H * 3600000));
+  const inWeek = (iso: string | null) => (iso ? dayYmds.indexOf(ymdOf(toCentral(iso))) : -1);
+
+  const assigned = db
+    .prepare(
+      `SELECT t.tech_name AS tech, COALESCE(NULLIF(t.office,''),'') AS office, a.st_id, a.customer, a.location_name,
+              a.window_start, a.window_end, a.status, a.job_type
+         FROM sched_appt_techs t JOIN sched_appointments a ON a.st_id = t.appt_st_id
+        WHERE a.window_start IS NOT NULL`
+    )
+    .all() as SchedRow[];
+
+  const byTech = new Map<string, { office: string; jobsByDay: any[][]; count: number }>();
+  for (const r of assigned) {
+    const di = inWeek(r.window_start);
+    if (di < 0) continue;
+    if (!byTech.has(r.tech)) byTech.set(r.tech, { office: r.office, jobsByDay: [[], [], [], [], []], count: 0 });
+    const g = byTech.get(r.tech)!;
+    if (!g.office && r.office) g.office = r.office;
+    const t = tintFor('confirmed');
+    g.jobsByDay[di].push({
+      who: r.customer || r.location_name || 'Job',
+      window: r.window_start && r.window_end ? `${timeLabel(r.window_start)}–${timeLabel(r.window_end)}` : r.window_start ? timeLabel(r.window_start) : '',
+      bg: t.bg, border: t.border, fg: t.fg, metaFg: t.metaFg,
+    });
+    g.count++;
+  }
+  const maxCount = Math.max(1, ...[...byTech.values()].map((g) => g.count));
+  const crews = [...byTech.entries()]
+    .sort((a, b) => (a[1].office || '').localeCompare(b[1].office || '') || b[1].count - a[1].count)
+    .map(([name, g]) => {
+      const pct = Math.round((g.count / maxCount) * 100);
+      return { name, skills: `${officeShort(g.office)} · ${g.count} job${g.count === 1 ? '' : 's'}`, loadPct: `${pct}%`, loadFg: loadFg(pct), days: g.jobsByDay.map((jobs) => ({ jobs })) };
+    });
+
+  const unassignedRows = db
+    .prepare(
+      `SELECT a.st_id, a.customer, a.location_name, a.office, a.window_start
+         FROM sched_appointments a
+        WHERE a.window_start IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM sched_appt_techs t WHERE t.appt_st_id = a.st_id)`
+    )
+    .all() as { st_id: string; customer: string | null; location_name: string | null; office: string; window_start: string }[];
+  const unassignedWeek = unassignedRows.filter((r) => inWeek(r.window_start) >= 0);
+
+  const weekApptIds = new Set<string>();
+  for (const r of assigned) if (inWeek(r.window_start) >= 0) weekApptIds.add(r.st_id);
+  for (const r of unassignedWeek) weekApptIds.add(r.st_id);
+  const jobsToday = [...assigned.filter((r) => r.window_start && ymdOf(toCentral(r.window_start)) === todayYmd).map((r) => r.st_id),
+    ...unassignedWeek.filter((r) => ymdOf(toCentral(r.window_start)) === todayYmd).map((r) => r.st_id)];
+  const officesActive = new Set([...byTech.values()].map((g) => g.office).filter(Boolean)).size;
+  const totalSynced = (db.prepare(`SELECT COUNT(*) AS v FROM sched_appointments`).get() as { v: number }).v || 0;
+
+  const waitlist = unassignedWeek.slice(0, 6).map((r) => {
+    const di = inWeek(r.window_start);
+    const isToday = ymdOf(toCentral(r.window_start)) === todayYmd;
+    return { rank: DOW[di] || '', customer: r.customer || r.location_name || 'Job', need: `${officeShort(r.office)} · ${timeLabel(r.window_start)}`, pill: isToday ? 'money' : 'amber' };
+  });
+
+  return {
+    live: true,
+    summary: {
+      kpis: [
+        { lab: 'Jobs this week', val: String(weekApptIds.size), color: 'var(--ink)' },
+        { lab: 'Scheduled today', val: String(new Set(jobsToday).size), color: 'var(--teal)' },
+        { lab: 'Technicians out', val: String(byTech.size), color: 'var(--ink)' },
+        { lab: 'Unassigned', val: String(unassignedWeek.length), color: unassignedWeek.length ? 'var(--money)' : 'var(--green)' },
+        { lab: 'Offices active', val: String(officesActive), color: 'var(--ink)' },
+      ],
+    },
+    header: { crewLabel: 'Technician', days: headerDays },
+    crews,
+    proposal: null,
+    waitlist,
+    waitlistTitle: 'Unassigned this week',
+    waitlistNote: 'scheduled without a tech',
+    noShows: {
+      title: 'The bigger picture',
+      note: `${totalSynced} scheduled appointments are mirrored from ServiceTrade across the next few weeks. The grid shows this Monday–Friday; unassigned jobs are the dispatch gaps to fill.`,
+      stats: [
+        { n: String(weekApptIds.size), nl: 'this week', color: 'var(--ink)' },
+        { n: String(byTech.size), nl: 'techs out', color: 'var(--teal)' },
+        { n: String(unassignedWeek.length), nl: 'unassigned', color: unassignedWeek.length ? 'var(--money)' : 'var(--green)' },
+      ],
+    },
+  };
+}
+
 export function getScheduleSummary() {
+  if (hasSchedule()) return realScheduleSummary();
   const db = getDb();
   const crews = db.prepare(`SELECT * FROM crews ORDER BY id ASC`).all() as Crew[];
   const appts = db.prepare(`SELECT * FROM appointments`).all() as Appointment[];

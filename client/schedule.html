@@ -79,7 +79,7 @@ fetch('/api/schedule').then(function(r){return r.json();}).then(function(d){DATA
 
 function render(){
   var d=DATA, s=d.summary;
-  var kpis=[
+  var kpis = s.kpis ? s.kpis.map(function(k){return [k.lab,k.val,k.color];}) : [
     ['Jobs today', s.jobsToday, 'var(--ink)'],
     ['Crew utilization', s.utilization, 'var(--teal)'],
     ['No-show rate', s.noShowRate, 'var(--green)'],
@@ -130,7 +130,7 @@ function render(){
 
   // waitlist
   document.getElementById('wl-card').innerHTML=
-    '<div class="card-head"><h2>Waitlist</h2><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">backfills cancellations</span></div>'+
+    '<div class="card-head"><h2>'+esc(d.waitlistTitle||'Waitlist')+'</h2><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">'+esc(d.waitlistNote||'backfills cancellations')+'</span></div>'+
     d.waitlist.map(function(w){
       var tone=({money:['var(--money)','var(--money-bg)'],amber:['var(--amber-ink)','var(--amber-bg)'],gray:['var(--muted)','var(--fill)']})[w.pill]||['var(--muted)','var(--fill)'];
       return '<div class="row"><span class="rk" style="color:'+tone[0]+';background:'+tone[1]+'">'+esc(w.rank)+'</span>'+
@@ -139,14 +139,14 @@ function render(){
 
   // no-shows
   var ns=d.noShows;
-  document.getElementById('ns-card').innerHTML=
-    '<div style="font-weight:800;font-size:13.5px;color:var(--ink)">No-shows</div>'+
-    '<p style="margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)">Two reminders go out per appointment — 48 hours and the morning of. '+esc(ns.note)+'</p>'+
-    '<div class="stats">'+
-      '<div><div class="n" style="color:var(--green)">'+esc(ns.rate)+'</div><div class="nl">this month</div></div>'+
+  var stats = ns.stats ? ns.stats.map(function(x){return '<div><div class="n" style="color:'+(x.color||'var(--ink)')+'">'+esc(x.n)+'</div><div class="nl">'+esc(x.nl)+'</div></div>';}).join('')
+    : '<div><div class="n" style="color:var(--green)">'+esc(ns.rate)+'</div><div class="nl">this month</div></div>'+
       '<div><div class="n" style="color:var(--ink)">'+esc(ns.missed)+'</div><div class="nl">missed visits</div></div>'+
-      '<div><div class="n" style="color:var(--ink)">'+esc(ns.reminders)+'</div><div class="nl">reminders sent</div></div>'+
-    '</div>';
+      '<div><div class="n" style="color:var(--ink)">'+esc(ns.reminders)+'</div><div class="nl">reminders sent</div></div>';
+  document.getElementById('ns-card').innerHTML=
+    '<div style="font-weight:800;font-size:13.5px;color:var(--ink)">'+esc(ns.title||'No-shows')+'</div>'+
+    '<p style="margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)">'+esc(ns.note)+'</p>'+
+    '<div class="stats">'+stats+'</div>';
 }
 function approve(id,btn){
   btn.disabled=true; btn.textContent='Sending…';

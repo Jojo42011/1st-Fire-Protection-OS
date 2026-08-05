@@ -621,6 +621,22 @@ export function initDb(): void {
       origin TEXT, sent_at TEXT, opened_count INTEGER DEFAULT 0, snooze_until TEXT,
       lost_reason TEXT, st_updated_at TEXT, local_updated_at TEXT, sync_state TEXT DEFAULT 'clean'
     );
+    /* ---------- schedule mirror: ServiceTrade appointments + assigned techs ----------
+     * Powers the live crew-week grid. Synced from /appointment (scheduled, windowed) with the
+     * technicians ServiceTrade has assigned. Rebuilt each sync for the current window; read-only. */
+    CREATE TABLE IF NOT EXISTS sched_appointments (
+      st_id TEXT PRIMARY KEY,
+      job_id TEXT, job_number TEXT, job_type TEXT,
+      customer TEXT, location_name TEXT, office TEXT,
+      window_start TEXT, window_end TEXT, status TEXT,
+      st_updated_at TEXT, synced_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sched_window ON sched_appointments(window_start);
+    CREATE TABLE IF NOT EXISTS sched_appt_techs (
+      appt_st_id TEXT NOT NULL, tech_id TEXT, tech_name TEXT, office TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_sched_techs ON sched_appt_techs(appt_st_id);
+
     CREATE TABLE IF NOT EXISTS account_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       account_id INTEGER NOT NULL,
