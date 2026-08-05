@@ -183,10 +183,25 @@ router.get('/api/proposal/st-probe', async (req, res) => {
     const r: any = await stGet(path);
     const d = r?.data || r;
     const arr = d?.appointments || d?.users || d?.jobs || (Array.isArray(d) ? d : [d]);
+    // Appointment aggregates: how often are techs actually assigned, and by what office.
+    let apptAgg: any = undefined;
+    if (Array.isArray(arr) && arr[0] && 'techs' in arr[0]) {
+      const withTechs = arr.filter((a: any) => Array.isArray(a.techs) && a.techs.length > 0);
+      const techNames = new Set<string>();
+      const byStatus: Record<string, number> = {};
+      const byOffice: Record<string, number> = {};
+      for (const a of arr) {
+        byStatus[a.status] = (byStatus[a.status] || 0) + 1;
+        (a.techs || []).forEach((t: any) => techNames.add(t.name || t.firstName || String(t.id)));
+        (a.offices || []).forEach((o: any) => { byOffice[o.name] = (byOffice[o.name] || 0) + 1; });
+      }
+      apptAgg = { inPage: arr.length, withTechs: withTechs.length, distinctTechs: [...techNames].slice(0, 20), byStatus, byOffice, techSample: withTechs[0]?.techs || [] };
+    }
     res.json({
       ok: true,
       totalPages: d?.totalPages,
       count: Array.isArray(arr) ? arr.length : 0,
+      apptAgg,
       sampleKeys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}),
       sample: arr[0] || d,
     });
