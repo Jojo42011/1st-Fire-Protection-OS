@@ -42,14 +42,23 @@
       <h1>Sign in</h1>
       <p>Enter the access password to continue.</p>
       <label for="pw">Password</label>
-      <input id="pw" type="password" autocomplete="current-password" autofocus />
+      <div style="position:relative">
+        <input id="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus style="padding-right:64px" />
+        <button type="button" id="toggle" onclick="togglePw()" tabindex="-1"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);appearance:none;border:0;background:none;color:#6B7683;font-size:12px;font-weight:700;cursor:pointer;padding:6px 8px">Show</button>
+      </div>
       <button id="btn" type="submit">Sign in</button>
       <div class="err" id="err"></div>
     </div>
   </form>
 <script>
+function togglePw(){
+  var el=document.getElementById('pw'), t=document.getElementById('toggle');
+  if(el.type==='password'){el.type='text';t.textContent='Hide';}else{el.type='password';t.textContent='Show';}
+  el.focus();
+}
 function submit(){
-  var pw=document.getElementById('pw').value;
+  var pw=document.getElementById('pw').value.trim(); // drop stray spaces/newlines from paste
   var btn=document.getElementById('btn'), err=document.getElementById('err');
   err.textContent=''; btn.disabled=true; btn.textContent='Signing in…';
   fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw})})
