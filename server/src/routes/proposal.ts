@@ -192,9 +192,25 @@ router.get('/api/proposal/intacct-probe', async (_req, res) => {
       };
     } catch (e) { out[label] = { error: String((e as Error).message).slice(0, 120) }; }
   };
-  await look('invoices', '/invoice?limit=8&longForm=true', ['transactionId', 'invoiceNumber']);
   await look('companies', '/company?limit=6&longForm=true', ['name']);
   await look('jobs', '/job?limit=6&longForm=true', ['name']);
+  // Invoices: pull a big page, look only at REAL ones (totalPrice > 0), count Intacct sync coverage.
+  try {
+    const r: any = await stGet('/invoice?limit=200&longForm=true');
+    const d = r?.data || r;
+    const k = Object.keys(d || {}).find((x) => Array.isArray((d as any)[x]));
+    const arr: any[] = k ? (d as any)[k] : [];
+    const real = arr.filter((x) => Number(x.totalPrice) > 0);
+    const hasIntacct = (x: any) => x.externalIds && (x.externalIds.intacct || (Array.isArray(x.externalIds) && x.externalIds.some((e: any) => e.system === 'intacct' || e.intacct)));
+    out.invoices = {
+      totalPages: d?.totalPages,
+      inPage: arr.length,
+      realInPage: real.length,
+      realWithIntacct: real.filter(hasIntacct).length,
+      byStatus: arr.reduce((m: any, x: any) => { m[x.status] = (m[x.status] || 0) + 1; return m; }, {}),
+      sampleReal: real.slice(0, 4).map((x: any) => ({ invoiceNumber: x.invoiceNumber || x.refNumber, total: x.totalPrice, status: x.status, externalIds: x.externalIds })),
+    };
+  } catch (e) { out.invoices = { error: String((e as Error).message).slice(0, 120) }; }
   res.json(out);
 });
 
