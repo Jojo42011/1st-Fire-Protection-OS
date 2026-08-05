@@ -12,6 +12,7 @@ import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
 import { runScheduledSync } from './services/servicetradeSync';
 
+import { gate, handleLogin, handleLogout, authRequired } from './auth';
 import health from './routes/health';
 import brain from './routes/brain';
 import invoices from './routes/invoices';
@@ -57,6 +58,12 @@ if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into 
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
+
+// ---- password gate (enforced only when APP_PASSWORD is set) ----
+app.use(gate);
+app.get('/login', (_req, res) => (authRequired() ? res.sendFile(path.join(CLIENT_DIR, 'login.html')) : res.redirect('/')));
+app.post('/api/login', handleLogin);
+app.post('/api/logout', handleLogout);
 
 // ---- API routes ----
 app.use(health);
