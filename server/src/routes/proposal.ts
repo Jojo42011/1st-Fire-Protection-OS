@@ -184,8 +184,7 @@ router.get('/api/proposal/plans-probe', async (_req, res) => {
       out[label] = { ok: true, totalPages: d?.totalPages, count: arr.length, keys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}), sample: arr[0] };
     } catch (e) { out[label] = { ok: false, error: (e as Error).message }; }
   };
-  await tryGet('servicecontract', '/servicecontract?limit=2');
-  await tryGet('recurringService', '/recurringservice?limit=2');
+  await tryGet('serviceRecurrence', '/servicerecurrence?limit=3');
   // job types distribution over a page
   try {
     const r: any = await stGet('/job?limit=100');
