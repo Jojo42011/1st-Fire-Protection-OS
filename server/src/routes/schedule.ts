@@ -9,8 +9,8 @@ import { syncSchedule } from '../services/scheduleSync';
  */
 const router = Router();
 
-router.get('/api/schedule', (_req, res) => {
-  res.json(getScheduleSummary());
+router.get('/api/schedule', (req, res) => {
+  res.json(getScheduleSummary(String(req.query.office || '')));
 });
 
 // Pull scheduled appointments + assigned techs from ServiceTrade into the mirror (read-only).

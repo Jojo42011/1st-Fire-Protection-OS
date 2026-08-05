@@ -44,6 +44,13 @@
   .frame.on{opacity:1;pointer-events:auto}
 
   /* header extras */
+  .office-sel{font-weight:600;font-size:12px;color:var(--ink);border:1px solid var(--border);
+    border-radius:var(--r-btn);padding:7px 30px 7px 12px;background:var(--panel);cursor:pointer;
+    appearance:none;-webkit-appearance:none;max-width:190px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center}
+  .office-sel:hover{border-color:var(--border-strong)}
+  .office-sel:focus{outline:none;border-color:var(--fp-red,#E53935)}
   .head .range{font-weight:600;font-size:11.5px;color:var(--ink-2);border:1px solid var(--border);
     border-radius:var(--r-btn);padding:7px 12px;background:none;cursor:pointer}
   .head .range:hover{border-color:var(--border-strong)}
@@ -259,11 +266,9 @@
         <h1 id="screen-title">Ask the Operator</h1>
         <span class="sub" id="screen-sub">One conversation over the whole company</span>
         <span class="spacer"></span>
-        <span class="seg" id="view-seg">
-          <button data-view="owner" class="on">Owner</button>
-          <button data-view="office">Office</button>
-        </span>
-        <button class="range">This week</button>
+        <select id="office-select" class="office-sel" aria-label="Location">
+          <option value="all">All offices</option>
+        </select>
         <button class="theme-tog" id="theme-tog" aria-label="Toggle light and dark theme">
           <span class="ti-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
           <span class="ti-sun" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.5v2.4M12 20.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M1.5 12h2.4M20.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg></span>
@@ -389,13 +394,28 @@ window.addEventListener('message',function(e){var d=e.data||{};
   if(d.type==='roster-changed'){location.replace(location.pathname+'?tab='+encodeURIComponent(current));}
 });
 
-/* ---- owner / office view switch (UI only for now) ---- */
-document.getElementById('view-seg').addEventListener('click',function(e){
-  var b=e.target.closest('button[data-view]');if(!b)return;
-  this.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});
-  try{localStorage.setItem('fpView',b.getAttribute('data-view'));}catch(_){}
-});
-try{var sv=localStorage.getItem('fpView');if(sv==='office'){document.querySelectorAll('#view-seg button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-view')==='office');});}}catch(_){}
+/* ---- global office switcher: scopes every screen to one location ---- */
+function curOffice(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
+function broadcastOffice(o){
+  document.querySelectorAll('.frames iframe').forEach(function(f){try{f.contentWindow.postMessage({type:'fp-office',office:o},'*');}catch(_){}});
+}
+(function initOfficeSwitch(){
+  var sel=document.getElementById('office-select');
+  if(!sel)return;
+  sel.addEventListener('change',function(){
+    var o=sel.value||'all';
+    try{localStorage.setItem('fpos_office',o);}catch(_){}
+    broadcastOffice(o);
+    refreshCounts();
+  });
+  fetch('/api/offices').then(function(r){return r.json();}).then(function(d){
+    (d.offices||[]).forEach(function(o){
+      var opt=document.createElement('option');opt.value=o.value;opt.textContent=o.label;sel.appendChild(opt);
+    });
+    var saved=curOffice();
+    if([].some.call(sel.options,function(x){return x.value===saved;})) sel.value=saved;
+  }).catch(function(){});
+})();
 
 /* ---- sidebar counts / badges ---- */
 function refreshCounts(){

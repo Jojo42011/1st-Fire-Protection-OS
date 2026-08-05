@@ -196,8 +196,10 @@ interface SchedRow {
   window_start: string | null; window_end: string | null; status: string; job_type: string | null;
 }
 
-function realScheduleSummary() {
+function realScheduleSummary(office = '') {
   const db = getDb();
+  const officeClause = office ? ` AND a.office = @office` : '';
+  const officeArg = office ? { office } : {};
   const monday = weekMondayCentral();
   const dayDates = Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setUTCDate(d.getUTCDate() + i); return d; });
   const dayYmds = dayDates.map(ymdOf);
@@ -210,9 +212,9 @@ function realScheduleSummary() {
       `SELECT t.tech_name AS tech, COALESCE(NULLIF(t.office,''),'') AS office, a.st_id, a.customer, a.location_name,
               a.window_start, a.window_end, a.status, a.job_type
          FROM sched_appt_techs t JOIN sched_appointments a ON a.st_id = t.appt_st_id
-        WHERE a.window_start IS NOT NULL`
+        WHERE a.window_start IS NOT NULL${officeClause}`
     )
-    .all() as SchedRow[];
+    .all(officeArg) as SchedRow[];
 
   const byTech = new Map<string, { office: string; jobsByDay: any[][]; count: number }>();
   for (const r of assigned) {
@@ -241,10 +243,10 @@ function realScheduleSummary() {
     .prepare(
       `SELECT a.st_id, a.customer, a.location_name, a.office, a.window_start
          FROM sched_appointments a
-        WHERE a.window_start IS NOT NULL
+        WHERE a.window_start IS NOT NULL${officeClause}
           AND NOT EXISTS (SELECT 1 FROM sched_appt_techs t WHERE t.appt_st_id = a.st_id)`
     )
-    .all() as { st_id: string; customer: string | null; location_name: string | null; office: string; window_start: string }[];
+    .all(officeArg) as { st_id: string; customer: string | null; location_name: string | null; office: string; window_start: string }[];
   const unassignedWeek = unassignedRows.filter((r) => inWeek(r.window_start) >= 0);
 
   const weekApptIds = new Set<string>();
@@ -253,7 +255,7 @@ function realScheduleSummary() {
   const jobsToday = [...assigned.filter((r) => r.window_start && ymdOf(toCentral(r.window_start)) === todayYmd).map((r) => r.st_id),
     ...unassignedWeek.filter((r) => ymdOf(toCentral(r.window_start)) === todayYmd).map((r) => r.st_id)];
   const officesActive = new Set([...byTech.values()].map((g) => g.office).filter(Boolean)).size;
-  const totalSynced = (db.prepare(`SELECT COUNT(*) AS v FROM sched_appointments`).get() as { v: number }).v || 0;
+  const totalSynced = (db.prepare(`SELECT COUNT(*) AS v FROM sched_appointments a WHERE 1=1${officeClause}`).get(officeArg) as { v: number }).v || 0;
 
   const waitlist = unassignedWeek.slice(0, 6).map((r) => {
     const di = inWeek(r.window_start);
@@ -290,8 +292,8 @@ function realScheduleSummary() {
   };
 }
 
-export function getScheduleSummary() {
-  if (hasSchedule()) return realScheduleSummary();
+export function getScheduleSummary(office = '') {
+  if (hasSchedule()) return realScheduleSummary(office);
   const db = getDb();
   const crews = db.prepare(`SELECT * FROM crews ORDER BY id ASC`).all() as Crew[];
   const appts = db.prepare(`SELECT * FROM appointments`).all() as Appointment[];
