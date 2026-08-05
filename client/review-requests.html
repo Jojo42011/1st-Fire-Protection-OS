@@ -18,12 +18,15 @@
   .pill.hold{color:var(--amber-ink);background:var(--amber-bg)}
   .pill.auto{color:var(--green);background:var(--green-bg)}
   .rr-mode{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .embed .hub-intro{display:none!important}
+  .embed .screen{padding-top:4px}
 </style>
+<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 </head>
 <body>
 <div class="screen">
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
-    <div>
+    <div class="hub-intro">
       <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Reputation · ServiceTrade × Google</p>
       <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Review requests</h1>
       <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:74ch">When a job completes in ServiceTrade, a request goes to that customer with the Google link for the <b>office that serviced them</b>, so the review lands on the right profile. Email via Microsoft 365. Nothing sends until you approve the first batch.</p>

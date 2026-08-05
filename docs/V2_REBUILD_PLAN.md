@@ -166,6 +166,20 @@ screen is fully on live data.
 
 ## 07b · Planned enhancements (do when the dependency lands)
 
+### Google Business Profile API → real inbound reputation *(blocked on GBP OAuth)*
+The outbound review-request pipeline is live (ServiceTrade → per-office Google link → M365 send).
+The inbound half — reading real ratings/reviews per office and posting replies — is still demo
+(`reviews` table is seed). The unlock is the **Google Business Profile API** (OAuth to the Google
+account that owns the profiles):
+
+- Read reviews per location using the **place IDs already stored in `review_targets`** (the same
+  office→profile mapping built for sending), so one config serves both directions.
+- Surface real avg rating + review volume per office; draft + post replies (gated).
+- Lands in the consolidated **Reviews** hub's "Reviews & replies" tab, which ships now as demo
+  and flips to live once this connects.
+
+### Sage Intacct → customer email enrichment *(blocked on Sage read-only access)*
+
 ### Sage Intacct → customer email enrichment *(blocked on Sage read-only access)*
 Sage has a deliverable email on every billing customer (it is how invoices go out), so it fills
 the gaps ServiceTrade leaves. When the Sage connector is live (read-only pull of customers +
