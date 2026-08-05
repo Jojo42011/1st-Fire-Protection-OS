@@ -124,3 +124,26 @@ Measure the pilot against these baselines:
 
 > Deeper cut still to pull: **answered-vs-voicemail rate per office** (needs `callRecords` session
 > parsing) to put a hard dollar figure on leads currently lost to the beep.
+
+---
+
+## 5. Next build (queued, post-8/14): missed-call → Teams alert
+
+Decided but not yet built. The first instrumentation slice, and the answered-vs-voicemail metric
+above falls out of it for free.
+
+- **Detect the miss.** Poll `/communications/callRecords` on a short cadence (every ~2–3 min) using
+  the existing Graph app (`CallRecords.Read.All`). For each inbound call, expand
+  `sessions($expand=segments)` and decide *answered by a person* vs *fell to voicemail / unanswered*
+  — PSTN `duration > 0` is NOT sufficient (the phone leg always connects to the auto attendant), so
+  the callee-segment success is the real signal. Heuristic needs tuning against live records.
+- **Log it.** Write every miss to a `missed_calls` table (office, caller, time, after-hours flag,
+  matched ServiceTrade account if caller ID resolves) → gives an in-app missed-call list *and* the
+  per-office miss-rate metric we don't have today.
+- **Alert it — per-office channels** (Devon's call). One Teams **Incoming Webhook** per office
+  channel (each office's misses route to that office's local team). Post an Adaptive Card: office
+  dialed, caller number, time, and the customer/site name when the caller ID matches the ST mirror.
+  Same low-friction pattern as the reviews distribution group — no Graph send permission, no admin
+  consent; Devon creates the webhooks and provides the URLs (one per office).
+- **Config / keyless boot.** No-op until the per-office webhook URLs are set; never throws.
+- **SMS text-back:** deferred (Email/Teams first, matching the reviews decision — Twilio later).
