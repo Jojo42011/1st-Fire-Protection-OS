@@ -171,4 +171,28 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
+/**
+ * Read-only ServiceTrade shape probe (temporary, for building the schedule sync). Allows GETs
+ * against a short allow-list of entities so we can inspect appointment / technician field shapes.
+ */
+router.get('/api/proposal/st-probe', async (req, res) => {
+  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
+  const path = String(req.query.path || '/appointment?limit=3');
+  if (!/^\/(appointment|user|job|tech)/.test(path)) return res.status(400).json({ ok: false, error: 'path not allowed' });
+  try {
+    const r: any = await stGet(path);
+    const d = r?.data || r;
+    const arr = d?.appointments || d?.users || d?.jobs || (Array.isArray(d) ? d : [d]);
+    res.json({
+      ok: true,
+      totalPages: d?.totalPages,
+      count: Array.isArray(arr) ? arr.length : 0,
+      sampleKeys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}),
+      sample: arr[0] || d,
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
+});
+
 export default router;
