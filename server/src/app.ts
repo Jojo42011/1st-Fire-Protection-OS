@@ -44,6 +44,7 @@ import schedule from './routes/schedule';
 import costing from './routes/costing';
 import settings from './routes/settings';
 import servicetradeWebhook from './routes/servicetradeWebhook';
+import teams from './routes/teams';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -96,6 +97,7 @@ app.use(schedule);
 app.use(costing);
 app.use(settings);
 app.use(servicetradeWebhook);
+app.use(teams);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
