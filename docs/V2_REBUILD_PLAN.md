@@ -164,6 +164,25 @@ screen is fully on live data.
 
 ---
 
+## 07b · Planned enhancements (do when the dependency lands)
+
+### Sage Intacct → customer email enrichment *(blocked on Sage read-only access)*
+Sage has a deliverable email on every billing customer (it is how invoices go out), so it fills
+the gaps ServiceTrade leaves. When the Sage connector is live (read-only pull of customers +
+contacts, matched to `accounts` by name/customer id):
+
+- **Invoice Collector:** Sage billing/AP email is the *primary* recipient (the payer).
+- **Google review requests:** Sage billing email is the *last-resort fallback* only. Reviews
+  should reach the person who experienced the service, so the contact chain stays:
+  `job primaryContact → site/location contact → site email → (Sage billing email)`. The Sage
+  address is an AP contact, not the field contact, so it ranks last — but it rescues the
+  ServiceTrade "email deserts" (e.g. the Lubbock office records almost no customer emails:
+  3 of 44 completed jobs). Implement the same day the Sage pull works: extend the contact
+  resolver in `servicetradeSync.pullCompletedJobs` (or a shared resolver) with the Sage email,
+  then re-backfill + regenerate held requests.
+
+---
+
 ## 08 · Risks & mitigations
 
 - **Sync state lives in memory on one machine.** A restart mid-pull loses progress. → Persist
