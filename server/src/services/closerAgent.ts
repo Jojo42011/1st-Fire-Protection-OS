@@ -142,13 +142,17 @@ const REASONS: { key: string; label: string; tone: string }[] = [
 // Raw ServiceTrade quote statuses, bucketed the same way crm.ts mapQuoteStage does.
 // Pulled quotes store the RAW status in quotes.stage (not the seed vocabulary), so the
 // Closer has to read them through the same lens the pipeline board does.
-const ST_OPEN = ['draft', 'submitted', 'pending', 'reviewed', 'contingent'];
+// NOTE: 'draft' is deliberately EXCLUDED — a draft has never been sent, so there is nothing to
+// follow up on. Drafts are the Estimator's worklist (Estimates tab); the Closer only chases
+// quotes that have actually gone out to the customer and are awaiting a decision. Clean handoff.
+const ST_OPEN = ['submitted', 'pending', 'reviewed', 'contingent'];
+const ST_APP = 'https://app.servicetrade.com';
 const ST_WON = ['accepted', 'approved', 'won'];
 const ST_LOST = ['rejected', 'lost', 'canceled', 'cancelled', 'expired', 'void'];
 const sqlList = (arr: string[]) => arr.map((s) => `'${s}'`).join(',');
 
 /** Shape one open quote into the row the Closer screen renders (tier, next move, cta). */
-function shapeQuoteRow(q: QuoteRow & { customer: string | null }) {
+function shapeQuoteRow(q: QuoteRow & { customer: string | null; st_id?: string | null }) {
   const days = daysSince(q.sent_at);
   const touches = touchCount(q.id);
   const tier = tierFor(days, touches);
@@ -167,6 +171,7 @@ function shapeQuoteRow(q: QuoteRow & { customer: string | null }) {
     next: nm.next,
     cta: nm.cta,
     ctaDark: tier === 'last_call',
+    stUrl: q.st_id ? `${ST_APP}/quotes/${q.st_id}` : null,
   };
 }
 
@@ -188,13 +193,13 @@ function realPipelineSummary() {
   // the open book itself, oldest-sent first (nulls last), capped so the screen stays snappy
   const rows = db
     .prepare(
-      `SELECT q.id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
+      `SELECT q.id, q.st_id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
          FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
         WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})
         ORDER BY (q.sent_at IS NULL), q.sent_at ASC
         LIMIT 80`
     )
-    .all() as (QuoteRow & { customer: string | null })[];
+    .all() as (QuoteRow & { customer: string | null; st_id: string | null })[];
 
   const { stalledAfterDays } = TRADE_CONFIG.closer;
   let stalled = 0;

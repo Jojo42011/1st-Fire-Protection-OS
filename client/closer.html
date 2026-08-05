@@ -64,8 +64,11 @@ function render(){
   var vis=d.quotes.filter(function(q){return filter==='stalled'?grp(q.tier)==='stalled':grp(q.tier)===filter;});
   var rows=vis.map(function(q){
     var pillCls=({money:'money',green:'green',gray:'gray',indigo:'indigo',amber:'amber'})[q.tierPill]||'gray';
+    var cust=q.stUrl
+      ? '<a href="'+esc(q.stUrl)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:13px;color:var(--ink);text-decoration:none">'+esc(q.customer)+'</a>'
+      : '<span style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(q.customer)+'</span>';
     return '<tr>'+
-      '<td style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(q.customer)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(q.work)+'</div></td>'+
+      '<td>'+cust+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(q.work)+'</div></td>'+
       '<td class="right" style="font-weight:700;color:var(--ink)">'+esc(q.value)+'</td>'+
       '<td class="right cl-age" style="color:'+q.ageTone+'">'+esc(q.age)+'</td>'+
       '<td><span class="pill '+pillCls+'">'+esc(q.tier)+'</span></td>'+
