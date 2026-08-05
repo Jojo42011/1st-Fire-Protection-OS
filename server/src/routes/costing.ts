@@ -8,8 +8,8 @@ import { getCostingSummary, draftChangeOrder } from '../services/costingAgent';
  */
 const router = Router();
 
-router.get('/api/costing', (_req, res) => {
-  res.json(getCostingSummary());
+router.get('/api/costing', (req, res) => {
+  res.json(getCostingSummary(String(req.query.office || '')));
 });
 
 router.post('/api/costing/:id/change-order', (req, res) => {

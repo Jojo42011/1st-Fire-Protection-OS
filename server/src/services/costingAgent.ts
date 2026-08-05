@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
+import { hasRealQuotes } from './servicetradeSync';
 
 /**
  * The Job-Costing engine. The doctrine here is one line: MARGIN IS COMPUTED, NEVER STORED.
@@ -88,7 +89,67 @@ export function draftChangeOrder(jobId: number): { jobId: number; amount: string
   return { jobId, amount, body };
 }
 
-export function getCostingSummary() {
+// ── Live "Job value" view (revenue side). True margins need cost data (Sage Intacct), which
+//    ServiceTrade does not expose — so this shows booked/open job revenue honestly, office-scoped,
+//    and flags that margins arrive when Sage connects. ──
+const ST_APP = 'https://app.servicetrade.com';
+const WON = ['accepted', 'approved', 'won'];
+const OPEN = ['submitted', 'pending', 'reviewed', 'contingent', 'draft'];
+const sqlIn = (arr: string[]) => arr.map((s) => `'${s}'`).join(',');
+const officeShort = (o: string) => (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim() || '—';
+
+function realJobValue(office = '') {
+  const db = getDb();
+  const oc = office ? ' AND q.office = @office' : '';
+  const bind: any = office ? { office } : {};
+  const scalar = (sql: string) => (db.prepare(sql).get(...(office ? [bind] : [])) as { v: number }).v || 0;
+
+  const bookedCents = scalar(`SELECT COALESCE(SUM(amount_cents),0) AS v FROM quotes q WHERE q.source='servicetrade' AND lower(q.stage) IN (${sqlIn(WON)})${oc}`);
+  const wonCount = scalar(`SELECT COUNT(*) AS v FROM quotes q WHERE q.source='servicetrade' AND lower(q.stage) IN (${sqlIn(WON)})${oc}`);
+  const openCents = scalar(`SELECT COALESCE(SUM(amount_cents),0) AS v FROM quotes q WHERE q.source='servicetrade' AND lower(q.stage) IN (${sqlIn(OPEN)})${oc}`);
+  const avg = wonCount ? Math.round(bookedCents / wonCount) : 0;
+
+  const stmt = db.prepare(
+    `SELECT q.id, q.st_id, q.number, q.title, q.amount_cents, q.stage, q.office, a.name AS customer
+       FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
+      WHERE q.source='servicetrade' AND lower(q.stage) IN (${sqlIn(WON.concat(OPEN))})${oc}
+      ORDER BY q.amount_cents DESC LIMIT 120`
+  );
+  const rows = (office ? stmt.all(bind) : stmt.all()) as { id: number; st_id: string | null; number: string | null; title: string | null; amount_cents: number | null; stage: string | null; office: string | null; customer: string | null }[];
+
+  const jobs = rows.map((q) => {
+    const won = WON.includes((q.stage || '').toLowerCase());
+    return {
+      id: q.id,
+      customer: q.customer || 'Prospect',
+      work: q.title || '',
+      value: money(q.amount_cents || 0),
+      office: officeShort(q.office || ''),
+      status: won ? 'won' : 'open',
+      statusTone: won ? 'var(--green)' : 'var(--muted)',
+      stUrl: q.st_id ? `${ST_APP}/quotes/${q.st_id}` : null,
+    };
+  });
+
+  return {
+    summary: {
+      kpis: [
+        { lab: 'Booked revenue', val: money(bookedCents), sub: `${wonCount.toLocaleString()} jobs won`, color: 'var(--green)' },
+        { lab: 'Average job value', val: money(avg), sub: 'per won job', color: 'var(--ink)' },
+        { lab: 'Open value', val: money(openCents), sub: 'quoted, not yet booked', color: 'var(--ink)' },
+        { lab: 'Margins', val: 'Pending', sub: 'unlock when Sage connects', color: 'var(--money)' },
+      ],
+      banner: 'This is the revenue side of every job — real, from ServiceTrade. True margins need job costs (labor, parts), which live in Sage Intacct and are not yet connected. When Sage is in, cost lands beside each number here and this becomes real margins.',
+    },
+    jobs,
+    focus: null,
+    changeOrder: null,
+    live: true,
+  };
+}
+
+export function getCostingSummary(office = '') {
+  if (hasRealQuotes()) return realJobValue(office);
   const db = getDb();
   const rows = db.prepare(`SELECT * FROM job_costs`).all() as JobCost[];
   const withM = rows.map((j) => ({ j, m: jobMargin(j) }));

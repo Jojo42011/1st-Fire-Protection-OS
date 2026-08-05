@@ -26,6 +26,10 @@
   .jc-focus .ln .k{flex:1;font-weight:500;font-size:12.5px;color:var(--ink-3)}
   .jc-focus .ln .v{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
   .jc-co p{margin:9px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3);background:var(--bg);border-radius:9px;padding:11px 13px}
+  .jc-banner{display:flex;gap:11px;align-items:flex-start;background:var(--amber-bg);border:1px solid var(--amber);border-radius:11px;padding:13px 15px;margin-top:16px}
+  .jc-banner .ic{flex:none;color:var(--amber-ink);font-weight:900}
+  .jc-banner p{margin:0;font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+  .jc-status{font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-radius:6px;padding:3px 8px}
 </style>
 </head>
 <body>
@@ -45,10 +49,14 @@ function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*
 function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
 var DATA=null, tab='in_progress';
 
-fetch('/api/costing').then(function(r){return r.json();}).then(function(d){DATA=d;render();});
+function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
+function load(){fetch('/api/costing'+officeParam()).then(function(r){return r.json();}).then(function(d){DATA=d;render();});}
+load();
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
 
 function render(){
   var d=DATA, s=d.summary;
+  if(d.live){ renderJobValue(d); return; }
   var kpis=[
     ['Portfolio margin', s.portfolioMargin, 'var(--green)', 'target '+s.target+' · '+s.jobsClosed+' jobs closed'],
     ['Losing money right now', s.losingCount+' jobs', 'var(--money)', s.atRisk+' of margin at risk'],
@@ -111,6 +119,29 @@ function render(){
     document.getElementById('send-co').onclick=function(){changeOrder(co.jobId,this,true);};
     document.getElementById('eat-co').onclick=function(){cc.style.display='none';};
   } else { cc.style.display='none'; }
+}
+// Live "Job value" view (revenue side; margins pending Sage).
+function renderJobValue(d){
+  var s=d.summary;
+  document.getElementById('kpis').innerHTML=(s.kpis||[]).map(function(k){
+    return '<div class="card jc-kpi"><div class="lab">'+esc(k.lab)+'</div><div class="val" style="color:'+(k.color||'var(--ink)')+'">'+esc(k.val)+'</div><div class="sub">'+esc(k.sub||'')+'</div></div>';
+  }).join('');
+  var rows=(d.jobs||[]).map(function(j){
+    var name=j.stUrl?'<a href="'+esc(j.stUrl)+'" target="_blank" rel="noopener" style="font-weight:700;font-size:13px;color:var(--ink);text-decoration:none">'+esc(j.customer)+'</a>':'<span style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(j.customer)+'</span>';
+    var stTone=j.status==='won'?['var(--green)','var(--green-bg)']:['var(--muted)','var(--fill)'];
+    return '<tr>'+
+      '<td>'+name+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(j.work)+'</div></td>'+
+      '<td class="right" style="font-weight:800;font-size:13.5px;color:var(--ink);font-variant-numeric:tabular-nums">'+esc(j.value)+'</td>'+
+      '<td style="color:var(--ink-3)">'+esc(j.office)+'</td>'+
+      '<td class="right"><span class="jc-status" style="color:'+stTone[0]+';background:'+stTone[1]+'">'+esc(j.status)+'</span></td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('jobs-card').innerHTML=
+    '<div class="card-head"><h2>Jobs by value</h2><span style="flex:1"></span><span style="font-weight:500;font-size:11.5px;color:var(--muted)">booked &amp; open, highest first</span></div>'+
+    '<table><thead><tr><th>Job</th><th class="right">Value</th><th>Office</th><th class="right">Status</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    (s.banner?'<div class="jc-banner"><span class="ic">!</span><p>'+esc(s.banner)+'</p></div>':'');
+  document.getElementById('focus-card').style.display='none';
+  document.getElementById('co-card').style.display='none';
 }
 function changeOrder(id,btn,isCard){
   btn.disabled=true; var orig=btn.textContent; btn.textContent='Drafting…';
