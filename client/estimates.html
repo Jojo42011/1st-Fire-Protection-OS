@@ -35,7 +35,8 @@
 <body>
 <div class="screen view" id="root">
   <div class="kpis" id="kpis"></div>
-  <div class="split">
+  <div id="live-main" style="display:none"><div class="card card-clip" id="worklist-card"></div></div>
+  <div id="demo-main" class="split" style="display:none">
     <div class="card card-clip" id="takeoff-card"></div>
     <div class="stack">
       <div class="card card-clip es-q" id="quote-card" style="border-left:3px solid var(--indigo)"></div>
@@ -49,6 +50,8 @@ function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*
 var activeId=null;
 
 fetch('/api/estimating').then(function(r){return r.json();}).then(function(d){
+  if(d.live){ renderLive(d); return; }
+  document.getElementById('demo-main').style.display='';
   var s=d.summary;
   document.getElementById('kpis').innerHTML=[
     kpi('Quotes sent this month', s.quotesThisMonth, s.quotedThisMonth+' quoted', 'var(--ink)'),
@@ -109,6 +112,44 @@ fetch('/api/estimating').then(function(r){return r.json();}).then(function(d){
 
 function kpi(lab,val,sub,color){
   return '<div class="card card-pad es-kpi"><div class="lab">'+esc(lab)+'</div><div class="val" style="color:'+color+'">'+esc(val)+'</div><div class="sub">'+esc(sub)+'</div></div>';
+}
+
+// Live view: the real ServiceTrade draft backlog as the estimator's worklist.
+function renderLive(d){
+  document.getElementById('live-main').style.display='';
+  var s=d.summary;
+  document.getElementById('kpis').innerHTML=[
+    kpi('Drafts to send', s.drafts, s.unpriced+' still need a price', 'var(--ink)'),
+    kpi('Value in the queue', s.value, 'across every open draft', 'var(--green)'),
+    kpi('Oldest draft', s.oldestLabel, 'sitting, not sent', 'var(--ink)'),
+    kpi('Average age', s.avgLabel, 'time spent in draft', 'var(--ink)')
+  ].join('');
+
+  var list=d.worklist||[];
+  var rows=list.map(function(q){
+    var val=q.needsPrice
+      ? '<span class="pill amber">needs price</span>'
+      : '<span style="font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums">'+esc(q.amount)+'</span>';
+    var action=q.stUrl
+      ? '<a class="btn btn-sm" href="'+esc(q.stUrl)+'" target="_blank" rel="noopener">Open in ServiceTrade</a>'
+      : '<span style="color:var(--faint);font-size:11.5px">no link</span>';
+    return '<tr>'+
+      '<td><div style="font-weight:700;font-size:13px;color:var(--ink)">'+esc(q.customer)+'</div>'+
+        '<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(q.title)+'</div></td>'+
+      '<td class="mono" style="color:var(--faint);font-size:11.5px">'+esc(q.number)+'</td>'+
+      '<td class="right">'+val+'</td>'+
+      '<td class="right" style="font-weight:700;color:'+q.ageTone+';font-variant-numeric:tabular-nums">'+esc(q.age)+'</td>'+
+      '<td class="right">'+action+'</td>'+
+    '</tr>';
+  }).join('');
+
+  document.getElementById('worklist-card').innerHTML=
+    '<div class="card-head"><h2>Draft quotes to price and send</h2>'+
+      '<span class="pill indigo">'+list.length+' in the queue</span><span style="flex:1"></span>'+
+      '<span style="font-weight:500;font-size:11.5px;color:var(--muted)">highest value first</span></div>'+
+    (list.length
+      ? '<table><thead><tr><th>Customer / scope</th><th>Quote</th><th class="right">Value</th><th class="right">Age</th><th class="right"></th></tr></thead><tbody>'+rows+'</tbody></table>'
+      : '<div class="empty" style="padding:30px 8px"><h3 style="font-size:14px">No drafts waiting</h3><p>Every ServiceTrade quote has been built and sent. New drafts land here automatically.</p></div>');
 }
 function sendQuote(){
   var btn=document.getElementById('send-quote'); if(!activeId){return;}
