@@ -61,7 +61,7 @@ function realWorklist(db: ReturnType<typeof getDb>) {
       needsPrice: !q.amount_cents,
       age: age.label,
       ageTone: age.tone,
-      stUrl: q.st_id ? `${ST_APP}/quotes/view/${q.st_id}` : null,
+      stUrl: q.st_id ? `${ST_APP}/quotes/${q.st_id}` : null,
     };
   });
 
