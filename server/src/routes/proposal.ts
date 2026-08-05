@@ -171,36 +171,4 @@ router.get('/api/proposal/deficiencies', async (req, res) => {
   }
 });
 
-// temp: probe ServiceTrade for job cost / revenue / labor signals (for the Job margins tab)
-router.get('/api/proposal/cost-probe', async (_req, res) => {
-  if (!stConfigured()) return res.status(400).json({ ok: false, error: 'ServiceTrade not connected' });
-  const out: any = {};
-  try {
-    const r: any = await stGet('/job?limit=3&longForm=true');
-    const d = r?.data || r;
-    const jobs = d?.jobs || [];
-    out.jobKeys = jobs[0] ? Object.keys(jobs[0]) : [];
-    // surface anything that looks like money/labor/revenue
-    const j = jobs[0] || {};
-    out.jobMoneyish = {
-      totalPrice: j.totalPrice, revenue: j.revenue, cost: j.cost, laborCost: j.laborCost,
-      estimatedPrice: j.estimatedPrice, invoiceTotal: j.invoiceTotal, currentAppointment: j.currentAppointment ? Object.keys(j.currentAppointment) : null,
-      items: Array.isArray(j.items) ? j.items.length : j.items, appointmentsN: Array.isArray(j.appointments) ? j.appointments.length : null,
-    };
-  } catch (e) { out.job = { error: (e as Error).message }; }
-  const tryGet = async (label: string, path: string) => {
-    try {
-      const r: any = await stGet(path);
-      const d = r?.data || r;
-      const k = Object.keys(d || {}).find((x) => Array.isArray((d as any)[x]));
-      const arr = k ? (d as any)[k] : [];
-      out[label] = { ok: true, totalPages: d?.totalPages, keys: arr[0] ? Object.keys(arr[0]) : Object.keys(d || {}), sample: arr[0] };
-    } catch (e) { out[label] = { ok: false, error: String((e as Error).message).slice(0, 90) }; }
-  };
-  await tryGet('clockevent', '/clockevent?limit=2');
-  await tryGet('timesheet', '/timecard?limit=2');
-  await tryGet('jobitem', '/jobitem?limit=2');
-  res.json(out);
-});
-
 export default router;
