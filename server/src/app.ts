@@ -44,6 +44,7 @@ import schedule from './routes/schedule';
 import costing from './routes/costing';
 import settings from './routes/settings';
 import servicetradeWebhook from './routes/servicetradeWebhook';
+import partner from './routes/partner';
 import teams from './routes/teams';
 
 const PORT = Number(process.env.PORT || 3900);
@@ -97,6 +98,7 @@ app.use(schedule);
 app.use(costing);
 app.use(settings);
 app.use(servicetradeWebhook);
+app.use(partner);
 app.use(teams);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----

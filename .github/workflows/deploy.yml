@@ -63,6 +63,9 @@ jobs:
 
           # Deploy. --ha=false keeps it to ONE machine (required for SQLite on one volume).
           # The [mounts] initial_size in fly.toml auto-creates the fp_data volume on first deploy.
-          flyctl deploy --remote-only --ha=false
+          # --no-cache: the shared remote builder was serving stale build layers that
+          # dropped newly added route files from server/dist; a clean build is cheap
+          # insurance that what's on main is what ships.
+          flyctl deploy --remote-only --ha=false --no-cache
 
           echo "Deployed. URL: https://$APP.fly.dev"

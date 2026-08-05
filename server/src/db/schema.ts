@@ -440,6 +440,25 @@ export function initDb(): void {
     );
   `);
 
+  /* ---------- partner cross-sell: sites a fire tech flags for VDS (security) ----------
+   * The highest-intent security lead there is: a trusted 1st FP tech standing inside a
+   * commercial building noting it has old or no cameras. Flows to the VDS OS via the
+   * key-gated partner export. This is a deliberate, sanctioned sister-company channel;
+   * only 1st FP's own observations cross, never anything else. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS partner_flags (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      company     TEXT NOT NULL,               -- the site / business name
+      address     TEXT,
+      contact     TEXT,
+      note        TEXT,                        -- what the tech saw (old cameras, no access control, etc.)
+      photo_url   TEXT,
+      flagged_by  TEXT,                        -- tech name
+      status      TEXT DEFAULT 'new',          -- new|sent
+      created_at  TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
    * Added after the base table so existing brains upgrade in place. Idempotent —
    * addColumn checks pragma table_info first (SQLite has no ADD COLUMN IF NOT EXISTS). */
