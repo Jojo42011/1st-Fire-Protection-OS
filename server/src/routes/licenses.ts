@@ -8,7 +8,7 @@ import {
   getReclaimQueue,
   VENDORS,
 } from '../services/licenseAgent';
-import { fetchDirectory, fetchTerminated, bambooConfigured } from '../services/bamboo';
+import { fetchDirectory, fetchTerminated, fetchRoster, bambooConfigured } from '../services/bamboo';
 import { fetchAllVendorSeats, configuredVendors } from '../services/licenseSources';
 import { parseCsv, importManualSeats, isVendor } from '../services/licenseImport';
 import { createApproval } from './approvals';
@@ -33,6 +33,32 @@ router.get('/api/licenses', (_req, res) => {
     liveVendors: configuredVendors(),
     live: bambooConfigured(),
   });
+});
+
+/**
+ * Live BambooHR roster grouped by office/location. Read-only, keyless-safe: with no Bamboo keys
+ * it reports connected:false and returns nothing (rather than leaking the seeded demo names as if
+ * they were the real roster). Optional ?location= does a case-insensitive substring filter; the
+ * `byLocation` breakdown is always returned so callers can see exactly what location values exist.
+ */
+router.get('/api/licenses/directory', async (req, res) => {
+  const roster = await fetchRoster();
+  if (!roster) {
+    return res.json({ ok: true, connected: false, total: 0, byLocation: [], employees: [] });
+  }
+  const q = String(req.query.location || '').trim().toLowerCase();
+  const counts = new Map<string, number>();
+  for (const e of roster) {
+    const loc = e.location || '(no location)';
+    counts.set(loc, (counts.get(loc) || 0) + 1);
+  }
+  const byLocation = [...counts.entries()]
+    .map(([location, count]) => ({ location, count }))
+    .sort((a, b) => b.count - a.count || a.location.localeCompare(b.location));
+  const employees = (q ? roster.filter((e) => (e.location || '').toLowerCase().includes(q)) : roster)
+    .map((e) => ({ full_name: e.full_name, title: e.title, department: e.department, location: e.location, email: e.email }))
+    .sort((a, b) => (a.department || '').localeCompare(b.department || '') || a.full_name.localeCompare(b.full_name));
+  res.json({ ok: true, connected: true, total: roster.length, filteredBy: q || null, count: employees.length, byLocation, employees });
 });
 
 /** Flag a seat for reclaim (the DRAFT - human-gated, nothing cancels). */
