@@ -130,11 +130,14 @@
 var money=function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 // Heuristic: does an off-roster account look like a real person (vs a shared mailbox / resource account)?
-var MAILBOX_RE=/\b(desk|reception|account(ing)?|admin|queue|main|forward(ing)?|conference|hours|after|migration|payroll|scan(s)?|submittal(s)?|hr|it|domain|emergency|connect|external|team|group|info|sales|service|office ?365|o365|noreply|no-reply|alerts?|notif|dispatch|room|2nd|aa|crow)\b/i;
+// Word-bounded terms that only appear in mailbox / resource-account names.
+var MAILBOX_RE=/\b(desk|reception|account(ing)?|queue|main|hours|after|migration|payroll|scan(s)?|submittal(s)?|hr|it|emergency|connect|external|team|group|info|sales|service|office ?365|o365|alerts?|notif|room|2nd|aa|crow)\b/i;
+// Fragments that never occur inside a person's name, even when joined (e.g. "DomainAdmin").
+var MAILBOX_SUB=/admin|domain|mailbox|noreply|no-reply|resource|forward|dispatch|conference/i;
 function looksLikePerson(name){
   var n=(name||'').trim();
   if(!n) return false;
-  if(MAILBOX_RE.test(n)) return false;
+  if(MAILBOX_RE.test(n) || MAILBOX_SUB.test(n)) return false;
   if(/[0-9@._/]/.test(n)) return false;               // codes, emails, slashes -> not a person
   var toks=n.split(/\s+/).filter(Boolean);
   return toks.length>=2 && toks.length<=4;             // First Last (maybe middle/suffix)
