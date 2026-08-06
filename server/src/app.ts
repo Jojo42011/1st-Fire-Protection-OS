@@ -50,6 +50,7 @@ import partner from './routes/partner';
 import proposal from './routes/proposal';
 import offices from './routes/offices';
 import teams from './routes/teams';
+import oncall from './routes/oncall';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -106,6 +107,7 @@ app.use(partner);
 app.use(proposal);
 app.use(offices);
 app.use(teams);
+app.use(oncall);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -142,6 +144,7 @@ app.get('/closer', page('closer.html'));
 app.get('/plans', page('plans.html'));
 app.get('/schedule', page('schedule.html'));
 app.get('/costing', page('costing.html'));
+app.get('/oncall', page('oncall.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

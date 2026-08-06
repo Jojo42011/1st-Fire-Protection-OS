@@ -459,6 +459,28 @@ export function initDb(): void {
     );
   `);
 
+  /* ---------- after-hours on-call roster (per office, weekly rotation) ----------
+   * The AI receptionist's after-hours flow reads "who is on call for THIS office right
+   * now" from here. One row is one shift: a person covering an office over a date window.
+   * A weekly rotation is just a run of consecutive one-week shifts cycling through a pool.
+   * starts_on is inclusive, ends_on is exclusive (the next shift's start), both local dates.
+   * person_phone is the E.164 line the assistant warm-transfers to. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS oncall_shifts (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      office        TEXT NOT NULL,               -- friendly office label (San Antonio, McAllen, ...)
+      person_name   TEXT NOT NULL,
+      person_phone  TEXT,                        -- E.164 the assistant dials for a warm transfer
+      person_email  TEXT,                        -- Teams identity
+      starts_on     TEXT NOT NULL,               -- inclusive local date (YYYY-MM-DD)
+      ends_on       TEXT NOT NULL,               -- exclusive local date (YYYY-MM-DD)
+      note          TEXT,
+      source        TEXT DEFAULT 'manual',       -- manual|rotation
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_oncall_office_dates ON oncall_shifts(office, starts_on, ends_on);
+  `);
+
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
    * Added after the base table so existing brains upgrade in place. Idempotent —
    * addColumn checks pragma table_info first (SQLite has no ADD COLUMN IF NOT EXISTS). */
