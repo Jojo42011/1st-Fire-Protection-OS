@@ -94,9 +94,9 @@
   <div class="card card-clip" id="review-card" style="display:none">
     <div class="card-head">
       <h2>Not on your roster</h2>
-      <span id="review-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
+      <span id="review-count" style="font-weight:500;font-size:12px;color:var(--muted)"></span>
       <span style="flex:1"></span>
-      <span style="font-weight:500;font-size:11.5px;color:var(--muted);max-width:52ch;text-align:right">Assigned to accounts with no match in HR. Usually shared mailboxes (reception, accounting) or staff missing a work email in BambooHR. <b style="color:var(--ink)">Not counted as savings</b> until you confirm.</span>
+      <span style="font-weight:500;font-size:11.5px;color:var(--muted);max-width:58ch;text-align:right">No match in BambooHR, so <b style="color:var(--ink)">never counted as savings</b>. Two kinds: shared mailboxes and Teams resource accounts (expected, leave them), and real people missing from BambooHR (an HR-data gap to fix, not wasted spend).</span>
     </div>
     <table>
       <thead><tr><th>Software</th><th>Assigned to</th><th class="right">Per year</th><th></th></tr></thead>
@@ -129,6 +129,16 @@
 <script>
 var money=function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
 function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+// Heuristic: does an off-roster account look like a real person (vs a shared mailbox / resource account)?
+var MAILBOX_RE=/\b(desk|reception|account(ing)?|admin|queue|main|forward(ing)?|conference|hours|after|migration|payroll|scan(s)?|submittal(s)?|hr|it|domain|emergency|connect|external|team|group|info|sales|service|office ?365|o365|noreply|no-reply|alerts?|notif|dispatch|room|2nd|aa|crow)\b/i;
+function looksLikePerson(name){
+  var n=(name||'').trim();
+  if(!n) return false;
+  if(MAILBOX_RE.test(n)) return false;
+  if(/[0-9@._/]/.test(n)) return false;               // codes, emails, slashes -> not a person
+  var toks=n.split(/\s+/).filter(Boolean);
+  return toks.length>=2 && toks.length<=4;             // First Last (maybe middle/suffix)
+}
 function kpi(l,v,s,hot){return '<div class="kpi"><div class="top"><div class="lab">'+l+'</div></div><div class="val'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+s+'</div></div>';}
 
 function load(){
@@ -211,9 +221,13 @@ function load(){
       revCard.style.display='';
       document.getElementById('review-count').textContent=rev.length+' to review';
       document.getElementById('review-rows').innerHTML=rev.map(function(x){
+        var person=looksLikePerson(x.assignee_name);
+        var tag=person
+          ? '<span class="pill amber" title="Looks like a real person with no BambooHR record. Add them in BambooHR, this is an HR-data gap, not wasted spend.">Not in BambooHR</span>'
+          : '<span class="pill" style="background:var(--fill);color:var(--muted)" title="Shared mailbox or Teams resource account. Expected, leave it.">Shared mailbox</span>';
         return '<tr>'+
           '<td>'+esc(x.vendor_label)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
-          '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name)+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
+          '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name)+' '+tag+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
           '<td class="right num" style="color:var(--muted)">'+money(x.cost_monthly*12)+'</td>'+
           '<td class="right" style="white-space:nowrap"><button class="btn btn-sm" onclick="flag('+x.seat_id+',this)">Reclaim anyway</button></td>'+
         '</tr>';
