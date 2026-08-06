@@ -60,7 +60,7 @@
   <div class="card" style="padding:16px 18px">
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:11px">
       <span class="sect-h" style="padding:0">Import seats</span>
-      <span style="font-weight:500;font-size:12px;color:var(--muted)">Paste a CSV export from any vendor console — flexible columns like <span class="key">email</span>, <span class="key">name</span>, <span class="key">product</span>, <span class="key">cost_monthly</span>. Re-importing replaces that vendor's manual seats.</span>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">Paste a CSV export from any vendor console, with flexible columns like <span class="key">email</span>, <span class="key">name</span>, <span class="key">product</span>, <span class="key">cost_monthly</span>. Re-importing replaces that vendor's manual seats.</span>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
       <select id="imp-vendor" class="btn" style="min-width:150px"></select>
@@ -78,7 +78,7 @@
   <div class="card card-clip">
     <div class="card-head">
       <h2>Seats to reclaim</h2>
-      <span id="reclaim-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
+      <span id="reclaim-count" style="font-weight:500;font-size:12px;color:var(--muted)"></span>
       <span style="flex:1"></span>
       <span class="btn-tint" style="cursor:default">Flag all terminated</span>
     </div>
@@ -119,7 +119,7 @@
         <div id="queue" class="stack"></div>
       </div>
       <div class="card conn" style="padding:14px 16px;border-left:3px solid var(--indigo)">
-        <b>Go live:</b> <span class="key">BAMBOO_*</span> pulls your real active + terminated roster; <span class="key">MS_GRAPH_*</span> pulls Microsoft 365 seats via Graph. Adobe (UMAPI) and Autodesk have APIs too. <b>Bluebeam, HydraCAD and HFSS have no public API</b> — import those by CSV above. Every vendor works by CSV today.
+        <b>Go live:</b> <span class="key">BAMBOO_*</span> pulls your real active + terminated roster; <span class="key">MS_GRAPH_*</span> pulls Microsoft 365 seats via Graph. Adobe (UMAPI) and Autodesk have APIs too. <b>Bluebeam, HydraCAD and HFSS have no public API</b>, so import those by CSV above. Every vendor works by CSV today.
       </div>
     </div>
   </div>
@@ -207,12 +207,12 @@ function load(){
       return '<tr>'+
         '<td>'+esc(x.vendor_label)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
         '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name)+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
-        '<td>'+esc(x.department||'—')+'</td>'+
+        '<td>'+esc(x.department||'')+'</td>'+
         '<td><span class="pill '+(terminated?'money':'amber')+'">'+esc(left)+'</span></td>'+
         '<td class="right num">'+money(x.cost_monthly*12)+'</td>'+
         '<td class="right" style="white-space:nowrap">'+act+'</td>'+
       '</tr>';
-    }).join('') : '<tr><td colspan="6" class="empty">No confirmed reclaims — no active license is assigned to a terminated employee.</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">No confirmed reclaims. No active license is assigned to a terminated employee.</td></tr>';
 
     // off-roster review list (shown but never counted as savings)
     var rev=d.review||[];
@@ -253,7 +253,7 @@ function load(){
       var vl = (d.vendors||[]).filter(function(v){return v.key===x.vendor;})[0];
       return '<tr>'+
         '<td>'+esc(vl?vl.label:x.vendor)+'<div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px">'+esc(x.product||'')+'</div></td>'+
-        '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name||'—')+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(x.assignee_name||'')+'<div class="mono" style="font-weight:500;font-size:11px;color:var(--faint);margin-top:2px">'+esc(x.assignee_email||'')+'</div></td>'+
         '<td><span class="pill gray">'+esc(x.source)+'</span></td>'+
         '<td class="right num">'+money(x.cost_monthly)+'</td>'+
       '</tr>';
@@ -279,7 +279,7 @@ function doImport(btn){
 document.getElementById('imp-file').addEventListener('change',function(e){
   var f=e.target.files&&e.target.files[0]; if(!f)return;
   var rd=new FileReader();
-  rd.onload=function(){document.getElementById('imp-csv').value=rd.result;var m=document.getElementById('imp-msg');m.style.color='var(--muted)';m.textContent=f.name+' loaded — pick the vendor and Import.';};
+  rd.onload=function(){document.getElementById('imp-csv').value=rd.result;var m=document.getElementById('imp-msg');m.style.color='var(--muted)';m.textContent=f.name+' loaded. Pick the vendor and Import.';};
   rd.readAsText(f);
 });
 load();
