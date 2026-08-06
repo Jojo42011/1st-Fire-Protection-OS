@@ -110,6 +110,33 @@ function reclaimsBySeat(): Map<number, { id: number; status: string }> {
  * The core reconciliation. Returns every reclaimable seat (with the ex-employee context),
  * a per-vendor breakdown across ALL seats, and the savings totals.
  */
+/** Common nickname to canonical first-name map, so "Barb" matches "Barbara", "Mike" "Michael". */
+const NICKNAMES: Record<string, string> = {
+  bill: 'william', billy: 'william', will: 'william', willie: 'william',
+  bob: 'robert', bobby: 'robert', rob: 'robert', robby: 'robert',
+  mike: 'michael', mikey: 'michael', mick: 'michael',
+  dave: 'david', davey: 'david', jim: 'james', jimmy: 'james', jamie: 'james',
+  joe: 'joseph', joey: 'joseph', tom: 'thomas', tommy: 'thomas', tony: 'anthony',
+  chris: 'christopher', dan: 'daniel', danny: 'daniel', matt: 'matthew',
+  nick: 'nicholas', alex: 'alexander', sam: 'samuel', ben: 'benjamin',
+  ed: 'edward', eddie: 'edward', ted: 'theodore', andy: 'andrew', drew: 'andrew',
+  greg: 'gregory', jeff: 'jeffrey', ken: 'kenneth', kenny: 'kenneth',
+  larry: 'lawrence', rick: 'richard', ricky: 'richard', rich: 'richard', richie: 'richard',
+  ron: 'ronald', ronny: 'ronald', ronnie: 'ronald', steve: 'steven', stevie: 'steven',
+  zack: 'zachary', zach: 'zachary', gabe: 'gabriel', nate: 'nathaniel',
+  phil: 'phillip', pat: 'patrick', fred: 'frederick', freddy: 'frederick',
+  hank: 'henry', jack: 'john', johnny: 'john', frank: 'francis', frankie: 'francis',
+  charlie: 'charles', chuck: 'charles', gus: 'gustavo', leo: 'leonardo', manny: 'manuel',
+  kate: 'katherine', katie: 'katherine', kathy: 'katherine', cathy: 'catherine',
+  liz: 'elizabeth', beth: 'elizabeth', betty: 'elizabeth', sue: 'susan', susie: 'susan',
+  deb: 'deborah', debbie: 'deborah', jen: 'jennifer', jenny: 'jennifer',
+  peggy: 'margaret', meg: 'margaret', maggie: 'margaret', jess: 'jessica',
+  angie: 'angela', becky: 'rebecca', cindy: 'cynthia', jackie: 'jacqueline',
+  kim: 'kimberly', mandy: 'amanda', pam: 'pamela', sandy: 'sandra',
+  terri: 'teresa', terry: 'teresa', tina: 'christina', trish: 'patricia', abby: 'abigail',
+};
+const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
+
 /** Normalize a person's name for matching: lowercase, strip accents/punctuation, sort tokens. */
 function normName(s: string | null | undefined): string {
   return (s || '')
@@ -122,24 +149,70 @@ function normName(s: string | null | undefined): string {
     .sort()
     .join(' ');
 }
-/** Active employees keyed by normalized name (the fallback when BambooHR has no work email). */
-function activeNameSet(): Set<string> {
+/** Name tokens with suffixes dropped and nicknames folded to their canonical form. */
+function nameTokens(s: string | null | undefined): string[] {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t && !SUFFIXES.has(t))
+    .map((t) => NICKNAMES[t] || t);
+}
+/** Order-independent canonical name (nickname-folded, sorted) for exact matching. */
+function canonName(s: string | null | undefined): string {
+  return nameTokens(s).slice().sort().join(' ');
+}
+/**
+ * Loose match: shares an identical surname-length token, and every remaining token pairs on
+ * first initial (catches spelling variants like Roman/Ramon and nicknames not in the map). Only
+ * accepted when EXACTLY ONE active employee matches, so it can never cross two different people.
+ */
+function looseActiveMatch(seatName: string, activeTokenLists: string[][]): boolean {
+  const st = nameTokens(seatName);
+  if (st.length < 2) return false;
+  let hits = 0;
+  for (const pt of activeTokenLists) {
+    if (pt.length !== st.length) continue;
+    const shared = st.filter((t) => t.length >= 4 && pt.includes(t));
+    if (!shared.length) continue;
+    const remS = st.filter((t) => !shared.includes(t));
+    const remP = pt.filter((t) => !shared.includes(t));
+    if (remS.length !== remP.length || !remS.length) continue;
+    const initialsOk = remS.every((a) => remP.some((b) => a[0] === b[0]));
+    if (initialsOk && shared.length + remS.length === st.length) {
+      hits += 1;
+      if (hits > 1) return false; // ambiguous -> do not guess
+    }
+  }
+  return hits === 1;
+}
+/** Active employees keyed by canonical name (fallback when BambooHR has no work email). */
+function activeCanonSet(): Set<string> {
   const rows = getDb()
     .prepare(`SELECT full_name FROM hr_employees WHERE status = 'active' AND full_name IS NOT NULL`)
     .all() as { full_name: string }[];
   const s = new Set<string>();
   for (const r of rows) {
-    const k = normName(r.full_name);
+    const k = canonName(r.full_name);
     if (k) s.add(k);
   }
   return s;
 }
-/** Every employee keyed by normalized name, so an email-less seat can still resolve a person. */
+/** Token lists for every active employee (input to the loose matcher). */
+function activeTokenLists(): string[][] {
+  const rows = getDb()
+    .prepare(`SELECT full_name FROM hr_employees WHERE status = 'active' AND full_name IS NOT NULL`)
+    .all() as { full_name: string }[];
+  return rows.map((r) => nameTokens(r.full_name)).filter((t) => t.length);
+}
+/** Every employee keyed by canonical name, so an email-less seat can still resolve a person. */
 function employeeByName(): Map<string, HrEmployee> {
   const rows = getDb().prepare(`SELECT * FROM hr_employees WHERE full_name IS NOT NULL`).all() as HrEmployee[];
   const m = new Map<string, HrEmployee>();
   for (const r of rows) {
-    const k = normName(r.full_name);
+    const k = canonName(r.full_name);
     if (k && !m.has(k)) m.set(k, r);
   }
   return m;
@@ -154,7 +227,8 @@ export function reconcile(): {
   const db = getDb();
   const seats = db.prepare(`SELECT * FROM license_seats`).all() as LicenseSeat[];
   const active = activeEmailSet();
-  const activeNames = activeNameSet();
+  const activeCanon = activeCanonSet();
+  const activeTokens = activeTokenLists();
   const byEmail = employeeByEmail();
   const byName = employeeByName();
   const openReclaims = reclaimsBySeat();
@@ -196,10 +270,11 @@ export function reconcile(): {
     if (!email) continue; // an unassigned seat is spare inventory, not a reclaim target
     if (active.has(email)) continue; // person still works here -> keep the seat
     // Many real employees have no work email in BambooHR (reception, field techs), so their seat
-    // email will not match. Fall back to a name match against the active roster before flagging.
-    if (seat.assignee_name && activeNames.has(normName(seat.assignee_name))) continue;
+    // email will not match. Fall back to a name match against the active roster before flagging:
+    // exact canonical (nickname-folded) first, then a unique loose match for spelling variants.
+    if (seat.assignee_name && (activeCanon.has(canonName(seat.assignee_name)) || looseActiveMatch(seat.assignee_name, activeTokens))) continue;
 
-    const emp = byEmail.get(email) || (seat.assignee_name ? byName.get(normName(seat.assignee_name)) : undefined);
+    const emp = byEmail.get(email) || (seat.assignee_name ? byName.get(canonName(seat.assignee_name)) : undefined);
     if (emp && emp.status === 'active') continue; // matched an active employee (email differed)
     const reasonKind: 'terminated' | 'off_roster' = emp ? 'terminated' : 'off_roster';
     const open = openReclaims.get(seat.id) || null;

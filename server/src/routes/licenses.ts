@@ -181,8 +181,13 @@ router.post('/api/licenses/sync', async (_req, res) => {
       // terminated rows overwrite by email. Seeded demo employees are left untouched.
       const rebuild = db.transaction(() => {
         db.prepare(`DELETE FROM hr_employees WHERE source = 'bamboo'`).run();
+        const seen = new Set<string>();
         for (const e of [...directory, ...terminated]) {
           if (!e.full_name) continue; // keep email-less employees (reception, field techs); name is the fallback key
+          // Dedup: email when present, else name+status (email-less rows can otherwise double-insert).
+          const key = (e.email && e.email.toLowerCase()) || `n:${e.full_name.toLowerCase().replace(/\s+/g, ' ').trim()}|${e.status}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
           upsert.run(e);
           employeesSynced += 1;
         }
