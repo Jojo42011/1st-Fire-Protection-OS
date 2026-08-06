@@ -182,7 +182,7 @@ router.post('/api/licenses/sync', async (_req, res) => {
       const rebuild = db.transaction(() => {
         db.prepare(`DELETE FROM hr_employees WHERE source = 'bamboo'`).run();
         for (const e of [...directory, ...terminated]) {
-          if (!e.email) continue; // email is the reconciliation key
+          if (!e.full_name) continue; // keep email-less employees (reception, field techs); name is the fallback key
           upsert.run(e);
           employeesSynced += 1;
         }

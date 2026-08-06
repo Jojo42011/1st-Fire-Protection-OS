@@ -110,6 +110,41 @@ function reclaimsBySeat(): Map<number, { id: number; status: string }> {
  * The core reconciliation. Returns every reclaimable seat (with the ex-employee context),
  * a per-vendor breakdown across ALL seats, and the savings totals.
  */
+/** Normalize a person's name for matching: lowercase, strip accents/punctuation, sort tokens. */
+function normName(s: string | null | undefined): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(' ');
+}
+/** Active employees keyed by normalized name (the fallback when BambooHR has no work email). */
+function activeNameSet(): Set<string> {
+  const rows = getDb()
+    .prepare(`SELECT full_name FROM hr_employees WHERE status = 'active' AND full_name IS NOT NULL`)
+    .all() as { full_name: string }[];
+  const s = new Set<string>();
+  for (const r of rows) {
+    const k = normName(r.full_name);
+    if (k) s.add(k);
+  }
+  return s;
+}
+/** Every employee keyed by normalized name, so an email-less seat can still resolve a person. */
+function employeeByName(): Map<string, HrEmployee> {
+  const rows = getDb().prepare(`SELECT * FROM hr_employees WHERE full_name IS NOT NULL`).all() as HrEmployee[];
+  const m = new Map<string, HrEmployee>();
+  for (const r of rows) {
+    const k = normName(r.full_name);
+    if (k && !m.has(k)) m.set(k, r);
+  }
+  return m;
+}
+
 export function reconcile(): {
   reclaimable: ReclaimableSeat[];
   review: ReclaimableSeat[];
@@ -119,7 +154,9 @@ export function reconcile(): {
   const db = getDb();
   const seats = db.prepare(`SELECT * FROM license_seats`).all() as LicenseSeat[];
   const active = activeEmailSet();
+  const activeNames = activeNameSet();
   const byEmail = employeeByEmail();
+  const byName = employeeByName();
   const openReclaims = reclaimsBySeat();
 
   const reclaimable: ReclaimableSeat[] = []; // CONFIRMED: assignee is a terminated employee
@@ -158,8 +195,12 @@ export function reconcile(): {
     const email = seat.assignee_email ? seat.assignee_email.toLowerCase() : '';
     if (!email) continue; // an unassigned seat is spare inventory, not a reclaim target
     if (active.has(email)) continue; // person still works here -> keep the seat
+    // Many real employees have no work email in BambooHR (reception, field techs), so their seat
+    // email will not match. Fall back to a name match against the active roster before flagging.
+    if (seat.assignee_name && activeNames.has(normName(seat.assignee_name))) continue;
 
-    const emp = byEmail.get(email);
+    const emp = byEmail.get(email) || (seat.assignee_name ? byName.get(normName(seat.assignee_name)) : undefined);
+    if (emp && emp.status === 'active') continue; // matched an active employee (email differed)
     const reasonKind: 'terminated' | 'off_roster' = emp ? 'terminated' : 'off_roster';
     const open = openReclaims.get(seat.id) || null;
 
