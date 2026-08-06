@@ -128,6 +128,7 @@ const NICKNAMES: Record<string, string> = {
   hank: 'henry', jack: 'john', johnny: 'john', frank: 'francis', frankie: 'francis',
   charlie: 'charles', chuck: 'charles', gus: 'gustavo', leo: 'leonardo', manny: 'manuel',
   kate: 'katherine', katie: 'katherine', kathy: 'katherine', cathy: 'catherine',
+  barb: 'barbara', barbie: 'barbara', gabby: 'gabriela', vicky: 'victoria', patty: 'patricia',
   liz: 'elizabeth', beth: 'elizabeth', betty: 'elizabeth', sue: 'susan', susie: 'susan',
   deb: 'deborah', debbie: 'deborah', jen: 'jennifer', jenny: 'jennifer',
   peggy: 'margaret', meg: 'margaret', maggie: 'margaret', jess: 'jessica',
@@ -172,16 +173,31 @@ function canonName(s: string | null | undefined): string {
 function looseActiveMatch(seatName: string, activeTokenLists: string[][]): boolean {
   const st = nameTokens(seatName);
   if (st.length < 2) return false;
+  const setS = new Set(st);
+  const sSurname = st[st.length - 1]; // names are almost always "First [Middle] Last"
   let hits = 0;
   for (const pt of activeTokenLists) {
-    if (pt.length !== st.length) continue;
-    const shared = st.filter((t) => t.length >= 4 && pt.includes(t));
-    if (!shared.length) continue;
-    const remS = st.filter((t) => !shared.includes(t));
-    const remP = pt.filter((t) => !shared.includes(t));
-    if (remS.length !== remP.length || !remS.length) continue;
-    const initialsOk = remS.every((a) => remP.some((b) => a[0] === b[0]));
-    if (initialsOk && shared.length + remS.length === st.length) {
+    const setP = new Set(pt);
+    const shared = st.filter((t) => setP.has(t));
+    if (!shared.some((t) => t.length >= 4)) continue; // need a strong anchor (a surname-length token)
+    let ok = false;
+    // Rule A: same length, identical surname, given names are spelling/nickname variants (Roman/Ramon)
+    if (pt.length === st.length) {
+      const pSurname = pt[pt.length - 1];
+      if (sSurname === pSurname && sSurname.length >= 3) {
+        const remS = st.filter((t) => !setP.has(t));
+        const remP = pt.filter((t) => !setS.has(t));
+        if (remS.length && remS.length === remP.length) {
+          ok = remS.every((a) => remP.some((b) => a[0] === b[0]));
+        }
+      }
+    }
+    // Rule B: one name's tokens are a subset of the other (extra middle name or second surname)
+    if (!ok) {
+      const diff = Math.abs(st.length - pt.length);
+      if (diff >= 1 && diff <= 2 && (st.every((t) => setP.has(t)) || pt.every((t) => setS.has(t)))) ok = true;
+    }
+    if (ok) {
       hits += 1;
       if (hits > 1) return false; // ambiguous -> do not guess
     }
