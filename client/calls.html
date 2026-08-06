@@ -19,6 +19,14 @@
   .badge.soon .d{background:var(--faint)}
   .badge.live{color:var(--green);background:var(--green-bg)}
   .badge.live .d{background:var(--green);animation:pulseDot 2.2s ease-in-out infinite}
+  .head-right{display:flex;align-items:center;gap:9px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+  .badge.oncall{cursor:pointer;border:1px solid transparent}
+  .badge.oncall.has{color:#e5484d;background:rgba(229,72,77,.12)}
+  .badge.oncall.has .d{background:#e5484d}
+  .badge.oncall.none{color:var(--muted);background:var(--fill)}
+  .badge.oncall.none .d{background:var(--faint)}
+  .badge.oncall b{font-weight:800}
+  .badge.oncall:hover{border-color:rgba(229,72,77,.35)}
 
   /* ---- "Answering now" pill ---- */
   .answering{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;color:var(--green);background:var(--green-bg);border-radius:var(--r-pill);padding:4px 10px}
@@ -82,7 +90,10 @@
         <h1>Phones</h1>
         <p>Answers the San Antonio line 24/7, classifies the call, and routes it into Teams, inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
       </div>
-      <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
+      <div class="head-right">
+        <span id="oncall-chip" class="badge oncall none" title="Who the after-hours line reaches now" onclick="ocGo()"><span class="d"></span>On call: …</span>
+        <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
+      </div>
     </div>
 
     <div class="kpis-5" id="kpis"></div>
@@ -177,6 +188,25 @@ function load(){
 }
 function kpi(l,v,green){return '<div class="kpi" style="padding:15px 17px;cursor:default"><div style="font:700 11.5px \'Figtree\',sans-serif;color:var(--muted)">'+l+'</div><div class="value num" style="font:800 24px \'Figtree\',sans-serif;letter-spacing:0;color:'+(green?'var(--green)':'var(--ink)')+';margin-top:9px">'+v+'</div></div>';}
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* --- on-call chip: who the after-hours line reaches now (office-aware) --- */
+function ocOffice(){try{var o=localStorage.getItem('fpos_office')||'';return o&&o!=='all'?o:'San Antonio';}catch(_){return 'San Antonio';}}
+function ocGo(){try{window.parent.postMessage({type:'app-navigate',tab:'oncall'},'*');}catch(_){}}
+function loadOnCall(){
+  var el=document.getElementById('oncall-chip'); if(!el)return;
+  fetch('/api/oncall/current?office='+encodeURIComponent(ocOffice())).then(function(r){return r.json();}).then(function(d){
+    var c=d&&d.onCall;
+    if(c){
+      el.className='badge oncall has';
+      el.innerHTML='<span class="d"></span>On call: <b>'+esc(c.person_name)+'</b>'+(c.person_phone?(' · '+esc(c.person_phone)):'');
+    } else {
+      el.className='badge oncall none';
+      el.innerHTML='<span class="d"></span>On call: nobody assigned';
+    }
+  }).catch(function(){});
+}
+loadOnCall();
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){loadOnCall();}});
 function fmtCost(v){v=Number(v)||0;if(v===0)return '$0';if(v<1)return '$'+v.toFixed(3);return '$'+v.toFixed(2);}
 
 /* ---- expandable call detail (recording, summary, cost, transcript) ---- */
