@@ -151,8 +151,7 @@ function load(){
       kpi('Answered today',m.callsToday,false),
       kpi('Routed correctly',m.transferred,true),
       kpi('New leads',m.leadsCaptured,false),
-      kpi('Average length',fmtDur(m.avgDuration),false),
-      kpi('Cost today',fmtCost(m.costToday),false)
+      kpi('Average length',fmtDur(m.avgDuration),false)
     ].join('');
     document.getElementById('call-rows').innerHTML=(d.calls||[]).map(function(c){
       var oc=c.outcome, pill= oc==='booked'?'green':oc==='transferred'?'amber':'gray';
@@ -216,12 +215,6 @@ function callDetail(c){
   if(c.vapi_call_id)r1.push('<span class="cbit">id <b>'+esc(String(c.vapi_call_id).slice(0,8))+'</b></span>');
   parts.push('<div class="row1">'+(r1.length?r1.join(''):'<span class="none">No recording on this call, connect Vapi and enable recording to capture audio.</span>')+'</div>');
   if(c.summary)parts.push('<div class="summary">'+esc(c.summary)+'</div>');
-  var cb=c.cost_breakdown;
-  if(cb&&typeof cb==='object'){
-    var bits=['transport','stt','llm','tts','vapi','total'].filter(function(k){return typeof cb[k]==='number';})
-      .map(function(k){return '<span class="cbit">'+k+' <b>'+fmtCost(cb[k])+'</b></span>';});
-    if(bits.length)parts.push('<div><div class="label">Cost breakdown</div><div class="costs">'+bits.join('')+'</div></div>');
-  }
   var t=transcriptHtml(c);
   if(t)parts.push('<div><div class="label">Transcript</div><div class="transcript">'+t+'</div></div>');
   return parts.join('');
