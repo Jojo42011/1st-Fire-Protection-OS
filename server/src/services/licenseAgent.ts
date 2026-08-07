@@ -170,13 +170,24 @@ function canonName(s: string | null | undefined): string {
  * first initial (catches spelling variants like Roman/Ramon and nicknames not in the map). Only
  * accepted when EXACTLY ONE active employee matches, so it can never cross two different people.
  */
-function looseActiveMatch(seatName: string, activeTokenLists: string[][]): boolean {
+interface NameItem {
+  tokens: string[];
+  emp: HrEmployee;
+}
+/**
+ * Unique loose match of a seat name against a list of people. Returns the single matching person,
+ * or null if none or more than one match (never guesses across two people). Handles spelling
+ * variants (Roman/Ramon) and extra name tokens (a middle name or a second surname).
+ */
+function looseUniqueMatch(seatName: string, people: NameItem[]): NameItem | null {
   const st = nameTokens(seatName);
-  if (st.length < 2) return false;
+  if (st.length < 2) return null;
   const setS = new Set(st);
   const sSurname = st[st.length - 1]; // names are almost always "First [Middle] Last"
-  let hits = 0;
-  for (const pt of activeTokenLists) {
+  let hit: NameItem | null = null;
+  let count = 0;
+  for (const item of people) {
+    const pt = item.tokens;
     const setP = new Set(pt);
     const shared = st.filter((t) => setP.has(t));
     if (!shared.some((t) => t.length >= 4)) continue; // need a strong anchor (a surname-length token)
@@ -187,9 +198,7 @@ function looseActiveMatch(seatName: string, activeTokenLists: string[][]): boole
       if (sSurname === pSurname && sSurname.length >= 3) {
         const remS = st.filter((t) => !setP.has(t));
         const remP = pt.filter((t) => !setS.has(t));
-        if (remS.length && remS.length === remP.length) {
-          ok = remS.every((a) => remP.some((b) => a[0] === b[0]));
-        }
+        if (remS.length && remS.length === remP.length) ok = remS.every((a) => remP.some((b) => a[0] === b[0]));
       }
     }
     // Rule B: one name's tokens are a subset of the other (extra middle name or second surname)
@@ -198,11 +207,12 @@ function looseActiveMatch(seatName: string, activeTokenLists: string[][]): boole
       if (diff >= 1 && diff <= 2 && (st.every((t) => setP.has(t)) || pt.every((t) => setS.has(t)))) ok = true;
     }
     if (ok) {
-      hits += 1;
-      if (hits > 1) return false; // ambiguous -> do not guess
+      count += 1;
+      if (count > 1) return null; // ambiguous -> do not guess
+      hit = item;
     }
   }
-  return hits === 1;
+  return count === 1 ? hit : null;
 }
 /** Active employees keyed by canonical name (fallback when BambooHR has no work email). */
 function activeCanonSet(): Set<string> {
@@ -216,12 +226,10 @@ function activeCanonSet(): Set<string> {
   }
   return s;
 }
-/** Token lists for every active employee (input to the loose matcher). */
-function activeTokenLists(): string[][] {
-  const rows = getDb()
-    .prepare(`SELECT full_name FROM hr_employees WHERE status = 'active' AND full_name IS NOT NULL`)
-    .all() as { full_name: string }[];
-  return rows.map((r) => nameTokens(r.full_name)).filter((t) => t.length);
+/** Every employee as a token list plus the row, for canonical and loose name matching. */
+function employeeNameItems(): NameItem[] {
+  const rows = getDb().prepare(`SELECT * FROM hr_employees WHERE full_name IS NOT NULL`).all() as HrEmployee[];
+  return rows.map((r) => ({ tokens: nameTokens(r.full_name), emp: r })).filter((i) => i.tokens.length);
 }
 /** Every employee keyed by canonical name, so an email-less seat can still resolve a person. */
 function employeeByName(): Map<string, HrEmployee> {
@@ -244,7 +252,8 @@ export function reconcile(): {
   const seats = db.prepare(`SELECT * FROM license_seats`).all() as LicenseSeat[];
   const active = activeEmailSet();
   const activeCanon = activeCanonSet();
-  const activeTokens = activeTokenLists();
+  const people = employeeNameItems();
+  const activePeople = people.filter((p) => p.emp.status === 'active');
   const byEmail = employeeByEmail();
   const byName = employeeByName();
   const openReclaims = reclaimsBySeat();
@@ -288,9 +297,15 @@ export function reconcile(): {
     // Many real employees have no work email in BambooHR (reception, field techs), so their seat
     // email will not match. Fall back to a name match against the active roster before flagging:
     // exact canonical (nickname-folded) first, then a unique loose match for spelling variants.
-    if (seat.assignee_name && (activeCanon.has(canonName(seat.assignee_name)) || looseActiveMatch(seat.assignee_name, activeTokens))) continue;
+    if (seat.assignee_name && (activeCanon.has(canonName(seat.assignee_name)) || looseUniqueMatch(seat.assignee_name, activePeople))) continue;
 
-    const emp = byEmail.get(email) || (seat.assignee_name ? byName.get(canonName(seat.assignee_name)) : undefined);
+    // Resolve the person for this seat (any status), so a TERMINATED employee with a name variant
+    // is still recognized: exact email, then exact canonical name, then a unique loose match.
+    const emp =
+      byEmail.get(email) ||
+      (seat.assignee_name
+        ? byName.get(canonName(seat.assignee_name)) || looseUniqueMatch(seat.assignee_name, people)?.emp
+        : undefined);
     if (emp && emp.status === 'active') continue; // matched an active employee (email differed)
     const reasonKind: 'terminated' | 'off_roster' = emp ? 'terminated' : 'off_roster';
     const open = openReclaims.get(seat.id) || null;
