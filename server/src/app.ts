@@ -51,6 +51,8 @@ import proposal from './routes/proposal';
 import offices from './routes/offices';
 import teams from './routes/teams';
 import oncall from './routes/oncall';
+import deficiencies from './routes/deficiencies';
+import scorecard from './routes/scorecard';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -108,6 +110,8 @@ app.use(proposal);
 app.use(offices);
 app.use(teams);
 app.use(oncall);
+app.use(deficiencies);
+app.use(scorecard);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -145,6 +149,8 @@ app.get('/plans', page('plans.html'));
 app.get('/schedule', page('schedule.html'));
 app.get('/costing', page('costing.html'));
 app.get('/oncall', page('oncall.html'));
+app.get('/deficiencies', page('deficiencies.html'));
+app.get('/scoreboard', page('scoreboard.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

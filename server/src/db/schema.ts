@@ -481,6 +481,31 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_oncall_office_dates ON oncall_shifts(office, starts_on, ends_on);
   `);
 
+  /* ---------- open-deficiency backlog (ServiceTrade repairs waiting to be quoted) ----------
+   * Deficiencies are the un-converted repair work techs already found. Mirrored from the
+   * ServiceTrade /deficiency API so the backlog is office-filterable and fast; office is derived
+   * from the account's jobs (same proxy as quotes). proposed_usd is the estimated repair dollars. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS deficiencies (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      st_id         INTEGER UNIQUE,
+      account_id    INTEGER,
+      company_st_id INTEGER,
+      company_name  TEXT,
+      location_name TEXT,
+      description   TEXT,
+      status        TEXT,
+      severity      TEXT,
+      proposed_usd  REAL DEFAULT 0,
+      office        TEXT,
+      reported_at   TEXT,
+      st_updated_at TEXT,
+      source        TEXT DEFAULT 'servicetrade',
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_deficiencies_office_status ON deficiencies(office, status);
+  `);
+
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
    * Added after the base table so existing brains upgrade in place. Idempotent —
    * addColumn checks pragma table_info first (SQLite has no ADD COLUMN IF NOT EXISTS). */

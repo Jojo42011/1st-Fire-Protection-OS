@@ -382,6 +382,11 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     if (getCursor('quotes')) { progress = { page: 0, totalPages: 1, count: 0 }; (out as any).quotes = await pullQuotes(getCursor('quotes')); }
     // give quotes an office by inheriting it from their account's jobs (assignedOffice is empty on the quote)
     deriveQuoteOffices();
+    // refresh the open-deficiency backlog (repairs waiting to be quoted); best-effort
+    try {
+      const { syncDeficiencies } = await import('./deficiencySync');
+      (out as any).deficiencies = await syncDeficiencies();
+    } catch { /* deficiency pull is best-effort */ }
     // Completed jobs (the review trigger) — incremental once the cursor is bootstrapped.
     if (getCursor('completed_jobs')) { runningEntity = 'jobs'; progress = { page: 0, totalPages: 1, count: 0 }; (out as any).completed = await pullCompletedJobs(getCursor('completed_jobs')); }
     // Newly-completed jobs flow into Google review requests (held or auto-sent per mode).

@@ -172,6 +172,16 @@
         </button>
 
         <div class="group">Winning work</div>
+        <button class="nav-item" data-key="scoreboard">
+          <span class="sq" style="background:var(--money)"></span>
+          <span class="grow">Scoreboard</span>
+          <span class="count" id="c-scoreboard"></span>
+        </button>
+        <button class="nav-item" data-key="deficiencies">
+          <span class="sq" style="background:#e5484d"></span>
+          <span class="grow">Repair backlog</span>
+          <span class="count" id="c-deficiencies"></span>
+        </button>
         <button class="nav-item" data-key="estimator">
           <span class="sq" style="background:var(--indigo)"></span>
           <span class="grow">Estimates</span>
@@ -301,6 +311,8 @@ var SCREENS = {
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews-hub',                  title:'Reviews',           sub:'Ask, earn, and reply. Requests out, reviews in, all in one place' },
   spend:    { src:'/licenses',                     title:'Wasted spend',      sub:'Finds the seats you pay for but nobody uses' },
+  scoreboard:{ src:'/scoreboard',                   title:'Scoreboard',        sub:'Every office side by side on the numbers that move money' },
+  deficiencies:{ src:'/deficiencies',               title:'Repair backlog',    sub:'Open ServiceTrade deficiencies, quotable repair revenue waiting to be sold' },
   estimator:{ src:'/estimates',                    title:'Estimates',         sub:'Photos in, a priced quote out. Demo, no ServiceTrade source yet' },
   closer:   { src:'/closer',                       title:'Follow-ups',        sub:'Every open ServiceTrade quote chased on a cadence until it books or dies' },
   dispatch: { src:'/schedule',                     title:'Schedule',          sub:'Jobs matched to crews, no-shows cut, cancellations backfilled' },
