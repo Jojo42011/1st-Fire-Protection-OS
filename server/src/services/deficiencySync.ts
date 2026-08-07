@@ -16,6 +16,48 @@ const num = (v: unknown): number => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+/** ServiceTrade money comes back as a comma string ("9,415.00"); parse to a number. */
+const money = (v: unknown): number => {
+  const n = Number(String(v == null ? 0 : v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+/** Quote statuses that still count as an open (un-won) repair quote. */
+const OPEN_QUOTE = ['draft', 'submitted', 'pending', 'reviewed', 'contingent'];
+
+/**
+ * Build a map of jobId -> best linked repair-quote value, from quotes whose `deficiencyJobs`
+ * reference that job. Prefers an open (un-won) quote; falls back to any linked quote's total.
+ */
+async function repairQuoteValueByJob(): Promise<Map<number, number>> {
+  const jobVal = new Map<number, number>();
+  let page = 1;
+  let totalPages = 1;
+  let guard = 0;
+  while (page <= totalPages && guard++ < 40) {
+    const resp: any = await stGet(`/quote?limit=1000&page=${page}`);
+    const d = resp?.data || resp;
+    const qs = d?.quotes || d?.data || [];
+    totalPages = num(d?.totalPages) || 1;
+    for (const q of qs) {
+      const dj = q?.deficiencyJobs || [];
+      if (!dj.length) continue;
+      const val = money(q.totalPrice);
+      if (val <= 0) continue;
+      const isOpen = OPEN_QUOTE.includes(String(q.status || '').toLowerCase());
+      for (const j of dj) {
+        const jid = (j && j.id) || j;
+        if (jid == null) continue;
+        const prev = jobVal.get(jid) || 0;
+        // prefer the larger value; open quotes are the truest "not yet sold" repair dollars
+        jobVal.set(jid, Math.max(prev, val));
+        if (isOpen) jobVal.set(jid, Math.max(jobVal.get(jid) || 0, val));
+      }
+    }
+    if (!qs.length) break;
+    page++;
+  }
+  return jobVal;
+}
 
 /** Statuses that mean the deficiency is done/void and no longer part of the open backlog. */
 export const CLOSED_STATUSES = ['fixed', 'invalid', 'canceled', 'cancelled', 'deleted', 'closed'];
@@ -40,7 +82,7 @@ export function cityToOffice(city: string | null | undefined): string | null {
   return CITY_OFFICE[String(city).trim().toLowerCase()] || null;
 }
 
-export async function syncDeficiencies(): Promise<{ pulled: number; open: number; attributed: number; pages: number }> {
+export async function syncDeficiencies(): Promise<{ pulled: number; open: number; attributed: number; quoted: number; pages: number }> {
   if (!stConfigured()) throw new Error('ServiceTrade not connected');
   const db = getDb();
 
@@ -62,19 +104,30 @@ export async function syncDeficiencies(): Promise<{ pulled: number; open: number
     const n = num(unix);
     return n > 0 ? new Date(n * 1000).toISOString() : null;
   };
+  const isOpen = (status: unknown) => !CLOSED_STATUSES.includes(String(status ?? '').toLowerCase());
+
+  // real repair dollars: link each deficiency's job to a quote (via the quote's deficiencyJobs)
+  const jobVal = await repairQuoteValueByJob();
+  // count OPEN deficiencies per job, so a quote covering several is split evenly (no double count)
+  const openPerJob = new Map<number, number>();
+  for (const x of rows) {
+    const jid = x?.job?.id;
+    if (jid != null && isOpen(x.status)) openPerJob.set(jid, (openPerJob.get(jid) || 0) + 1);
+  }
 
   const upsert = db.prepare(
-    `INSERT INTO deficiencies (st_id, account_id, company_st_id, company_name, location_name, description,
-        status, severity, proposed_usd, office, reported_at, st_updated_at, source)
-     VALUES (@st_id, NULL, NULL, @company_name, @location_name, @description,
-        @status, @severity, @proposed_usd, @office, @reported_at, @st_updated_at, 'servicetrade')
-     ON CONFLICT(st_id) DO UPDATE SET company_name=excluded.company_name, location_name=excluded.location_name,
-        description=excluded.description, status=excluded.status, severity=excluded.severity,
-        proposed_usd=excluded.proposed_usd, office=excluded.office, reported_at=excluded.reported_at,
-        st_updated_at=excluded.st_updated_at, source='servicetrade'`
+    `INSERT INTO deficiencies (st_id, account_id, company_st_id, job_st_id, company_name, location_name, description,
+        status, severity, proposed_usd, quoted, office, reported_at, st_updated_at, source)
+     VALUES (@st_id, NULL, NULL, @job_st_id, @company_name, @location_name, @description,
+        @status, @severity, @proposed_usd, @quoted, @office, @reported_at, @st_updated_at, 'servicetrade')
+     ON CONFLICT(st_id) DO UPDATE SET job_st_id=excluded.job_st_id, company_name=excluded.company_name,
+        location_name=excluded.location_name, description=excluded.description, status=excluded.status,
+        severity=excluded.severity, proposed_usd=excluded.proposed_usd, quoted=excluded.quoted,
+        office=excluded.office, reported_at=excluded.reported_at, st_updated_at=excluded.st_updated_at, source='servicetrade'`
   );
 
   let attributed = 0;
+  let quotedCount = 0;
   const tx = db.transaction((items: any[]) => {
     db.prepare(`DELETE FROM deficiencies WHERE source = 'servicetrade'`).run(); // clean rebuild
     for (const x of items) {
@@ -83,14 +136,26 @@ export async function syncDeficiencies(): Promise<{ pulled: number; open: number
       const city = loc.address ? loc.address.city : null;
       const office = cityToOffice(city);
       if (office) attributed++;
+      const jid = x?.job?.id ?? null;
+      const open = isOpen(x.status);
+      // real quoted value, split across the open deficiencies sharing that quote's job
+      let proposed = 0;
+      if (open && jid != null && jobVal.has(jid)) {
+        const share = openPerJob.get(jid) || 1;
+        proposed = jobVal.get(jid)! / share;
+      }
+      const quoted = proposed > 0 ? 1 : 0;
+      if (quoted) quotedCount++;
       upsert.run({
         st_id: x.id,
+        job_st_id: jid,
         company_name: loc.name || null, // the site is the customer-facing name
         location_name: loc.address ? [loc.address.city, loc.address.state].filter(Boolean).join(', ') : null,
         description: x.title || x.description || x.proposedFix || null,
         status: String(x.status ?? 'unknown'),
         severity: x.severity != null ? String(x.severity) : null,
-        proposed_usd: num(x.proposedProceeds), // ServiceTrade rarely sets this; kept for when it does
+        proposed_usd: Math.round(proposed),
+        quoted,
         office,
         reported_at: iso(x.reportedOn ?? x.created),
         st_updated_at: iso(x.updated),
@@ -102,7 +167,7 @@ export async function syncDeficiencies(): Promise<{ pulled: number; open: number
   const open = (db
     .prepare(`SELECT COUNT(*) AS v FROM deficiencies WHERE lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`).join(',')})`)
     .get() as { v: number }).v;
-  return { pulled: rows.length, open, attributed, pages: totalPages };
+  return { pulled: rows.length, open, attributed, quoted: quotedCount, pages: totalPages };
 }
 
 export function hasDeficiencies(): boolean {

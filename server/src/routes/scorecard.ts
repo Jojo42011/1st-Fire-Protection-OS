@@ -61,8 +61,11 @@ router.get('/api/scorecard', (_req, res) => {
     const pipelineCents = scalar(`SELECT COALESCE(SUM(amount_cents),0) AS v FROM quotes WHERE source='servicetrade' AND office=@office AND lower(stage) IN (${list(OPEN)})`, office);
     const jobs = scalar(`SELECT COUNT(*) AS v FROM crm_jobs WHERE source='servicetrade' AND office_name=@office`, office);
     const plans = scalar(`SELECT COUNT(*) AS v FROM service_recurrences WHERE office=@office`, office);
-    const defOpen = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, shortLabel(office));
-    const defUsd = defOpen * AVG_REPAIR_USD; // projected (deficiencies carry no price)
+    const sl = shortLabel(office);
+    const defOpen = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, sl);
+    const defQuoted = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE office=@office AND quoted=1 AND ${OPEN_DEF}`, sl);
+    const defQuotedUsd = scalar(`SELECT COALESCE(SUM(proposed_usd),0) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, sl); // real
+    const defUsd = defQuotedUsd + (defOpen - defQuoted) * AVG_REPAIR_USD; // real quoted + projected un-quoted
     return {
       office,
       label: shortLabel(office),

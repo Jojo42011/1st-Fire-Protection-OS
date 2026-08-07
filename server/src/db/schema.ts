@@ -491,12 +491,14 @@ export function initDb(): void {
       st_id         INTEGER UNIQUE,
       account_id    INTEGER,
       company_st_id INTEGER,
+      job_st_id     INTEGER,
       company_name  TEXT,
       location_name TEXT,
       description   TEXT,
       status        TEXT,
       severity      TEXT,
       proposed_usd  REAL DEFAULT 0,
+      quoted        INTEGER DEFAULT 0,
       office        TEXT,
       reported_at   TEXT,
       st_updated_at TEXT,
@@ -550,6 +552,10 @@ export function initDb(): void {
   // not just a chat console. 'console' keeps any pre-existing built agents as-is; new builds set
   // 'dashboard' at creation. Founding agents keep their own bespoke dashboards regardless.
   addColumn('agents', 'dashboard_kind', "TEXT DEFAULT 'console'");
+
+  // deficiency->quote linkage + real value (added after the base deficiencies table shipped)
+  addColumn('deficiencies', 'job_st_id', 'INTEGER');
+  addColumn('deficiencies', 'quoted', 'INTEGER DEFAULT 0');
 
   /* ---------- the associative memory layer (decaying association graph) ----------
    * The existing typed edges (relation != 'assoc') are untouched. Associative edges

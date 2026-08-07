@@ -49,7 +49,7 @@
   <div class="card card-clip" style="margin-top:16px">
     <div class="card-head"><h2>Highest-value open repairs</h2><span style="flex:1"></span><span id="count" style="font-weight:500;font-size:12px;color:var(--muted)"></span></div>
     <table>
-      <thead><tr><th>Site</th><th>What was found</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Site</th><th>What was found</th><th>Status</th><th class="right">Repair value</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </div>
@@ -65,9 +65,9 @@ function render(d){
   var s=d.summary||{};
   var ticket=s.avgTicket||650;
   document.getElementById('kpis').innerHTML=
-    kpi('Open deficiencies', Number(s.openCount||0).toLocaleString('en-US'), 'documented on site, not yet quoted', false)+
-    kpi('Projected value', money(s.projectedUsd), 'estimated at ~'+money(ticket)+' per repair', true)+
-    kpi('Assumed ticket', money(ticket), 'ServiceTrade does not price deficiencies', false);
+    kpi('Open deficiencies', Number(s.openCount||0).toLocaleString('en-US'), Number(s.quotedCount||0).toLocaleString('en-US')+' already have a repair quote', false)+
+    kpi('Quoted value', money(s.quotedUsd), 'real dollars from linked repair quotes', true)+
+    kpi('Total backlog', money(s.totalUsd), 'quoted + '+Number(s.unquotedCount||0).toLocaleString('en-US')+' un-quoted at ~'+money(ticket), true);
   document.getElementById('status').innerHTML=(d.byStatus||[]).map(function(x){
     return '<span class="db-chip">'+esc(x.status)+' <b>'+Number(x.n).toLocaleString('en-US')+'</b></span>';
   }).join('') || '<span style="color:var(--muted);font-size:12.5px">No open deficiencies for this office.</span>';
@@ -80,13 +80,16 @@ function render(d){
         (x.location_name?('<div class="desc">'+esc(x.location_name)+'</div>'):'')+'</td>'+
       '<td><div class="desc" style="color:var(--ink-2);max-width:60ch">'+esc(x.description||'(no description)')+'</div></td>'+
       '<td style="font-weight:600;font-size:12.5px;color:var(--ink-2)">'+esc(x.status||'')+'</td>'+
+      '<td class="right num" style="white-space:nowrap">'+(x.proposed_usd>0?
+        ('<span style="font-weight:700;color:var(--money)">'+money(x.proposed_usd)+'</span><div style="font-size:10px;color:var(--faint)">quoted</div>'):
+        '<span style="color:var(--faint);font-weight:500;font-size:12px">not quoted</span>')+'</td>'+
       '<td class="right" style="white-space:nowrap">'+
         '<button class="btn btn-sm" onclick="draft('+x.id+',this)">Draft quote</button>'+
         (x.stUrl?(' <a class="stlink" href="'+esc(x.stUrl)+'" target="_blank" rel="noopener">Open</a>'):'')+
         '<div class="draft-box" id="draft-'+x.id+'"></div>'+
       '</td>'+
     '</tr>';
-  }).join('') : '<tr><td colspan="4" class="empty" style="padding:22px">No open deficiencies. Run a sync, or none are attributed to this office yet.</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="empty" style="padding:22px">No open deficiencies. Run a sync, or none are attributed to this office yet.</td></tr>';
 }
 function kpi(lab,val,sub,money){return '<div class="card db-kpi"><div class="lab">'+esc(lab)+'</div><div class="val'+(money?' money':'')+'">'+esc(val)+'</div><div class="sub">'+esc(sub)+'</div></div>';}
 
