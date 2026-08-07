@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { CLOSED_STATUSES } from '../services/deficiencySync';
+import { CLOSED_STATUSES, AVG_REPAIR_USD } from '../services/deficiencySync';
 
 /**
  * Per-office scoreboard. One comparative row per office, built entirely from the local mirror so
@@ -39,7 +39,6 @@ router.get('/api/scorecard', (_req, res) => {
         `SELECT DISTINCT o FROM (
            SELECT office AS o FROM sched_appointments WHERE office IS NOT NULL AND office != ''
            UNION SELECT office AS o FROM quotes WHERE source='servicetrade' AND office IS NOT NULL AND office != ''
-           UNION SELECT office AS o FROM deficiencies WHERE office IS NOT NULL AND office != ''
          ) ORDER BY o`
       )
       .all() as { o: string }[]
@@ -62,8 +61,8 @@ router.get('/api/scorecard', (_req, res) => {
     const pipelineCents = scalar(`SELECT COALESCE(SUM(amount_cents),0) AS v FROM quotes WHERE source='servicetrade' AND office=@office AND lower(stage) IN (${list(OPEN)})`, office);
     const jobs = scalar(`SELECT COUNT(*) AS v FROM crm_jobs WHERE source='servicetrade' AND office_name=@office`, office);
     const plans = scalar(`SELECT COUNT(*) AS v FROM service_recurrences WHERE office=@office`, office);
-    const defOpen = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, office);
-    const defUsd = scalar(`SELECT COALESCE(SUM(proposed_usd),0) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, office);
+    const defOpen = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE office=@office AND ${OPEN_DEF}`, shortLabel(office));
+    const defUsd = defOpen * AVG_REPAIR_USD; // projected (deficiencies carry no price)
     return {
       office,
       label: shortLabel(office),

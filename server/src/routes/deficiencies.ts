@@ -1,15 +1,25 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
-import { syncDeficiencies, CLOSED_STATUSES } from '../services/deficiencySync';
+import { syncDeficiencies, CLOSED_STATUSES, AVG_REPAIR_USD } from '../services/deficiencySync';
 
 /**
  * Repair backlog: the open ServiceTrade deficiencies (repairs techs already found) as quotable
  * work, office-scoped. GET serves the backlog summary + the highest-value open items. Sync pulls
  * the mirror. Drafting a repair quote is gated and never writes to ServiceTrade (live:false).
+ *
+ * Deficiencies are attributed to an office by city (short label), so the office filter normalizes
+ * the switcher's full ServiceTrade name to that label. They carry no price, so the value is a
+ * PROJECTION: open count x an assumed average repair ticket.
  */
 const router = Router();
 const ST_APP = 'https://app.servicetrade.com';
 const OPEN_CLAUSE = `lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`).join(',')})`;
+
+/** Full ServiceTrade office name -> friendly label (deficiencies store the label). */
+function shortLabel(o: string): string {
+  const s = (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim();
+  return /^services$/i.test(s) ? 'San Antonio' : s || o;
+}
 
 interface DefRow {
   id: number;
@@ -25,9 +35,10 @@ interface DefRow {
 
 router.get('/api/deficiencies', (req, res) => {
   const db = getDb();
-  const office = String(req.query.office || '').trim();
-  const oc = office && office !== 'all' ? ` AND office = @office` : '';
-  const bind = office && office !== 'all' ? [{ office }] : [];
+  const raw = String(req.query.office || '').trim();
+  const office = raw && raw !== 'all' ? shortLabel(raw) : '';
+  const oc = office ? ` AND office = @office` : '';
+  const bind = office ? [{ office }] : [];
   const scalar = (sql: string): number => {
     try {
       return (db.prepare(sql).get(...bind) as { v: number }).v || 0;
@@ -37,9 +48,9 @@ router.get('/api/deficiencies', (req, res) => {
   };
 
   const openCount = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}`);
-  const backlogUsd = scalar(`SELECT COALESCE(SUM(proposed_usd),0) AS v FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}`);
-  const valued = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE ${OPEN_CLAUSE} AND proposed_usd > 0${oc}`);
-  const total = scalar(`SELECT COUNT(*) AS v FROM deficiencies${office && office !== 'all' ? ' WHERE office = @office' : ''}`);
+  const realUsd = scalar(`SELECT COALESCE(SUM(proposed_usd),0) AS v FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}`);
+  const projectedUsd = openCount * AVG_REPAIR_USD;
+  const total = scalar(`SELECT COUNT(*) AS v FROM deficiencies${office ? ' WHERE office = @office' : ''}`);
 
   const byStatus = db
     .prepare(`SELECT status, COUNT(*) AS n, COALESCE(SUM(proposed_usd),0) AS usd FROM deficiencies WHERE ${OPEN_CLAUSE}${oc} GROUP BY status ORDER BY n DESC`)
@@ -56,7 +67,7 @@ router.get('/api/deficiencies', (req, res) => {
   res.json({
     office: office || 'all',
     live: total > 0,
-    summary: { openCount, backlogUsd: Math.round(backlogUsd), valued, avgUsd: valued ? Math.round(backlogUsd / valued) : 0 },
+    summary: { openCount, projectedUsd, avgTicket: AVG_REPAIR_USD, realUsd: Math.round(realUsd) },
     byStatus,
     items: rows.map((r) => ({
       ...r,
