@@ -9,8 +9,8 @@ import { getDb } from '../db/index';
 const router = Router();
 
 const shortLabel = (o: string): string => {
-  const s = (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'San Antonio' : s || o;
+  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
+  return /^services$/i.test(s) ? 'Riverton' : s || o;
 };
 
 router.get('/api/offices', (_req, res) => {

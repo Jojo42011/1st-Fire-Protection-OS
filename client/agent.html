@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Agent · 1st FP</title>
+<title>Agent · Northstar</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/command.css" />
@@ -112,7 +112,7 @@ async function send(e){
   var d=await (await fetch('/api/agent/'+encodeURIComponent(key))).json();
   var a=d&&d.agent;
   if(!a){document.getElementById('miss').textContent='Agent not found.';return;}
-  document.title=a.name+' · 1st FP';
+  document.title=a.name+' · Northstar';
   render(a,d.sampleMetrics||[],d.sampleFeed||[]);
 })();
 </script>

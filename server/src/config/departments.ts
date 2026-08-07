@@ -1,5 +1,5 @@
 /**
- * THE DEPARTMENT MODEL, the real 1st FP org, extracted from the live receptionist
+ * THE DEPARTMENT MODEL, the real Northstar org, extracted from the live receptionist
  * routing prompt (who calls actually route to). This is founder-layer knowledge:
  * swap this file to re-target the wheel at a different company.
  *
@@ -109,7 +109,7 @@ export const DEPARTMENTS: DepartmentDef[] = [
     connects: ['sales', 'finance', 'vendors'],
     systems: ['ServiceTrade', 'Spreadsheets'],
     questions: [
-      { q: 'Which jurisdictions slow you down the most, and who carries each AHJ\'s quirks in their head?', chips: ['San Antonio proper', 'The smaller counties', 'One PM knows them all'] },
+      { q: 'Which jurisdictions slow you down the most, and who carries each AHJ\'s quirks in their head?', chips: ['Riverton proper', 'The smaller counties', 'One PM knows them all'] },
       { q: 'How do you track a project from sold to closed, a system or a spreadsheet?', chips: ['ServiceTrade', 'Spreadsheets', 'A bit of both'] },
       { q: 'What is the most common reason a project slips?', chips: ['Permits', 'Material lead times', 'Crew availability'] },
     ],
@@ -195,7 +195,7 @@ export const DEPARTMENTS: DepartmentDef[] = [
     tagline: 'The general line, every call classified, routed, captured',
     aiRole: 'Answers 24/7 in English and Spanish, routes by the real routing brain, and never lets a message die on a sticky note.',
     agents: [
-      { name: 'AI Receptionist', what: 'Answering the San Antonio line right now, in this OS', capability_id: 'ai_receptionist', weeks: 0, live: true },
+      { name: 'AI Receptionist', what: 'Answering the Riverton line right now, in this OS', capability_id: 'ai_receptionist', weeks: 0, live: true },
       { name: 'Message Router', what: 'Every message logged, routed, and followed up', weeks: 1 },
       { name: 'Review Engine', what: 'Every finished job becomes a Google review', capability_id: 'review_engine', weeks: 0, live: true },
     ],
@@ -211,7 +211,7 @@ export const DEPARTMENTS: DepartmentDef[] = [
     name: 'Growth & Market Expansion',
     wheel: 'Growth',
     tagline: 'Winning recurring ITM across Texas - permits to pipeline to acquisition',
-    aiRole: 'Hunts future recurring-inspection revenue across Texas: catches new-construction permits before the acceptance test, maps competitor white-space from the state license database, converts installs into recurring agreements, and sources tuck-in shops - density first, San Antonio outward.',
+    aiRole: 'Hunts future recurring-inspection revenue across Texas: catches new-construction permits before the acceptance test, maps competitor white-space from the state license database, converts installs into recurring agreements, and sources tuck-in shops - density first, Riverton outward.',
     agents: [
       { name: 'Permit Hunter', what: 'Catches new commercial fire-system permits the day they post and times outreach to the acceptance test', capability_id: 'permit_hunter', weeks: 3 },
       { name: 'Territory Mapper', what: 'Maps every state-licensed competitor and the metros where coverage is thin', capability_id: 'territory_map', weeks: 3 },
@@ -224,7 +224,7 @@ export const DEPARTMENTS: DepartmentDef[] = [
     questions: [
       { q: 'What share of your revenue is under a recurring ITM agreement today versus one-off project work?', chips: ['Most of it recurring', 'Roughly half', 'Mostly project work'] },
       { q: 'When a new building goes up in your metros, how do you find out - and does anyone chase the inspection contract before a competitor does?', chips: ['We hear through relationships', 'The GC tells us', 'We do not systematically track it'] },
-      { q: 'Outside San Antonio, which Texas metro is the biggest opportunity - and would you rather grow there organically or buy a small shop with a book?', chips: ['The Austin corridor', 'Houston or DFW', 'Not sure yet'] },
+      { q: 'Outside Riverton, which Texas metro is the biggest opportunity - and would you rather grow there organically or buy a small shop with a book?', chips: ['The Austin corridor', 'Houston or DFW', 'Not sure yet'] },
     ],
   },
 ];

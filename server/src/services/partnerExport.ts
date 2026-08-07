@@ -2,9 +2,9 @@ import { getDb } from '../db/index';
 import { integrationConnected } from '../config/integrations';
 
 /**
- * Partner cross-sell export — 1st FP's OWN commercial customers, shaped as warm
+ * Partner cross-sell export — Northstar's OWN commercial customers, shaped as warm
  * security leads for the sister company (VDS). This is a deliberate, sanctioned
- * channel between two commonly-owned companies; only 1st FP's own customer data
+ * channel between two commonly-owned companies; only Northstar's own customer data
  * crosses, and nothing else. It is separate from /api/introspect (which is
  * metadata-only). Consumers score and work these on their side.
  *
@@ -23,16 +23,16 @@ export interface PartnerLead {
   city: string;
   state: string;
   propertyType: string;
-  serviceType: string;        // 1st FP's line of work for them (fire/life-safety detail)
+  serviceType: string;        // Northstar's line of work for them (fire/life-safety detail)
   fireRelationship: string;   // strong | normal | new
   onSiteFrequency: string;    // high | normal | low
   lifetimeValue: number;      // total invoiced, a proxy for account size
   lastJobAt: string;
   triggerEvent: string;       // a recent event that opens a security conversation
-  techFlagged: boolean;       // a 1st FP tech flagged this site in person
+  techFlagged: boolean;       // a Northstar tech flagged this site in person
   hasSecurityVendor: boolean; // unknown from fire data; default greenfield (verify on contact)
   notes: string;
-  source: string;             // "1st FP book" | "tech flag"
+  source: string;             // "Northstar book" | "tech flag"
 }
 
 const norm = (s: string) => (s || '').trim().toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ');
@@ -121,8 +121,8 @@ export function buildPartnerCrossSell(): { live: boolean; count: number; leads: 
       triggerEvent: triggerFrom(r.desc),
       techFlagged: false,
       hasSecurityVendor: false,
-      notes: `1st FP ${rel} relationship${r.amount ? `, ~$${Math.round(r.amount).toLocaleString()} of fire work` : ''}.`,
-      source: '1st FP book',
+      notes: `Northstar ${rel} relationship${r.amount ? `, ~$${Math.round(r.amount).toLocaleString()} of fire work` : ''}.`,
+      source: 'Northstar book',
     });
   }
 
@@ -143,10 +143,10 @@ export function buildPartnerCrossSell(): { live: boolean; count: number; leads: 
       onSiteFrequency: 'high',
       lifetimeValue: 0,
       lastJobAt: f.created_at || '',
-      triggerEvent: f.note || 'a 1st FP tech flagged this site for security',
+      triggerEvent: f.note || 'a Northstar tech flagged this site for security',
       techFlagged: true,
       hasSecurityVendor: false,
-      notes: `Flagged by ${f.flagged_by || 'a 1st FP tech'} on site: ${f.note || 'security gap noted'}.`,
+      notes: `Flagged by ${f.flagged_by || 'a Northstar tech'} on site: ${f.note || 'security gap noted'}.`,
       source: 'tech flag',
     });
   }

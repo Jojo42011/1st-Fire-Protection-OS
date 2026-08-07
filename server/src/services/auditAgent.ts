@@ -297,7 +297,7 @@ export async function capture(
   );
   for (const p of analysis.people) {
     if (!p?.name) continue;
-    // partial-name dedupe: "Kelsey" must match the existing "Kelsey Bovard", not duplicate her
+    // partial-name dedupe: "Kelsey" must match the existing "Kayla Brooks", not duplicate her
     const dup = db
       .prepare(
         `SELECT id FROM audit_people

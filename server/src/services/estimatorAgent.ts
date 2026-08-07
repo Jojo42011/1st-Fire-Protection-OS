@@ -31,7 +31,7 @@ export interface Takeoff {
   created_at: string;
 }
 
-/** The Randolph AFB annex read — the deterministic fixture for keyless boot. */
+/** The Northgate Federal Campus annex read — the deterministic fixture for keyless boot. */
 export const SAMPLE_TAKEOFF: {
   customer: string;
   address: string;
@@ -40,8 +40,8 @@ export const SAMPLE_TAKEOFF: {
   scale_ref: string;
   items: TakeoffItem[];
 } = {
-  customer: 'Randolph AFB annex',
-  address: 'Universal City, TX',
+  customer: 'Northgate Federal Campus annex',
+  address: 'Northgate, TX',
   source: 'photos',
   asset_count: 14,
   scale_ref: '36in entry door',

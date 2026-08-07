@@ -96,7 +96,7 @@ const ST_APP = 'https://app.servicetrade.com';
 const WON = ['accepted', 'approved', 'won'];
 const OPEN = ['submitted', 'pending', 'reviewed', 'contingent', 'draft'];
 const sqlIn = (arr: string[]) => arr.map((s) => `'${s}'`).join(',');
-const officeShort = (o: string) => (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim() || '—';
+const officeShort = (o: string) => (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim() || '—';
 
 function realJobValue(office = '') {
   const db = getDb();

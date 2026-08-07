@@ -1,6 +1,6 @@
 /**
  * Brand theme — the single source of truth for colors, mirrored in client/theme.css
- * and the shell. This is the REAL 1st Fire Protection brand: a fire-station command
+ * and the shell. This is the REAL Northstar Fire & Safety brand: a fire-station command
  * center — red = the fire, navy = the uniform, off-white = the blueprint, gold = the badge.
  */
 export const THEME = {

@@ -83,7 +83,7 @@ Highest-value signal chain: permit issued → identify the AHJ jurisdiction → 
 owner/property manager → check SFMO for the incumbent competitor → time outreach to the
 acceptance-test / first-annual-inspection window. Two motions: organic account hunting AND
 small-shop acquisition sourcing (the SFMO DB feeds both). Geography is density-first: deepen
-San Antonio / Bexar, then the Austin corridor, then Houston and DFW, then a statewide
+Riverton / the metro area, then the Austin corridor, then Houston and DFW, then a statewide
 single-provider offer to multi-site owners. Growth KPIs to probe: % revenue under recurring ITM,
 RMR, deficiency-to-repair conversion %, revenue per location, DSO, new-account seeding rate.
 

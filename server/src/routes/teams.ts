@@ -11,14 +11,14 @@ const router = Router();
 
 // The office main (auto-attendant) numbers, so inbound calls can be labeled by office.
 const OFFICE_NUMBERS: Record<string, string> = {
-  '+12103773473': 'San Antonio',
-  '+13463728684': 'Houston',
-  '+15123129768': 'Austin',
-  '+19799786563': 'College Station',
-  '+19566823473': 'McAllen',
-  '+18062167634': 'Lubbock',
-  '+12543273744': 'Waco',
-  '+17262235130': 'Accounting',
+  '+15125550101': 'Riverton',
+  '+15125550102': 'Houston',
+  '+15125550103': 'Austin',
+  '+15125550104': 'College Station',
+  '+15125550105': 'Fairview',
+  '+15125550106': 'Lubbock',
+  '+15125550107': 'Millbrook',
+  '+15125550108': 'Accounting',
 };
 
 router.get('/api/teams/pstn-analytics', async (req, res) => {

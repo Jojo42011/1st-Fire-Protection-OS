@@ -110,7 +110,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     what: 'Nine branches, one brain — see every location\'s numbers side by side instead of nine versions of the truth.',
     builds: 'Cross-location rollup: same KPIs per branch (revenue, aging, utilization, deficiency conversion), variance flagged automatically.',
     pillars: ['ops', 'finance'],
-    triggers: ['location', 'branch', 'office', 'austin|waco|mcallen|laredo|lubbock|college station|houston|corpus', 'their own way', 'each (site|branch|office)', 'consolidat', 'roll.?up'],
+    triggers: ['location', 'branch', 'office', 'austin|millbrook|fairview|lakeside|lubbock|college station|houston|corpus', 'their own way', 'each (site|branch|office)', 'consolidat', 'roll.?up'],
   },
   {
     id: 'exec_dashboard',
@@ -156,7 +156,7 @@ export const CAPABILITIES: CapabilityDef[] = [
     id: 'territory_map',
     name: 'Texas Territory Map',
     what: 'Maps every state-licensed fire contractor and the metros where coverage is thin — so you expand into white space instead of a knife fight.',
-    builds: 'Pulls the Texas SFMO public license database into a live competitor map by metro; scores white-space and route-density opportunity San Antonio → Austin → Houston/DFW.',
+    builds: 'Pulls the Texas SFMO public license database into a live competitor map by metro; scores white-space and route-density opportunity Riverton → Austin → Houston/DFW.',
     pillars: ['growth', 'ops'],
     triggers: ['expand', 'expansion', 'territory', 'market share', 'competitor', 'white ?space', 'new (market|metro)', 'take over (texas|the)', 'grow(th|ing)? (into|across)'],
   },

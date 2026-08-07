@@ -189,7 +189,7 @@ function timeLabel(iso: string): string {
   let hh = h % 12; if (hh === 0) hh = 12;
   return `${hh}${m ? ':' + pad2(m) : ''}${ap}`;
 }
-const officeShort = (o: string) => (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim() || 'No office';
+const officeShort = (o: string) => (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim() || 'No office';
 
 interface SchedRow {
   tech: string; office: string; st_id: string; customer: string | null; location_name: string | null;
@@ -316,7 +316,7 @@ export function getScheduleSummary(office = '') {
     })),
   }));
 
-  // the active right-rail proposal: the seeded 'proposed' appointment (Randolph AFB → Crew B).
+  // the active right-rail proposal: the seeded 'proposed' appointment (Northgate Federal Campus → Crew B).
   const proposedAppt = appts.find((a) => a.status === 'proposed');
   let proposal = null;
   if (proposedAppt) {
@@ -325,7 +325,7 @@ export function getScheduleSummary(office = '') {
     proposal = {
       appointmentId: proposedAppt.id,
       title: `${proposedAppt.customer} → ${crewName}, ${DOW[proposedAppt.dow]} ${proposedAppt.window}`,
-      reason: `${crewName} is the only crew with the base clearance on file, they're 4 miles from the site on ${DOW_FULL[proposedAppt.dow]}, and the slot leaves Thursday open for the Alamo Ridge repairs if that quote lands.`,
+      reason: `${crewName} is the only crew with the base clearance on file, they're 4 miles from the site on ${DOW_FULL[proposedAppt.dow]}, and the slot leaves Thursday open for the Maplewood repairs if that quote lands.`,
     };
   }
 

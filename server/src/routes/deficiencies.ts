@@ -17,8 +17,8 @@ const OPEN_CLAUSE = `lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`
 
 /** Full ServiceTrade office name -> friendly label (deficiencies store the label). */
 function shortLabel(o: string): string {
-  const s = (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'San Antonio' : s || o;
+  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
+  return /^services$/i.test(s) ? 'Riverton' : s || o;
 }
 
 interface DefRow {

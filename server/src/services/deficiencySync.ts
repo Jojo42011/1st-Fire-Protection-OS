@@ -69,13 +69,13 @@ export const AVG_REPAIR_USD = 650;
 const CITY_OFFICE: Record<string, string> = {};
 const seed = (office: string, cities: string[]) => cities.forEach((c) => (CITY_OFFICE[c] = office));
 seed('Austin', ['austin', 'san marcos', 'georgetown', 'lakeway', 'buda', 'round rock', 'dripping springs', 'cedar park', 'pflugerville', 'kyle', 'leander', 'bee cave', 'bastrop', 'elgin', 'taylor', 'hutto', 'burnet', 'marble falls', 'wimberley', 'lockhart', 'manor', 'del valle', 'liberty hill', 'jarrell', 'luling']);
-seed('San Antonio', ['san antonio', 'boerne', 'new braunfels', 'schertz', 'seguin', 'converse', 'universal city', 'live oak', 'helotes', 'cibolo', 'floresville', 'kerrville', 'pleasanton', 'castroville', 'fair oaks ranch', 'selma', 'leon valley', 'san marcos ', 'devine', 'hondo', 'jourdanton', 'poteet']);
-seed('McAllen', ['mcallen', 'mission', 'edinburg', 'pharr', 'harlingen', 'brownsville', 'weslaco', 'mercedes', 'san juan', 'donna', 'alamo', 'rio grande city', 'los fresnos', 'la feria', 'elsa', 'raymondville', 'roma', 'penitas', 'palmview', 'hidalgo']);
-seed('Waco', ['waco', 'temple', 'killeen', 'belton', 'hewitt', 'woodway', 'copperas cove', 'harker heights', 'robinson', 'mcgregor', 'gatesville', 'lorena', 'bellmead']);
+seed('Riverton', ['riverton', 'boerne', 'new braunfels', 'schertz', 'seguin', 'converse', 'northgate', 'live oak', 'helotes', 'cibolo', 'floresville', 'kerrville', 'pleasanton', 'castroville', 'fair oaks ranch', 'selma', 'leon valley', 'san marcos ', 'devine', 'hondo', 'jourdanton', 'poteet']);
+seed('Fairview', ['fairview', 'mission', 'edinburg', 'pharr', 'harlingen', 'brownsville', 'weslaco', 'mercedes', 'san juan', 'donna', 'maplewood', 'rio grande city', 'los fresnos', 'la feria', 'elsa', 'raymondville', 'roma', 'penitas', 'palmview', 'hidalgo']);
+seed('Millbrook', ['millbrook', 'temple', 'killeen', 'belton', 'hewitt', 'woodway', 'copperas cove', 'harker heights', 'robinson', 'mcgregor', 'gatesville', 'lorena', 'bellmead']);
 seed('College Station', ['college station', 'bryan', 'huntsville', 'navasota', 'brenham', 'madisonville', 'caldwell', 'hearne', 'franklin']);
 seed('Lubbock', ['lubbock', 'amarillo', 'plainview', 'levelland', 'wolfforth', 'slaton', 'brownfield']);
 seed('Houston', ['houston', 'katy', 'sugar land', 'conroe', 'the woodlands', 'pearland', 'cypress', 'spring', 'humble', 'pasadena', 'baytown', 'galveston', 'tomball', 'richmond', 'rosenberg', 'friendswood', 'league city', 'stafford', 'missouri city', 'channelview', 'deer park']);
-seed('Laredo', ['laredo', 'eagle pass', 'del rio', 'carrizo springs', 'zapata', 'cotulla']);
+seed('Lakeside', ['lakeside', 'eagle pass', 'del rio', 'carrizo springs', 'zapata', 'cotulla']);
 
 export function cityToOffice(city: string | null | undefined): string | null {
   if (!city) return null;

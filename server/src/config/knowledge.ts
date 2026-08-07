@@ -91,7 +91,7 @@ export const FINGERPRINTS = [
   'Complaints bypass everything, straight to the Operations Manager — never handled by the front desk.',
   'Spanish-only callers are helped in Spanish but not transferred — captured for a bilingual callback.',
   'Emergencies pre-empt all routing: name, number, address, then the after-hours on-call queue.',
-  'Multi-location (9 sites, San Antonio HQ) — expect per-branch variance in every workflow.',
+  'Multi-location (9 sites, Riverton HQ) — expect per-branch variance in every workflow.',
 ];
 
 /** Standard systems the operator expects to find (and their classic gaps). */

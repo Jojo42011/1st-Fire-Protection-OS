@@ -61,13 +61,13 @@ router.post('/api/admin/reset-demo', (req, res) => {
  * even while the app is serving. Streams the copy as an attachment, then deletes it.
  *
  * Open by default (demo data). Set ADMIN_TOKEN to require `?token=` / `x-admin-token`.
- *   curl -fL "https://<APP>.fly.dev/api/admin/backup" -o 1stfp.db
+ *   curl -fL "https://<APP>.fly.dev/api/admin/backup" -o northstardemo.db
  */
 router.get('/api/admin/backup', async (req, res) => {
   if (!adminAuthed(req)) return res.status(401).json({ ok: false, error: 'unauthorized' });
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); // 2026-07-12T17-13-10
-  const filename = `1stfp-${stamp}.db`;
+  const filename = `northstardemo-${stamp}.db`;
   const tmp = path.join(os.tmpdir(), `backup-${stamp}-${process.pid}.db`);
   const cleanup = () => fs.promises.unlink(tmp).catch(() => {});
 

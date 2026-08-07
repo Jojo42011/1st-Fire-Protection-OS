@@ -1,3 +1,4 @@
+import './config/demo'; // MUST be first: strips external creds + redirects db when DEMO_MODE is on
 import express from 'express';
 import path from 'path';
 import http from 'http';
@@ -245,7 +246,7 @@ setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
 setInterval(runStSync, ST_SYNC_MS).unref();
 
 server.listen(PORT, () => {
-  console.log(`\n  1st FP Operating System`);
+  console.log(`\n  Northstar Operating System`);
   console.log(`  ▸ http://localhost:${PORT}`);
   console.log(`  ▸ client: ${CLIENT_DIR}`);
   console.log(`  ▸ tabs: /calls (home) /invoices /reviews /integrations\n`);

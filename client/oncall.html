@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>On-call · 1st FP</title>
+<title>On-call · Northstar</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
@@ -75,8 +75,8 @@
         <div class="oc-note" style="margin-bottom:12px">One line per person: <code>Name, phone, email</code>. They take turns, one week each, starting the date below.</div>
         <div class="oc-fld">
           <label>On-call people (in rotation order)</label>
-          <textarea class="oc-in" id="r-people" placeholder="Ronnie Blue, +12104016907, ronnie.blue@1stfpservices.com
-Matthew Shaner, +12107301104, matthew.shaner@1stfpservices.com"></textarea>
+          <textarea class="oc-in" id="r-people" placeholder="Ryan Blake, +15124016907, ryan.blake@northstardemo.example
+Mitch Shafer, +15127301104, mitch.shafer@northstardemo.example"></textarea>
         </div>
         <div class="oc-two">
           <div class="oc-fld"><label>First week starts</label><input class="oc-in" id="r-start" type="date"></div>
@@ -91,10 +91,10 @@ Matthew Shaner, +12107301104, matthew.shaner@1stfpservices.com"></textarea>
 
       <!-- single shift -->
       <div id="form-single" style="display:none">
-        <div class="oc-fld"><label>Name</label><input class="oc-in" id="s-name" placeholder="Ronnie Blue"></div>
+        <div class="oc-fld"><label>Name</label><input class="oc-in" id="s-name" placeholder="Ryan Blake"></div>
         <div class="oc-two">
-          <div class="oc-fld"><label>Phone (E.164)</label><input class="oc-in" id="s-phone" placeholder="+12104016907"></div>
-          <div class="oc-fld"><label>Email</label><input class="oc-in" id="s-email" placeholder="name@1stfpservices.com"></div>
+          <div class="oc-fld"><label>Phone (E.164)</label><input class="oc-in" id="s-phone" placeholder="+15124016907"></div>
+          <div class="oc-fld"><label>Email</label><input class="oc-in" id="s-email" placeholder="name@northstardemo.example"></div>
         </div>
         <div class="oc-two">
           <div class="oc-fld"><label>Starts</label><input class="oc-in" id="s-start" type="date"></div>
@@ -115,7 +115,7 @@ Matthew Shaner, +12107301104, matthew.shaner@1stfpservices.com"></textarea>
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function officeRaw(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
 function officeParam(){var o=officeRaw();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
-function officeLabel(){var o=officeRaw();if(!o||o==='all')return 'all offices';var s=o.replace(/^1st FP\s*/i,'').replace(/\s*LLC$/i,'').trim();return /^services$/i.test(s)?'San Antonio':(s||o);}
+function officeLabel(){var o=officeRaw();if(!o||o==='all')return 'all offices';var s=o.replace(/^Northstar\s*/i,'').replace(/\s*LLC$/i,'').trim();return /^services$/i.test(s)?'Riverton':(s||o);}
 function mono(nm){return (String(nm||'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2)||'?').toUpperCase();}
 function fmtDay(s){if(!s)return '';var d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}

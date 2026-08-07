@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>1st Fire Protection · Operating System</title>
+<title>Northstar Fire & Safety · Operating System</title>
 <link rel="icon" type="image/png" href="/brand/logo.png" />
 <link rel="apple-touch-icon" href="/brand/logo.png" />
 <script src="/theme-sync.js"></script>
@@ -111,10 +111,10 @@
   <div class="app" id="app">
     <aside class="side" id="side">
       <div class="brand">
-        <span class="mark">1F</span>
+        <span class="mark">NS</span>
         <span style="flex:1;min-width:0">
-          <span class="n">1st Fire</span>
-          <span class="s">San Antonio · 9 locations</span>
+          <span class="n">Northstar</span>
+          <span class="s">Central Texas · 9 locations</span>
         </span>
         <button class="grip" id="collapse" title="Collapse (Ctrl/⌘ + \)" aria-label="Collapse sidebar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
@@ -306,7 +306,7 @@ var SCREENS = {
   home:     { src:'/home',                         title:'Home',              sub:'Everything in one place', home:true },
   approve:  { src:'/approvals',                    title:'To approve',        sub:'Nothing leaves the building without you' },
   operator: { src:'/operator',                    title:'Ask the Operator',  sub:'One conversation over the whole company' },
-  phones:   { src:'/calls',                        title:'Phones',            sub:'210-377-FIRE · answered 24/7' },
+  phones:   { src:'/calls',                        title:'Phones',            sub:'Main line · answered 24/7' },
   oncall:   { src:'/oncall',                        title:'On-call',           sub:'Who the after-hours line reaches, per office' },
   money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
   reviews:  { src:'/reviews-hub',                  title:'Reviews',           sub:'Ask, earn, and reply. Requests out, reviews in, all in one place' },
@@ -378,7 +378,7 @@ function activate(key,announce){
   current=key;
   titleEl.textContent=SCREENS[key].title;
   subEl.textContent=SCREENS[key].sub;
-  try{document.title='1st FP · '+SCREENS[key].title;}catch(_){}
+  try{document.title='Northstar · '+SCREENS[key].title;}catch(_){}
   if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}
 }
 nav.addEventListener('click',function(e){var it=e.target.closest('.nav-item');if(it)activate(it.getAttribute('data-key'),true);});

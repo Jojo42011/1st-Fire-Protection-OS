@@ -92,7 +92,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
     ),
     lastUsedAt: latest(`SELECT MAX(started_at) AS v FROM calls`),
     notes: telephonyEnabled()
-      ? 'Answers the San Antonio line via Vapi/Twilio; failures30d = missed calls.'
+      ? 'Answers the Riverton line via Vapi/Twilio; failures30d = missed calls.'
       : 'Wired but no telephony provider connected — calls in the log are seeded/manual entries.',
   });
 

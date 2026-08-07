@@ -6,7 +6,7 @@ import { mailConfigured, sendMail } from './msGraphMail';
 /**
  * Google review requests, routed per office.
  *
- * A completed ServiceTrade job carries assignedOffice (which 1st FP branch serviced it) and
+ * A completed ServiceTrade job carries assignedOffice (which Northstar branch serviced it) and
  * primaryContact (who to ask). We map each office to its public Google "write a review" link,
  * then on completion send that customer a request pointing at THEIR office's link — so the
  * review lands on the right profile.
@@ -154,10 +154,10 @@ function recentlyAsked(email: string): boolean {
   return !!row;
 }
 
-/** Friendly, recognizable office name for the From line + signature ("1st Fire Protection Houston"). */
+/** Friendly, recognizable office name for the From line + signature ("Northstar Fire & Safety Houston"). */
 export function officeDisplay(officeName: string | null): string {
   if (!officeName) return COMPANY.name;
-  const clean = officeName.replace(/\bLLC\b/gi, '').replace(/1st FP/gi, '1st Fire Protection').replace(/\s+/g, ' ').trim();
+  const clean = officeName.replace(/\bLLC\b/gi, '').replace(/Northstar/gi, 'Northstar Fire & Safety').replace(/\s+/g, ' ').trim();
   return clean || COMPANY.name;
 }
 
@@ -173,7 +173,7 @@ function formatPhone(raw: string | null): string | null {
 function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
-  const city = office.replace(/1st Fire Protection/i, '').trim(); // "Houston", "Services", ...
+  const city = office.replace(/Northstar Fire & Safety/i, '').trim(); // "Houston", "Services", ...
   const phone = formatPhone(job.target_phone || job.office_phone) || COMPANY.phonePretty; // override > ServiceTrade > main line
   const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
@@ -184,13 +184,13 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
     `If anything fell short, just reply to this email and we will make it right.\n\n` +
     `Thank you,\n${office}\n${phone} · ${COMPANY.site}`;
 
-  // Table-based, inline-styled email in the 1st FP palette (navy #1E2D40, red #E53935, gold #F5B81B).
+  // Table-based, inline-styled email in the Northstar palette (navy #1E2D40, red #E53935, gold #F5B81B).
   const gold = city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : '';
   const html =
 `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">` +
 `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">` +
 `<tr><td style="background:#1E2D40;padding:20px 28px;font-family:Arial,Helvetica,sans-serif;">` +
-`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">1ST FIRE PROTECTION</div>${gold}</td></tr>` +
+`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">NORTHSTAR FIRE & SAFETY</div>${gold}</td></tr>` +
 `<tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>` +
 `<tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">` +
 `<p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>` +
@@ -277,7 +277,7 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
 export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
   return buildMessage({
     id: 0, number: null, kind: null, completed_at: null,
-    office_id: null, office_name: officeName || '1st FP Houston LLC', office_phone: '2813334444', target_phone: null,
+    office_id: null, office_name: officeName || 'Northstar Houston LLC', office_phone: '2813334444', target_phone: null,
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
     account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
   });

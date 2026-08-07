@@ -310,7 +310,7 @@ function agentSample(agent: any): AgentSample {
           M('Deadlines flagged (7d)', String(ri(r, 2, 8))),
         ],
         feed: feed([
-          'Flagged a permit deadline in San Antonio proper',
+          'Flagged a permit deadline in Riverton proper',
           'Loaded a county inspector\'s known preferences',
           'Caught a submittal due in 3 days',
           'Updated a code-cycle change for a jurisdiction',
@@ -418,7 +418,7 @@ function agentSample(agent: any): AgentSample {
           'Refreshed the SFMO license map for the Austin corridor',
           'Scored white-space in a thin-coverage metro',
           'Flagged a competitor cluster near an existing route',
-          'Ranked expansion targets San Antonio outward',
+          'Ranked expansion targets Riverton outward',
           'Logged a territory snapshot',
         ]),
       };

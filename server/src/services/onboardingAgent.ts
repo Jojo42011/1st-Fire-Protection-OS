@@ -18,13 +18,13 @@ export type Owner = 'bamboo' | 'it' | 'mario' | 'rebecca' | 'sandi' | 'denise' |
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
-  { key: 'bamboo', label: 'BambooHR (Sandi builds it)', tag: 'BambooHR' },
+  { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
-  { key: 'mario', label: 'Mario (approval)', tag: 'Mario' },
-  { key: 'rebecca', label: 'Rebecca (Accounting approval)', tag: 'Rebecca' },
-  { key: 'sandi', label: 'Sandi (HR approval)', tag: 'Sandi' },
-  { key: 'denise', label: 'Denise McAndrew (Safety team)', tag: 'Safety' },
-  { key: 'daniel', label: 'Daniel Mendoza (Safety team)', tag: 'Safety' },
+  { key: 'mario', label: 'Owner (approval)', tag: 'Owner' },
+  { key: 'rebecca', label: 'Accounting (approval)', tag: 'Accounting' },
+  { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
+  { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
+  { key: 'daniel', label: 'Ops (approval)', tag: 'Ops' },
 ];
 const OWNER_LABEL: Record<Owner, string> = OWNERS.reduce(
   (m, o) => ((m[o.key] = o.label), m),
@@ -50,15 +50,15 @@ export const SHAREPOINT: { name: string; owner: Owner; kind: 'task' | 'approval'
   // the IT-provisioned location/function groups
   { name: 'Austin', owner: 'it', kind: 'task' },
   { name: 'College Station', owner: 'it', kind: 'task' },
-  { name: 'Extinguisher (Not 1FP)', owner: 'it', kind: 'task' },
+  { name: 'Extinguisher (Not NFS)', owner: 'it', kind: 'task' },
   { name: 'FIRCON', owner: 'it', kind: 'task' },
   { name: 'Lubbock', owner: 'it', kind: 'task' },
-  { name: 'McAllen', owner: 'it', kind: 'task' },
+  { name: 'Fairview', owner: 'it', kind: 'task' },
   { name: 'One Stop', owner: 'it', kind: 'task' },
   { name: 'SAFETY', owner: 'it', kind: 'task' },
-  { name: 'San Antonio (FPS)', owner: 'it', kind: 'task' },
-  { name: 'SP 1st FP Extinguishers', owner: 'it', kind: 'task' },
-  { name: 'WACO', owner: 'it', kind: 'task' },
+  { name: 'Riverton (FPS)', owner: 'it', kind: 'task' },
+  { name: 'SP Northstar Extinguishers', owner: 'it', kind: 'task' },
+  { name: 'MILLBROOK', owner: 'it', kind: 'task' },
   // the approval-gated groups
   { name: 'MGMT', owner: 'mario', kind: 'approval' },
   { name: 'ACCT', owner: 'rebecca', kind: 'approval' },
@@ -69,16 +69,16 @@ const SHAREPOINT_ROUTING = new Map(SHAREPOINT.map((g) => [g.name, g]));
 
 /** Printers the form offers - every printer routes to IT. */
 export const PRINTERS: string[] = [
-  'San Antonio Regular',
-  'San Antonio Plotter',
-  'San Antonio Accounting',
-  'San Antonio Safety',
+  'Riverton Regular',
+  'Riverton Plotter',
+  'Riverton Accounting',
+  'Riverton Safety',
   'Buda Regular',
   'Buda Plotter',
-  'McAllen Regular',
-  'McAllen Plotter',
-  'Waco Regular',
-  'Waco Plotter',
+  'Fairview Regular',
+  'Fairview Plotter',
+  'Millbrook Regular',
+  'Millbrook Plotter',
 ];
 
 /** The computer choices and the spec each carries (for the Mario approval detail). */

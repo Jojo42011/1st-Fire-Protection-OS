@@ -15,8 +15,8 @@ const router = Router();
 
 /** Same normalization the office switcher uses: full ServiceTrade name -> friendly label. */
 function shortLabel(o: string): string {
-  const s = (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'San Antonio' : s || o;
+  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
+  return /^services$/i.test(s) ? 'Riverton' : s || o;
 }
 
 /** YYYY-MM-DD for a Date, using its UTC fields (we treat dates as tz-free calendar days). */

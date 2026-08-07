@@ -18,8 +18,8 @@ const OPEN_DEF = `lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`).j
 
 /** ServiceTrade full office name -> friendly label (mirrors the office switcher). */
 function shortLabel(o: string): string {
-  const s = (o || '').replace(/^1st FP\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'San Antonio' : s || o;
+  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
+  return /^services$/i.test(s) ? 'Riverton' : s || o;
 }
 
 router.get('/api/scorecard', (_req, res) => {

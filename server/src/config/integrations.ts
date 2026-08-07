@@ -2,7 +2,7 @@
  * The integration catalog — every "hand" the system CAN plug into, with live status
  * resolved from process.env. This is the "show what it could do" surface.
  *
- * Wired to 1st FP's REAL stack: ServiceTrade (field service system of record), Vapi + Twilio
+ * Wired to Northstar's REAL stack: ServiceTrade (field service system of record), Vapi + Twilio
  * (telephony into Microsoft Teams), Microsoft 365, Google Business Profile + Facebook (reviews).
  */
 
@@ -12,7 +12,7 @@ export interface IntegrationDef {
   id: string;
   name: string;
   category: string;
-  why: string; // why it matters for 1st FP
+  why: string; // why it matters for Northstar
   isConnected: () => boolean;
   baseline: 'available' | 'planned';
 }
@@ -22,7 +22,7 @@ const CATALOG: IntegrationDef[] = [
     id: 'vapi',
     name: 'Vapi (AI Voice)',
     category: 'Voice & Telephony',
-    why: 'Answers the San Antonio line, classifies the call, transfers into Teams. Bring-your-own OpenAI key.',
+    why: 'Answers the main line, classifies the call, transfers into Teams. Bring-your-own OpenAI key.',
     baseline: 'planned',
     isConnected: () => !!process.env.VAPI_API_KEY,
   },
@@ -30,7 +30,7 @@ const CATALOG: IntegrationDef[] = [
     id: 'twilio',
     name: 'Twilio',
     category: 'Voice & Telephony',
-    why: 'Forwards 210-377-FIRE to the AI agent, then transfers back into Teams (Phase 1, no porting risk).',
+    why: 'Forwards the main line to the AI agent, then transfers back into Teams (Phase 1, no porting risk).',
     baseline: 'planned',
     isConnected: () => !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
   },

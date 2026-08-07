@@ -441,10 +441,10 @@ export function initDb(): void {
   `);
 
   /* ---------- partner cross-sell: sites a fire tech flags for VDS (security) ----------
-   * The highest-intent security lead there is: a trusted 1st FP tech standing inside a
+   * The highest-intent security lead there is: a trusted Northstar tech standing inside a
    * commercial building noting it has old or no cameras. Flows to the VDS OS via the
    * key-gated partner export. This is a deliberate, sanctioned sister-company channel;
-   * only 1st FP's own observations cross, never anything else. */
+   * only Northstar's own observations cross, never anything else. */
   db.exec(`
     CREATE TABLE IF NOT EXISTS partner_flags (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -468,7 +468,7 @@ export function initDb(): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS oncall_shifts (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
-      office        TEXT NOT NULL,               -- friendly office label (San Antonio, McAllen, ...)
+      office        TEXT NOT NULL,               -- friendly office label (Riverton, Fairview, ...)
       person_name   TEXT NOT NULL,
       person_phone  TEXT,                        -- E.164 the assistant dials for a warm transfer
       person_email  TEXT,                        -- Teams identity
@@ -578,8 +578,8 @@ export function initDb(): void {
       const addHfss = db.prepare(
         "INSERT INTO license_seats (vendor, product, assignee_email, assignee_name, cost_monthly, assigned_at, source) VALUES ('hfss', 'HFSS', ?, ?, 20, ?, 'seed')"
       );
-      addHfss.run('victor.delgado@1stfp.example', 'Victor Delgado', '2025-06-01');
-      addHfss.run('jordan.pratt@1stfp.example', 'Jordan Pratt', '2025-02-15');
+      addHfss.run('victor.delgado@northstardemo.example', 'Vince Delano', '2025-06-01');
+      addHfss.run('jordan.pratt@northstardemo.example', 'Jared Pope', '2025-02-15');
     }
     setState('mig_license_vendors_v2', '1');
   }
@@ -611,7 +611,7 @@ export function initDb(): void {
       title         TEXT NOT NULL,
       stake         TEXT,                    -- '$34,800' | 'saves $1,752/yr'
       body          TEXT,                    -- the actual draft the human reads
-      trail         TEXT,                    -- 'Goes to marcy.d@alamoridge.com + AP inbox'
+      trail         TEXT,                    -- 'Goes to marcy.d@maplewood.example + AP inbox'
       subject_type  TEXT,                    -- 'invoice' | 'review' | 'seat' | 'account'
       subject_id    INTEGER,
       status        TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | skipped | expired
@@ -862,7 +862,7 @@ export function initDb(): void {
   addColumn('quotes', 'source', "TEXT DEFAULT 'seed'");
 
   /* ---------- Google review requests (per-office routing) ----------
-   * A completed ServiceTrade job carries assignedOffice (which 1st FP branch) and
+   * A completed ServiceTrade job carries assignedOffice (which Northstar branch) and
    * primaryContact (who to ask). We capture both on the job, map each office to its Google
    * review link, and send "how did we do?" so the review lands on the right profile. */
   addColumn('crm_jobs', 'office_id', 'TEXT');
@@ -872,7 +872,7 @@ export function initDb(): void {
   addColumn('crm_jobs', 'contact_email', 'TEXT');
   addColumn('crm_jobs', 'contact_phone', 'TEXT');
   addColumn('crm_jobs', 'review_requested', 'INTEGER DEFAULT 0'); // 1 once a request has been queued/sent
-  addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "1st FP Austin LLC"), for per-location scoping
+  addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "Northstar Austin LLC"), for per-location scoping
   db.exec(`
     /* ---------- service-plan mirror: ServiceTrade recurring services (the real agreement book) ----
      * One row per ServiceTrade serviceRecurrence — a location serviced on a cadence. Powers the

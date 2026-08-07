@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Onboarding · 1st FP</title>
+<title>Onboarding · Northstar</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/command.css" />
@@ -108,16 +108,16 @@
           <div class="field"><label>Full name <span class="tag bamboo">BambooHR</span></label><input name="name" required placeholder="Jordan Rivera" /></div>
           <div class="field"><label>Personal email</label><input name="personal_email" type="email" placeholder="jordan@gmail.com" /></div>
           <div class="field"><label>Start date</label><input name="start_date" type="date" /></div>
-          <div class="field"><label>Cell phone</label><input name="cell_phone" placeholder="+1 210 555 0100" /></div>
+          <div class="field"><label>Cell phone</label><input name="cell_phone" placeholder="+1 512 555 0100" /></div>
           <div class="field"><label>Job position</label><input name="job_position" placeholder="Sprinkler Designer" /></div>
           <div class="field"><label>Salary</label><input name="salary" placeholder="$72,000 / yr" /></div>
-          <div class="field"><label>Manager</label><input name="manager_name" placeholder="Priya Nair" /></div>
+          <div class="field"><label>Manager</label><input name="manager_name" placeholder="Prisha Nadar" /></div>
         </div>
       </div>
 
       <div class="fsec">
         <div class="head"><span class="st">Pay + HR Exceptions</span><span class="tag bamboo">BambooHR</span></div>
-        <p class="muted" style="font-size:12px;margin-bottom:10px">Check only what differs from the default. Each becomes a BambooHR task for Sandi.</p>
+        <p class="muted" style="font-size:12px;margin-bottom:10px">Check only what differs from the default. Each becomes an HR task.</p>
         <div class="checks">
           <label class="chk"><input type="checkbox" name="cell_reimburse"><span class="ct">Cell-phone reimbursement</span></label>
           <label class="chk"><input type="checkbox" name="pto_plan"><span class="ct">Different PTO plan</span></label>
@@ -126,7 +126,7 @@
           <label class="chk"><input type="checkbox" name="incentive_plan"><span class="ct">Incentive plan</span></label>
           <label class="chk"><input type="checkbox" name="vehicle_allowance"><span class="ct">Vehicle allowance (built into pay)</span></label>
         </div>
-        <div class="field" style="margin-top:12px"><label>Misc pay/HR exceptions (free text)</label><textarea name="misc_exceptions" placeholder="Anything else Sandi should build into the record"></textarea></div>
+        <div class="field" style="margin-top:12px"><label>Misc pay/HR exceptions (free text)</label><textarea name="misc_exceptions" placeholder="Anything else HR should build into the record"></textarea></div>
       </div>
 
       <div class="fsec">
@@ -145,7 +145,7 @@
 
       <div class="fsec">
         <div class="head"><span class="st">Equipment + Software</span></div>
-        <div class="grouplabel">Computer <span class="tag mario">Mario approval</span></div>
+        <div class="grouplabel">Computer <span class="tag mario">Owner approval</span></div>
         <div class="radios" id="computer-radios"></div>
 
         <div class="grouplabel">Software</div>
@@ -161,12 +161,12 @@
       </div>
 
       <div class="fsec">
-        <div class="head"><span class="st">Vehicle</span><span class="tag safety">Safety + Sandi</span></div>
-        <p class="muted" style="font-size:12px;margin-bottom:10px">A company vehicle fans out to three owners: Sandi (license + MVR), Denise (State Auto policy), Daniel (confirm the vehicle).</p>
+        <div class="head"><span class="st">Vehicle</span><span class="tag safety">Safety + HR</span></div>
+        <p class="muted" style="font-size:12px;margin-bottom:10px">A company vehicle fans out to three owners: HR (license + MVR), Safety (State Auto policy), Ops (confirm the vehicle).</p>
         <div class="checks">
           <label class="chk"><input type="checkbox" name="company_vehicle"><span class="ct">Company vehicle needed</span></label>
         </div>
-        <div class="field" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Daniel to confirm"></textarea></div>
+        <div class="field" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Ops to confirm"></textarea></div>
       </div>
 
       <div class="submit-row">
@@ -195,7 +195,7 @@ function renderOptions(o){
     return '<label class="chk"><input type="checkbox" name="pr" value="'+esc(p)+'"><span class="ct">'+esc(p)+'</span></label>';
   }).join('');
   document.getElementById('software-checks').innerHTML=o.software.map(function(s){
-    return '<label class="chk"><input type="checkbox" name="sw" value="'+esc(s.name)+'"><span class="ct">'+esc(s.name)+' <span class="tag '+ownerClass(s.owner)+'">'+(s.kind==='approval'?'Mario':'IT')+'</span></span></label>';
+    return '<label class="chk"><input type="checkbox" name="sw" value="'+esc(s.name)+'"><span class="ct">'+esc(s.name)+' <span class="tag '+ownerClass(s.owner)+'">'+(s.kind==='approval'?'Owner':'IT')+'</span></span></label>';
   }).join('');
   var radios='<label class="radio on"><input type="radio" name="computer_type" value="none" checked><span><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>';
   radios+=o.computers.map(function(c){
@@ -257,7 +257,7 @@ function openReq(id){
   });
 }
 function closeReq(){OPEN_ID=null;document.getElementById('detail').innerHTML='';}
-function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Mario',rebecca:'Rebecca',sandi:'Sandi',denise:'Safety',daniel:'Safety'};return m[o]||o;}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops'};return m[o]||o;}
 
 function itemRow(it){
   var st, act='';

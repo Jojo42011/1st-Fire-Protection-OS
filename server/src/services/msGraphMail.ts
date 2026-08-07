@@ -6,7 +6,7 @@ import { graphToken } from './licenseSources';
  * Reuses the same Entra app-registration credentials as the license integration
  * (MS_GRAPH_TENANT / MS_GRAPH_CLIENT_ID / MS_GRAPH_CLIENT_SECRET). Sending additionally
  * requires the **Mail.Send** application permission granted to that app (admin consent) and a
- * MS_MAIL_FROM mailbox to send as (e.g. reviews@1stfpservices.com).
+ * MS_MAIL_FROM mailbox to send as (e.g. reviews@northstardemo.example).
  *
  * Keyless / permissionless-safe: returns { ok:false, error } instead of throwing, so a missing
  * grant or a transient failure never crashes the review sweep — the request just stays queued.
