@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Money · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  body{background:var(--bg)}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 24px 60px}
+  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
+  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px}
+  .sec-h{font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:28px 0 12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+  .kpi{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 16px 15px;cursor:pointer}
+  .kpi:hover{border-color:var(--border-strong)}
+  .kpi .lab{font-weight:700;font-size:11.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+  .kpi .val{font-weight:800;font-size:26px;letter-spacing:-.02em;color:var(--ink);margin-top:7px;font-variant-numeric:tabular-nums}
+  .kpi .sub{font-weight:550;font-size:12px;color:var(--ink-3);margin-top:3px}
+  .kpi .tag{display:inline-block;margin-top:8px;font-weight:700;font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);background:var(--fill);border-radius:var(--r-pill);padding:3px 8px}
+  .locked{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px;margin-top:4px}
+  .locked .row{display:flex;align-items:center;gap:12px}
+  .locked .badge{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#8a6d1a;background:#fff3e6;border-radius:var(--r-pill);padding:5px 11px;flex:none}
+  .locked h3{font-weight:750;font-size:15px;color:var(--ink)}
+  .locked p{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:4px;max-width:70ch}
+  .locked .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:14px}
+  .locked .g{border:1px dashed var(--border-strong,#c9ccd6);border-radius:10px;padding:12px;color:var(--muted)}
+  .locked .g .l{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+  .locked .g .v{font-weight:700;font-size:16px;color:var(--ink-3);margin-top:5px}
+  .note{font-weight:500;font-size:12px;color:var(--muted);margin-top:16px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Money</h1>
+    <div class="lead" id="lead">Receivables, pipeline, and repair opportunity for the selected office. Loading…</div>
+
+    <div class="sec-h">What we can see today</div>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="sec-h">Financial statements</div>
+    <div class="locked">
+      <div class="row">
+        <span class="badge" id="intacctBadge">Not connected</span>
+        <div><h3>Revenue, gross margin, and cash come from Sage Intacct</h3>
+          <p id="intacctNote">P&amp;L, gross profit, operating income, and cash collected are financial truth from Sage Intacct. They stay unavailable until the Intacct connection and the office/entity mapping are configured. ServiceTrade receivables above are operational, not final accounting truth.</p></div>
+      </div>
+      <div class="grid">
+        <div class="g"><div class="l">Revenue</div><div class="v">— Intacct</div></div>
+        <div class="g"><div class="l">Gross margin</div><div class="v">— Intacct</div></div>
+        <div class="g"><div class="l">Operating income</div><div class="v">— Intacct</div></div>
+        <div class="g"><div class="l">Cash collected</div><div class="v">— Intacct</div></div>
+      </div>
+    </div>
+    <div class="note" id="note"></div>
+  </div>
+<script>
+"use strict";
+var NAV='app-navigate';
+function office(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
+function op(){var o=office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'&office=all';}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
+function go(tab){try{parent.postMessage({type:NAV,tab:tab},'*');}catch(_){}}
+var KPI=[['ar_outstanding','Accounts receivable','receivables'],['ar_90_plus','AR over 90 days','receivables'],
+  ['open_pipeline','Open pipeline','pipeline'],['repair_opportunity_total','Repair opportunity','deficiencies']];
+function card(m,tab){
+  var cw=m.companyWide?'<span class="tag">company-wide</span>':'<span class="tag">'+esc(m.source)+'</span>';
+  return '<div class="kpi" data-tab="'+esc(tab)+'"><div class="lab">'+esc(m.label)+'</div>'+
+    '<div class="val">'+money(m.value)+'</div>'+cw+'</div>';
+}
+function load(){
+  Promise.all(KPI.map(function(k){return fetch('/api/metrics/'+k[0]+'?period=year'+op()).then(function(r){return r.json();}).then(function(d){return d.ok?{m:d.metric,tab:k[2]}:null;}).catch(function(){return null;});}))
+  .then(function(res){
+    document.getElementById('kpis').innerHTML=res.filter(Boolean).map(function(x){return card(x.m,x.tab);}).join('');
+    var anyCw=res.some(function(x){return x&&x.m.companyWide;});
+    document.getElementById('lead').textContent='Receivables, pipeline, and repair opportunity for '+(office()==='all'?'all offices':office())+'.';
+    document.getElementById('note').textContent=anyCw?'AR is company-wide until Sage Intacct provides office/entity attribution. Pipeline and repair opportunity are office-scoped from ServiceTrade.':'Office-scoped from ServiceTrade. AR is company-wide until Intacct is connected.';
+  });
+  fetch('/api/sources').then(function(r){return r.json();}).then(function(d){
+    var s=(d.sources||[]).find(function(x){return x.key==='intacct';});
+    if(s){document.getElementById('intacctBadge').textContent=s.connected?('Connected · '+s.status):'Not connected';}
+  }).catch(function(){});
+}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(b)go(b.getAttribute('data-tab'));});
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
+load();
+</script>
+</body>
+</html>

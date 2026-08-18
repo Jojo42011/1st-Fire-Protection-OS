@@ -50,14 +50,17 @@
 <script>
 "use strict";
 var NAV='app-navigate';
-var ownerFilter='';
+var ownerFilter=(new URLSearchParams(location.search).get('owner'))||'';
 function office(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
 function officeParam(){var o=office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
 function go(tab){try{parent.postMessage({type:NAV,tab:tab},'*');}catch(_){}}
 var OWNERS=[['','All'],['operations','Operations'],['accounting','Accounting'],['it','IT'],['people','People'],['safety','Safety']];
-var SUBJECT_TAB={office:'deficiencies',employee:'people',company:'receivables',invoice:'receivables',job:'jobs'};
+// Drill from an exception to the underlying record, by category.
+var CAT_TAB={deficiency_aging:'deficiencies',terminated_access:'people',ar_aging:'receivables',
+  handoff_missing_office:'jobs',handoff_missing_contact:'jobs'};
+function drillTab(e){return CAT_TAB[e.category]||({office:'deficiencies',employee:'people',company:'receivables',job:'jobs'})[e.subject_type]||'';}
 
 function renderOwners(){
   document.getElementById('ownerFilters').innerHTML=OWNERS.map(function(o){
@@ -73,9 +76,11 @@ function renderSummary(s){
 }
 function exCard(e){
   var impact = e.financial_impact>0 ? '<span class="tag impact">'+(e.financial_projected?'~':'')+money(e.financial_impact)+(e.financial_projected?' projected':'')+'</span>' : '';
+  var tab=drillTab(e);
+  var openBtn = tab ? '<button data-open="'+esc(tab)+'" data-office="'+esc(e.office||'')+'">Open</button>' : '';
   return '<div class="ex '+esc(e.severity)+'"><div class="h"><div><div class="t">'+esc(e.title)+'</div>'+
     '<div class="d">'+esc(e.description||'')+'</div></div>'+
-    '<div class="acts"><button data-open="'+esc(SUBJECT_TAB[e.subject_type]||'')+'">Open</button>'+
+    '<div class="acts">'+openBtn+
       '<button class="res" data-id="'+e.id+'" data-status="resolved">Resolve</button>'+
       '<button data-id="'+e.id+'" data-status="dismissed">Dismiss</button></div></div>'+
     '<div class="tags"><span class="tag owner">'+esc(e.owner_team||'')+'</span>'+
@@ -100,7 +105,10 @@ function setStatus(id,status){
 document.addEventListener('click',function(e){
   var o=e.target.closest('[data-owner]');if(o){ownerFilter=o.getAttribute('data-owner');renderOwners();load();return;}
   var s=e.target.closest('[data-id]');if(s){setStatus(s.getAttribute('data-id'),s.getAttribute('data-status'));return;}
-  var op=e.target.closest('[data-open]');if(op&&op.getAttribute('data-open')){go(op.getAttribute('data-open'));return;}
+  var op=e.target.closest('[data-open]');if(op&&op.getAttribute('data-open')){
+    var off=op.getAttribute('data-office');
+    if(off){try{parent.postMessage({type:'set-office',office:off},'*');}catch(_){}}
+    go(op.getAttribute('data-open'));return;}
   if(e.target.closest('#refresh')){fetch('/api/exceptions/detect',{method:'POST'}).then(function(){load();});return;}
 });
 window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});

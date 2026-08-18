@@ -86,3 +86,23 @@ test('a user-dismissed exception stays dismissed across re-detection', () => {
   const still = db.prepare(`SELECT status FROM exceptions WHERE id=?`).get(austin.id) as any;
   assert.equal(still.status, 'dismissed');
 });
+
+test('accounting handoff detectors: unattributed jobs (company-wide) + missing contact (per office)', () => {
+  db.exec(`DELETE FROM crm_jobs;`);
+  // completed 2 days ago (well within the 90-day window); date computed in SQL, not a bound literal
+  const jNoOffice = db.prepare(`INSERT INTO crm_jobs (st_id, source, office_name, completed_at, contact_email, contact_phone) VALUES (?, 'servicetrade', NULL, date('now','-2 day'), 'a@b.com', '555')`);
+  for (let i = 0; i < 3; i++) jNoOffice.run('u' + i); // 3 completed jobs with NO office
+  const jNoContact = db.prepare(`INSERT INTO crm_jobs (st_id, source, office_name, completed_at, contact_email, contact_phone) VALUES (?, 'servicetrade', '1st FP Houston, LLC (HOU)', date('now','-2 day'), NULL, NULL)`);
+  for (let i = 0; i < 6; i++) jNoContact.run('h' + i); // 6 Houston jobs with no contact (threshold >=5)
+  detectExceptions();
+  const open = listExceptions(exec, { status: 'open' });
+  const noOffice = open.find((e) => e.category === 'handoff_missing_office');
+  assert.ok(noOffice);
+  assert.equal(noOffice.count, 3);
+  assert.equal(noOffice.office, null);         // company-wide
+  assert.equal(noOffice.owner_team, 'accounting');
+  const noContact = open.find((e) => e.category === 'handoff_missing_contact' && e.office === 'houston');
+  assert.ok(noContact);
+  assert.equal(noContact.count, 6);
+  assert.equal(noContact.owner_team, 'accounting');
+});

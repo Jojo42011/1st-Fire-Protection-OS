@@ -173,6 +173,7 @@ app.get('/scoreboard', page('scoreboard.html'));
 app.get('/office-performance', page('office-performance.html'));
 app.get('/exceptions', page('exceptions.html'));
 app.get('/reports-builder', page('reports-builder.html'));
+app.get('/money', page('money.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)

@@ -30,7 +30,8 @@ interface Detected {
 export function detectExceptions(): DetectResult[] {
   const db = getDb();
   const results: DetectResult[] = [];
-  for (const detector of [detectDeficiencyAging, detectTerminatedAccess, detectArAging]) {
+  const detectors = [detectDeficiencyAging, detectTerminatedAccess, detectArAging, detectUnattributedJobs, detectMissingContact];
+  for (const detector of detectors) {
     let found: Detected[] = [];
     try { found = detector(db); } catch { found = []; }
     results.push(reconcile(db, detector.category, found));
@@ -123,6 +124,52 @@ function detectArAging(db: any): Detected[] {
   }];
 }
 detectArAging.category = 'ar_aging';
+
+/**
+ * Accounting handoff: jobs completed in the last 90 days with NO office/entity assigned. Accounting
+ * cannot bill to the right LLC until the job is attributed. Company-wide roll-up (they have no office
+ * by definition).
+ */
+function detectUnattributedJobs(db: any): Detected[] {
+  const row = db.prepare(
+    `SELECT COUNT(*) n FROM crm_jobs
+       WHERE source='servicetrade' AND completed_at IS NOT NULL
+         AND julianday('now') - julianday(completed_at) <= 90
+         AND (office_name IS NULL OR office_name = '')`
+  ).get() as { n: number };
+  if (!row || row.n === 0) return [];
+  return [{
+    dedupe_key: 'handoff_no_office:company', category: 'handoff_missing_office', source_system: 'servicetrade', office: null,
+    subject_type: 'company', subject_id: null,
+    title: `${row.n} completed job${row.n === 1 ? '' : 's'} have no office/entity assigned`,
+    description: `${row.n} job${row.n === 1 ? '' : 's'} completed in the last 90 days carry no ServiceTrade assignedOffice, so accounting cannot bill them to the correct LLC without research.`,
+    severity: row.n >= 20 ? 'high' : 'medium', financial_impact: 0, financial_projected: 0, owner_team: 'accounting', count: row.n,
+  }];
+}
+detectUnattributedJobs.category = 'handoff_missing_office';
+
+/**
+ * Accounting handoff: completed jobs (last 90 days) with no customer contact email OR phone, per
+ * office. Collections/billing can't reach the customer. Grouped by office so each branch owns its own.
+ */
+function detectMissingContact(db: any): Detected[] {
+  const rows = db.prepare(
+    `SELECT os_office_key(office_name) k, COUNT(*) n FROM crm_jobs
+       WHERE source='servicetrade' AND completed_at IS NOT NULL
+         AND julianday('now') - julianday(completed_at) <= 90
+         AND COALESCE(contact_email,'')='' AND COALESCE(contact_phone,'')=''
+         AND office_name IS NOT NULL AND office_name != ''
+       GROUP BY k HAVING n >= 5`
+  ).all() as { k: string; n: number }[];
+  return rows.filter((r) => r.k).map((r) => ({
+    dedupe_key: `handoff_no_contact:${r.k}`, category: 'handoff_missing_contact', source_system: 'servicetrade', office: r.k,
+    subject_type: 'office', subject_id: r.k,
+    title: `${r.n} completed jobs missing customer contact`,
+    description: `${officeLabel(r.k)} has ${r.n} jobs completed in the last 90 days with no customer email or phone on file, so billing and collections cannot reach the customer.`,
+    severity: 'medium', financial_impact: 0, financial_projected: 0, owner_team: 'accounting', count: r.n,
+  }));
+}
+detectMissingContact.category = 'handoff_missing_contact';
 
 /* ── read/scope + actions ── */
 
