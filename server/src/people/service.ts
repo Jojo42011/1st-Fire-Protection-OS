@@ -318,6 +318,73 @@ function displayName(h: NewHire): string {
   return h.preferred_name || [h.legal_first_name, h.legal_last_name].filter(Boolean).join(' ') || 'New hire';
 }
 
+const empName = (e: any): string => e.preferred_name || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || `Employee ${e.id}`;
+
+/** People "needs attention" counts — current employee risk, prioritized over configuration. */
+export function peopleAttention(): any {
+  const db = getDb();
+  const n = (sql: string, ...a: any[]) => { try { return (db.prepare(sql).get(...a) as { c: number }).c || 0; } catch { return 0; } };
+  return {
+    startingSoon: n(`SELECT COUNT(*) c FROM employees WHERE employment_status='onboarding' AND anticipated_start_date IS NOT NULL AND julianday(anticipated_start_date)-julianday('now') BETWEEN -1 AND 7`),
+    blockedOnboarding: n(`SELECT COUNT(DISTINCT w.employee_id) c FROM people_workflows w JOIN people_tasks t ON t.workflow_id=w.id WHERE w.kind='onboarding' AND w.status='open' AND t.status='blocked'`),
+    missingCredentials: n(`SELECT COUNT(*) c FROM employee_credentials WHERE status IN ('required','expired')`),
+    offboardingWithAccess: n(`SELECT COUNT(DISTINCT e.id) c FROM employees e JOIN employee_access a ON a.employee_id=e.id WHERE e.employment_status IN ('notice','offboarding','terminated') AND a.status IN ('provisioned','approved')`),
+    unreturnedAssets: n(`SELECT COUNT(*) c FROM employee_assets a JOIN employees e ON e.id=a.employee_id WHERE e.employment_status IN ('notice','offboarding','terminated') AND a.status IN ('assigned','pending_return')`),
+  };
+}
+
+/** Employees starting within `days`, each with their Day-1 readiness (most urgent first). */
+export function startingSoon(days = 7): any[] {
+  const db = getDb();
+  const emps = db.prepare(
+    `SELECT id, preferred_name, legal_first_name, legal_last_name, job_position, office, anticipated_start_date
+       FROM employees WHERE employment_status='onboarding' AND anticipated_start_date IS NOT NULL
+         AND julianday(anticipated_start_date)-julianday('now') BETWEEN -1 AND ?
+      ORDER BY anticipated_start_date ASC`
+  ).all(days) as any[];
+  return emps.map((e) => {
+    const wf = db.prepare(`SELECT id FROM people_workflows WHERE employee_id=? AND kind='onboarding' ORDER BY id DESC LIMIT 1`).get(e.id) as { id: number } | undefined;
+    const readiness = wf ? computeReadiness(wf.id) : null;
+    const d = Math.round((new Date(e.anticipated_start_date).getTime() - Date.now()) / 86400000);
+    return { id: e.id, name: empName(e), job_position: e.job_position, office: e.office, start: e.anticipated_start_date, daysUntil: d, readiness: readiness ? readiness.overall : 'unknown', categories: readiness ? readiness.categories : [] };
+  });
+}
+
+/** Assets by view: assigned | available | pending_return | missing. Office/employee context included. */
+export function listAssets(view = 'assigned'): any[] {
+  const db = getDb();
+  let where = '1=1';
+  if (view === 'assigned') where = `a.status='assigned'`;
+  else if (view === 'available') where = `a.status='available' OR a.employee_id IS NULL`;
+  else if (view === 'pending_return') where = `a.status='pending_return'`;
+  else if (view === 'missing') where = `a.status IN ('missing','damaged')`;
+  try {
+    return (db.prepare(
+      `SELECT a.id, a.asset_type, a.identifier, a.status, a.owner, a.assigned_at,
+              e.id AS employee_id, e.preferred_name, e.legal_first_name, e.legal_last_name, e.office
+         FROM employee_assets a LEFT JOIN employees e ON e.id=a.employee_id WHERE ${where}
+        ORDER BY a.status, a.asset_type LIMIT 300`
+    ).all() as any[]).map((a) => ({ id: a.id, type: a.asset_type, identifier: a.identifier, status: a.status, owner: a.owner, assigned_at: a.assigned_at, employee: a.employee_id ? empName(a) : null, office: a.office || null }));
+  } catch { return []; }
+}
+
+/** Credentials by view: expiring | expired | missing | all. */
+export function listCredentials(view = 'expiring'): any[] {
+  const db = getDb();
+  let where = '1=1';
+  if (view === 'expiring') where = `c.expires_at IS NOT NULL AND julianday(c.expires_at)-julianday('now') BETWEEN 0 AND 60 AND c.status!='waived'`;
+  else if (view === 'expired') where = `c.status='expired' OR (c.expires_at IS NOT NULL AND c.expires_at < date('now') AND c.status!='waived')`;
+  else if (view === 'missing') where = `c.status='required'`;
+  try {
+    return (db.prepare(
+      `SELECT c.id, c.credential_type, c.status, c.expires_at,
+              e.id AS employee_id, e.preferred_name, e.legal_first_name, e.legal_last_name, e.office
+         FROM employee_credentials c JOIN employees e ON e.id=c.employee_id WHERE ${where}
+        ORDER BY (c.expires_at IS NULL), c.expires_at ASC LIMIT 300`
+    ).all() as any[]).map((c) => ({ id: c.id, type: c.credential_type, status: c.status, expires_at: c.expires_at, employee: empName(c), office: c.office || null }));
+  } catch { return []; }
+}
+
 /* ─────────────────────────── BambooHR roster import ─────────────────────────── */
 
 /** The subset of employees columns a Bamboo row maps to, plus the status Bamboo reports. */

@@ -41,6 +41,9 @@ router.get('/api/people/catalog', requirePeople(), (_req, res) => {
   res.json({ ...catalogSnapshot(), vendorPortals: vendors, bambooConnected: bambooConfigured() });
 });
 router.get('/api/people/overview', requirePeople(), (_req, res) => res.json(svc.overview()));
+router.get('/api/people/attention', requirePeople(), (_req, res) => res.json({ ok: true, attention: svc.peopleAttention(), startingSoon: svc.startingSoon(7) }));
+router.get('/api/people/assets', requirePeople(), (req, res) => res.json({ ok: true, assets: svc.listAssets((req.query.view as string) || 'assigned') }));
+router.get('/api/people/credentials', requirePeople(), (req, res) => res.json({ ok: true, credentials: svc.listCredentials((req.query.view as string) || 'expiring') }));
 
 /* ─────────────────────────── positions + role templates ─────────────────────────── */
 router.get('/api/people/positions', requirePeople(), (_req, res) => {

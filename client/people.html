@@ -73,9 +73,11 @@ var TABS=[
   {key:'overview',label:'Overview'},
   {key:'onboarding',label:'Onboarding'},
   {key:'employees',label:'Employees'},
+  {key:'assets',label:'Assets'},
+  {key:'credentials',label:'Credentials'},
+  {key:'offboarding',label:'Offboarding'},
   {key:'tasks',label:'My Tasks'},
   {key:'approvals',label:'Approvals'},
-  {key:'offboarding',label:'Offboarding'},
   {key:'templates',label:'Role Templates'}
 ];
 var cur='overview';
@@ -122,17 +124,29 @@ function go(k){ cur=k; renderTabs(); var v=document.getElementById('view'); v.in
 /* ---------- views ---------- */
 var VIEWS={};
 VIEWS.overview=function(v){
-  j('/api/people/overview').then(function(r){
-    var o=r.body||{};
-    v.innerHTML='<div class="kpis">'+
-      kpi('In onboarding',o.onboarding)+kpi('Active',o.active)+kpi('Offboarding',o.offboarding)+kpi('Terminated',o.terminated)+
-    '</div>'+
-    '<div class="kpis" style="margin-top:14px">'+
-      kpi('Open tasks',o.openTasks)+kpi('Awaiting approval',o.awaitingApproval)+kpi('Blocked',o.blocked)+kpi('Templates to review',o.templatesUnreviewed)+
-    '</div>'+
-    '<p class="muted" style="margin-top:14px">'+(o.active===0&&o.onboarding===0?'No employees in the lifecycle yet. Start with <span class="link" onclick="go(\'onboarding\')">Onboarding</span>, or import from BambooHR (coming next).':'Use <span class="link" onclick="go(\'tasks\')">My Tasks</span> to work your queue and <span class="link" onclick="go(\'employees\')">Employees</span> to see each footprint.')+'</p>';
+  Promise.all([j('/api/people/overview'),j('/api/people/attention')]).then(function(res){
+    var o=res[0].body||{}; var A=(res[1].ok?res[1].body:{})||{}; var att=A.attention||{}; var soon=A.startingSoon||[];
+    // 1) Needs attention — current employee risk first (config is demoted below).
+    var cards=[];
+    if(att.startingSoon>0) cards.push(attn('warn',att.startingSoon+' starting within 7 days','Confirm Day-1 readiness before they arrive','onboarding'));
+    if(att.blockedOnboarding>0) cards.push(attn('bad',att.blockedOnboarding+' onboarding blocked','A dependency or approval is holding Day-1 readiness','tasks'));
+    if(att.offboardingWithAccess>0) cards.push(attn('bad',att.offboardingWithAccess+' leaving/left still have access','Security and license exposure until revoked','offboarding'));
+    if(att.unreturnedAssets>0) cards.push(attn('warn',att.unreturnedAssets+' assets not returned','Company property with departing employees','assets'));
+    if(att.missingCredentials>0) cards.push(attn('warn',att.missingCredentials+' credentials missing or expired','Required certifications not on file','credentials'));
+    var attnHtml = cards.length? '<div class="kpis" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">'+cards.join('')+'</div>' : '<div class="card card-pad"><p class="muted">Nothing needs attention in the lifecycle right now.</p></div>';
+    // 2) Starting next 7 days with Day-1 readiness
+    var soonHtml = soon.length? '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>Starting next 7 days</h2></div><table><thead><tr><th>Name</th><th>Role</th><th>Office</th><th>Starts</th><th>Day-1</th></tr></thead><tbody>'+
+      soon.map(function(s){var tone=s.readiness==='ready'?'completed':s.readiness==='blocked'?'awaiting_approval':'pending';
+        return '<tr style="cursor:pointer" onclick="empDetail('+s.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(s.name)+'</td><td>'+esc(s.job_position||'')+'</td><td>'+esc(s.office||'')+'</td><td>'+esc(s.start||'')+(s.daysUntil!=null?' <span class="muted">('+s.daysUntil+'d)</span>':'')+'</td><td><span class="st '+tone+'">'+esc(human(s.readiness))+'</span></td></tr>';}).join('')+
+      '</tbody></table></div>' : '';
+    // 3) Lifecycle counts (secondary) + config note (demoted)
+    var counts='<div class="kpis" style="margin-top:14px">'+kpi('Active',o.active)+kpi('In onboarding',o.onboarding)+kpi('Offboarding',o.offboarding)+kpi('Open tasks',o.openTasks)+'</div>';
+    var cfg='<p class="muted" style="margin-top:14px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="go(\'templates\')">Role Templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My Tasks</span>.</p>';
+    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+'<div class="sec" style="margin:20px 0 10px">Lifecycle</div>'+counts+cfg;
   });
 };
+function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:pointer;border-left:4px solid '+(tone==='bad'?'#d64545':tone==='warn'?'#c9821a':'#7c869b')+'" onclick="go(\''+tab+'\')"><div class="val" style="font-size:15px;line-height:1.3">'+esc(title)+'</div><div class="lab" style="text-transform:none;font-weight:500;margin-top:4px">'+esc(why)+'</div></div>';}
+function goGlobal(tab){try{parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(_){}}
 function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+'</div><div class="val">'+(val==null?'0':esc(val))+'</div></div>';}
 
 VIEWS.employees=function(v){
@@ -167,36 +181,64 @@ function importBamboo(){
     setTimeout(function(){var m=document.getElementById('bhMsg');if(m){m.innerHTML='<div class="card card-pad" style="margin-bottom:12px;background:var(--panel-alt,var(--fill))"><p><b>Imported '+o.total+' from BambooHR.</b> '+esc(summary)+'.</p></div>';}},60);
   });
 }
+var _emp=null, _empTab='overview';
 function empDetail(id){
   var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>';
   j('/api/people/employees/'+id).then(function(r){
     if(!r.ok){v.innerHTML='<p class="muted">Not found.</p>';return;}
-    var d=r.body, e=d.employee;
-    var rd=d.readiness;
-    v.innerHTML='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
-      '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</h2><p class="muted">'+esc(e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
-        (rd?'<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">'+rd.categories.map(function(c){return '<span class="pill '+c.state+'">'+esc(c.label)+' '+(c.state==='ready'?'✓':c.state==='blocked'?'✕':'⚠')+'</span>';}).join('')+'</div>':'')+
-      '</div>'+
-      section('Identity & access', d.access, function(a){return '<tr><td>'+esc(a.label||a.system)+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['System','Status','Owner'],'No access recorded.')+
-      section('Assets', d.assets, function(a){return '<tr><td>'+esc(human(a.asset_type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['Asset','Status','Owner'],'No assets assigned.')+
-      section('Certifications', d.credentials, function(c){return '<tr><td>'+esc(human(c.credential_type))+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'')+'</td></tr>';},['Credential','Status','Expires'],'None tracked.')+
-      section('Lifecycle history', d.history, function(h){return '<tr><td style="white-space:nowrap;color:var(--faint)">'+esc(h.at)+'</td><td>'+esc(human(h.action))+'</td><td class="muted">'+esc(h.detail||'')+'</td></tr>';},['When','Event','Detail'],'No history.')+
-      (e.employment_status==='active'?'<div style="margin-top:14px"><button class="btn btn-sm" onclick="go(\'offboarding\')">Start offboarding →</button></div>':'');
+    _emp=r.body; _empTab='overview'; renderEmp();
   });
 }
+function renderEmp(){
+  var v=document.getElementById('view'); var d=_emp, e=d.employee, rd=d.readiness;
+  var activeAccess=(d.access||[]).filter(function(a){return a.status==='provisioned'||a.status==='approved';}).length;
+  var critical = (e.employment_status==='terminated'||e.employment_status==='offboarding'||e.employment_status==='notice') && activeAccess>0;
+  var name=e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||''));
+  var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['credentials','Credentials'],['history','History']];
+  var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
+    '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(name)+'</h2><p class="muted">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
+    (critical?'<div class="card-pad" style="margin-top:10px;background:#fbeaea;border-radius:8px;padding:10px 12px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted"> — this person is leaving/left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
+    '</div>'+
+    '<div class="ptabs" style="margin-top:12px">'+tabs.map(function(t){return '<button class="ptab'+(t[0]===_empTab?' on':'')+'" onclick="empTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  var body='';
+  if(_empTab==='overview'){
+    body=(rd?'<div class="card card-pad"><div class="row" style="gap:8px;flex-wrap:wrap">'+rd.categories.map(function(c){return '<span class="pill '+c.state+'">'+esc(c.label)+' '+(c.state==='ready'?'✓':c.state==='blocked'?'✕':'⚠')+'</span>';}).join('')+'</div></div>':'')+
+      section('Recent activity', (d.history||[]).slice(0,6), function(h){return '<tr><td style="white-space:nowrap;color:var(--faint)">'+esc(h.at)+'</td><td>'+esc(human(h.action))+'</td><td class="muted">'+esc(h.detail||'')+'</td></tr>';},['When','Event','Detail'],'No history.')+
+      (e.employment_status==='active'?'<div style="margin-top:14px"><button class="btn btn-sm" onclick="go(\'offboarding\')">Start offboarding →</button></div>':'');
+  } else if(_empTab==='access'){
+    body=section('Identity & access', d.access, function(a){return '<tr><td>'+esc(a.label||a.system)+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['System','Status','Owner'],'No access recorded.');
+  } else if(_empTab==='assets'){
+    body=section('Assets', d.assets, function(a){return '<tr><td>'+esc(human(a.asset_type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['Asset','Status','Owner'],'No assets assigned.');
+  } else if(_empTab==='credentials'){
+    body=section('Certifications & credentials', d.credentials, function(c){return '<tr><td>'+esc(human(c.credential_type))+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'')+'</td></tr>';},['Credential','Status','Expires'],'None tracked.');
+  } else {
+    body=section('Lifecycle history', d.history, function(h){return '<tr><td style="white-space:nowrap;color:var(--faint)">'+esc(h.at)+'</td><td>'+esc(human(h.action))+'</td><td class="muted">'+esc(h.detail||'')+'</td></tr>';},['When','Event','Detail'],'No history.');
+  }
+  v.innerHTML=header+body;
+}
+function empTab(t){ _empTab=t; renderEmp(); }
 function section(title,rows,rowFn,heads,empty){
   return '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>'+esc(title)+'</h2></div>'+
     (rows&&rows.length?'<table><thead><tr>'+heads.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(rowFn).join('')+'</tbody></table>':'<div class="card-pad"><p class="muted">'+esc(empty)+'</p></div>')+'</div>';
 }
 
-VIEWS.tasks=function(v){ renderTaskList(v,'/api/people/tasks?mine=1&status=open','Your queue','Nothing in your queue. When onboarding or offboarding routes work to your team, it lands here.'); };
-VIEWS.approvals=function(v){ renderTaskList(v,'/api/people/tasks?mine=1&status=open','Approvals you can decide','No approvals waiting on you.',true); };
-function renderTaskList(v,url,title,empty,approvalsOnly){
+// People tasks and approvals are part of ONE company-wide system (Work > My Tasks / Approvals),
+// not a divergent People-only queue. These tabs surface the People slice and link to the unified view.
+VIEWS.tasks=function(v){
+  renderTaskList(v,'/api/people/tasks?mine=1&status=open','Your People queue','Nothing in your People queue right now.',false,
+    'These also appear in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My Tasks</span> alongside every other kind of work.');
+};
+VIEWS.approvals=function(v){
+  renderTaskList(v,'/api/people/tasks?mine=1&status=open','People approvals you can decide','No People approvals waiting on you.',true,
+    'Access, spend and other approvals live together in company-wide <span class="link" onclick="goGlobal(\'approve\')">Approvals</span>.');
+};
+function renderTaskList(v,url,title,empty,approvalsOnly,linkNote){
   j(url).then(function(r){
+    var note=linkNote?'<div class="card card-pad" style="margin-bottom:12px;background:var(--panel-alt,var(--fill))"><p class="muted">'+linkNote+'</p></div>':'';
     var tasks=((r.body&&r.body.tasks)||[]);
     if(approvalsOnly) tasks=tasks.filter(function(t){return t.kind==='approval';});
-    if(!tasks.length){ v.innerHTML='<div class="card card-pad"><p class="muted">'+esc(empty)+'</p></div>'; return; }
-    v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>'+esc(title)+'</h2><span style="flex:1"></span><span class="muted">'+tasks.length+'</span></div><table><thead><tr><th>Task</th><th>For</th><th>Team</th><th>Status</th><th></th></tr></thead><tbody>'+
+    if(!tasks.length){ v.innerHTML=note+'<div class="card card-pad"><p class="muted">'+esc(empty)+'</p></div>'; return; }
+    v.innerHTML=note+'<div class="card card-clip"><div class="card-head"><h2>'+esc(title)+'</h2><span style="flex:1"></span><span class="muted">'+tasks.length+'</span></div><table><thead><tr><th>Task</th><th>For</th><th>Team</th><th>Status</th><th></th></tr></thead><tbody>'+
       tasks.map(function(t){
         var name=(t.preferred_name||((t.legal_first_name||'')+' '+(t.legal_last_name||''))).trim();
         var actions='';
@@ -237,11 +279,38 @@ VIEWS.templates=function(v){
     var rows=(r.body&&r.body.positions)||[];
     v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>Job positions → role templates</h2><span style="flex:1"></span><span class="muted">'+rows.length+' positions</span></div>'+
       '<div class="card-pad" style="padding-top:0"><p class="muted">Defaults are configured iteratively. New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.</p></div>'+
-      '<table><thead><tr><th>Position</th><th>Template</th></tr></thead><tbody>'+rows.map(function(p){
-        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td></tr>';
+      '<table><thead><tr><th>Position</th><th>Template</th><th>Updated</th></tr></thead><tbody>'+rows.map(function(p){
+        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td><td class="muted">'+esc((p.updated_at||'').slice(0,10)||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
   });
 };
+
+var _assetView='assigned';
+VIEWS.assets=function(v){
+  var views=[['assigned','Assigned'],['pending_return','Pending return'],['available','Available'],['missing','Missing']];
+  j('/api/people/assets?view='+_assetView).then(function(r){
+    var rows=(r.body&&r.body.assets)||[];
+    var tabs='<div class="ptabs">'+views.map(function(t){return '<button class="ptab'+(t[0]===_assetView?' on':'')+'" onclick="setAssetView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+    var body=rows.length?'<div class="card card-clip"><table><thead><tr><th>Asset</th><th>Assigned to</th><th>Office</th><th>Status</th><th>Owner</th></tr></thead><tbody>'+
+      rows.map(function(a){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(a.type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td>'+esc(a.employee||'—')+'</td><td>'+esc(a.office||'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';}).join('')+'</tbody></table></div>'
+      :'<div class="card card-pad"><p class="muted">No assets in this view.</p></div>';
+    v.innerHTML=tabs+body;
+  });
+};
+function setAssetView(x){_assetView=x;go('assets');}
+var _credView='expiring';
+VIEWS.credentials=function(v){
+  var views=[['expiring','Expiring soon'],['expired','Expired'],['missing','Missing'],['all','All']];
+  j('/api/people/credentials?view='+_credView).then(function(r){
+    var rows=(r.body&&r.body.credentials)||[];
+    var tabs='<div class="ptabs">'+views.map(function(t){return '<button class="ptab'+(t[0]===_credView?' on':'')+'" onclick="setCredView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+    var body=rows.length?'<div class="card card-clip"><table><thead><tr><th>Credential</th><th>Employee</th><th>Office</th><th>Status</th><th>Expires</th></tr></thead><tbody>'+
+      rows.map(function(c){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(c.type))+'</td><td>'+esc(c.employee||'')+'</td><td>'+esc(c.office||'')+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'—')+'</td></tr>';}).join('')+'</tbody></table></div>'
+      :'<div class="card card-pad"><p class="muted">Nothing in this view.</p></div>';
+    v.innerHTML=tabs+body;
+  });
+};
+function setCredView(x){_credView=x;go('credentials');}
 
 VIEWS.onboarding=function(v){
   if(!has('manager')&&!has('hr')){ v.innerHTML='<div class="card card-pad"><p class="muted">Onboarding is initiated by a hiring manager or HR. You have read access only.</p></div>'; return; }
