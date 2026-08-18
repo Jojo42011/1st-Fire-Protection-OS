@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Tasks · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .tk{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:12px 14px;margin-bottom:8px}
+  .tk .stripe{width:4px;align-self:stretch;border-radius:3px;flex:none}
+  .tk.overdue .stripe{background:var(--os-bad)}.tk.blocked .stripe{background:var(--os-warn)}.tk.needs_you .stripe{background:var(--os-accent)}.tk.upcoming .stripe{background:var(--os-neutral)}.tk.completed .stripe{background:var(--os-good)}
+  .tk .body{flex:1;min-width:0}
+  .tk .subj{font-weight:700;font-size:14px;color:var(--ink)}
+  .tk .det{font-weight:500;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tk .tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center}
+  .tk .acts{display:flex;gap:6px;flex:none}
+  .tk .acts button{font-weight:700;font-size:12px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .tk .acts .open{color:#fff;background:var(--os-accent);border-color:transparent}
+  .grpttl{font-weight:800;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;display:flex;gap:8px;align-items:center}
+  .grpttl .n{color:var(--ink-3)}
+  .segbar{display:flex;gap:6px;margin:14px 0}
+</style>
+</head>
+<body>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div>
+        <h1>My Tasks</h1>
+        <div class="os-q">What you need to do, across the whole company.</div>
+      </div>
+    </div>
+    <div class="segbar os-filters" id="scope">
+      <button class="os-fb on" data-scope="mine">Mine</button>
+      <button class="os-fb" data-scope="team">My team</button>
+      <button class="os-fb" data-scope="all">Everything I can see</button>
+    </div>
+    <div id="summary" class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
+    <div id="list"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var scope='mine';
+var GROUPS=[['overdue','Overdue'],['needs_you','Needs you now'],['blocked','Blocked / waiting'],['upcoming','Upcoming'],['completed','Completed recently']];
+function scopeParam(){ return scope==='mine'?'mine=1':scope==='team'?'':''; } // 'all' = no filter; team handled server-side later
+function load(){
+  var list=document.getElementById('list'); list.innerHTML=OS.skeletonKpis(1);
+  var q='/api/work/tasks'+(scope==='mine'?'?mine=1':'');
+  fetch(q).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ list.innerHTML=OS.errorBox('Could not load tasks.'); return; }
+    renderSummary(d.tasks);
+    if(!d.tasks.length){ list.innerHTML=OS.empty('No tasks '+(scope==='mine'?'assigned to you':'in view')+'. You are clear.','✓'); return; }
+    var byGroup={}; d.tasks.forEach(function(t){ (byGroup[t.group]=byGroup[t.group]||[]).push(t); });
+    var html='';
+    GROUPS.forEach(function(g){ var items=byGroup[g[0]]; if(!items||!items.length) return;
+      html+='<div class="grpttl">'+g[1]+' <span class="n">· '+items.length+'</span></div>';
+      html+=items.map(taskRow).join('');
+    });
+    list.innerHTML=html;
+  }).catch(function(){ list.innerHTML=OS.errorBox('Could not load tasks.'); });
+}
+function renderSummary(tasks){
+  var by={overdue:0,needs_you:0,blocked:0,upcoming:0};
+  tasks.forEach(function(t){ if(by[t.group]!=null) by[t.group]++; });
+  document.getElementById('summary').innerHTML=[
+    ['Overdue',by.overdue],['Needs you',by.needs_you],['Blocked',by.blocked],['Upcoming',by.upcoming]
+  ].map(function(c){ return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+c[1]+'</div></div>'; }).join('');
+}
+function taskRow(t){
+  var owner=t.ownerTeam?OS.ownerTag(t.ownerTeam):'';
+  var office=t.officeLabel&&t.officeLabel!=='Unassigned'?OS.officeTag(t.officeLabel):'';
+  var due=t.dueDate?'<span class="os-tag">due '+OS.date(t.dueDate)+'</span>':'';
+  var blockedPill=t.blocked?OS.pill(t.blockedReason||'blocked','warn'):'';
+  var openBtn=t.related?'<button class="open" data-tab="'+OS.esc(t.related.tab)+'"'+(t.related.office?' data-office="'+OS.esc(t.related.office)+'"':'')+'>Open</button>':'';
+  return '<div class="tk '+OS.esc(t.group)+'"><span class="stripe"></span><div class="body">'+
+    '<div class="subj">'+OS.esc(t.subject)+'</div>'+
+    (t.detail?'<div class="det">'+OS.esc(t.detail)+'</div>':'')+
+    '<div class="tags">'+owner+office+due+blockedPill+'<span class="os-tag">'+OS.esc(t.source)+'</span></div></div>'+
+    '<div class="acts">'+openBtn+'</div></div>';
+}
+document.getElementById('scope').addEventListener('click',function(e){
+  var b=e.target.closest('[data-scope]'); if(!b) return;
+  scope=b.getAttribute('data-scope');
+  [].forEach.call(this.querySelectorAll('.os-fb'),function(x){x.classList.toggle('on',x===b);});
+  load();
+});
+OS.ready(function(){ load(); });
+OS.onChange(load);
+</script>
+</body>
+</html>
