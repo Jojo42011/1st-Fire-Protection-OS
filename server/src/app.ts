@@ -178,6 +178,8 @@ app.get('/reports-builder', page('reports-builder.html'));
 app.get('/money', page('money.html'));
 app.get('/access', page('access.html'));
 app.get('/my-tasks', page('my-tasks.html'));
+app.get('/receivables', page('receivables.html'));
+app.get('/close', page('close.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)

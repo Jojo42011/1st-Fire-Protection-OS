@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Receivables · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .aging{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px}
+  @media(max-width:640px){.aging{grid-template-columns:repeat(2,1fr)}}
+  .ab{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:12px 13px;cursor:pointer;text-align:left}
+  .ab:hover{border-color:var(--border-strong)}
+  .ab .bl{font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;color:var(--muted)}
+  .ab .bv{font-weight:800;font-size:18px;color:var(--ink);margin-top:5px;font-variant-numeric:tabular-nums}
+  .ab .bc{font-weight:600;font-size:11px;color:var(--ink-3);margin-top:2px}
+  .ab.hot .bv{color:var(--os-bad)}
+  .ab .track{height:6px;background:var(--fill);border-radius:3px;margin-top:8px;overflow:hidden}
+  .ab .fill{height:100%;border-radius:3px;background:var(--os-neutral)}
+  .ab.hot .fill{background:var(--os-bad)}
+</style>
+</head>
+<body>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Receivables</h1><div class="os-q">What we have earned but not collected.</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip">Company-wide · office attribution pending Intacct</span></div></div>
+    </div>
+    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
+    <div class="os-sec">AR aging <span class="n">· click a bucket to filter</span></div>
+    <div class="aging" id="aging"></div>
+    <div class="os-sec">Collection queue <span class="n" id="qn"></span></div>
+    <div class="os-filters" id="agefilter" style="margin-bottom:10px"></div>
+    <div id="queue"></div>
+    <div class="os-q" style="margin-top:14px">ServiceTrade / invoice data is operational receivables, not final GL truth. Collected figures and office attribution arrive with Sage Intacct.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var INV=[], agingFilter='';
+var BUCKETS=[['current','Current',function(d){return d<=0;}],['1-30','1–30',function(d){return d>0&&d<=30;}],
+  ['31-60','31–60',function(d){return d>30&&d<=60;}],['61-90','61–90',function(d){return d>60&&d<=90;}],
+  ['90plus','90+',function(d){return d>90;}]];
+function unpaid(){ return INV.filter(function(i){return i.status!=='paid';}); }
+function load(){
+  fetch('/api/invoices').then(function(r){return r.json();}).then(function(d){
+    INV=(d.invoices||[]);
+    renderKpis(d.summary);
+    renderAging();
+    renderQueue();
+  }).catch(function(){document.getElementById('queue').innerHTML=OS.errorBox('Could not load receivables.');});
+}
+function renderKpis(summary){
+  var up=unpaid();
+  var totalAR=up.reduce(function(s,i){return s+(i.amount||0);},0);
+  var ar90=up.filter(function(i){return (i.days_overdue||0)>90;}).reduce(function(s,i){return s+(i.amount||0);},0);
+  var dueSoon=up.filter(function(i){var d=i.days_overdue||0;return d<=0 && d>-8;}).reduce(function(s,i){return s+(i.amount||0);},0);
+  var collected30=INV.filter(function(i){return i.status==='paid'&&i.paid_at&&(Date.now()-new Date(i.paid_at).getTime())/86400000<=30;}).reduce(function(s,i){return s+(i.amount||0);},0);
+  document.getElementById('kpis').innerHTML=[
+    ['Total AR',OS.money(totalAR)],['Over 90 days',OS.money(ar90)],['Due within 7 days',OS.money(dueSoon)],['Collected (30d)',OS.money(collected30)]
+  ].map(function(c,i){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val"'+(i===1?' style="color:var(--os-bad)"':'')+'>'+c[1]+'</div></div>';}).join('');
+}
+function renderAging(){
+  var up=unpaid(); var max=1;
+  var buckets=BUCKETS.map(function(b){ var rows=up.filter(function(i){return b[2](i.days_overdue||0);});
+    var amt=rows.reduce(function(s,i){return s+(i.amount||0);},0); if(amt>max)max=amt; return {key:b[0],label:b[1],amt:amt,n:rows.length}; });
+  document.getElementById('aging').innerHTML=buckets.map(function(b){
+    var hot=b.key==='90plus'||b.key==='61-90';
+    return '<button class="ab'+(hot?' hot':'')+(agingFilter===b.key?' on':'')+'" data-bucket="'+b.key+'"><div class="bl">'+b.label+'</div>'+
+      '<div class="bv">'+OS.money(b.amt)+'</div><div class="bc">'+b.n+' invoice'+(b.n===1?'':'s')+'</div>'+
+      '<div class="track"><span class="fill" style="width:'+Math.round((b.amt/max)*100)+'%"></span></div></button>';
+  }).join('');
+  // aging filter reset button
+  document.getElementById('agefilter').innerHTML = agingFilter?('<button class="os-fb on" data-bucket="">Clear filter ('+ (BUCKETS.filter(function(b){return b[0]===agingFilter;})[0]||['',''])[1] +')</button>'):'';
+}
+function renderQueue(){
+  var up=unpaid();
+  var b=BUCKETS.filter(function(x){return x[0]===agingFilter;})[0];
+  if(b) up=up.filter(function(i){return b[2](i.days_overdue||0);});
+  // prioritize: 90+ first, then by amount
+  up.sort(function(a,c){ var ao=(a.days_overdue||0)>90?0:1, co=(c.days_overdue||0)>90?0:1; return ao-co || (c.amount-a.amount); });
+  document.getElementById('qn').textContent='· '+up.length;
+  if(!up.length){ document.getElementById('queue').innerHTML=OS.empty('No open invoices in this view.','✓'); return; }
+  var cols=[
+    {as:'customer',label:'Customer',strong:true},
+    {as:'amount',label:'Amount',kind:'money'},
+    {as:'age',label:'Overdue',render:function(v,r){var d=r.days_overdue||0; return d>90?OS.pill(d+'d','bad'):d>0?OS.pill(d+'d','warn'):OS.pill('current','neutral');}},
+    {as:'contact',label:'Last contact',render:function(v,r){return r.last_reminder_at?OS.date(r.last_reminder_at):'<span class="muted">never</span>';}},
+    {as:'status',label:'Status',render:function(v,r){return OS.esc(r.status);}},
+    {as:'act',label:'',render:function(v,r){return '<button class="os-fb" data-remind="'+r.id+'">Draft reminder</button> <button class="os-fb" data-paid="'+r.id+'">Mark paid</button>';}}
+  ];
+  document.getElementById('queue').innerHTML=OS.table(cols, up.map(function(i){return {customer:i.customer,amount:i.amount,days_overdue:i.days_overdue,last_reminder_at:i.last_reminder_at,status:i.status,id:i.id};}), {});
+}
+document.addEventListener('click',function(e){
+  var ab=e.target.closest('[data-bucket]'); if(ab){ agingFilter=ab.getAttribute('data-bucket'); renderAging(); renderQueue(); return; }
+  var rem=e.target.closest('[data-remind]'); if(rem){ rem.disabled=true; rem.textContent='Drafting…';
+    fetch('/api/invoices/'+rem.getAttribute('data-remind')+'/draft-reminder',{method:'POST'}).then(function(){load();}); return; }
+  var pd=e.target.closest('[data-paid]'); if(pd){ pd.disabled=true;
+    fetch('/api/invoices/'+pd.getAttribute('data-paid')+'/mark-paid',{method:'POST'}).then(function(){load();}); return; }
+});
+OS.ready(function(){ load(); });
+OS.onChange(load);
+</script>
+</body>
+</html>
