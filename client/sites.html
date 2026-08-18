@@ -3,41 +3,41 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sites · Northstar</title>
+<title>Sites · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
-<link rel="stylesheet" href="/list-view.css" />
-<style>
-  .screen{max-width:none}
-  .st-name{font-weight:700;font-size:13px;color:var(--ink)}
-  .st-addr{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
-  .st-acct{font-weight:600;font-size:12.5px;color:var(--indigo)}
-</style>
+<link rel="stylesheet" href="/os.css" />
+<style>.search{width:100%;max-width:420px;font-family:var(--sans);font-weight:600;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel);color:var(--ink)}</style>
 </head>
 <body>
-<div class="screen view" id="root"></div>
-<script src="/list-view.js"></script>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Sites</h1><div class="os-q">Every service location, searchable.</div></div>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search sites…" />
+    <div id="list" style="margin-top:14px"></div>
+  </div>
+<script src="/os.js"></script>
 <script>
-var esc=ListView.esc;
-function nav(id){ if(id==null)return; try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
-
-ListView({
-  mount:document.getElementById('root'),
-  endpoint:'/api/sites', dataKey:'sites', noun:'sites',
-  searchPlaceholder:'Search sites or addresses…',
-  filters:[['all','All'],['linked','Linked to account'],['addressed','Has address']],
-  defaultSort:'name', sortDefaults:{name:'asc'},
-  onRow:function(s){ nav(s.accountId); },
-  columns:[
-    { label:'Site', sort:'name', cell:function(s){
-        return '<div class="st-name">'+esc(s.name)+'</div>'+(s.address?'<div class="st-addr">'+esc(s.address)+'</div>':''); } },
-    { label:'Account', cell:function(s){ return '<span class="st-acct">'+esc(s.account)+'</span>'; } },
-    { label:'System', cell:function(s){ return s.system?'<span style="color:var(--muted)">'+esc(s.system)+'</span>':'<span style="color:var(--faint)">—</span>'; } },
-    { label:'Next service', cell:function(s){ return '<span style="color:var(--muted)">'+esc(s.next)+'</span>'; } },
-    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
-  ]
-});
+"use strict";
+var t=null;
+function load(){
+  var q=document.getElementById('q').value.trim();
+  fetch('/api/sites?pageSize=100'+(q?('&q='+encodeURIComponent(q)):'')).then(function(r){return r.json();}).then(function(d){
+    var sites=d.sites||[];
+    if(!sites.length){document.getElementById('list').innerHTML=OS.empty(d.live===false?'Connect ServiceTrade to see live sites.':'No sites match.');return;}
+    var cols=[
+      {as:'name',label:'Site',strong:true},
+      {as:'account',label:'Account'},
+      {as:'address',label:'Address',render:function(v){return OS.esc(v||'');}},
+      {as:'next',label:'Next visit',render:function(v){return OS.esc(v||'');}}
+    ];
+    document.getElementById('list').innerHTML=OS.table(cols, sites,{});
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load sites.');});
+}
+document.getElementById('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(load,250);});
+OS.ready(load);
 </script>
 </body>
 </html>

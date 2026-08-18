@@ -3,47 +3,46 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Quotes · Northstar</title>
+<title>Quotes · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
-<link rel="stylesheet" href="/list-view.css" />
-<style>
-  .screen{max-width:none}
-  .qt-title{font-weight:700;font-size:13px;color:var(--ink)}
-  .qt-num{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
-  .qt-acct{font-weight:600;font-size:12.5px;color:var(--indigo)}
-</style>
+<link rel="stylesheet" href="/os.css" />
 </head>
 <body>
-<div class="screen view" id="root"></div>
-<script src="/list-view.js"></script>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Quotes</h1><div class="os-q">The sales pipeline: what is open, won, and lost.</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span><span class="chip" id="ctxPeriod">This month</span></div></div>
+    </div>
+    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"></div>
+    <div class="os-filters" id="views" style="margin:18px 0 10px"></div>
+    <div id="list"></div>
+  </div>
+<script src="/os.js"></script>
 <script>
-var esc=ListView.esc;
-function nav(id){ if(id==null)return; try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
-function statusPill(s){
-  var t=(s||'').toLowerCase();
-  var tone= (t.indexOf('accept')>=0||t.indexOf('approv')>=0||t.indexOf('won')>=0)?'green'
-    : (t.indexOf('reject')>=0||t.indexOf('lost')>=0||t.indexOf('expire')>=0)?'money'
-    : (t.indexOf('submit')>=0||t.indexOf('sent')>=0)?'indigo' : 'gray';
-  return s?'<span class="pill '+tone+'">'+esc(s)+'</span>':'<span style="color:var(--faint)">—</span>';
+"use strict";
+var view='open_pipeline';
+var VIEWS=[['open_pipeline','Open'],['quotes_won','Won'],['quotes_lost','Lost']];
+function renderViews(){document.getElementById('views').innerHTML=VIEWS.map(function(v){return '<button class="os-fb'+(v[0]===view?' on':'')+'" data-view="'+v[0]+'">'+v[1]+'</button>';}).join('');}
+function reload(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  document.getElementById('ctxPeriod').textContent=OS.periodLabel();
+  document.getElementById('kpis').innerHTML=OS.skeletonKpis(3);
+  OS.metrics(['open_pipeline','quote_win_rate','quotes_won'],{compare:true}).then(function(cards){
+    document.getElementById('kpis').innerHTML=OS.kpiRow(cards.filter(Boolean),{});
+  });
+  loadList();
 }
-
-ListView({
-  mount:document.getElementById('root'),
-  endpoint:'/api/quotes', dataKey:'quotes', noun:'quotes',
-  searchPlaceholder:'Search quotes (number or title)…',
-  filters:[['all','All'],['valued','Has value']],
-  defaultSort:'amount', sortDefaults:{amount:'desc',number:'asc'},
-  onRow:function(q){ nav(q.accountId); },
-  columns:[
-    { label:'Quote', sort:'number', cell:function(q){ return '<div class="qt-title">'+esc(q.title)+'</div><div class="qt-num">#'+esc(q.number)+'</div>'; } },
-    { label:'Account', cell:function(q){ return '<span class="qt-acct">'+esc(q.account)+'</span>'; } },
-    { label:'Status', cell:function(q){ return statusPill(q.status); } },
-    { label:'Value', align:'right', sort:'amount', cell:function(q){ return '<span class="num" style="font-weight:700;color:var(--ink)">'+esc(q.amount)+'</span>'; } },
-    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
-  ]
-});
+function loadList(){
+  document.getElementById('list').innerHTML=OS.skeletonKpis(1);
+  OS.drill(view,{limit:100}).then(function(d){
+    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.empty('No quotes in this view.');return;}
+    document.getElementById('list').innerHTML=OS.table(d.columns,d.rows,{empty:'No quotes in this view.'});
+  });
+}
+document.getElementById('views').addEventListener('click',function(e){var b=e.target.closest('[data-view]');if(b){view=b.getAttribute('data-view');renderViews();loadList();}});
+OS.ready(function(){renderViews();reload();}); OS.onChange(reload);
 </script>
 </body>
 </html>

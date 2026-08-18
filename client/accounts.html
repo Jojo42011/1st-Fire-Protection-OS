@@ -3,59 +3,46 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Accounts · Northstar</title>
+<title>Accounts · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
-<link rel="stylesheet" href="/list-view.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
-  .ac-mono{width:28px;height:28px;border-radius:9px;font-weight:800;font-size:10px}
-  .ac-cust{display:flex;align-items:center;gap:10px}
-  .ac-name{display:block;font-weight:700;font-size:13px;color:var(--ink)}
-  .ac-seg{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:1px}
-  .ac-arnote{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;
-    padding:10px 14px;margin-bottom:12px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
-  .ac-arnote svg{width:15px;height:15px;flex:none;margin-top:1px}
-  .ac-arnote b{font-weight:700}
+  .search{width:100%;max-width:420px;font-family:var(--sans);font-weight:600;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel);color:var(--ink)}
 </style>
 </head>
 <body>
-<div class="screen view">
-  <div class="ac-arnote">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.5"/></svg>
-    <span>Balances are <b>ServiceTrade billing</b>, not confirmed receivables — ServiceTrade has no recorded payments, so “overdue” means <b>unreconciled in ServiceTrade</b>. Real A/R (and the Invoice Collector) arrives when Sage Intacct is connected.</span>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Accounts</h1><div class="os-q">Every customer, live from ServiceTrade.</div></div>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search customers…" />
+    <div id="list" style="margin-top:14px"></div>
   </div>
-  <div id="root"></div>
-</div>
-<script src="/list-view.js"></script>
+<script src="/os.js"></script>
 <script>
-var esc=ListView.esc;
-function money(v){ if(v==null||v==='')return ''; if(typeof v==='number')return '$'+v.toLocaleString('en-US'); return String(v); }
-function nav(id){ try{window.parent.postMessage({type:'app-navigate',tab:'account',param:'id='+id},'*');}catch(e){} }
-
-ListView({
-  mount:document.getElementById('root'),
-  endpoint:'/api/accounts', dataKey:'accounts', noun:'customers',
-  searchPlaceholder:'Search customers…',
-  filters:[['all','All'],['contract','Under contract'],['due','Open (billed)'],['risk','Overdue in ST']],
-  defaultSort:'name', sortDefaults:{name:'asc',balance:'desc'},
-  onRow:function(a){ nav(a.id); },
-  columns:[
-    { label:'Customer', sort:'name', cell:function(a){
-        return '<span class="ac-cust">'
-          +'<span class="monogram ac-mono" style="background:'+esc(a.tintBg)+';color:'+esc(a.tintFg)+'">'+esc(a.initials)+'</span>'
-          +'<span><span class="ac-name">'+esc(a.name)+'</span><span class="ac-seg">'+esc(a.segment)+'</span></span>'
-        +'</span>'; } },
-    { label:'Sites', cell:function(a){ return esc(a.sites); } },
-    { label:'Contract', cell:function(a){ return a.contract?'<span class="pill '+esc(a.contractKind)+'">'+esc(a.contract)+'</span>':'<span style="color:var(--faint)">—</span>'; } },
-    { label:'Next service', cell:function(a){ return '<span style="color:var(--muted)">'+esc(a.next)+'</span>'; } },
-    { label:'Balance', align:'right', sort:'balance', cell:function(a){
-        return '<span class="num" style="color:'+(a.balanceOverdue?'var(--money)':'var(--ink)')+'">'+esc(money(a.balance))+'</span>'; } },
-    { label:'Last touch', cell:function(a){ return '<span style="color:var(--muted)">'+esc(a.touch)+'</span>'; } },
-    { label:'', align:'right', cell:function(){ return '<span class="lv-open">Open →</span>'; } }
-  ]
-});
+"use strict";
+var t=null;
+function load(){
+  var q=document.getElementById('q').value.trim();
+  fetch('/api/accounts?pageSize=100'+(q?('&q='+encodeURIComponent(q)):'')).then(function(r){return r.json();}).then(function(d){
+    var accts=d.accounts||[];
+    if(!accts.length){document.getElementById('list').innerHTML=OS.empty(d.live===false?'Connect ServiceTrade to see live customers.':'No customers match.','');return;}
+    var cols=[
+      {as:'name',label:'Customer',strong:true},
+      {as:'segment',label:'Segment',render:function(v){return OS.esc((v||'').split(' · ')[0]||'');}},
+      {as:'sites',label:'Sites',kind:'num'},
+      {as:'next',label:'Next action',render:function(v){return OS.esc(v||'');}},
+      {as:'risk',label:'',render:function(v){return v==='at_risk'?OS.pill('at risk','bad'):'';}},
+      {as:'go',label:'',render:function(v,r){return '<button class="os-fb" data-acct="'+r.id+'">Open</button>';}}
+    ];
+    document.getElementById('list').innerHTML=OS.table(cols, accts.map(function(a){return {name:a.name,segment:a.segment,sites:a.sites,next:a.next,risk:a.risk,id:a.id};}),{});
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load accounts.');});
+}
+document.getElementById('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(load,250);});
+document.addEventListener('click',function(e){var b=e.target.closest('[data-acct]');if(b){OS.go('account',{param:'id='+b.getAttribute('data-acct')});}});
+OS.ready(load);
 </script>
 </body>
 </html>
