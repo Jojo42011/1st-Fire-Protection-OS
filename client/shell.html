@@ -36,6 +36,20 @@
   .nav-item .avstack{display:flex}
   .nav-item .avstack i{width:20px;height:20px;border-radius:50%;border:2px solid var(--panel);display:block}
   .nav-item .avstack i+i{margin-left:-7px}
+  /* collapsible business nav (accordion) */
+  .nav .nav-sect.lead{margin-bottom:4px}
+  .nav-group{display:flex;align-items:center;width:100%;gap:8px;background:none;border:0;cursor:pointer;
+    font-family:var(--sans);font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);padding:11px 10px 5px;text-align:left}
+  .nav-group .grow{flex:1}
+  .nav-group .chev{transition:transform .18s;opacity:.7}
+  .nav-group.open .chev{transform:rotate(180deg)}
+  .nav-group:hover{color:var(--ink-2)}
+  .nav-sect{display:none;flex-direction:column;gap:1px}
+  .nav-sect.open{display:flex}
+  .nav-item .dotk{width:6px;height:6px;border-radius:50%;background:var(--border-strong,#c9ccd6);flex:none;margin:0 3px}
+  .nav-item.on .dotk{background:var(--fp-red,#E53935)}
+  .nav-item .count{margin-left:auto;font-weight:600;font-size:11px;color:var(--muted)}
 
   /* main column + iframe frames (persistent, one per screen) */
   .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
@@ -129,134 +143,7 @@
         </button>
       </div>
 
-      <nav id="nav">
-        <button class="nav-item" data-key="home">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg></span>
-          <span class="grow">Home</span>
-        </button>
-        <button class="nav-item" data-key="approve">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 5h16v11H4z"/><path d="M8 20h8"/></svg></span>
-          <span class="grow">To approve</span>
-          <span class="badge" id="c-approve" style="display:none">0</span>
-        </button>
-        <button class="nav-item" data-key="operator">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M12 8v4l3 2"/></svg></span>
-          <span class="grow">Ask the Operator</span>
-        </button>
-
-        <div class="group">Workstreams</div>
-        <button class="nav-item" data-key="phones">
-          <span class="sq" style="background:var(--green)"></span>
-          <span class="grow">Phones</span>
-          <span class="count" id="c-phones"></span>
-        </button>
-        <button class="nav-item" data-key="oncall">
-          <span class="sq" style="background:#e5484d"></span>
-          <span class="grow">On-call</span>
-          <span class="count" id="c-oncall"></span>
-        </button>
-        <button class="nav-item" data-key="money">
-          <span class="sq" style="background:var(--money)"></span>
-          <span class="grow">Getting paid</span>
-          <span class="count" id="c-money"></span>
-        </button>
-        <button class="nav-item" data-key="reviews">
-          <span class="sq" style="background:var(--amber)"></span>
-          <span class="grow">Reviews</span>
-          <span class="count" id="c-review-requests"></span>
-        </button>
-        <button class="nav-item" data-key="spend">
-          <span class="sq" style="background:var(--indigo)"></span>
-          <span class="grow">Wasted spend</span>
-          <span class="count" id="c-spend"></span>
-        </button>
-
-        <div class="group">Winning work</div>
-        <button class="nav-item" data-key="scoreboard">
-          <span class="sq" style="background:var(--money)"></span>
-          <span class="grow">Scoreboard</span>
-          <span class="count" id="c-scoreboard"></span>
-        </button>
-        <button class="nav-item" data-key="deficiencies">
-          <span class="sq" style="background:#e5484d"></span>
-          <span class="grow">Repair backlog</span>
-          <span class="count" id="c-deficiencies"></span>
-        </button>
-        <button class="nav-item" data-key="estimator">
-          <span class="sq" style="background:var(--indigo)"></span>
-          <span class="grow">Estimates</span>
-          <span class="count" id="c-estimator"></span>
-        </button>
-        <button class="nav-item" data-key="closer">
-          <span class="sq" style="background:var(--money)"></span>
-          <span class="grow">Follow-ups</span>
-          <span class="count" id="c-closer"></span>
-        </button>
-
-        <div class="group">Delivering work</div>
-        <button class="nav-item" data-key="dispatch">
-          <span class="sq" style="background:var(--teal)"></span>
-          <span class="grow">Schedule</span>
-          <span class="count" id="c-dispatch"></span>
-        </button>
-        <button class="nav-item" data-key="plans">
-          <span class="sq" style="background:var(--teal)"></span>
-          <span class="grow">Service plans</span>
-          <span class="count" id="c-plans"></span>
-        </button>
-        <button class="nav-item" data-key="costing">
-          <span class="sq" style="background:var(--green)"></span>
-          <span class="grow">Job margins</span>
-          <span class="count" id="c-costing"></span>
-        </button>
-
-        <div class="group">Customers</div>
-        <button class="nav-item" data-key="crm">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20v-1.5A4.5 4.5 0 0 1 8.5 14h3A4.5 4.5 0 0 1 16 18.5V20"/><circle cx="10" cy="8" r="3.4"/><path d="M17 11.5a3 3 0 1 0 0-6"/><path d="M18.5 20v-1.2a3.6 3.6 0 0 0-1.8-3.1"/></svg></span>
-          <span class="grow">Accounts</span>
-          <span class="count" id="c-accounts"></span>
-        </button>
-        <button class="nav-item" data-key="sites">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01"/></svg></span>
-          <span class="grow">Sites</span>
-          <span class="count" id="c-sites"></span>
-        </button>
-        <button class="nav-item" data-key="jobs">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 4h6a1 1 0 0 1 1 1v2H8V5a1 1 0 0 1 1-1z"/><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 12h18"/></svg></span>
-          <span class="grow">Jobs</span>
-          <span class="count" id="c-jobs"></span>
-        </button>
-        <button class="nav-item" data-key="quotes">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span>
-          <span class="grow">Quotes</span>
-          <span class="count" id="c-quotes"></span>
-        </button>
-        <button class="nav-item" data-key="pipeline">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="5" height="14" rx="1.5"/><rect x="10" y="5" width="5" height="9" rx="1.5"/><rect x="17" y="5" width="4" height="5" rx="1.5"/></svg></span>
-          <span class="grow">Pipeline</span>
-          <span class="count" id="c-pipeline"></span>
-        </button>
-        <button class="nav-item" data-key="sync">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 9a8 8 0 0 1 13.3-3.3L20 8"/><path d="M20 4v4h-4"/><path d="M20 15a8 8 0 0 1-13.3 3.3L4 16"/><path d="M4 20v-4h4"/></svg></span>
-          <span class="grow">ServiceTrade sync</span>
-          <span class="dot live"></span>
-        </button>
-
-        <div class="group">People</div>
-        <button class="nav-item" data-key="people">
-          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-          <span class="grow">People</span>
-        </button>
-
-        <div class="group">Your team</div>
-        <button class="nav-item" data-key="team">
-          <span class="grow">9 agents</span>
-          <span class="avstack"><i style="background:var(--indigo)"></i><i style="background:var(--green)"></i><i style="background:var(--amber)"></i></span>
-        </button>
-        <button class="nav-item" data-key="hire">
-          <span class="grow" style="color:var(--indigo-deep);font-weight:700">+ Hire a new agent</span>
-        </button>
-      </nav>
+      <nav id="nav" class="nav"></nav>
 
       <div class="promo">
         <b>Connect ServiceTrade</b>
@@ -264,10 +151,10 @@
         <span class="btn-accent btn-sm" style="display:inline-block;margin-top:10px">Connect</span>
       </div>
       <div class="me">
-        <span class="avatar" style="width:26px;height:26px;font-size:10px">DB</span>
+        <span class="avatar" id="me-avatar" style="width:26px;height:26px;font-size:10px">··</span>
         <span style="flex:1;min-width:0">
-          <span style="display:block;font-weight:600;font-size:12px;color:var(--ink)">Devon Booker</span>
-          <span style="display:block;font-weight:500;font-size:10.5px;color:var(--muted)">Owner</span>
+          <span id="me-name" style="display:block;font-weight:600;font-size:12px;color:var(--ink)">Signed in</span>
+          <span id="me-role" style="display:block;font-weight:500;font-size:10.5px;color:var(--muted)">Loading…</span>
         </span>
         <button id="signout" title="Sign out" aria-label="Sign out" onclick="signOut()"
           style="appearance:none;border:1px solid var(--border);background:var(--panel);border-radius:8px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);flex:none">
@@ -309,32 +196,73 @@
    not yet built (Home, To approve, and the CRM screens) open a graceful /soon
    placeholder until their phase lands. */
 var SCREENS = {
-  home:     { src:'/home',                         title:'Home',              sub:'Everything in one place', home:true },
-  approve:  { src:'/approvals',                    title:'To approve',        sub:'Nothing leaves the building without you' },
-  operator: { src:'/operator',                    title:'Ask the Operator',  sub:'One conversation over the whole company' },
-  phones:   { src:'/calls',                        title:'Phones',            sub:'Main line · answered 24/7' },
-  oncall:   { src:'/oncall',                        title:'On-call',           sub:'Who the after-hours line reaches, per office' },
-  money:    { src:'/invoices',                     title:'Getting paid',      sub:'Chases every receivable, drafts the reminder, waits for your yes' },
-  reviews:  { src:'/reviews-hub',                  title:'Reviews',           sub:'Ask, earn, and reply. Requests out, reviews in, all in one place' },
-  spend:    { src:'/licenses',                     title:'Wasted spend',      sub:'Finds the seats you pay for but nobody uses' },
-  scoreboard:{ src:'/scoreboard',                   title:'Scoreboard',        sub:'Every office side by side on the numbers that move money' },
-  deficiencies:{ src:'/deficiencies',               title:'Repair backlog',    sub:'Open ServiceTrade deficiencies, quotable repair revenue waiting to be sold' },
-  estimator:{ src:'/estimates',                    title:'Estimates',         sub:'Photos in, a priced quote out. Demo, no ServiceTrade source yet' },
-  closer:   { src:'/closer',                       title:'Follow-ups',        sub:'Every open ServiceTrade quote chased on a cadence until it books or dies' },
-  dispatch: { src:'/schedule',                     title:'Schedule',          sub:'Jobs matched to crews, no-shows cut, cancellations backfilled' },
-  plans:    { src:'/plans',                        title:'Service plans',     sub:'Recurring agreements from ServiceTrade, renewed before they lapse' },
-  costing:  { src:'/costing',                      title:'Job margins',       sub:'Live job value from ServiceTrade, true margins pending Sage' },
-  crm:      { src:'/accounts',                     title:'Accounts',          sub:'Customers, live from ServiceTrade' },
-  sites:    { src:'/sites',                         title:'Sites',             sub:'Every service location, searchable' },
-  jobs:     { src:'/jobs',                           title:'Jobs',              sub:'Every job, live from ServiceTrade' },
-  quotes:   { src:'/quotes',                         title:'Quotes',            sub:'Every quote, searchable by value' },
-  account:  { src:'/account',                      title:'Account',           sub:'Customer detail', detail:true },
-  pipeline: { src:'/pipeline',                     title:'Pipeline',          sub:'Open quotes by stage, live from ServiceTrade' },
-  sync:     { src:'/sync',                          title:'ServiceTrade sync', sub:'Two-way, every 15 minutes' },
-  people:   { src:'/people',                       title:'People',            sub:'Onboarding, active employees, and offboarding' },
-  team:     { src:'/roster',                       title:'Your team',         sub:'9 agents, one job each' },
-  hire:     { src:'/harness',                      title:'Hire a new agent',  sub:'Describe the gap in your own words' }
+  // HOME
+  home:        { src:'/home',        title:'Home',                sub:'What needs attention, and how the business is doing', home:true },
+  operator:    { src:'/operator',    title:'Ask the Operator',    sub:'One conversation over the whole company' },
+  // WORK
+  tasks:       { src:'/soon?s=My%20Tasks',           title:'My Tasks',            sub:'Your queue across the company' },
+  approve:     { src:'/approvals',   title:'Approvals',           sub:'Nothing leaves the building without a yes' },
+  exceptions:  { src:'/soon?s=Exceptions',           title:'Exceptions',          sub:'Where reality does not match the process' },
+  // MONEY
+  moneyOverview:{ src:'/soon?s=Money',               title:'Money',               sub:'Revenue, margin, cash, and AR at a glance' },
+  receivables: { src:'/invoices',    title:'Receivables',         sub:'Every open invoice, chased to paid' },
+  handoffs:    { src:'/soon?s=Accounting%20Handoffs',title:'Accounting Handoffs', sub:'Catch bad inputs before accounting cleans them up' },
+  close:       { src:'/soon?s=Close',                title:'Close',               sub:'Month-end readiness, by office' },
+  // OPERATIONS
+  service:     { src:'/soon?s=Service',              title:'Service',             sub:'Active service workload' },
+  schedule:    { src:'/schedule',    title:'Schedule',            sub:'Jobs matched to crews, cancellations backfilled' },
+  deficiencies:{ src:'/deficiencies',title:'Deficiencies',        sub:'Open ServiceTrade deficiencies: quotable repair revenue waiting' },
+  jobs:        { src:'/jobs',        title:'Jobs',                sub:'Every job, live from ServiceTrade' },
+  agreements:  { src:'/plans',       title:'Service Agreements',  sub:'Recurring agreements, renewed before they lapse' },
+  costing:     { src:'/costing',     title:'Job margins',         sub:'Live job value from ServiceTrade, true margins pending Sage' },
+  // FRONT DESK
+  phones:      { src:'/calls',       title:'Phones',              sub:'Main line, answered 24/7' },
+  reviews:     { src:'/reviews-hub', title:'Reviews',             sub:'Ask, earn, and reply' },
+  oncall:      { src:'/oncall',      title:'On-call',             sub:'Who the after-hours line reaches, per office' },
+  // PEOPLE
+  people:      { src:'/people',      title:'People',              sub:'Onboarding, active employees, and offboarding' },
+  // CUSTOMERS
+  accounts:    { src:'/accounts',    title:'Accounts',            sub:'Customers, live from ServiceTrade' },
+  sites:       { src:'/sites',       title:'Sites',               sub:'Every service location, searchable' },
+  quotes:      { src:'/quotes',      title:'Quotes',              sub:'Every quote, searchable by value' },
+  pipeline:    { src:'/pipeline',    title:'Pipeline',            sub:'Open quotes by stage, live from ServiceTrade' },
+  closer:      { src:'/closer',      title:'Follow-ups',          sub:'Every open quote chased on a cadence until it books or dies' },
+  estimator:   { src:'/estimates',   title:'Estimates',           sub:'Photos in, a priced quote out' },
+  account:     { src:'/account',     title:'Account',             sub:'Customer detail', detail:true },
+  // REPORTS
+  reportsExec: { src:'/executive',   title:'Executive',           sub:'The company at a glance' },
+  officePerf:  { src:'/scoreboard',  title:'Office Performance',  sub:'Every office side by side on the numbers that move money' },
+  reportsMoney:{ src:'/soon?s=Money%20Reports',      title:'Money',               sub:'Financial reporting' },
+  reportsOps:  { src:'/soon?s=Operations%20Reports', title:'Operations',          sub:'Operational reporting' },
+  reportsPeople:{ src:'/soon?s=People%20Reports',    title:'People',              sub:'People reporting' },
+  customReports:{ src:'/soon?s=Custom%20Reports',    title:'Custom Reports',      sub:'Build and save your own' },
+  // COMPANY
+  companyOffices:{ src:'/soon?s=Offices',            title:'Offices',             sub:'Each office, end to end' },
+  itSystems:   { src:'/licenses',    title:'IT & Systems',        sub:'Licenses, devices, and cleanup' },
+  integrations:{ src:'/integrations',title:'Integrations',        sub:'Systems of record and sync health' },
+  sync:        { src:'/sync',        title:'ServiceTrade sync',   sub:'Two-way, every 15 minutes' },
+  settings:    { src:'/soon?s=Settings',             title:'Settings',            sub:'Configuration' },
+  team:        { src:'/roster',      title:'Agents',              sub:'The automation working underneath, one job each' },
+  hire:        { src:'/harness',     title:'Add an agent',        sub:'Describe the gap in your own words' }
 };
+
+/* The business-oriented navigation. Groups are collapsible (accordion); the group holding the
+   active screen opens on load. Screens not yet built route to a graceful /soon placeholder. */
+var NAV = [
+  { items:[ 'home','operator' ] },
+  { group:'Work',       items:[ 'tasks','approve','exceptions' ] },
+  { group:'Money',      items:[ 'moneyOverview','receivables','handoffs','close' ] },
+  { group:'Operations', items:[ 'service','schedule','deficiencies','jobs','agreements','costing' ] },
+  { group:'Front desk', items:[ 'phones','reviews','oncall' ] },
+  { group:'People',     items:[ 'people' ] },
+  { group:'Customers',  items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
+  { group:'Reports',    items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
+  { group:'Company',    items:[ 'companyOffices','itSystems','integrations','sync','settings','team','hire' ] }
+];
+/* count badge element id per screen key (only where /api/nav-counts provides a number) */
+var COUNTS = { approve:'c-approve', receivables:'c-money', phones:'c-phones', reviews:'c-review-requests',
+  deficiencies:'c-deficiencies', accounts:'c-accounts', sites:'c-sites', jobs:'c-jobs', quotes:'c-quotes',
+  pipeline:'c-pipeline', officePerf:'c-scoreboard', itSystems:'c-spend', closer:'c-closer' };
 var KEYS = Object.keys(SCREENS);
 var HOME = KEYS.filter(function(k){return SCREENS[k].home;})[0] || KEYS[0];
 var NAV_MESSAGE_TYPE = 'app-navigate';
@@ -352,6 +280,28 @@ frames.innerHTML=KEYS.map(function(k){
   return '<iframe class="frame'+(k===HOME?' on':'')+'" id="frame-'+k+'" data-src="'+SCREENS[k].src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';
 }).join('');
 function frameEl(k){return document.getElementById('frame-'+k);}
+
+/* ---- render the business navigation (collapsible groups) ---- */
+function navItemHTML(k){
+  var s=SCREENS[k]; if(!s) return '';
+  var badge = COUNTS[k] ? '<span class="count" id="'+COUNTS[k]+'"></span>' : '';
+  return '<button class="nav-item" data-key="'+k+'"><span class="dotk"></span><span class="grow">'+s.title+'</span>'+badge+'</button>';
+}
+function renderNav(){
+  nav.innerHTML = NAV.map(function(g,gi){
+    var items = g.items.map(navItemHTML).join('');
+    if(!g.group) return '<div class="nav-sect lead open">'+items+'</div>';
+    return '<button class="nav-group" data-gi="'+gi+'"><span class="grow">'+g.group+'</span>'+
+      '<svg class="chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>'+
+      '<div class="nav-sect" data-sect="'+gi+'">'+items+'</div>';
+  }).join('');
+}
+renderNav();
+function groupOf(key){ for(var i=0;i<NAV.length;i++){ if(NAV[i].items.indexOf(key)>=0) return i; } return -1; }
+function openGroup(gi){
+  nav.querySelectorAll('.nav-group').forEach(function(h){ h.classList.toggle('open', (+h.getAttribute('data-gi'))===gi); });
+  nav.querySelectorAll('.nav-sect[data-sect]').forEach(function(s){ s.classList.toggle('open', (+s.getAttribute('data-sect'))===gi); });
+}
 
 /* ---- mobile: size each iframe to its content so the outer document scrolls ---- */
 function fitFrame(f){
@@ -383,12 +333,17 @@ function activate(key,announce){
     if(ni)ni.classList.toggle('on',k===key);
   });
   current=key;
+  var gi=groupOf(key); if(gi>=0) openGroup(gi); // open the group holding the active screen
   titleEl.textContent=SCREENS[key].title;
   subEl.textContent=SCREENS[key].sub;
-  try{document.title='Northstar · '+SCREENS[key].title;}catch(_){}
+  try{document.title='1st FP OS · '+SCREENS[key].title;}catch(_){}
   if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}
 }
-nav.addEventListener('click',function(e){var it=e.target.closest('.nav-item');if(it)activate(it.getAttribute('data-key'),true);});
+nav.addEventListener('click',function(e){
+  var grp=e.target.closest('.nav-group');
+  if(grp){ var gi=+grp.getAttribute('data-gi'); openGroup(grp.classList.contains('open')?-1:gi); return; }
+  var it=e.target.closest('.nav-item'); if(it)activate(it.getAttribute('data-key'),true);
+});
 
 /* ---- collapse / mobile drawer ---- */
 function setCollapsed(v){app.classList.toggle('collapsed',v);if(!isMobile()){try{localStorage.setItem('shell_collapsed',v?'1':'0');}catch(_){}}}
@@ -424,22 +379,44 @@ function curOffice(){try{return localStorage.getItem('fpos_office')||'all';}catc
 function broadcastOffice(o){
   document.querySelectorAll('.frames iframe').forEach(function(f){try{f.contentWindow.postMessage({type:'fp-office',office:o},'*');}catch(_){}});
 }
+function setOfficeCookie(v){try{document.cookie='fpos_office='+encodeURIComponent(v)+';path=/;max-age=31536000;samesite=lax';}catch(_){}}
+function setMe(me){
+  var nEl=document.getElementById('me-name'), rEl=document.getElementById('me-role'), aEl=document.getElementById('me-avatar');
+  var name=(me.identity&&(me.identity.name||me.identity.email))||'Signed in';
+  var role=(me.roles&&me.roles.length)?me.roles.join(', ').replace(/_/g,' '):(me.legacy?'Office access':'No role');
+  if(nEl)nEl.textContent=name;
+  if(rEl)rEl.textContent=role.replace(/\b\w/g,function(c){return c.toUpperCase();});
+  if(aEl){var init=name.replace(/[^A-Za-z ]/g,'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();if(init)aEl.textContent=init;}
+}
 (function initOfficeSwitch(){
   var sel=document.getElementById('office-select');
   if(!sel)return;
   sel.addEventListener('change',function(){
     var o=sel.value||'all';
     try{localStorage.setItem('fpos_office',o);}catch(_){}
+    setOfficeCookie(o);
     broadcastOffice(o);
     refreshCounts();
   });
-  fetch('/api/offices').then(function(r){return r.json();}).then(function(d){
-    (d.offices||[]).forEach(function(o){
-      var opt=document.createElement('option');opt.value=o.value;opt.textContent=o.label;sel.appendChild(opt);
-    });
+  Promise.all([
+    fetch('/api/me').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/offices').then(function(r){return r.json();}).catch(function(){return {offices:[]};})
+  ]).then(function(res){
+    var me=res[0]||{}, all=(res[1]&&res[1].offices)||[];
+    var allowedKeys=(me.offices||[]).map(function(o){return o.key;});
+    var canAll=me.canSeeAllOffices!==false; // legacy / company-wide default true
+    var opts=canAll?all:all.filter(function(o){return allowedKeys.indexOf(o.key)>=0;});
+    sel.innerHTML='';
+    if(canAll){var a=document.createElement('option');a.value='all';a.textContent='All offices';sel.appendChild(a);}
+    opts.forEach(function(o){var opt=document.createElement('option');opt.value=o.value;opt.textContent=o.label;opt.setAttribute('data-key',o.key);sel.appendChild(opt);});
     var saved=curOffice();
-    if([].some.call(sel.options,function(x){return x.value===saved;})) sel.value=saved;
-  }).catch(function(){});
+    var have=function(v){return [].some.call(sel.options,function(x){return x.value===v;});};
+    if(have(saved))sel.value=saved; else if(!canAll&&opts.length)sel.value=opts[0].value;
+    try{localStorage.setItem('fpos_office',sel.value);}catch(_){}
+    setOfficeCookie(sel.value);
+    broadcastOffice(sel.value);
+    setMe(me);
+  });
 })();
 
 /* ---- sidebar counts / badges ---- */
