@@ -55,6 +55,8 @@ import oncall from './routes/oncall';
 import deficiencies from './routes/deficiencies';
 import scorecard from './routes/scorecard';
 import people from './routes/people';
+import me from './routes/me';
+import sources from './routes/sources';
 import { seedPeopleCatalog } from './people/service';
 
 const PORT = Number(process.env.PORT || 3900);
@@ -118,6 +120,8 @@ app.use(oncall);
 app.use(deficiencies);
 app.use(scorecard);
 app.use(people);
+app.use(me);
+app.use(sources);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) => {
