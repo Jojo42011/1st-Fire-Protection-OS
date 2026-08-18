@@ -3,178 +3,89 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>To approve · Northstar</title>
+<title>Approvals · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
-  .filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .filters .chip{cursor:pointer;border:1px solid transparent}
-  .filters .chip.on{background:#fff;border-color:var(--border);color:var(--ink)}
-  .explain{display:flex;align-items:center;gap:12px}
-  .explain .tile{width:30px;height:30px;border-radius:9px;background:var(--indigo-bg);color:var(--indigo);display:flex;align-items:center;justify-content:center;flex:none}
-  .explain .tile svg{width:15px;height:15px}
-  .explain b{font-weight:700;font-size:12.5px;color:var(--ink)}
-  .explain p{margin:3px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--muted)}
-  .appr .hd{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
-  .appr .hd .agent{font-weight:500;font-size:11.5px;color:var(--faint)}
-  .appr .hd .age{margin-left:auto;font-weight:500;font-size:11px;color:var(--faint)}
-  .appr .bd{padding:15px 18px 17px}
-  .appr .toprow{display:flex;align-items:baseline;gap:12px}
-  .appr .toprow .t{font-weight:800;font-size:15px;color:var(--ink);flex:1}
-  .appr .actions{display:flex;align-items:center;gap:8px;margin-top:13px}
-  .appr .actions .trail{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint);text-align:right}
-  .dotc{width:9px;height:9px;border-radius:3px;flex:none}
-  .edit-ta{width:100%;box-sizing:border-box;margin-top:7px;min-height:110px;resize:vertical;
-    font-family:var(--sans);font-weight:500;font-size:13px;line-height:1.6;color:var(--ink);
-    background:var(--panel-alt);border:1px solid var(--border-strong);border-radius:10px;padding:11px 13px}
-  .edit-ta:focus{outline:none;border-color:var(--indigo)}
-  .edit-hint{margin-left:auto;font-weight:500;font-size:11.5px;color:var(--faint)}
+  .ap{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 17px;margin-bottom:12px}
+  .ap .h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .ap .cat{font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3)}
+  .ap .t{font-weight:750;font-size:15.5px;color:var(--ink);margin-top:3px;line-height:1.3}
+  .ap .reason{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:5px}
+  .ap .body{font-weight:500;font-size:12.5px;color:var(--ink-2);background:var(--fill);border-radius:10px;padding:11px 13px;margin-top:11px;white-space:pre-wrap;max-height:150px;overflow:auto}
+  .ap .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;align-items:center}
+  .ap .stake{font-weight:800;font-size:16px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .ap .acts{display:flex;gap:8px;margin-top:13px}
+  .ap .acts button{font-weight:700;font-size:13px;border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .ap .acts .yes{background:var(--os-good);color:#fff;border-color:transparent}
+  .ap .acts .no{background:var(--panel);color:var(--os-bad);border-color:var(--os-bad)}
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
-  <div class="filters" id="filters"></div>
-  <div class="card card-pad explain">
-    <span class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg></span>
-    <div><b>Anything reversible already happened</b><p>Drafting, scheduling and logging run on their own. Only things that leave the building or cost money wait for you.</p></div>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Approvals</h1><div class="os-q">What needs your decision. Nothing leaves the building without a yes.</div></div>
+    </div>
+    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
+    <div class="os-filters" id="catFilters" style="margin:18px 0 8px"></div>
+    <div id="list"></div>
   </div>
-  <div id="list"></div>
-  <div id="empty" style="display:none"></div>
-</div>
+<script src="/os.js"></script>
 <script>
-var AGENT={invoices:'Invoice Collector',reviews:'Review Collector',licenses:'License Reclaim',calls:'Call Receptionist',crm:'ServiceTrade',estimator:'The Estimator',closer:'The Closer',dispatch:'The Dispatcher',plans:'Service-Plan Manager',costing:'Job Costing'};
-var KIND_LABEL={send_email:'This sends an email',send_sms:'This sends a text',publish:'This posts publicly',cancel_seat:'This cancels a subscription',push_st:'This writes to ServiceTrade',quote_price:'This quotes a price',schedule_change:'This schedules work'};
-/* tone by workstream: variant class (signal .appr.send/.post/.money) + dot/label colour */
-var TONE={
-  invoices:{cls:'send', c:'var(--money)'},
-  reviews: {cls:'post', c:'var(--amber-ink)', dot:'var(--amber)'},
-  licenses:{cls:'money',c:'var(--indigo)'},
-  crm:     {cls:'money',c:'var(--indigo)'},
-  calls:   {cls:'', c:'var(--green)'},
-  estimator:{cls:'money',c:'var(--indigo)'},
-  closer:  {cls:'send', c:'var(--money)'},
-  dispatch:{cls:'', c:'var(--teal)'},
-  plans:   {cls:'', c:'var(--teal)'},
-  costing: {cls:'', c:'var(--green)'}
-};
-var PRIMARY={send_email:'Approve & send',send_sms:'Approve & send',publish:'Approve & post',cancel_seat:'Approve',push_st:'Approve & sync',quote_price:'Approve & send',schedule_change:'Approve & schedule'};
-/* the dismiss button: honest label per kind ("Keep seat" declines a cancellation; "Skip" everywhere else) */
-var DISMISS={cancel_seat:'Keep seat'};
-/* editing a draft only makes sense where there's message text to change (not a seat-cancel decision) */
-function canEdit(a){return !!a.body && a.kind!=='cancel_seat';}
-var SEND=['send_email','send_sms'],MONEY=['cancel_seat','quote_price'],PUBLISH=['publish','push_st'],SCHEDULE=['schedule_change'];
-var FILTERS=[['all','All'],['send','Sends something'],['money','Spends money'],['publish','Posts publicly'],['schedule','Schedules work']];
-
-var items=[], filter='all', editingId=null;
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function age(m){m=m||0;if(m<60)return (m||1)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago';}
-function cat(k){return SEND.indexOf(k)>=0?'send':MONEY.indexOf(k)>=0?'money':SCHEDULE.indexOf(k)>=0?'schedule':'publish';}
-function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
-function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
-
+"use strict";
+var catFilter='';
+var CATS=[['','All'],['Access','Access'],['Spend','Spend'],['Financial','Financial'],['People','People'],['External communication','External comms']];
+function categoryOf(it){
+  var k=it.kind||'', a=it.agent_key||'';
+  if(/seat|reclaim|cancel/.test(k)||a==='licenses') return 'Spend';
+  if(/quote_price|push_st|price/.test(k)||a==='crm') return 'Financial';
+  if(a==='people'||/access|provision/.test(k)) return 'Access';
+  return 'External communication';
+}
 function load(){
-  fetch('/api/approvals').then(function(r){return r.json();}).then(function(d){items=d.items||[];render();});
+  fetch('/api/approvals').then(function(r){return r.json();}).then(function(d){
+    var items=(d.items||[]).map(function(it){ it._cat=categoryOf(it); return it; });
+    renderKpis(items);
+    renderCats(items);
+    var shown=catFilter?items.filter(function(it){return it._cat===catFilter;}):items;
+    var list=document.getElementById('list');
+    if(!shown.length){ list.innerHTML=OS.empty('Nothing needs your decision right now.','✓'); return; }
+    list.innerHTML=shown.map(card).join('');
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load approvals.');});
 }
-function counts(){
-  var c={all:items.length,send:0,money:0,publish:0,schedule:0};
-  items.forEach(function(i){c[cat(i.kind)]++;});
-  return c;
+function renderKpis(items){
+  var byCat={}; items.forEach(function(it){byCat[it._cat]=(byCat[it._cat]||0)+1;});
+  var cards=[['Waiting',items.length]];
+  ['Financial','Spend','External communication'].forEach(function(c){ if(byCat[c]) cards.push([c==='External communication'?'External':c,byCat[c]]); });
+  document.getElementById('kpis').innerHTML=cards.map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+c[1]+'</div></div>';}).join('');
 }
-function render(){
-  var c=counts();
-  document.getElementById('filters').innerHTML=
-    FILTERS.map(function(f){return '<button class="chip'+(filter===f[0]?' on':'')+'" data-f="'+f[0]+'">'+f[1]+(f[0]==='all'?' '+c.all:'')+'</button>';}).join('')
-    + '<span style="flex:1"></span><button class="btn-tint" id="routine">Approve all routine</button>';
-  var vis=items.filter(function(i){return filter==='all'||cat(i.kind)===filter;});
-  document.getElementById('list').innerHTML=vis.map(card).join('');
-  var empty=document.getElementById('empty');
-  if(!items.length){
-    empty.style.display='';
-    empty.innerHTML='<div class="card" style="padding:44px 18px;text-align:center">'+
-      '<div class="empty"><div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
-      '<h3>You’re all caught up</h3><p>Nine agents are still working. The next thing that needs a human will show up here — you’ll also get it as a morning digest.</p></div></div>';
-  }else{empty.style.display='none';empty.innerHTML='';}
-  wire();
+function renderCats(items){
+  var present={}; items.forEach(function(it){present[it._cat]=true;});
+  document.getElementById('catFilters').innerHTML=CATS.filter(function(c){return c[0]===''||present[c[0]];}).map(function(c){
+    return '<button class="os-fb'+(c[0]===catFilter?' on':'')+'" data-cat="'+OS.esc(c[0])+'">'+OS.esc(c[1])+'</button>'; }).join('');
 }
-function card(a){
-  var tone=TONE[a.agent_key]||TONE.calls, dot=tone.dot||tone.c;
-  var prim=PRIMARY[a.kind]||'Approve', dismiss=DISMISS[a.kind]||'Skip';
-  var style=tone.cls?'':' style="border-left:3px solid '+tone.c+'"';
-  var head='<div class="hd"><span class="dotc" style="background:'+dot+'"></span>'+
-      '<span class="kind" style="color:'+tone.c+'">'+esc(KIND_LABEL[a.kind]||a.kind)+'</span>'+
-      '<span class="agent">· '+esc(AGENT[a.agent_key]||a.agent_key)+'</span>'+
-      '<span class="age">'+age(a.age_mins)+'</span></div>';
-
-  // editing state — the draft body becomes an editable textarea with Save / Cancel.
-  if(editingId===a.id){
-    return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+head+
-      '<div class="bd"><div class="toprow"><div class="t">'+esc(a.title)+'</div></div>'+
-      '<textarea class="edit-ta" id="edit-'+a.id+'">'+esc(a.body||'')+'</textarea>'+
-      '<div class="actions"><button class="btn-primary" data-act="save">Save changes</button>'+
-      '<button class="btn" data-act="cancel">Cancel</button>'+
-      '<span class="edit-hint">Edits the draft that gets sent on approval</span></div></div></div>';
-  }
-
-  return '<div class="appr '+tone.cls+'" data-id="'+a.id+'"'+style+'>'+head+
-    '<div class="bd"><div class="toprow"><div class="t">'+esc(a.title)+'</div>'+
-      (a.stake?'<div class="stake" style="color:'+tone.c+'">'+esc(a.stake)+'</div>':'')+'</div>'+
-      (a.body?'<p class="well" style="margin-top:7px">'+esc(a.body)+'</p>':'')+
-      '<div class="actions"><button class="btn-primary" data-act="approve">'+esc(prim)+'</button>'+
-      (canEdit(a)?'<button class="btn" data-act="edit">Edit</button>':'')+
-      '<button class="btn" data-act="skip">'+esc(dismiss)+'</button>'+
-      (a.trail?'<span class="trail">'+esc(a.trail)+'</span>':'')+'</div></div></div>';
+function card(it){
+  var risk=it.risk==='sensitive'?OS.pill('sensitive','warn'):OS.pill('routine','neutral');
+  var stake=it.stake?'<span class="stake">'+OS.esc(it.stake)+'</span>':'';
+  return '<div class="ap"><div class="h"><div><div class="cat">'+OS.esc(it._cat)+'</div>'+
+    '<div class="t">'+OS.esc(it.title)+'</div>'+
+    (it.trail?'<div class="reason">'+OS.esc(it.trail)+'</div>':'')+'</div>'+stake+'</div>'+
+    (it.body?'<div class="body">'+OS.esc(it.body)+'</div>':'')+
+    '<div class="tags">'+risk+(it.subject_type?'<span class="os-tag">'+OS.esc(it.subject_type)+'</span>':'')+'</div>'+
+    '<div class="acts"><button class="yes" data-approve="'+it.id+'">Approve</button>'+
+      '<button class="no" data-decline="'+it.id+'">Decline</button></div></div>';
 }
-function wire(){
-  document.querySelectorAll('#filters .chip').forEach(function(b){b.onclick=function(){filter=b.getAttribute('data-f');render();};});
-  var rt=document.getElementById('routine');if(rt)rt.onclick=approveRoutine;
-  document.querySelectorAll('.appr').forEach(function(el){
-    var id=+el.getAttribute('data-id');
-    el.querySelectorAll('[data-act]').forEach(function(btn){
-      var act=btn.getAttribute('data-act');
-      btn.onclick=function(){
-        if(act==='edit'){editingId=id;render();var ta=document.getElementById('edit-'+id);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}return;}
-        if(act==='cancel'){editingId=null;render();return;}
-        if(act==='save'){saveEdit(id);return;}
-        decide(id,act,el); // approve | skip
-      };
-    });
-  });
-}
-function saveEdit(id){
-  var ta=document.getElementById('edit-'+id);if(!ta)return;
-  var body=ta.value.trim();if(!body)return;
-  ta.disabled=true;
-  fetch('/api/approvals/'+id+'/edit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({body:body})})
-    .then(function(r){return r.json();}).then(function(d){
-      if(d&&d.item){items=items.map(function(i){return i.id===id?d.item:i;});}
-      editingId=null;render();
-    }).catch(function(){ta.disabled=false;});
-}
-function removeCard(el,id){
-  el.classList.add('leaving');
-  setTimeout(function(){
-    items=items.filter(function(i){return i.id!==id;});
-    render(); notify();
-  },320);
-}
-function decide(id,act,el){
-  el.querySelectorAll('button').forEach(function(b){b.disabled=true;});
-  fetch('/api/approvals/'+id+'/'+act,{method:'POST'}).then(function(r){return r.json();}).then(function(){
-    removeCard(el,id);
-  }).catch(function(){el.querySelectorAll('button').forEach(function(b){b.disabled=false;});});
-}
-function approveRoutine(){
-  var routine=items.filter(function(i){return i.risk==='routine';});
-  if(!routine.length)return;
-  fetch('/api/approvals/approve-routine',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-    var ids={};(d.approved||[]).forEach(function(x){ids[x]=1;});
-    document.querySelectorAll('.appr').forEach(function(el){if(ids[+el.getAttribute('data-id')])el.classList.add('leaving');});
-    setTimeout(function(){items=items.filter(function(i){return !ids[i.id];});render();notify();},380);
-  });
-}
-load();
+document.addEventListener('click',function(e){
+  var c=e.target.closest('[data-cat]'); if(c){ catFilter=c.getAttribute('data-cat'); load(); return; }
+  var y=e.target.closest('[data-approve]'); if(y){ y.disabled=true; y.textContent='Approving…';
+    fetch('/api/approvals/'+y.getAttribute('data-approve')+'/approve',{method:'POST'}).then(function(){load();}); return; }
+  var n=e.target.closest('[data-decline]'); if(n){ n.disabled=true;
+    fetch('/api/approvals/'+n.getAttribute('data-decline')+'/skip',{method:'POST'}).then(function(){load();}); return; }
+});
+OS.ready(function(){ load(); });
+OS.onChange(load);
 </script>
 </body>
 </html>
