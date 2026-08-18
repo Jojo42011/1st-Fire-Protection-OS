@@ -207,13 +207,26 @@ export function exceptionSummary(ctx: OsContext): any {
   const open = listExceptions(ctx, { status: 'open' });
   const byOwner: Record<string, number> = {};
   const bySeverity: Record<string, number> = {};
-  let impact = 0;
+  const byOffice: Record<string, { label: string; count: number; impact: number }> = {};
+  const today = new Date().toISOString().slice(0, 10);
+  let impact = 0, overdue = 0;
   for (const e of open) {
     byOwner[e.owner_team] = (byOwner[e.owner_team] || 0) + 1;
     bySeverity[e.severity] = (bySeverity[e.severity] || 0) + 1;
     impact += e.financial_impact || 0;
+    if (e.due_at && e.due_at < today) overdue++;
+    const okey = e.office || '__company__';
+    if (!byOffice[okey]) byOffice[okey] = { label: e.officeLabel, count: 0, impact: 0 };
+    byOffice[okey].count++; byOffice[okey].impact += e.financial_impact || 0;
   }
-  return { open: open.length, byOwner, bySeverity, financialImpact: impact };
+  // resolved in the last 30 days (the "this period" signal)
+  let resolvedRecently = 0;
+  try {
+    resolvedRecently = (getDb().prepare(
+      `SELECT COUNT(*) v FROM exceptions WHERE status='resolved' AND resolved_at IS NOT NULL AND julianday('now') - julianday(resolved_at) <= 30`
+    ).get() as { v: number }).v || 0;
+  } catch { resolvedRecently = 0; }
+  return { open: open.length, byOwner, bySeverity, byOffice, financialImpact: impact, overdue, resolvedRecently };
 }
 
 /** Update status. Scope-checked: the caller must be authorized for the exception's office. */
