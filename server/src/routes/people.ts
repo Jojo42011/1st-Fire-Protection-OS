@@ -10,6 +10,7 @@ import { entraConfigured, devLoginEnabled, beginLogin, handleCallback, signOut, 
 import { currentUser, requirePeople, hasRole, canViewCompensation, canApprove, listAppUsers, upsertAppUser, setAppUserActive, ROLES, Role } from '../people/authz';
 import * as svc from '../people/service';
 import { bambooConfigured } from '../services/bamboo';
+import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -148,12 +149,14 @@ router.post('/api/people/offboarding', requirePeople('hr', 'people_admin', 'mana
 });
 
 /* ─────────────────────────── app users / roles (admin) ─────────────────────────── */
-router.get('/api/people/users', requirePeople('people_admin'), (_req, res) => res.json({ users: listAppUsers() }));
+router.get('/api/people/users', requirePeople('people_admin'), (_req, res) => res.json({ users: listAppUsers(), roles: ROLES, offices: operatingOffices() }));
 router.post('/api/people/users', requirePeople('people_admin'), (req, res) => {
-  const { email, roles, display_name } = req.body || {};
+  const { email, roles, display_name, offices, all_offices } = req.body || {};
   if (!email || !Array.isArray(roles)) return res.status(400).json({ ok: false, error: 'email + roles[] required' });
-  const u = upsertAppUser(String(email), roles as Role[], display_name);
-  svc.audit('access_requested', `Role mapping set: ${u.email} = [${u.roles.join(', ')}]`, { actor: actor(req) });
+  const scope = { offices: Array.isArray(offices) ? offices.map(String) : [], all_offices: !!all_offices };
+  const u = upsertAppUser(String(email), roles as Role[], display_name, scope);
+  const scopeStr = u.all_offices ? 'all offices' : (u.offices.join(', ') || 'no office');
+  svc.audit('access_requested', `Access set: ${u.email} = roles [${u.roles.join(', ')}], scope [${scopeStr}]`, { actor: actor(req) });
   res.json({ ok: true, user: u });
 });
 router.post('/api/people/users/:email/active', requirePeople('people_admin'), (req, res) => {

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Access &amp; Roles · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  body{background:var(--bg)}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 24px 60px}
+  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
+  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px;max-width:78ch}
+  .gate{border:1px dashed var(--border-strong,#c9ccd6);border-radius:14px;padding:28px;text-align:center;color:var(--muted);font-weight:600;margin-top:20px}
+  .add{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}
+  .add input{font-family:var(--sans);font-weight:600;font-size:13px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;min-width:240px;background:var(--panel);color:var(--ink)}
+  .btn{font-weight:700;font-size:13px;border-radius:9px;padding:9px 15px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .btn.pri{background:var(--fp-red,#E53935);color:#fff;border-color:transparent}
+  .u{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px;margin-top:12px}
+  .u .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .u .em{font-weight:750;font-size:14.5px;color:var(--ink)}
+  .u .nm{font-weight:550;font-size:12px;color:var(--muted)}
+  .grp{margin-top:12px}
+  .grp .lbl{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:7px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-weight:650;font-size:12px;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--r-pill);padding:6px 11px;cursor:pointer;user-select:none}
+  .chip.on{background:var(--ink);color:var(--panel);border-color:transparent}
+  .chip.off-scope{opacity:.5;pointer-events:none}
+  .save{margin-top:14px;display:flex;gap:8px;align-items:center}
+  .saved{font-weight:650;font-size:12px;color:#1f9d55}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Access &amp; Roles</h1>
+    <div class="lead">Assign each person their OS roles and the offices they may see. Office scope is separate from role: a user can have company-wide IT access without company-wide financial access. Everything here is enforced on the server, on every request.</div>
+    <div id="gate" class="gate" style="display:none"></div>
+    <div id="admin" style="display:none">
+      <div class="add">
+        <input id="newEmail" type="email" placeholder="person@1stfp.com" />
+        <button class="btn pri" id="addBtn">Add / edit user</button>
+      </div>
+      <div id="list"></div>
+    </div>
+  </div>
+<script>
+"use strict";
+var ROLES=[], OFFICES=[], USERS=[];
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function j(url,opts){return fetch(url,Object.assign({headers:{'content-type':'application/json'}},opts)).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});});}
+
+function boot(){
+  j('/api/people/users').then(function(r){
+    if(r.status===401){ gate('Sign in to People (Microsoft) as a People Admin to manage access.'); return; }
+    if(r.status===403){ gate('You are signed in, but only a People Admin can manage access.'); return; }
+    if(!r.ok){ gate('Could not load access settings.'); return; }
+    ROLES=r.body.roles||[]; OFFICES=r.body.offices||[]; USERS=r.body.users||[];
+    document.getElementById('gate').style.display='none';
+    document.getElementById('admin').style.display='';
+    render();
+  }).catch(function(){gate('Could not load access settings.');});
+}
+function gate(msg){var g=document.getElementById('gate');g.style.display='';g.textContent=msg;document.getElementById('admin').style.display='none';}
+
+function userCard(u,idx){
+  var roleChips=ROLES.map(function(r){
+    var on=(u.roles||[]).indexOf(r.key)>=0;
+    return '<span class="chip'+(on?' on':'')+'" data-idx="'+idx+'" data-kind="role" data-val="'+esc(r.key)+'" title="'+esc(r.description)+'">'+esc(r.label)+'</span>';
+  }).join('');
+  var allOn=!!u.all_offices;
+  var officeChips=OFFICES.map(function(o){
+    var on=(u.offices||[]).indexOf(o.key)>=0;
+    return '<span class="chip'+(on?' on':'')+(allOn?' off-scope':'')+'" data-idx="'+idx+'" data-kind="office" data-val="'+esc(o.key)+'">'+esc(o.label)+'</span>';
+  }).join('');
+  return '<div class="u" data-idx="'+idx+'"><div class="top"><span class="em">'+esc(u.email)+'</span>'+
+    '<span class="nm">'+esc(u.display_name||'')+(u.active===false?' · inactive':'')+'</span></div>'+
+    '<div class="grp"><div class="lbl">Roles</div><div class="chips">'+roleChips+'</div></div>'+
+    '<div class="grp"><div class="lbl">Office scope</div><div class="chips">'+
+      '<span class="chip'+(allOn?' on':'')+'" data-idx="'+idx+'" data-kind="all">All offices (company-wide)</span>'+officeChips+'</div></div>'+
+    '<div class="save"><button class="btn pri" data-save="'+idx+'">Save</button><span class="saved" id="saved-'+idx+'" style="display:none">Saved</span></div></div>';
+}
+function render(){ document.getElementById('list').innerHTML=USERS.map(userCard).join(''); }
+
+document.addEventListener('click',function(e){
+  var chip=e.target.closest('.chip');
+  if(chip){
+    var idx=+chip.getAttribute('data-idx'), kind=chip.getAttribute('data-kind'), val=chip.getAttribute('data-val'), u=USERS[idx];
+    if(kind==='role'){ toggle(u,'roles',val); }
+    else if(kind==='all'){ u.all_offices=!u.all_offices; }
+    else if(kind==='office'){ if(u.all_offices)return; toggle(u,'offices',val); }
+    render(); return;
+  }
+  var save=e.target.closest('[data-save]');
+  if(save){ var i=+save.getAttribute('data-save'); saveUser(USERS[i],i); return; }
+  if(e.target.closest('#addBtn')){
+    var em=document.getElementById('newEmail').value.trim(); if(!em)return;
+    var ex=USERS.find(function(x){return x.email.toLowerCase()===em.toLowerCase();});
+    if(!ex){ USERS.unshift({email:em.toLowerCase(),display_name:null,roles:[],offices:[],all_offices:false,active:true}); render(); }
+    document.getElementById('newEmail').value='';
+  }
+});
+function toggle(u,field,val){ u[field]=u[field]||[]; var i=u[field].indexOf(val); if(i>=0)u[field].splice(i,1); else u[field].push(val); }
+function saveUser(u,idx){
+  j('/api/people/users',{method:'POST',body:JSON.stringify({email:u.email,display_name:u.display_name,roles:u.roles||[],offices:u.offices||[],all_offices:!!u.all_offices})})
+    .then(function(r){ if(r.ok){ var s=document.getElementById('saved-'+idx); if(s){s.style.display='';setTimeout(function(){s.style.display='none';},1800);} } else { alert((r.body&&r.body.error)||'Save failed'); } });
+}
+boot();
+</script>
+</body>
+</html>
