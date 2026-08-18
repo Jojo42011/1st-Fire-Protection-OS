@@ -134,12 +134,35 @@ function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+
 VIEWS.employees=function(v){
   j('/api/people/employees').then(function(r){
     var list=(r.body&&r.body.employees)||[];
-    if(!list.length){ v.innerHTML='<div class="card card-pad"><p class="muted">No employees yet. When BambooHR import or an onboarding lands, they appear here. Nothing is faked.</p></div>'; return; }
-    v.innerHTML='<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
-      list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
-    '</tbody></table></div>';
+    var connected=CAT&&CAT.bambooConnected;
+    var importBtn=connected?'<button class="btn btn-sm" id="bhImport" onclick="importBamboo()">Import from BambooHR</button>':'<span class="muted" style="font-size:13px">BambooHR not connected</span>';
+    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">Everyone on the roster. Import pulls the live BambooHR directory and reconciles by employee.</p></div>'+importBtn+'</div>';
+    var body=(!list.length)
+      ? '<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>'
+      : '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
+          list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+        '</tbody></table></div>';
+    v.innerHTML=head+'<div id="bhMsg"></div>'+body;
   });
 };
+function importBamboo(){
+  var btn=document.getElementById('bhImport'), msg=document.getElementById('bhMsg');
+  if(btn){btn.disabled=true;btn.textContent='Importing…';}
+  if(msg){msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p class="muted">Pulling the live BambooHR roster…</p></div>';}
+  j('/api/people/import/bamboo',{method:'POST',body:JSON.stringify({})}).then(function(r){
+    if(!r.ok){
+      var why=(r.body&&r.body.reason)==='bamboo_not_connected'?'BambooHR is not connected on the server.':(r.body&&r.body.reason)==='bamboo_fetch_failed'?'Could not reach BambooHR (check the API key). No changes were made.':(r.body&&r.body.error||'Import failed.');
+      if(msg){msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p style="color:var(--danger,#C62828)">'+esc(why)+'</p></div>';}
+      if(btn){btn.disabled=false;btn.textContent='Import from BambooHR';}
+      return;
+    }
+    var o=r.body;
+    var summary=o.created+' new, '+o.updated+' updated'+(o.skipped?', '+o.skipped+' skipped':'')+' · '+o.active+' active, '+o.terminated+' inactive';
+    if(msg){msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px;background:var(--panel-alt,var(--fill))"><p><b>Imported '+o.total+' from BambooHR.</b> '+esc(summary)+'.</p></div>';}
+    go('employees'); // re-render the table; the message is re-drawn fresh so re-show it
+    setTimeout(function(){var m=document.getElementById('bhMsg');if(m){m.innerHTML='<div class="card card-pad" style="margin-bottom:12px;background:var(--panel-alt,var(--fill))"><p><b>Imported '+o.total+' from BambooHR.</b> '+esc(summary)+'.</p></div>';}},60);
+  });
+}
 function empDetail(id){
   var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>';
   j('/api/people/employees/'+id).then(function(r){

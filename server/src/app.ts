@@ -120,8 +120,12 @@ app.use(scorecard);
 app.use(people);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
-const page = (name: string) => (_req: express.Request, res: express.Response) =>
+const page = (name: string) => (_req: express.Request, res: express.Response) => {
+  // App shells are auth-gated and data-driven — never let a browser (or an iframe) serve a stale
+  // copy captured before the session was active. Static assets keep their own caching elsewhere.
+  res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(CLIENT_DIR, name));
+};
 
 app.get('/', page('shell.html'));
 app.get('/shell', page('shell.html'));

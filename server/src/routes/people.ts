@@ -9,6 +9,7 @@ import { catalogSnapshot } from '../people/catalog';
 import { entraConfigured, devLoginEnabled, beginLogin, handleCallback, signOut, currentIdentity } from '../people/identity';
 import { currentUser, requirePeople, hasRole, canViewCompensation, canApprove, listAppUsers, upsertAppUser, setAppUserActive, ROLES, Role } from '../people/authz';
 import * as svc from '../people/service';
+import { bambooConfigured } from '../services/bamboo';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -36,7 +37,7 @@ router.post('/api/people/auth/logout', (_req, res) => { signOut(res); res.json({
 /* ─────────────────────────── catalogs + overview (any People role) ─────────────────────────── */
 router.get('/api/people/catalog', requirePeople(), (_req, res) => {
   const vendors = getDb().prepare(`SELECT key, name, owner FROM vendor_portals WHERE active = 1 ORDER BY name`).all();
-  res.json({ ...catalogSnapshot(), vendorPortals: vendors });
+  res.json({ ...catalogSnapshot(), vendorPortals: vendors, bambooConnected: bambooConfigured() });
 });
 router.get('/api/people/overview', requirePeople(), (_req, res) => res.json(svc.overview()));
 
@@ -70,6 +71,17 @@ router.get('/api/people/employees/:id', requirePeople(), (req, res) => {
   const detail = svc.getEmployeeDetail(Number(req.params.id), { includeComp: canViewCompensation((req as any).user) });
   if (!detail) return res.status(404).json({ ok: false, error: 'not found' });
   res.json(detail);
+});
+
+/* Import the real BambooHR roster (idempotent upsert by bamboo_id). HR / admin only. */
+router.post('/api/people/import/bamboo', requirePeople('people_admin', 'hr'), async (req, res) => {
+  try {
+    const out = await svc.importFromBamboo(actor(req));
+    if (!out.ok) return res.status(out.reason === 'bamboo_not_connected' ? 409 : 502).json(out);
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: (e as Error).message });
+  }
 });
 
 /* ─────────────────────────── onboarding ─────────────────────────── */

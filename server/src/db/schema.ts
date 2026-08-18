@@ -1135,6 +1135,9 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+  // employees gains a source marker (manual|bamboo) and a unique Bamboo id for idempotent import.
+  addColumn('employees', 'source', "TEXT DEFAULT 'manual'");
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

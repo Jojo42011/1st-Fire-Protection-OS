@@ -22,6 +22,29 @@ export interface DirectoryEmployee {
   source: 'bamboo';
 }
 
+/**
+ * A raw BambooHR custom-report row, carrying the full field set the People employees table
+ * needs. Kept as the untransformed shape from Bamboo so the DB mapping (mapBambooRow) stays a
+ * pure, testable function with no network in it.
+ */
+export interface BambooImportRow {
+  id: string | null;
+  employeeNumber: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  preferredName: string | null;
+  displayName: string | null;
+  jobTitle: string | null;
+  department: string | null;
+  location: string | null;
+  workEmail: string | null;
+  homeEmail: string | null;
+  mobilePhone: string | null;
+  hireDate: string | null;
+  status: string | null;
+  supervisor: string | null;
+}
+
 /** A roster row that carries the employee's office/location (for location-scoped listings). */
 export interface RosterEmployee {
   full_name: string;
@@ -77,6 +100,70 @@ export async function fetchDirectory(): Promise<DirectoryEmployee[] | null> {
     }));
   } catch (err) {
     console.warn('[bamboo] directory pull failed, degrading to seed:', (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Pull the full roster (active AND inactive) with the rich field set the People module needs to
+ * seed and reconcile its employees table. Returns null when unkeyed so the caller can report an
+ * honest "bamboo_not_connected" state instead of importing nothing silently. Never throws on a
+ * transient failure — degrades to null.
+ */
+export async function fetchRosterForImport(): Promise<BambooImportRow[] | null> {
+  if (!bambooConfigured()) return null;
+  const sub = process.env.BAMBOO_SUBDOMAIN as string;
+  const url = `https://api.bamboohr.com/api/gateway.php/${encodeURIComponent(sub)}/v1/reports/custom?format=JSON&onlyCurrent=false`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: authHeader(), accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'People roster import',
+        fields: [
+          'employeeNumber',
+          'firstName',
+          'lastName',
+          'preferredName',
+          'displayName',
+          'jobTitle',
+          'department',
+          'location',
+          'workEmail',
+          'homeEmail',
+          'mobilePhone',
+          'hireDate',
+          'status',
+          'supervisor',
+        ],
+      }),
+    });
+    if (!res.ok) throw new Error(`bamboo import ${res.status}: ${await res.text()}`);
+    const data = (await res.json()) as { employees?: any[] };
+    const rows = Array.isArray(data.employees) ? data.employees : [];
+    const str = (v: unknown): string | null => {
+      const s = v == null ? '' : String(v).trim();
+      return s ? s : null;
+    };
+    return rows.map((e) => ({
+      id: str(e.id),
+      employeeNumber: str(e.employeeNumber),
+      firstName: str(e.firstName),
+      lastName: str(e.lastName),
+      preferredName: str(e.preferredName),
+      displayName: str(e.displayName),
+      jobTitle: str(e.jobTitle),
+      department: str(e.department),
+      location: str(e.location),
+      workEmail: str(e.workEmail),
+      homeEmail: str(e.homeEmail),
+      mobilePhone: str(e.mobilePhone),
+      hireDate: str(e.hireDate),
+      status: str(e.status),
+      supervisor: str(e.supervisor),
+    }));
+  } catch (err) {
+    console.warn('[bamboo] roster import pull failed, degrading:', (err as Error).message);
     return null;
   }
 }

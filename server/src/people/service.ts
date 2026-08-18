@@ -10,6 +10,7 @@
 import { getDb } from '../db/index';
 import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
+import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
 
 /* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
 export function seedPeopleCatalog(): void {
@@ -315,4 +316,126 @@ export function overview(): any {
 
 function displayName(h: NewHire): string {
   return h.preferred_name || [h.legal_first_name, h.legal_last_name].filter(Boolean).join(' ') || 'New hire';
+}
+
+/* ─────────────────────────── BambooHR roster import ─────────────────────────── */
+
+/** The subset of employees columns a Bamboo row maps to, plus the status Bamboo reports. */
+export interface MappedBambooEmployee {
+  bamboo_id: string;
+  employee_number: string | null;
+  legal_first_name: string | null;
+  legal_last_name: string | null;
+  preferred_name: string | null;
+  work_email: string | null;
+  personal_email: string | null;
+  personal_phone: string | null;
+  office: string | null;
+  department: string | null;
+  public_job_title: string | null;
+  job_position: string | null;
+  manager: string | null;
+  actual_start_date: string | null;
+  bamboo_status: 'active' | 'terminated';
+}
+
+/**
+ * Pure mapping from a raw BambooHR row to our employees columns. Returns null when the row has no
+ * Bamboo id (we upsert by bamboo_id, so an id-less row can't be reconciled idempotently). BambooHR
+ * marks former staff status='Inactive' (not 'Terminated') and returns a '0000-00-00' placeholder
+ * hire date for some rows — both are handled here.
+ */
+export function mapBambooRow(row: BambooImportRow): MappedBambooEmployee | null {
+  if (!row.id) return null;
+  const cleanDate = (d: string | null): string | null => (d && d !== '0000-00-00' ? d : null);
+  const s = String(row.status || '').toLowerCase();
+  const bamboo_status: 'active' | 'terminated' = s === 'inactive' || s === 'terminated' ? 'terminated' : 'active';
+  const title = row.jobTitle || null;
+  return {
+    bamboo_id: row.id,
+    employee_number: row.employeeNumber,
+    legal_first_name: row.firstName,
+    legal_last_name: row.lastName,
+    preferred_name: row.preferredName,
+    work_email: row.workEmail,
+    personal_email: row.homeEmail,
+    personal_phone: row.mobilePhone,
+    office: row.location,
+    department: row.department,
+    public_job_title: title,
+    job_position: title, // seeds the role-template match; HR can correct it on review
+    manager: row.supervisor,
+    actual_start_date: cleanDate(row.hireDate),
+    bamboo_status,
+  };
+}
+
+// Statuses that reflect an in-flight lifecycle we own — never overwrite these from a Bamboo sync.
+const IN_FLIGHT_STATUSES = new Set(['prehire', 'onboarding', 'notice', 'offboarding']);
+
+export interface ImportResult {
+  ok: boolean;
+  reason?: string;
+  total?: number;
+  created?: number;
+  updated?: number;
+  skipped?: number;
+  active?: number;
+  terminated?: number;
+}
+
+/**
+ * Import (upsert) the real BambooHR roster into the employees table, keyed by bamboo_id so it is
+ * idempotent and safe to re-run. Existing in-flight lifecycle statuses (onboarding/notice/offboarding)
+ * are preserved; otherwise the employee's status follows Bamboo (Active→active, Inactive→terminated).
+ * Returns an honest { ok:false, reason:'bamboo_not_connected' } when the API key is absent rather than
+ * importing nothing silently.
+ */
+export async function importFromBamboo(actor: string): Promise<ImportResult> {
+  if (!bambooConfigured()) return { ok: false, reason: 'bamboo_not_connected' };
+  const rows = await fetchRosterForImport();
+  if (rows === null) return { ok: false, reason: 'bamboo_fetch_failed' };
+
+  const db = getDb();
+  const findByBamboo = db.prepare(`SELECT id, employment_status FROM employees WHERE bamboo_id = ?`);
+  const insert = db.prepare(
+    `INSERT INTO employees (bamboo_id, employee_number, legal_first_name, legal_last_name, preferred_name,
+        work_email, personal_email, personal_phone, office, department, public_job_title, job_position,
+        manager, actual_start_date, employment_status, source)
+     VALUES (@bamboo_id, @employee_number, @legal_first_name, @legal_last_name, @preferred_name,
+        @work_email, @personal_email, @personal_phone, @office, @department, @public_job_title, @job_position,
+        @manager, @actual_start_date, @employment_status, 'bamboo')`
+  );
+  const update = db.prepare(
+    `UPDATE employees SET employee_number = @employee_number, legal_first_name = @legal_first_name,
+        legal_last_name = @legal_last_name, preferred_name = @preferred_name, work_email = @work_email,
+        personal_email = @personal_email, personal_phone = @personal_phone, office = @office,
+        department = @department, public_job_title = @public_job_title, job_position = @job_position,
+        manager = @manager, actual_start_date = @actual_start_date, employment_status = @employment_status,
+        source = 'bamboo', updated_at = datetime('now')
+     WHERE id = @id`
+  );
+
+  let created = 0, updated = 0, skipped = 0, active = 0, terminated = 0;
+  const tx = db.transaction(() => {
+    for (const raw of rows) {
+      const m = mapBambooRow(raw);
+      if (!m) { skipped++; continue; }
+      if (m.bamboo_status === 'active') active++; else terminated++;
+      const existing = findByBamboo.get(m.bamboo_id) as { id: number; employment_status: string } | undefined;
+      if (existing) {
+        // Keep an in-flight status we're managing; otherwise follow Bamboo.
+        const status = IN_FLIGHT_STATUSES.has(existing.employment_status) ? existing.employment_status : m.bamboo_status;
+        update.run({ ...m, id: existing.id, employment_status: status });
+        updated++;
+      } else {
+        insert.run({ ...m, employment_status: m.bamboo_status });
+        created++;
+      }
+    }
+  });
+  tx();
+
+  audit('bamboo_import', `Imported ${rows.length} Bamboo rows: ${created} new, ${updated} updated, ${skipped} skipped (${active} active, ${terminated} inactive)`, { actor });
+  return { ok: true, total: rows.length, created, updated, skipped, active, terminated };
 }
