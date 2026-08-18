@@ -54,6 +54,8 @@ import teams from './routes/teams';
 import oncall from './routes/oncall';
 import deficiencies from './routes/deficiencies';
 import scorecard from './routes/scorecard';
+import people from './routes/people';
+import { seedPeopleCatalog } from './people/service';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -61,6 +63,8 @@ const CLIENT_DIR = path.resolve(__dirname, '../../client');
 // ---- boot the brain ----
 initDb();
 seed();
+// Seed the People config catalogs (real job positions + role templates). Idempotent, not demo data.
+seedPeopleCatalog();
 // Backfill agents for any build order that shipped before the roster existed, so a shipped
 // card never claims "live in the roster" without a real agent behind it.
 const healed = healRoster();
@@ -113,6 +117,7 @@ app.use(teams);
 app.use(oncall);
 app.use(deficiencies);
 app.use(scorecard);
+app.use(people);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) =>
@@ -152,6 +157,7 @@ app.get('/costing', page('costing.html'));
 app.get('/oncall', page('oncall.html'));
 app.get('/deficiencies', page('deficiencies.html'));
 app.get('/scoreboard', page('scoreboard.html'));
+app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)
 app.use(express.static(CLIENT_DIR));

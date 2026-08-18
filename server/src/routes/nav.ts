@@ -42,11 +42,12 @@ router.get('/api/nav-counts', (_req, res) => {
     reviews: num(`SELECT COUNT(*) AS v FROM reviews WHERE reply_status IN ('none','draft') AND stars <= 3`),
     reviewRequests: (() => { const n = num(`SELECT COUNT(*) AS v FROM review_requests WHERE source = 'servicetrade' AND status = 'held'`); return n > 0 ? String(n) : ''; })(),
     spend: num(`SELECT COUNT(*) AS v FROM license_reclaims WHERE status = 'proposed'`),
-    accounts: real ? loc(acctCount) : '412',
+    // Honest-empty when ServiceTrade is not connected — never a fabricated production number.
+    accounts: real ? loc(acctCount) : '',
     sites: real ? loc(num(`SELECT COUNT(*) AS v FROM sites WHERE source = 'servicetrade'`)) : '',
     jobs: real ? loc(num(`SELECT COUNT(*) AS v FROM crm_jobs WHERE source = 'servicetrade'`)) : '',
     quotes: real ? loc(num(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade'`)) : '',
-    pipeline: real ? fmtMoney(openQuoteCents / 100) : '$412k',
+    pipeline: real ? fmtMoney(openQuoteCents / 100) : '',
     live: real,
   });
 });

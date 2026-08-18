@@ -944,6 +944,197 @@ export function initDb(): void {
     ).run();
     setState('mig_sites_source_v1', '1');
   }
+
+  /* ---------- People / Employee Lifecycle (onboarding -> active -> offboarding) ----------
+   * The employee record is the permanent object; onboarding and offboarding are workflows
+   * attached to it. Access/assets/credentials record what a person ACTUALLY has, so
+   * offboarding can reverse the real footprint (not just the role-template guess). Sensitive
+   * comp data lives on the workflow intake (HR-gated), never broadcast. See server/src/people/.
+   */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_users (
+      email        TEXT PRIMARY KEY,            -- lowercase; matched to the Entra sign-in email
+      display_name TEXT,
+      roles        TEXT DEFAULT '',             -- csv of app roles (people_admin,hr,it,safety,accounting,executive_approver,manager,viewer)
+      active       INTEGER DEFAULT 1,
+      source       TEXT DEFAULT 'admin',
+      created_at   TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS employees (
+      id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number       TEXT,
+      bamboo_id             TEXT,
+      legal_first_name      TEXT,
+      legal_last_name       TEXT,
+      preferred_name        TEXT,
+      personal_email        TEXT,
+      work_email            TEXT,
+      personal_phone        TEXT,
+      office                TEXT,
+      department            TEXT,
+      job_position          TEXT,
+      public_job_title      TEXT,
+      manager               TEXT,
+      employment_type       TEXT,               -- full_time|part_time|contractor
+      employment_status     TEXT DEFAULT 'prehire', -- prehire|onboarding|active|notice|offboarding|terminated
+      anticipated_start_date TEXT,
+      actual_start_date     TEXT,
+      notice_date           TEXT,
+      last_working_date     TEXT,
+      termination_date      TEXT,
+      termination_type      TEXT,               -- voluntary|involuntary|immediate
+      ad_username           TEXT,
+      upn                   TEXT,
+      entra_object_id       TEXT,
+      created_at            TEXT DEFAULT (datetime('now')),
+      updated_at            TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_employees_status ON employees(employment_status);
+    CREATE INDEX IF NOT EXISTS idx_employees_office ON employees(office);
+    CREATE INDEX IF NOT EXISTS idx_employees_position ON employees(job_position);
+
+    CREATE TABLE IF NOT EXISTS employee_access (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id   INTEGER NOT NULL,
+      system        TEXT NOT NULL,              -- catalog key or namespaced (sharepoint:mgmt, building:key_fob, vendor:x)
+      label         TEXT,
+      access_level  TEXT,
+      status        TEXT DEFAULT 'requested',   -- requested|awaiting_approval|approved|provisioned|revoked
+      owner         TEXT,                        -- owning team
+      approver      TEXT,                        -- approver group when gated
+      external_ref  TEXT,
+      requested_at  TEXT DEFAULT (datetime('now')),
+      approved_at   TEXT,
+      provisioned_at TEXT,
+      revoked_at    TEXT,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_emp_access_emp ON employee_access(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_emp_access_status ON employee_access(status);
+
+    CREATE TABLE IF NOT EXISTS employee_assets (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id   INTEGER,
+      asset_type    TEXT NOT NULL,              -- catalog key (laptop, vehicle, wex_card, key_fob, ...)
+      identifier    TEXT,                        -- asset tag / plate / last-4
+      serial        TEXT,
+      device_name   TEXT,
+      status        TEXT DEFAULT 'assigned',    -- available|assigned|pending_return|returned|transferred|missing|damaged|retired
+      owner         TEXT,                        -- owning team
+      assigned_at   TEXT,
+      returned_at   TEXT,
+      condition     TEXT,
+      received_by   TEXT,
+      notes         TEXT,
+      created_at    TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_emp_assets_emp ON employee_assets(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_emp_assets_status ON employee_assets(status);
+
+    CREATE TABLE IF NOT EXISTS employee_credentials (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id    INTEGER NOT NULL,
+      credential_type TEXT NOT NULL,            -- driver_license|proof_of_insurance|osha|nicet|trade_license|...
+      status         TEXT DEFAULT 'required',   -- required|uploaded|verified|expired|waived
+      uploaded_at    TEXT,
+      verified_at    TEXT,
+      verified_by    TEXT,
+      expires_at     TEXT,
+      reminder_at    TEXT,
+      notes          TEXT,
+      created_at     TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_emp_cred_emp ON employee_credentials(employee_id);
+
+    CREATE TABLE IF NOT EXISTS people_workflows (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id    INTEGER NOT NULL,
+      kind           TEXT NOT NULL,             -- onboarding|offboarding
+      status         TEXT DEFAULT 'open',       -- open|complete|canceled
+      initiated_by   TEXT,
+      manager        TEXT,
+      intake_json    TEXT DEFAULT '{}',         -- the manager intake (comp fields are HR-gated on read)
+      notice_date    TEXT,
+      last_working_date TEXT,
+      termination_type TEXT,
+      access_cutoff_at TEXT,
+      notes          TEXT,
+      created_at     TEXT DEFAULT (datetime('now')),
+      completed_at   TEXT,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_pwf_emp ON people_workflows(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_pwf_kind_status ON people_workflows(kind, status);
+
+    CREATE TABLE IF NOT EXISTS people_tasks (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      workflow_id    INTEGER NOT NULL,
+      employee_id    INTEGER NOT NULL,
+      category       TEXT,                       -- identity|hardware|software|access|hr|safety|credentials|sharepoint
+      team           TEXT NOT NULL,             -- it|hr|safety|accounting|executive
+      kind           TEXT NOT NULL,             -- task|approval
+      title          TEXT NOT NULL,
+      detail         TEXT,
+      status         TEXT DEFAULT 'pending',    -- blocked|pending|awaiting_approval|approved|ready|in_progress|completed|rejected|waived|failed
+      item_key       TEXT,                       -- stable key from the routing engine (for dependencies)
+      depends_on_key TEXT,                        -- gate: not actionable until this item_key is satisfied
+      approver_role  TEXT,                        -- for approvals: the role that can decide
+      system         TEXT,
+      asset_type     TEXT,
+      due_date       TEXT,
+      assigned_user  TEXT,
+      decided_by     TEXT,
+      completed_by   TEXT,
+      completed_at   TEXT,
+      external_ref   TEXT,
+      created_at     TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (workflow_id) REFERENCES people_workflows(id) ON DELETE CASCADE,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_ptasks_wf ON people_tasks(workflow_id);
+    CREATE INDEX IF NOT EXISTS idx_ptasks_emp ON people_tasks(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_ptasks_team_status ON people_tasks(team, status);
+
+    CREATE TABLE IF NOT EXISTS people_audit (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id  INTEGER,
+      workflow_id  INTEGER,
+      actor        TEXT,
+      action       TEXT NOT NULL,
+      detail       TEXT,
+      at           TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_paudit_emp ON people_audit(employee_id);
+
+    /* config catalogs (seeded from code defaults, extendable by a people_admin) */
+    CREATE TABLE IF NOT EXISTS job_positions (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT UNIQUE NOT NULL,
+      active     INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS role_templates (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      position      TEXT UNIQUE NOT NULL,
+      review_status TEXT DEFAULT 'unreviewed',   -- unreviewed|reviewed
+      defaults_json TEXT DEFAULT '{}',           -- the default onboarding package (keys into the catalogs)
+      updated_by    TEXT,
+      updated_at    TEXT,
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS vendor_portals (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      key        TEXT UNIQUE NOT NULL,
+      name       TEXT NOT NULL,
+      owner      TEXT DEFAULT 'it',
+      active     INTEGER DEFAULT 1,
+      source     TEXT DEFAULT 'admin',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

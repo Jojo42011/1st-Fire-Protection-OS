@@ -9,7 +9,8 @@
     "start": "node server/dist/app.js",
     "dev": "tsc -p server/tsconfig.json && node server/dist/app.js",
     "reset": "npm run build && node server/dist/scripts/reset.js",
-    "boot-check": "npm run build && DB_PATH=/tmp/1stfp.db PORT=3900 node server/dist/app.js"
+    "boot-check": "npm run build && DB_PATH=/tmp/1stfp.db PORT=3900 node server/dist/app.js",
+    "test": "npm run build && node --test server/dist/people/routing.test.js server/dist/people/authz.test.js server/dist/people/service.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",

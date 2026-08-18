@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>People · 1st FP</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .ptabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin:6px 0 18px}
+  .ptab{appearance:none;border:0;background:none;padding:10px 14px;font-weight:600;font-size:13.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .ptab.on{color:var(--ink);border-bottom-color:var(--indigo)}
+  .ptab .b{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--fill);color:var(--muted);font-size:11px;font-weight:700;text-align:center}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px}
+  @media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{padding:16px 18px}
+  .kpi .lab{font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .kpi .val{font-weight:800;font-size:26px;color:var(--ink);margin-top:8px;font-variant-numeric:tabular-nums}
+  .row{display:flex;align-items:center;gap:10px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;border-radius:999px;padding:3px 10px}
+  .pill.ready{color:var(--green);background:var(--green-bg,rgba(31,122,77,.12))}
+  .pill.at_risk{color:#8a6d0b;background:rgba(185,134,11,.14)}
+  .pill.blocked{color:#C62828;background:rgba(198,40,40,.12)}
+  .team{display:inline-block;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;border-radius:6px;padding:2px 7px;color:#fff}
+  .st{font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px;background:var(--fill);color:var(--muted)}
+  .st.pending{background:rgba(75,87,201,.12);color:var(--indigo)}
+  .st.blocked{background:rgba(198,40,40,.1);color:#C62828}
+  .st.awaiting_approval{background:rgba(185,134,11,.14);color:#8a6d0b}
+  .st.completed,.st.approved,.st.provisioned{background:rgba(31,122,77,.12);color:var(--green)}
+  .st.rejected,.st.failed{background:rgba(198,40,40,.12);color:#C62828}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+  label.fld{display:block;font-weight:600;font-size:12px;color:var(--muted);margin:0 0 5px}
+  input.in,select.in,textarea.in{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--ink);padding:9px 11px;font-size:13.5px}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);padding:6px 0}
+  .chk input{width:16px;height:16px}
+  .sec{font-weight:800;font-size:13px;color:var(--ink);margin:16px 0 6px;letter-spacing:-.01em}
+  .muted{color:var(--muted);font-size:12.5px}
+  .authwrap{max-width:520px;margin:8vh auto;text-align:center}
+  .authwrap .ms{display:inline-flex;align-items:center;gap:10px;background:#2f2f2f;color:#fff;border:0;border-radius:8px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer;margin-top:16px}
+  .link{color:var(--indigo);font-weight:600;cursor:pointer}
+  .backlink{font-weight:600;font-size:12.5px;color:var(--indigo);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="screen view" id="root">
+  <div>
+    <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Restricted · role-based access</p>
+    <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">People</h1>
+    <p class="muted" style="margin-top:6px;max-width:74ch">The employee lifecycle: onboarding, active employees, and offboarding. Who someone is, what they have, what is still outstanding, and what to reverse when they leave.</p>
+  </div>
+  <div id="who" class="muted" style="margin-top:8px"></div>
+  <div id="tabsWrap" style="display:none">
+    <div class="ptabs" id="ptabs"></div>
+    <div id="view"></div>
+  </div>
+  <div id="gate"></div>
+</div>
+
+<script>
+"use strict";
+var ME=null, CAT=null;
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function j(url,opts){return fetch(url,Object.assign({headers:{'content-type':'application/json'}},opts)).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});});}
+function teamColor(k){return ({it:'#4b57c9',hr:'#B9860B',safety:'#1f7a4d',accounting:'#5b86ad',executive:'#C62828'})[k]||'#5b6675';}
+function human(s){return String(s||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
+function has(role){return ME&&ME.roles&&(ME.roles.indexOf('people_admin')>=0||ME.roles.indexOf(role)>=0);}
+
+var TABS=[
+  {key:'overview',label:'Overview'},
+  {key:'onboarding',label:'Onboarding'},
+  {key:'employees',label:'Employees'},
+  {key:'tasks',label:'My Tasks'},
+  {key:'approvals',label:'Approvals'},
+  {key:'offboarding',label:'Offboarding'},
+  {key:'templates',label:'Role Templates'}
+];
+var cur='overview';
+
+/* ---------- boot: identity gate ---------- */
+function boot(){
+  j('/api/people/me').then(function(r){
+    ME=r.body;
+    var who=document.getElementById('who');
+    if(!ME.authenticated || !ME.authorized){ renderGate(); return; }
+    who.innerHTML='Signed in as <b>'+esc(ME.name||ME.email)+'</b> · roles: '+(ME.roles.map(esc).join(', ')||'none')+' · <span class="link" onclick="signOut()">sign out</span>';
+    document.getElementById('gate').innerHTML='';
+    document.getElementById('tabsWrap').style.display='';
+    j('/api/people/catalog').then(function(c){CAT=c.ok?c.body:null; renderTabs(); go('overview');});
+  }).catch(function(){renderGate();});
+}
+function renderGate(){
+  document.getElementById('tabsWrap').style.display='none';
+  var g=document.getElementById('gate');
+  if(ME && ME.authenticated && !ME.authorized){
+    g.innerHTML='<div class="authwrap"><div class="card card-pad"><h2 style="margin:0 0 6px">You are signed in, but not authorized for People</h2><p class="muted">Signed in as '+esc(ME.email)+'. Ask a People admin to grant you a role.</p><p style="margin-top:10px"><span class="link" onclick="signOut()">Sign out</span></p></div></div>';
+    return;
+  }
+  var btn = ME && ME.entraConfigured
+    ? '<button class="ms" onclick="location.href=\'/api/people/auth/login\'"><svg width="16" height="16" viewBox="0 0 23 23"><rect x="1" y="1" width="10" height="10" fill="#f25022"/><rect x="12" y="1" width="10" height="10" fill="#7fba00"/><rect x="1" y="12" width="10" height="10" fill="#00a4ef"/><rect x="12" y="12" width="10" height="10" fill="#ffb900"/></svg>Sign in with Microsoft</button>'
+    : (ME && ME.devLogin
+        ? '<button class="ms" onclick="location.href=\'/api/people/auth/login\'">Continue (dev bootstrap sign-in)</button>'
+        : '<p class="muted" style="margin-top:14px">Microsoft Entra sign-in is not configured yet. Set <code>ENTRA_*</code> (and a <code>PEOPLE_BOOTSTRAP_EMAIL</code>) to enable secure access. The shared app password is deliberately not enough to see employee data.</p>');
+  g.innerHTML='<div class="authwrap"><div class="card card-pad"><h2 style="margin:0 0 6px">Sign in to People</h2><p class="muted">People holds employee and HR information, so it requires your Microsoft identity, not just the office password.</p>'+btn+'</div></div>';
+}
+function signOut(){ j('/api/people/auth/logout',{method:'POST'}).then(function(){location.reload();}); }
+
+function renderTabs(){
+  document.getElementById('ptabs').innerHTML=TABS.map(function(t){
+    return '<button class="ptab'+(t.key===cur?' on':'')+'" data-k="'+t.key+'" onclick="go(\''+t.key+'\')">'+t.label+'<span class="b" id="tabb-'+t.key+'" style="display:none"></span></button>';
+  }).join('');
+}
+function go(k){ cur=k; renderTabs(); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v); }
+
+/* ---------- views ---------- */
+var VIEWS={};
+VIEWS.overview=function(v){
+  j('/api/people/overview').then(function(r){
+    var o=r.body||{};
+    v.innerHTML='<div class="kpis">'+
+      kpi('In onboarding',o.onboarding)+kpi('Active',o.active)+kpi('Offboarding',o.offboarding)+kpi('Terminated',o.terminated)+
+    '</div>'+
+    '<div class="kpis" style="margin-top:14px">'+
+      kpi('Open tasks',o.openTasks)+kpi('Awaiting approval',o.awaitingApproval)+kpi('Blocked',o.blocked)+kpi('Templates to review',o.templatesUnreviewed)+
+    '</div>'+
+    '<p class="muted" style="margin-top:14px">'+(o.active===0&&o.onboarding===0?'No employees in the lifecycle yet. Start with <span class="link" onclick="go(\'onboarding\')">Onboarding</span>, or import from BambooHR (coming next).':'Use <span class="link" onclick="go(\'tasks\')">My Tasks</span> to work your queue and <span class="link" onclick="go(\'employees\')">Employees</span> to see each footprint.')+'</p>';
+  });
+};
+function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+'</div><div class="val">'+(val==null?'0':esc(val))+'</div></div>';}
+
+VIEWS.employees=function(v){
+  j('/api/people/employees').then(function(r){
+    var list=(r.body&&r.body.employees)||[];
+    if(!list.length){ v.innerHTML='<div class="card card-pad"><p class="muted">No employees yet. When BambooHR import or an onboarding lands, they appear here. Nothing is faked.</p></div>'; return; }
+    v.innerHTML='<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
+      list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+    '</tbody></table></div>';
+  });
+};
+function empDetail(id){
+  var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>';
+  j('/api/people/employees/'+id).then(function(r){
+    if(!r.ok){v.innerHTML='<p class="muted">Not found.</p>';return;}
+    var d=r.body, e=d.employee;
+    var rd=d.readiness;
+    v.innerHTML='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
+      '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</h2><p class="muted">'+esc(e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
+        (rd?'<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px">'+rd.categories.map(function(c){return '<span class="pill '+c.state+'">'+esc(c.label)+' '+(c.state==='ready'?'✓':c.state==='blocked'?'✕':'⚠')+'</span>';}).join('')+'</div>':'')+
+      '</div>'+
+      section('Identity & access', d.access, function(a){return '<tr><td>'+esc(a.label||a.system)+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['System','Status','Owner'],'No access recorded.')+
+      section('Assets', d.assets, function(a){return '<tr><td>'+esc(human(a.asset_type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';},['Asset','Status','Owner'],'No assets assigned.')+
+      section('Certifications', d.credentials, function(c){return '<tr><td>'+esc(human(c.credential_type))+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'')+'</td></tr>';},['Credential','Status','Expires'],'None tracked.')+
+      section('Lifecycle history', d.history, function(h){return '<tr><td style="white-space:nowrap;color:var(--faint)">'+esc(h.at)+'</td><td>'+esc(human(h.action))+'</td><td class="muted">'+esc(h.detail||'')+'</td></tr>';},['When','Event','Detail'],'No history.')+
+      (e.employment_status==='active'?'<div style="margin-top:14px"><button class="btn btn-sm" onclick="go(\'offboarding\')">Start offboarding →</button></div>':'');
+  });
+}
+function section(title,rows,rowFn,heads,empty){
+  return '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>'+esc(title)+'</h2></div>'+
+    (rows&&rows.length?'<table><thead><tr>'+heads.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(rowFn).join('')+'</tbody></table>':'<div class="card-pad"><p class="muted">'+esc(empty)+'</p></div>')+'</div>';
+}
+
+VIEWS.tasks=function(v){ renderTaskList(v,'/api/people/tasks?mine=1&status=open','Your queue','Nothing in your queue. When onboarding or offboarding routes work to your team, it lands here.'); };
+VIEWS.approvals=function(v){ renderTaskList(v,'/api/people/tasks?mine=1&status=open','Approvals you can decide','No approvals waiting on you.',true); };
+function renderTaskList(v,url,title,empty,approvalsOnly){
+  j(url).then(function(r){
+    var tasks=((r.body&&r.body.tasks)||[]);
+    if(approvalsOnly) tasks=tasks.filter(function(t){return t.kind==='approval';});
+    if(!tasks.length){ v.innerHTML='<div class="card card-pad"><p class="muted">'+esc(empty)+'</p></div>'; return; }
+    v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>'+esc(title)+'</h2><span style="flex:1"></span><span class="muted">'+tasks.length+'</span></div><table><thead><tr><th>Task</th><th>For</th><th>Team</th><th>Status</th><th></th></tr></thead><tbody>'+
+      tasks.map(function(t){
+        var name=(t.preferred_name||((t.legal_first_name||'')+' '+(t.legal_last_name||''))).trim();
+        var actions='';
+        if(t.kind==='approval' && t.status==='awaiting_approval') actions='<button class="btn btn-sm" onclick="act('+t.id+',\'approve\')">Approve</button> <button class="btn btn-sm" onclick="act('+t.id+',\'reject\')">Reject</button>';
+        else if(t.kind==='task' && (t.status==='pending'||t.status==='ready'||t.status==='in_progress')) actions='<button class="btn btn-sm" onclick="act('+t.id+',\'complete\')">Mark done</button>';
+        else if(t.status==='blocked') actions='<span class="muted" style="font-size:11.5px">waiting on a dependency</span>';
+        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(t.title)+(t.detail?'<div class="muted" style="font-size:11.5px">'+esc(t.detail)+'</div>':'')+'</td><td>'+esc(name)+'</td><td><span class="team" style="background:'+teamColor(t.team)+'">'+esc(t.team)+'</span></td><td><span class="st '+esc(t.status)+'">'+esc(human(t.status))+'</span></td><td style="white-space:nowrap">'+actions+'</td></tr>';
+      }).join('')+
+    '</tbody></table></div>';
+  });
+}
+function act(id,kind){ j('/api/people/tasks/'+id+'/'+kind,{method:'POST',body:JSON.stringify({})}).then(function(r){ if(!r.ok){alert(r.body&&r.body.error||'failed');} go(cur); }); }
+
+VIEWS.offboarding=function(v){
+  j('/api/people/employees?status=active').then(function(r){
+    var list=(r.body&&r.body.employees)||[];
+    v.innerHTML='<div class="card card-pad"><div class="card-head" style="padding:0 0 8px"><h2>Start offboarding</h2></div>'+
+      '<p class="muted">Offboarding reverses what the person <b>actually has</b> on record, not a template guess. Begin when notice is received.</p>'+
+      (list.length? '<div class="grid2" style="margin-top:12px"><div><label class="fld">Employee</label><select class="in" id="off-emp">'+list.map(function(e){return '<option value="'+e.id+'">'+esc((e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+' · '+(e.job_position||''))+'</option>';}).join('')+'</select></div>'+
+        '<div><label class="fld">Type</label><select class="in" id="off-type"><option value="voluntary">Voluntary</option><option value="involuntary">Involuntary</option><option value="immediate">Immediate termination</option></select></div>'+
+        '<div><label class="fld">Notice date</label><input class="in" id="off-notice" type="date"></div>'+
+        '<div><label class="fld">Last working date</label><input class="in" id="off-last" type="date"></div></div>'+
+        '<div style="margin-top:12px"><button class="btn" onclick="startOff()">Generate offboarding tasks</button></div>'
+        : '<p class="muted" style="margin-top:12px">No active employees to offboard yet.</p>')+
+    '</div><div id="off-result"></div>';
+  });
+};
+function startOff(){
+  var payload={employee_id:Number(document.getElementById('off-emp').value),termination_type:document.getElementById('off-type').value,notice_date:document.getElementById('off-notice').value||null,last_working_date:document.getElementById('off-last').value||null};
+  j('/api/people/offboarding',{method:'POST',body:JSON.stringify(payload)}).then(function(r){
+    if(!r.ok){document.getElementById('off-result').innerHTML='<p class="muted">'+esc(r.body&&r.body.error||'failed')+'</p>';return;}
+    document.getElementById('off-result').innerHTML='<div class="card card-pad" style="margin-top:14px"><p><b>'+r.body.tasks+' reverse tasks</b> generated from the employee\'s actual footprint. See them in <span class="link" onclick="go(\'tasks\')">My Tasks</span>.</p></div>';
+  });
+}
+
+VIEWS.templates=function(v){
+  j('/api/people/positions').then(function(r){
+    var rows=(r.body&&r.body.positions)||[];
+    v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>Job positions → role templates</h2><span style="flex:1"></span><span class="muted">'+rows.length+' positions</span></div>'+
+      '<div class="card-pad" style="padding-top:0"><p class="muted">Defaults are configured iteratively. New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.</p></div>'+
+      '<table><thead><tr><th>Position</th><th>Template</th></tr></thead><tbody>'+rows.map(function(p){
+        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  });
+};
+
+VIEWS.onboarding=function(v){
+  if(!has('manager')&&!has('hr')){ v.innerHTML='<div class="card card-pad"><p class="muted">Onboarding is initiated by a hiring manager or HR. You have read access only.</p></div>'; return; }
+  var C=CAT||{};
+  var soft=(C.systems||[]).filter(function(s){return s.category!=='identity';}).map(function(s){return chk('sys_'+s.key,s.name);}).join('');
+  var sp=(C.sharepointGroups||[]).map(function(g){return chk('sp_'+g.key,g.name+(g.restricted?' (approval)':''));}).join('');
+  var acc=(C.accessMethods||[]).map(function(a){return chk('acc_'+a.key,a.name);}).join('');
+  var offices=(C.offices||[]).map(function(o){return '<option value="'+esc(o.name)+'">'+esc(o.name)+'</option>';}).join('');
+  var positions=(C.jobPositions||[]).map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>';}).join('');
+  var classes=(C.computerClasses||[]).map(function(c){return '<option value="'+esc(c.key)+'">'+esc(c.label)+' · '+esc(c.spec)+'</option>';}).join('');
+  v.innerHTML='<div class="card card-pad"><div class="card-head" style="padding:0 0 8px"><h2>Start onboarding</h2></div>'+
+    '<p class="muted">Pick the position to load its defaults, then adjust. On submit the system routes tasks to HR, IT, Safety, Accounting and approvers automatically.</p>'+
+    '<div class="sec">1 · Employee</div><div class="grid3">'+
+      fld('First name','o_fn')+fld('Last name','o_ln')+fld('Preferred name','o_pn')+
+      fld('Personal email','o_pe')+fld('Personal phone','o_pp')+
+      '<div><label class="fld">Office</label><select class="in" id="o_office"><option value="">—</option>'+offices+'</select></div>'+
+      '<div><label class="fld">Job position</label><select class="in" id="o_pos"><option value="">—</option>'+positions+'</select></div>'+
+      fld('Public job title','o_title')+fld('Manager','o_mgr')+
+      '<div><label class="fld">Employment type</label><select class="in" id="o_type"><option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contractor">Contractor</option></select></div>'+
+      '<div><label class="fld">Anticipated start</label><input class="in" id="o_start" type="date"></div>'+
+    '</div>'+
+    '<div class="sec">2 · Identity & HR</div><div class="grid3">'+
+      wchk('o_ad','Create AD account',true)+wchk('o_email','Company email',true)+wchk('o_m365','Microsoft 365',true)+
+      wchk('o_teams','Teams number')+wchk('o_bamboo','BambooHR record',true)+wchk('o_payroll','Payroll setup')+
+      wchk('o_benefits','Insurance / benefits')+wchk('o_pto','PTO exception')+wchk('o_probation','Probation waiver')+
+      wchk('o_incentive','Incentive plan')+wchk('o_hours','80/40 hours exception')+wchk('o_vehallow','Vehicle allowance (HR)')+
+    '</div>'+
+    '<div class="sec">3 · Equipment</div><div class="grid3">'+
+      wchk('o_comp','Computer needed')+
+      '<div><label class="fld">Computer class</label><select class="in" id="o_class"><option value="">—</option>'+classes+'</select></div>'+
+      wchk('o_existing','Reuse existing device')+
+      wchk('o_phone','Company phone')+wchk('o_ipad','iPad')+wchk('o_dock','Dock / accessories')+
+      '<div><label class="fld">Monitors</label><input class="in" id="o_mon" type="number" min="0" value="0"></div>'+
+      wchk('o_premium','Exceptional hardware (needs exec approval)')+
+    '</div>'+
+    '<div class="sec">4 · Software & systems</div><div class="grid3">'+soft+'</div>'+
+    '<div class="sec">5 · SharePoint</div><div class="grid3">'+sp+'</div>'+
+    '<div class="sec">6 · Vehicles & Safety</div><div class="grid3">'+
+      wchk('o_veh','Company vehicle')+wchk('o_vehtrans','Vehicle transfer')+wchk('o_wex','WEX fuel card')+
+      wchk('o_mvr','MVR required')+wchk('o_ins','Proof of insurance')+wchk('o_safety','Safety onboarding',true)+
+    '</div>'+
+    '<div class="sec">7 · Building access</div><div class="grid3">'+acc+'</div>'+
+    '<div class="sec">8 · Review & submit</div>'+
+    '<label class="chk" style="margin-top:6px"><input type="checkbox" id="o_confirm"> I have reviewed this onboarding request and the information is complete.</label>'+
+    '<div style="margin-top:12px"><button class="btn" onclick="submitOnboarding()">Submit onboarding</button></div>'+
+    '<div id="o_result" style="margin-top:12px"></div>'+
+  '</div>';
+};
+function fld(l,id){return '<div><label class="fld">'+esc(l)+'</label><input class="in" id="'+id+'"></div>';}
+function chk(id,l){return '<label class="chk"><input type="checkbox" id="'+id+'"> '+esc(l)+'</label>';}
+function wchk(id,l,def){return '<label class="chk"><input type="checkbox" id="'+id+'"'+(def?' checked':'')+'> '+esc(l)+'</label>';}
+function cv(id){var el=document.getElementById(id);return el&&el.checked;}
+function tv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+function submitOnboarding(){
+  if(!cv('o_confirm')){alert('Please confirm the review checkbox.');return;}
+  var C=CAT||{};
+  var systems=(C.systems||[]).filter(function(s){return s.category!=='identity'&&cv('sys_'+s.key);}).map(function(s){return s.key;});
+  var sharepoint=(C.sharepointGroups||[]).filter(function(g){return cv('sp_'+g.key);}).map(function(g){return g.key;});
+  var buildingAccess=(C.accessMethods||[]).filter(function(a){return cv('acc_'+a.key);}).map(function(a){return a.key;});
+  var body={
+    legal_first_name:tv('o_fn'),legal_last_name:tv('o_ln'),preferred_name:tv('o_pn'),
+    personal_email:tv('o_pe'),personal_phone:tv('o_pp'),office:tv('o_office'),job_position:tv('o_pos'),
+    public_job_title:tv('o_title'),manager:tv('o_mgr'),employment_type:document.getElementById('o_type').value,anticipated_start_date:tv('o_start'),
+    intake:{
+      wantAdAccount:cv('o_ad'),companyEmail:cv('o_email'),microsoft365:cv('o_m365'),teamsNumber:cv('o_teams'),bambooRecord:cv('o_bamboo'),
+      payrollSetup:cv('o_payroll'),benefits:cv('o_benefits'),ptoException:cv('o_pto'),probationWaived:cv('o_probation'),
+      incentivePlan:cv('o_incentive'),hoursException:cv('o_hours'),vehicleAllowance:cv('o_vehallow'),
+      computerNeeded:cv('o_comp'),computerClass:document.getElementById('o_class').value,existingComputer:cv('o_existing'),
+      companyPhone:cv('o_phone'),ipad:cv('o_ipad'),dock:cv('o_dock'),monitors:Number(tv('o_mon')||0),premiumHardware:cv('o_premium'),
+      systems:systems,sharepoint:sharepoint,buildingAccess:buildingAccess,office:tv('o_office'),
+      companyVehicle:cv('o_veh'),vehicleTransfer:cv('o_vehtrans'),wexCard:cv('o_wex'),mvrRequired:cv('o_mvr'),proofOfInsurance:cv('o_ins'),safetyOnboarding:cv('o_safety')
+    }
+  };
+  if(!body.legal_first_name&&!body.preferred_name){alert('First name or preferred name is required.');return;}
+  j('/api/people/onboarding',{method:'POST',body:JSON.stringify(body)}).then(function(r){
+    if(!r.ok){document.getElementById('o_result').innerHTML='<p class="muted">'+esc(r.body&&r.body.error||'failed')+'</p>';return;}
+    document.getElementById('o_result').innerHTML='<div class="card card-pad" style="background:var(--panel-alt,var(--fill))"><p><b>Onboarding created.</b> '+r.body.tasks+' tasks routed to the owning teams. Track it in <span class="link" onclick="go(\'employees\')">Employees</span> and work it in <span class="link" onclick="go(\'tasks\')">My Tasks</span>.</p></div>';
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

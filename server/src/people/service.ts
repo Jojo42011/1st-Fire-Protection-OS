@@ -1,0 +1,318 @@
+/**
+ * People / Employee Lifecycle — data service (the DB-facing layer over the pure routing engine).
+ *
+ * Persists employees, workflows, tasks, access, assets, credentials and the audit trail. Task
+ * lifecycle honors dependencies: an approval-gated provisioning task stays `blocked` until its
+ * approval is granted; completing a task unblocks anything waiting on it. Offboarding reverses the
+ * employee's ACTUAL recorded footprint. Nothing here performs a destructive external action — it
+ * generates human-confirmed workflow tasks; real provisioning/de-provisioning is a later phase.
+ */
+import { getDb } from '../db/index';
+import { JOB_POSITIONS } from './catalog';
+import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
+
+/* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
+export function seedPeopleCatalog(): void {
+  const db = getDb();
+  const insPos = db.prepare(`INSERT OR IGNORE INTO job_positions (name) VALUES (?)`);
+  const insTpl = db.prepare(`INSERT OR IGNORE INTO role_templates (position, review_status, defaults_json) VALUES (?, 'unreviewed', '{}')`);
+  const tx = db.transaction(() => {
+    for (const name of JOB_POSITIONS) { insPos.run(name); insTpl.run(name); }
+  });
+  tx();
+}
+
+/* ─────────────────────────── audit ─────────────────────────── */
+export function audit(action: string, detail: string, opts: { actor?: string; employee_id?: number; workflow_id?: number } = {}): void {
+  getDb()
+    .prepare(`INSERT INTO people_audit (employee_id, workflow_id, actor, action, detail) VALUES (?, ?, ?, ?, ?)`)
+    .run(opts.employee_id ?? null, opts.workflow_id ?? null, opts.actor || 'system', action, detail);
+}
+
+/* ─────────────────────────── task status from a routed work item ─────────────────────────── */
+function initialStatus(w: WorkItem): string {
+  if (w.kind === 'approval') return 'awaiting_approval';
+  if (w.dependsOn) return 'blocked';
+  return 'pending';
+}
+
+/* ─────────────────────────── onboarding ─────────────────────────── */
+export interface NewHire {
+  legal_first_name?: string; legal_last_name?: string; preferred_name?: string;
+  personal_email?: string; personal_phone?: string; work_email?: string;
+  office?: string; department?: string; job_position?: string; public_job_title?: string;
+  manager?: string; employment_type?: string; anticipated_start_date?: string;
+  intake?: OnboardingIntake;
+}
+
+export function createOnboarding(hire: NewHire, actor: string): { employee_id: number; workflow_id: number; tasks: number } {
+  const db = getDb();
+  const empInfo = db.prepare(
+    `INSERT INTO employees (legal_first_name, legal_last_name, preferred_name, personal_email, personal_phone, work_email,
+        office, department, job_position, public_job_title, manager, employment_type, anticipated_start_date, employment_status)
+     VALUES (@fn, @ln, @pn, @pe, @pp, @we, @office, @dept, @pos, @title, @mgr, @type, @start, 'onboarding')`
+  ).run({
+    fn: hire.legal_first_name || null, ln: hire.legal_last_name || null, pn: hire.preferred_name || null,
+    pe: hire.personal_email || null, pp: hire.personal_phone || null, we: hire.work_email || null,
+    office: hire.office || null, dept: hire.department || null, pos: hire.job_position || null,
+    title: hire.public_job_title || null, mgr: hire.manager || null, type: hire.employment_type || null,
+    start: hire.anticipated_start_date || null,
+  });
+  const employee_id = Number(empInfo.lastInsertRowid);
+
+  const intake: OnboardingIntake = hire.intake || {};
+  const wfInfo = db.prepare(
+    `INSERT INTO people_workflows (employee_id, kind, status, initiated_by, manager, intake_json)
+     VALUES (?, 'onboarding', 'open', ?, ?, ?)`
+  ).run(employee_id, actor, hire.manager || null, JSON.stringify(intake));
+  const workflow_id = Number(wfInfo.lastInsertRowid);
+
+  const items = routeOnboarding(intake);
+  persistItems(workflow_id, employee_id, items, 'onboarding');
+
+  audit('onboarding_initiated', `Onboarding started for ${displayName(hire)} (${hire.job_position || 'no position'})`, { actor, employee_id, workflow_id });
+  audit('form_submitted', `${items.length} work items routed`, { actor, employee_id, workflow_id });
+  return { employee_id, workflow_id, tasks: items.length };
+}
+
+function persistItems(workflow_id: number, employee_id: number, items: WorkItem[], mode: 'onboarding' | 'offboarding'): void {
+  const db = getDb();
+  const insTask = db.prepare(
+    `INSERT INTO people_tasks (workflow_id, employee_id, category, team, kind, title, detail, status, item_key, depends_on_key, approver_role, system, asset_type)
+     VALUES (@wf, @emp, @cat, @team, @kind, @title, @detail, @status, @key, @dep, @role, @sys, @asset)`
+  );
+  const insAccess = db.prepare(
+    `INSERT INTO employee_access (employee_id, system, label, status, owner, approver) VALUES (?, ?, ?, ?, ?, ?)`
+  );
+  const tx = db.transaction(() => {
+    for (const w of items) {
+      insTask.run({
+        wf: workflow_id, emp: employee_id, cat: w.category, team: w.team, kind: w.kind, title: w.title,
+        detail: w.detail || null, status: initialStatus(w), key: w.key, dep: w.dependsOn || null,
+        role: w.approverRole || null, sys: w.system || null, asset: w.assetType || null,
+      });
+      // Onboarding: record the intended access footprint up front (provisioning flips it to provisioned).
+      if (mode === 'onboarding' && w.system && w.kind === 'task') {
+        insAccess.run(employee_id, w.system, w.title.replace(/^Provision |^Grant /, ''), w.dependsOn ? 'awaiting_approval' : 'requested', w.team, null);
+      }
+    }
+  });
+  tx();
+}
+
+/* ─────────────────────────── task decisions (the human gate + dependency engine) ─────────────────────────── */
+interface TaskRow {
+  id: number; workflow_id: number; employee_id: number; kind: string; status: string;
+  item_key: string | null; approver_role: string | null; system: string | null; asset_type: string | null; title: string; team: string;
+}
+function getTask(id: number): TaskRow | undefined {
+  return getDb().prepare(`SELECT * FROM people_tasks WHERE id = ?`).get(id) as TaskRow | undefined;
+}
+const OPEN_STATES = ['pending', 'blocked', 'awaiting_approval', 'ready', 'in_progress'];
+
+/** Complete a task. Marks provisioning done, creates assets, unblocks dependents, may finish the workflow. */
+export function completeTask(id: number, user: string): TaskRow {
+  const db = getDb();
+  const t = getTask(id);
+  if (!t) throw new Error('task not found');
+  if (t.kind !== 'task') throw new Error('not a task (use approve/reject)');
+  if (t.status === 'blocked') throw new Error('task is blocked by an unmet dependency');
+  if (OPEN_STATES.includes(t.status)) {
+    db.prepare(`UPDATE people_tasks SET status = 'completed', completed_by = ?, completed_at = datetime('now') WHERE id = ?`).run(user, id);
+    applySideEffects(t, user);
+    unblockDependents(t.workflow_id, t.item_key);
+    audit('task_completed', t.title, { actor: user, employee_id: t.employee_id, workflow_id: t.workflow_id });
+    maybeFinishWorkflow(t.workflow_id);
+  }
+  return getTask(id)!;
+}
+
+/** Approve an approval. Unblocks its dependent provisioning task; marks access approved. */
+export function approveTask(id: number, user: string): TaskRow {
+  const db = getDb();
+  const t = getTask(id);
+  if (!t) throw new Error('task not found');
+  if (t.kind !== 'approval') throw new Error('not an approval');
+  if (OPEN_STATES.includes(t.status)) {
+    db.prepare(`UPDATE people_tasks SET status = 'approved', decided_by = ?, completed_at = datetime('now') WHERE id = ?`).run(user, id);
+    if (t.system) db.prepare(`UPDATE employee_access SET status = 'approved', approved_at = datetime('now') WHERE employee_id = ? AND system = ? AND status != 'provisioned'`).run(t.employee_id, t.system);
+    unblockDependents(t.workflow_id, t.item_key);
+    audit('approval_approved', t.title, { actor: user, employee_id: t.employee_id, workflow_id: t.workflow_id });
+    maybeFinishWorkflow(t.workflow_id);
+  }
+  return getTask(id)!;
+}
+
+/** Reject an approval. Its dependent provisioning task is marked failed (cannot proceed). */
+export function rejectTask(id: number, user: string, note?: string): TaskRow {
+  const db = getDb();
+  const t = getTask(id);
+  if (!t) throw new Error('task not found');
+  if (t.kind !== 'approval') throw new Error('not an approval');
+  if (OPEN_STATES.includes(t.status)) {
+    db.prepare(`UPDATE people_tasks SET status = 'rejected', decided_by = ?, detail = COALESCE(detail,'') || ? , completed_at = datetime('now') WHERE id = ?`).run(user, note ? ` · rejected: ${note}` : '', id);
+    if (t.item_key) db.prepare(`UPDATE people_tasks SET status = 'failed' WHERE workflow_id = ? AND depends_on_key = ? AND status = 'blocked'`).run(t.workflow_id, t.item_key);
+    audit('approval_rejected', t.title + (note ? ` (${note})` : ''), { actor: user, employee_id: t.employee_id, workflow_id: t.workflow_id });
+    maybeFinishWorkflow(t.workflow_id);
+  }
+  return getTask(id)!;
+}
+
+function applySideEffects(t: TaskRow, user: string): void {
+  const db = getDb();
+  // Provisioning a system flips the recorded access to provisioned (or revoked, on offboarding).
+  if (t.system) {
+    const wf = db.prepare(`SELECT kind FROM people_workflows WHERE id = ?`).get(t.workflow_id) as { kind: string } | undefined;
+    if (wf?.kind === 'offboarding') {
+      db.prepare(`UPDATE employee_access SET status = 'revoked', revoked_at = datetime('now') WHERE employee_id = ? AND system = ? AND status != 'revoked'`).run(t.employee_id, t.system);
+    } else {
+      db.prepare(`UPDATE employee_access SET status = 'provisioned', provisioned_at = datetime('now') WHERE employee_id = ? AND system = ?`).run(t.employee_id, t.system);
+    }
+  }
+  // Asset issuance (onboarding) creates the assigned asset; asset recovery (offboarding) returns it.
+  if (t.asset_type) {
+    const wf = db.prepare(`SELECT kind FROM people_workflows WHERE id = ?`).get(t.workflow_id) as { kind: string } | undefined;
+    if (wf?.kind === 'offboarding') {
+      db.prepare(`UPDATE employee_assets SET status = 'returned', returned_at = datetime('now'), received_by = ? WHERE employee_id = ? AND asset_type = ? AND status IN ('assigned','pending_return')`).run(user, t.employee_id, t.asset_type);
+    } else {
+      const exists = db.prepare(`SELECT 1 FROM employee_assets WHERE employee_id = ? AND asset_type = ? AND status = 'assigned'`).get(t.employee_id, t.asset_type);
+      if (!exists) db.prepare(`INSERT INTO employee_assets (employee_id, asset_type, status, owner, assigned_at) VALUES (?, ?, 'assigned', ?, datetime('now'))`).run(t.employee_id, t.asset_type, t.team);
+    }
+  }
+}
+
+function unblockDependents(workflow_id: number, item_key: string | null): void {
+  if (!item_key) return;
+  getDb().prepare(`UPDATE people_tasks SET status = 'pending' WHERE workflow_id = ? AND depends_on_key = ? AND status = 'blocked'`).run(workflow_id, item_key);
+}
+
+function maybeFinishWorkflow(workflow_id: number): void {
+  const db = getDb();
+  const open = (db.prepare(`SELECT COUNT(*) AS c FROM people_tasks WHERE workflow_id = ? AND status IN ('pending','blocked','awaiting_approval','ready','in_progress')`).get(workflow_id) as { c: number }).c;
+  if (open > 0) return;
+  const wf = db.prepare(`SELECT * FROM people_workflows WHERE id = ?`).get(workflow_id) as any;
+  if (!wf || wf.status === 'complete') return;
+  db.prepare(`UPDATE people_workflows SET status = 'complete', completed_at = datetime('now') WHERE id = ?`).run(workflow_id);
+  if (wf.kind === 'onboarding') {
+    db.prepare(`UPDATE employees SET employment_status = 'active', actual_start_date = COALESCE(actual_start_date, anticipated_start_date), updated_at = datetime('now') WHERE id = ?`).run(wf.employee_id);
+    audit('employee_activated', 'Onboarding complete; employee is Active', { actor: 'system', employee_id: wf.employee_id, workflow_id });
+  } else {
+    db.prepare(`UPDATE employees SET employment_status = 'terminated', termination_date = COALESCE(termination_date, date('now')), updated_at = datetime('now') WHERE id = ?`).run(wf.employee_id);
+    audit('employee_terminated', 'Offboarding complete; employee is Terminated (history preserved)', { actor: 'system', employee_id: wf.employee_id, workflow_id });
+  }
+}
+
+/* ─────────────────────────── offboarding (reverse the ACTUAL footprint) ─────────────────────────── */
+export function startOffboarding(employee_id: number, opts: { notice_date?: string; last_working_date?: string; termination_type?: string; access_cutoff_at?: string; notes?: string; manager?: string }, actor: string): { workflow_id: number; tasks: number } {
+  const db = getDb();
+  const emp = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(employee_id) as any;
+  if (!emp) throw new Error('employee not found');
+
+  const footprint: Footprint = {
+    access: (db.prepare(`SELECT system, label FROM employee_access WHERE employee_id = ? AND status IN ('requested','awaiting_approval','approved','provisioned')`).all(employee_id) as any[]).map((r) => ({ system: r.system, label: r.label })),
+    assets: (db.prepare(`SELECT asset_type, identifier FROM employee_assets WHERE employee_id = ? AND status IN ('assigned','pending_return')`).all(employee_id) as any[]).map((r) => ({ assetType: r.asset_type, identifier: r.identifier })),
+  };
+
+  const wfInfo = db.prepare(
+    `INSERT INTO people_workflows (employee_id, kind, status, initiated_by, manager, notice_date, last_working_date, termination_type, access_cutoff_at, notes)
+     VALUES (?, 'offboarding', 'open', ?, ?, ?, ?, ?, ?, ?)`
+  ).run(employee_id, actor, opts.manager || null, opts.notice_date || null, opts.last_working_date || null, opts.termination_type || null, opts.access_cutoff_at || null, opts.notes || null);
+  const workflow_id = Number(wfInfo.lastInsertRowid);
+
+  db.prepare(`UPDATE employees SET employment_status = 'offboarding', notice_date = ?, last_working_date = ?, termination_type = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(opts.notice_date || null, opts.last_working_date || null, opts.termination_type || null, employee_id);
+
+  const items = routeOffboarding(footprint);
+  persistItems(workflow_id, employee_id, items, 'offboarding');
+  // Mark assets pending return so the recovery is tracked.
+  db.prepare(`UPDATE employee_assets SET status = 'pending_return' WHERE employee_id = ? AND status = 'assigned'`).run(employee_id);
+
+  audit('offboarding_started', `Offboarding started; reversing ${footprint.access.length} access + ${footprint.assets.length} asset(s)`, { actor, employee_id, workflow_id });
+  return { workflow_id, tasks: items.length };
+}
+
+/* ─────────────────────────── reads ─────────────────────────── */
+export function listEmployees(filter: { status?: string; office?: string; q?: string } = {}): any[] {
+  const where: string[] = [], args: any[] = [];
+  if (filter.status) { where.push('employment_status = ?'); args.push(filter.status); }
+  if (filter.office) { where.push('office = ?'); args.push(filter.office); }
+  if (filter.q) { where.push('(lower(legal_first_name || " " || legal_last_name) LIKE ? OR lower(preferred_name) LIKE ?)'); args.push(`%${filter.q.toLowerCase()}%`, `%${filter.q.toLowerCase()}%`); }
+  const sql = `SELECT id, legal_first_name, legal_last_name, preferred_name, job_position, public_job_title, office, manager, employment_status, work_email, anticipated_start_date, actual_start_date
+               FROM employees ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY employment_status, legal_last_name`;
+  return getDb().prepare(sql).all(...args);
+}
+
+export function getEmployeeDetail(id: number, opts: { includeComp: boolean }): any | null {
+  const db = getDb();
+  const emp = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(id) as any;
+  if (!emp) return null;
+  const access = db.prepare(`SELECT id, system, label, status, owner, approved_at, provisioned_at, revoked_at FROM employee_access WHERE employee_id = ? ORDER BY status, system`).all(id);
+  const assets = db.prepare(`SELECT id, asset_type, identifier, serial, device_name, status, owner, assigned_at, returned_at, condition FROM employee_assets WHERE employee_id = ? ORDER BY status, asset_type`).all(id);
+  const credentials = db.prepare(`SELECT id, credential_type, status, expires_at, verified_at, verified_by FROM employee_credentials WHERE employee_id = ? ORDER BY credential_type`).all(id);
+  const workflows = db.prepare(`SELECT id, kind, status, created_at, completed_at FROM people_workflows WHERE employee_id = ? ORDER BY id DESC`).all(id);
+  const history = db.prepare(`SELECT actor, action, detail, at FROM people_audit WHERE employee_id = ? ORDER BY id DESC LIMIT 100`).all(id);
+  const openWf = db.prepare(`SELECT id FROM people_workflows WHERE employee_id = ? AND kind = 'onboarding' ORDER BY id DESC LIMIT 1`).get(id) as { id: number } | undefined;
+  const readiness = openWf ? computeReadiness(openWf.id) : null;
+  if (!opts.includeComp) { delete emp.termination_type; } // comp/pay never lives on employees; intake holds it (HR-gated)
+  return { employee: emp, access, assets, credentials, workflows, history, readiness };
+}
+
+export function listTasks(filter: { team?: string; status?: string; employee_id?: number; kind?: string } = {}): any[] {
+  const where: string[] = [], args: any[] = [];
+  if (filter.team) { where.push('t.team = ?'); args.push(filter.team); }
+  if (filter.kind) { where.push('t.kind = ?'); args.push(filter.kind); }
+  if (filter.employee_id) { where.push('t.employee_id = ?'); args.push(filter.employee_id); }
+  if (filter.status === 'open') where.push(`t.status IN ('pending','blocked','awaiting_approval','ready','in_progress')`);
+  else if (filter.status) { where.push('t.status = ?'); args.push(filter.status); }
+  const sql = `SELECT t.*, e.legal_first_name, e.legal_last_name, e.preferred_name, e.job_position, e.office, w.kind AS workflow_kind
+               FROM people_tasks t JOIN employees e ON e.id = t.employee_id JOIN people_workflows w ON w.id = t.workflow_id
+               ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+               ORDER BY CASE t.status WHEN 'pending' THEN 0 WHEN 'awaiting_approval' THEN 1 WHEN 'blocked' THEN 2 ELSE 3 END, t.id DESC`;
+  return getDb().prepare(sql).all(...args);
+}
+
+/* ─────────────────────────── readiness ─────────────────────────── */
+const READINESS_CATEGORIES: { key: string; label: string; match: string[] }[] = [
+  { key: 'identity', label: 'Identity', match: ['identity'] },
+  { key: 'hardware', label: 'Hardware', match: ['hardware'] },
+  { key: 'software', label: 'Software', match: ['software'] },
+  { key: 'access', label: 'Access', match: ['access', 'sharepoint'] },
+  { key: 'hr', label: 'HR', match: ['hr'] },
+  { key: 'safety', label: 'Safety', match: ['safety'] },
+  { key: 'credentials', label: 'Credentials', match: ['credentials'] },
+];
+export function computeReadiness(workflow_id: number): { overall: string; categories: any[] } {
+  const rows = getDb().prepare(`SELECT category, status FROM people_tasks WHERE workflow_id = ?`).all(workflow_id) as { category: string; status: string }[];
+  const cats = READINESS_CATEGORIES.map((c) => {
+    const mine = rows.filter((r) => c.match.includes(r.category));
+    if (!mine.length) return { key: c.key, label: c.label, state: 'ready', open: 0, blocked: 0, total: 0 };
+    const failed = mine.filter((r) => r.status === 'failed' || r.status === 'rejected').length;
+    const blocked = mine.filter((r) => r.status === 'blocked').length;
+    const open = mine.filter((r) => ['pending', 'awaiting_approval', 'blocked', 'in_progress', 'ready'].includes(r.status)).length;
+    const state = failed ? 'blocked' : open ? 'at_risk' : 'ready';
+    return { key: c.key, label: c.label, state, open, blocked, total: mine.length };
+  });
+  const overall = cats.some((c) => c.state === 'blocked') ? 'blocked' : cats.some((c) => c.state === 'at_risk') ? 'at_risk' : 'ready';
+  return { overall, categories: cats };
+}
+
+/* ─────────────────────────── overview ─────────────────────────── */
+export function overview(): any {
+  const db = getDb();
+  const n = (sql: string, ...a: any[]) => (db.prepare(sql).get(...a) as { c: number }).c;
+  return {
+    onboarding: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'onboarding'`),
+    active: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'active'`),
+    offboarding: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status IN ('notice','offboarding')`),
+    terminated: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'terminated'`),
+    openTasks: n(`SELECT COUNT(*) AS c FROM people_tasks WHERE status IN ('pending','ready','in_progress')`),
+    awaitingApproval: n(`SELECT COUNT(*) AS c FROM people_tasks WHERE status = 'awaiting_approval'`),
+    blocked: n(`SELECT COUNT(*) AS c FROM people_tasks WHERE status = 'blocked'`),
+    positions: n(`SELECT COUNT(*) AS c FROM job_positions WHERE active = 1`),
+    templatesUnreviewed: n(`SELECT COUNT(*) AS c FROM role_templates WHERE review_status = 'unreviewed'`),
+  };
+}
+
+function displayName(h: NewHire): string {
+  return h.preferred_name || [h.legal_first_name, h.legal_last_name].filter(Boolean).join(' ') || 'New hire';
+}
