@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Coming soon · Northstar</title>
+<title>Coming soon · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
@@ -32,10 +32,11 @@
   var s = new URLSearchParams(location.search).get('s');
   if (s) {
     document.getElementById('title').textContent = s + ' — coming soon';
-    var phase = ({ 'Home':'Phase 3', 'To approve':'Phase 3', 'Accounts':'Phase 4',
-      'Pipeline':'Phase 4', 'ServiceTrade sync':'Phase 4' })[s];
+    var phase = ({ 'Money':'Phase 6 (Intacct)', 'Accounting Handoffs':'Phase 7', 'Close':'Phase 6',
+      'Custom Reports':'Phase 8', 'Offices':'Company', 'Settings':'Company', 'My Tasks':'Work',
+      'Service':'Operations', 'Money Reports':'Reports', 'Operations Reports':'Reports', 'People Reports':'Reports' })[s];
     if (phase) document.getElementById('phase').textContent = 'Ships in ' + phase;
-    document.title = s + ' · Northstar';
+    document.title = s + ' · 1st FP OS';
   }
 </script>
 </body>

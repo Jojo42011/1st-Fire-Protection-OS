@@ -1158,6 +1158,40 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_saved_reports_owner ON saved_reports(owner_email);
   `);
+
+  // Exceptions (Phase 3): the generic "reality does not match the intended process" object. One
+  // table for every department (accounting/ops/people/it/fleet), deduped by a stable key so the
+  // detector is idempotent. office holds a canonical office key (or null for company-wide) so
+  // exceptions scope exactly like every other object.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS exceptions (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      dedupe_key     TEXT UNIQUE,               -- stable key -> idempotent detection
+      category       TEXT NOT NULL,             -- e.g. deficiency_aging, terminated_access, ar_aging
+      source_system  TEXT,                      -- servicetrade|bamboo|microsoft|invoices|derived
+      office         TEXT,                      -- canonical office key, or NULL for company-wide
+      subject_type   TEXT,                      -- office|employee|job|invoice|company
+      subject_id     TEXT,
+      title          TEXT NOT NULL,
+      description    TEXT,
+      severity       TEXT DEFAULT 'medium',     -- low|medium|high|critical
+      financial_impact INTEGER DEFAULT 0,       -- whole USD; 0 when not quantified
+      financial_projected INTEGER DEFAULT 0,    -- 1 = the impact is an estimate, not booked
+      owner_team     TEXT,                       -- accounting|operations|people|it|safety
+      assigned_user  TEXT,
+      status         TEXT DEFAULT 'open',        -- open|assigned|in_progress|resolved|dismissed|ignored|blocked
+      count          INTEGER DEFAULT 1,          -- how many underlying records this rolls up
+      detected_at    TEXT DEFAULT (datetime('now')),
+      due_at         TEXT,
+      resolved_at    TEXT,
+      resolution     TEXT,
+      evidence_json  TEXT,
+      updated_at     TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_exceptions_status ON exceptions(status);
+    CREATE INDEX IF NOT EXISTS idx_exceptions_office ON exceptions(office);
+    CREATE INDEX IF NOT EXISTS idx_exceptions_owner ON exceptions(owner_team);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

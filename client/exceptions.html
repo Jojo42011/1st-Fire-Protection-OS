@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exceptions · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  body{background:var(--bg)}
+  .wrap{max-width:1060px;margin:0 auto;padding:24px 24px 60px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .top h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
+  .top .ctx{font-weight:600;font-size:12.5px;color:var(--muted);margin-top:2px}
+  .sum{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0 4px}
+  .sc{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:11px 15px;min-width:120px}
+  .sc .n{font-weight:800;font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .sc .l{font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-top:2px}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px}
+  .fb{font-weight:650;font-size:12px;color:var(--ink-2);border:1px solid var(--border);background:var(--panel);border-radius:var(--r-pill);padding:6px 12px;cursor:pointer}
+  .fb.on{background:var(--ink);color:var(--panel);border-color:transparent}
+  .list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+  .ex{border:1px solid var(--border);border-left-width:4px;border-radius:12px;background:var(--panel);padding:14px 15px}
+  .ex.critical{border-left-color:#b3261e}.ex.high{border-left-color:#e5484d}.ex.medium{border-left-color:#e8a13a}.ex.low{border-left-color:#8892a6}
+  .ex .h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .ex .t{font-weight:750;font-size:14.5px;color:var(--ink);line-height:1.3}
+  .ex .d{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:4px}
+  .ex .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center}
+  .tag{font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.03em;border-radius:var(--r-pill);padding:3px 8px;background:var(--fill);color:var(--ink-3)}
+  .tag.owner{background:#eef2ff;color:#3b4a9b}
+  .tag.office{background:#eefaf1;color:#1f7a4d}
+  .tag.impact{background:#fff3e6;color:#b06a1a}
+  .acts{display:flex;gap:6px;flex:none}
+  .acts button{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 11px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .acts .res{background:#1f9d55;color:#fff;border-color:transparent}
+  .empty{border:1px dashed var(--border-strong,#c9ccd6);border-radius:14px;padding:30px;text-align:center;color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div><h1>Exceptions</h1><div class="ctx" id="ctx">Where reality does not match the process.</div></div>
+      <button class="fb" id="refresh">↻ Re-scan</button>
+    </div>
+    <div class="sum" id="sum"></div>
+    <div class="filters" id="ownerFilters"></div>
+    <div class="list" id="list"></div>
+  </div>
+<script>
+"use strict";
+var NAV='app-navigate';
+var ownerFilter='';
+function office(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
+function officeParam(){var o=office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
+function go(tab){try{parent.postMessage({type:NAV,tab:tab},'*');}catch(_){}}
+var OWNERS=[['','All'],['operations','Operations'],['accounting','Accounting'],['it','IT'],['people','People'],['safety','Safety']];
+var SUBJECT_TAB={office:'deficiencies',employee:'people',company:'receivables',invoice:'receivables',job:'jobs'};
+
+function renderOwners(){
+  document.getElementById('ownerFilters').innerHTML=OWNERS.map(function(o){
+    return '<button class="fb'+(o[0]===ownerFilter?' on':'')+'" data-owner="'+o[0]+'">'+esc(o[1])+'</button>';
+  }).join('');
+}
+function renderSummary(s){
+  var cards=[['Open',s.open],['Financial impact',money(s.financialImpact)]];
+  Object.keys(s.bySeverity||{}).sort().forEach(function(k){cards.push([k,s.bySeverity[k]]);});
+  document.getElementById('sum').innerHTML=cards.map(function(c){
+    return '<div class="sc"><div class="n">'+esc(String(c[1]))+'</div><div class="l">'+esc(c[0])+'</div></div>';
+  }).join('');
+}
+function exCard(e){
+  var impact = e.financial_impact>0 ? '<span class="tag impact">'+(e.financial_projected?'~':'')+money(e.financial_impact)+(e.financial_projected?' projected':'')+'</span>' : '';
+  return '<div class="ex '+esc(e.severity)+'"><div class="h"><div><div class="t">'+esc(e.title)+'</div>'+
+    '<div class="d">'+esc(e.description||'')+'</div></div>'+
+    '<div class="acts"><button data-open="'+esc(SUBJECT_TAB[e.subject_type]||'')+'">Open</button>'+
+      '<button class="res" data-id="'+e.id+'" data-status="resolved">Resolve</button>'+
+      '<button data-id="'+e.id+'" data-status="dismissed">Dismiss</button></div></div>'+
+    '<div class="tags"><span class="tag owner">'+esc(e.owner_team||'')+'</span>'+
+      '<span class="tag office">'+esc(e.officeLabel||'')+'</span>'+
+      '<span class="tag">'+esc(e.severity)+'</span>'+
+      '<span class="tag">'+esc(e.source_system||'')+'</span>'+impact+'</div></div>';
+}
+function load(){
+  fetch('/api/exceptions/summary'+ (officeParam()?('?'+officeParam().slice(1)):'')).then(function(r){return r.json();}).then(function(d){if(d&&d.ok)renderSummary(d.summary);}).catch(function(){});
+  var url='/api/exceptions?status=open'+officeParam()+(ownerFilter?('&owner='+ownerFilter):'');
+  fetch(url).then(function(r){return r.json();}).then(function(d){
+    var list=document.getElementById('list');
+    if(!d||!d.ok){list.innerHTML='<div class="empty">Could not load.</div>';return;}
+    if(!d.exceptions.length){list.innerHTML='<div class="empty">No open exceptions'+(ownerFilter?(' for '+ownerFilter):'')+'. Clean.</div>';return;}
+    list.innerHTML=d.exceptions.map(exCard).join('');
+  }).catch(function(){});
+}
+function setStatus(id,status){
+  fetch('/api/exceptions/'+id+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:status})})
+    .then(function(r){return r.json();}).then(function(){load();}).catch(function(){});
+}
+document.addEventListener('click',function(e){
+  var o=e.target.closest('[data-owner]');if(o){ownerFilter=o.getAttribute('data-owner');renderOwners();load();return;}
+  var s=e.target.closest('[data-id]');if(s){setStatus(s.getAttribute('data-id'),s.getAttribute('data-status'));return;}
+  var op=e.target.closest('[data-open]');if(op&&op.getAttribute('data-open')){go(op.getAttribute('data-open'));return;}
+  if(e.target.closest('#refresh')){fetch('/api/exceptions/detect',{method:'POST'}).then(function(){load();});return;}
+});
+window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
+renderOwners();
+load();
+</script>
+</body>
+</html>

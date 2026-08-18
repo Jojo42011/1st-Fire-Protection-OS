@@ -58,6 +58,8 @@ import people from './routes/people';
 import me from './routes/me';
 import sources from './routes/sources';
 import reports from './routes/reports';
+import exceptions from './routes/exceptions';
+import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 
 const PORT = Number(process.env.PORT || 3900);
@@ -124,6 +126,7 @@ app.use(people);
 app.use(me);
 app.use(sources);
 app.use(reports);
+app.use(exceptions);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) => {
@@ -168,6 +171,7 @@ app.get('/oncall', page('oncall.html'));
 app.get('/deficiencies', page('deficiencies.html'));
 app.get('/scoreboard', page('scoreboard.html'));
 app.get('/office-performance', page('office-performance.html'));
+app.get('/exceptions', page('exceptions.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)
@@ -258,9 +262,13 @@ const runStSync = () =>
     .catch((err) => console.warn('[st-sync] schedule error:', (err as Error).message))
     .then(() => syncPlans())
     .then((p) => { if (p && p.recurrences) console.log(`[st-sync] plans: ${p.recurrences} recurrences, ${p.officesSet} offices set`); })
-    .catch((err) => console.warn('[st-sync] plans error:', (err as Error).message));
+    .catch((err) => console.warn('[st-sync] plans error:', (err as Error).message))
+    // Refresh the exceptions queue off the freshly-synced mirror (idempotent, self-healing).
+    .then(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] detect error:', (e as Error).message); } });
 setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
 setInterval(runStSync, ST_SYNC_MS).unref();
+// One detection pass at boot so the queue is populated before the first sync cycle.
+setTimeout(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] boot detect error:', (e as Error).message); } }, 1000 * 8).unref();
 
 server.listen(PORT, () => {
   console.log(`\n  Northstar Operating System`);
