@@ -1138,6 +1138,12 @@ export function initDb(): void {
   // employees gains a source marker (manual|bamboo) and a unique Bamboo id for idempotent import.
   addColumn('employees', 'source', "TEXT DEFAULT 'manual'");
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
+
+  // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical
+  // office keys) OR company-wide (all_offices=1). Office scope is separate from role — a user can
+  // have company-wide IT access without company-wide financial access. Enforced server-side.
+  addColumn('app_users', 'offices', 'TEXT');            // CSV of canonical office keys; null/'' = none
+  addColumn('app_users', 'all_offices', 'INTEGER DEFAULT 0'); // 1 = company-wide scope
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

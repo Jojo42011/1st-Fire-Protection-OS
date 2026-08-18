@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hasRole, canApprove, canViewCompensation, hasAnyPeopleRole, AppUser, Role } from './authz';
 
-const mk = (roles: Role[]): AppUser => ({ email: 'x@1stfp.test', display_name: null, roles, active: true, source: 'test' });
+const mk = (roles: Role[]): AppUser => ({ email: 'x@1stfp.test', display_name: null, roles, active: true, source: 'test', offices: [], all_offices: false });
 
 test('people_admin is a super-user across roles, approvals and comp', () => {
   const admin = mk(['people_admin']);

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { canonicalOffice } from '../os/office';
 
 let _db: Database.Database | null = null;
 
@@ -12,5 +13,8 @@ export function getDb(): Database.Database {
   _db = new Database(dbPath);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
+  // os_office_key(x): canonical office key for any office string, so office scope can be enforced
+  // inside SQL (WHERE os_office_key(office) IN (...)) instead of filtering rows in application code.
+  _db.function('os_office_key', { deterministic: true }, (x: any) => canonicalOffice(x == null ? '' : String(x)));
   return _db;
 }
