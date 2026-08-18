@@ -115,6 +115,36 @@
     return '<div class="os-tablewrap"><div class="os-tablescroll"><table class="os-table"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div></div>';
   };
 
+  // Horizontal comparison bars from [{label, value}] (for office/category comparisons).
+  OS.bars = function(rows, opts){ opts=opts||{};
+    if(!rows||!rows.length) return OS.empty(opts.empty||'No data.');
+    var max=Math.max.apply(null,rows.map(function(r){return r.value;}))||1;
+    var fmt=opts.money?OS.money:OS.num;
+    return '<div>'+rows.map(function(r){
+      return '<div style="display:grid;grid-template-columns:130px 1fr auto;gap:10px;align-items:center;margin:7px 0"'+(r.office?' class="click" data-tab="'+OS.esc(opts.tab||'')+'" data-office="'+OS.esc(r.office)+'"':'')+'>'+
+        '<span style="font-weight:650;font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+OS.esc(r.label)+'</span>'+
+        '<span style="height:14px;background:var(--fill);border-radius:7px;overflow:hidden"><span style="display:block;height:100%;border-radius:7px;background:var(--os-accent);width:'+Math.round((r.value/max)*100)+'%"></span></span>'+
+        '<span style="font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums">'+fmt(r.value)+'</span></div>';
+    }).join('')+'</div>';
+  };
+  // Minimal SVG line chart from [{bucket, value}]. theme-aware via currentColor.
+  OS.lineChart = function(points, opts){ opts=opts||{};
+    if(!points||points.length<2) return OS.empty(opts.empty||'Not enough history yet to draw a trend.');
+    var W=640,H=180,pad=28,padB=26;
+    var vals=points.map(function(p){return p.value;}); var max=Math.max.apply(null,vals)||1, min=Math.min.apply(null,vals,0);
+    var x=function(i){return pad+(i/(points.length-1))*(W-pad-8);};
+    var y=function(v){return pad-4+(1-(v-min)/((max-min)||1))*(H-pad-padB);};
+    var pts=points.map(function(p,i){return x(i)+','+y(p.value);}).join(' ');
+    var area='M'+x(0)+','+(H-padB)+' L'+points.map(function(p,i){return x(i)+','+y(p.value);}).join(' L')+' L'+x(points.length-1)+','+(H-padB)+' Z';
+    var last=points[points.length-1];
+    var labels=points.map(function(p,i){ if(points.length>8 && i%2) return ''; return '<text x="'+x(i)+'" y="'+(H-8)+'" font-size="10" text-anchor="middle" fill="var(--muted)">'+OS.esc(p.bucket.slice(2))+'</text>'; }).join('');
+    return '<div class="os-tablewrap" style="padding:12px 14px"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+OS.esc(opts.label||'trend')+'" style="width:100%;height:auto;color:var(--os-accent)">'+
+      '<path d="'+area+'" fill="currentColor" opacity="0.08"/>'+
+      '<polyline points="'+pts+'" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
+      '<circle cx="'+x(points.length-1)+'" cy="'+y(last.value)+'" r="3.6" fill="currentColor"/>'+
+      '<text x="'+x(points.length-1)+'" y="'+(y(last.value)-9)+'" font-size="11" font-weight="700" text-anchor="end" fill="var(--ink)">'+OS.esc(opts.money?OS.money(last.value):OS.num(last.value))+'</text>'+
+      labels+'</svg></div>';
+  };
   OS.empty = function(msg, icon){ return '<div class="os-empty">'+(icon?'<div class="ico">'+icon+'</div>':'')+OS.esc(msg||'Nothing here.')+'</div>'; };
   OS.skeletonKpis = function(n){ var s=''; for(var i=0;i<(n||4);i++) s+='<div class="os-skel os-skel-kpi"></div>'; return '<div class="os-kpis">'+s+'</div>'; };
   OS.errorBox = function(msg, onRetry){ return '<div class="os-err"><span>'+OS.esc(msg||'Could not load.')+'</span>'+(onRetry?'<button data-retry="1">Retry</button>':'')+'</div>'; };

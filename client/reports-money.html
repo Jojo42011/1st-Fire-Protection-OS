@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Money Reports · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+</head><body>
+  <div class="os-wrap">
+    <div class="os-head"><div><h1>Money Reports</h1><div class="os-q">Historical financial analysis. (Money Overview is current condition; this is the trend view.)</div>
+      <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div></div>
+    <div class="os-kpis" id="kpis"></div>
+    <div class="os-sec">Open pipeline by office</div><div id="byOffice"></div>
+    <div class="banner os-stale" style="margin-top:20px">Revenue, gross margin, cash-collected and AR trends are financial truth from Sage Intacct. They stay unavailable until the Intacct connection and office/entity mapping are configured. The figures above are operational (ServiceTrade + invoices), not GL truth.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function reload(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  document.getElementById('kpis').innerHTML=OS.skeletonKpis(4);
+  OS.metrics(['ar_outstanding','ar_90_plus','open_pipeline','repair_opportunity_total'],{}).then(function(c){document.getElementById('kpis').innerHTML=OS.kpiRow(c.filter(Boolean),{});});
+  fetch('/api/metrics/open_pipeline/by-office?period='+OS.period()).then(function(r){return r.json();}).then(function(d){
+    var rows=(d.rows||[]).map(function(r){return {label:r.label,value:r.value,office:r.office};}).filter(function(r){return r.value>0;});
+    document.getElementById('byOffice').innerHTML=rows.length?OS.bars(rows,{money:true,tab:'quotes'}):OS.empty('Available to company-wide viewers.');
+  });
+}
+OS.ready(reload); OS.onChange(reload);
+</script></body></html>

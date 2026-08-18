@@ -3,127 +3,49 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>At a glance</title>
-<style>
-  /* Geist - the premium type system, loaded locally (this page is standalone). */
-  @font-face{font-family:'Geist';font-weight:400;font-display:swap;src:url('/brand/fonts/Geist-Regular.woff2') format('woff2');}
-  @font-face{font-family:'Geist';font-weight:500;font-display:swap;src:url('/brand/fonts/Geist-Medium.woff2') format('woff2');}
-  @font-face{font-family:'Geist';font-weight:600;font-display:swap;src:url('/brand/fonts/Geist-SemiBold.woff2') format('woff2');}
-  @font-face{font-family:'Geist';font-weight:700;font-display:swap;src:url('/brand/fonts/Geist-Bold.woff2') format('woff2');}
-  @font-face{font-family:'Geist';font-weight:800;font-display:swap;src:url('/brand/fonts/Geist-ExtraBold.woff2') format('woff2');}
-  :root{
-    --canvas:#ffffff;
-    --ink:#111111;
-    --muted:#6b7280;
-    --faint:#9ca3af;
-    --hair:rgba(0,0,0,0.10);
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);}
-  body{
-    font-family:'Geist',system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    text-rendering:optimizeLegibility;
-    line-height:1.4;
-  }
-  .wrap{
-    max-width:560px;
-    margin:0 auto;
-    padding:44px 24px 64px;
-  }
-  .period{
-    font-size:12px;
-    letter-spacing:.14em;
-    text-transform:uppercase;
-    color:var(--faint);
-    margin:0 0 40px;
-  }
-  .stat{
-    padding:30px 0;
-    border-top:1px solid var(--hair);
-  }
-  .stat:first-of-type{border-top:none;padding-top:0;}
-  .stat-top{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom:10px;
-  }
-  .label{
-    font-size:12px;
-    letter-spacing:.12em;
-    text-transform:uppercase;
-    color:var(--muted);
-  }
-  .num{
-    font-size:clamp(52px,15vw,80px);
-    font-weight:600;
-    line-height:1.02;
-    letter-spacing:-0.02em;
-    font-variant-numeric:tabular-nums;
-    color:var(--ink);
-    margin:2px 0 8px;
-  }
-  .roi{
-    font-size:15px;
-    color:var(--muted);
-    margin:0;
-  }
-  .sub{
-    font-size:13px;
-    color:var(--faint);
-    margin:6px 0 0;
-  }
-  .foot{
-    margin-top:44px;
-    font-size:11px;
-    letter-spacing:.06em;
-    color:var(--faint);
-  }
-  @media (max-width:400px){
-    .wrap{padding:34px 20px 56px;}
-  }
-</style>
+<title>Executive · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 </head>
 <body>
-  <main class="wrap">
-    <p class="period" id="period">&nbsp;</p>
-    <div id="stats"></div>
-    <p class="foot" id="foot"></p>
-  </main>
-
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Executive</h1><div class="os-q">The company at a glance: where the money and the risk are.</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span><span class="chip" id="ctxPeriod">This month</span></div></div>
+      <div class="os-sources" id="sources"></div>
+    </div>
+    <div class="os-kpis" id="kpis"></div>
+    <div class="os-sec">Open pipeline by office</div>
+    <div id="comparison"></div>
+    <div class="os-sec">Jobs completed over time</div>
+    <div id="trend"></div>
+    <div class="os-sec">Deficiency opportunity</div>
+    <div id="funnel" class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"></div>
+    <div class="os-q" style="margin-top:14px">Revenue, gross margin and cash arrive with Sage Intacct. Everything here is operational truth from ServiceTrade; projected values are labeled and never counted as booked revenue.</div>
+  </div>
+<script src="/os.js"></script>
 <script>
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-function block(a){
-  return '<section class="stat">'
-    + '<div class="stat-top"><span class="label">'+esc(a.label)+'</span></div>'
-    + '<div class="num">'+esc(a.headline)+'</div>'
-    + '<p class="roi">'+esc(a.roi)+'</p>'
-    + (a.sub ? '<p class="sub">'+esc(a.sub)+'</p>' : '')
-    + '</section>';
-}
-
-function fmtDate(iso){
-  try{
-    var d = new Date(iso);
-    return d.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'});
-  }catch(e){ return ''; }
-}
-
-fetch('/api/impact')
-  .then(function(r){return r.json();})
-  .then(function(d){
-    document.getElementById('period').textContent = d.period || '';
-    document.getElementById('stats').innerHTML = (d.agents||[]).map(block).join('');
-    var when = fmtDate(d.generatedAt);
-    document.getElementById('foot').textContent = when ? ('Updated '+when) : '';
-  })
-  .catch(function(){
-    document.getElementById('stats').innerHTML =
-      '<section class="stat"><p class="roi">Numbers are loading.</p></section>';
+"use strict";
+function reload(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  document.getElementById('ctxPeriod').textContent=OS.periodLabel();
+  document.getElementById('kpis').innerHTML=OS.skeletonKpis(6);
+  var o=OS.office(), p=OS.period();
+  fetch('/api/reports/office?office='+encodeURIComponent(o)+'&period='+p).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');return;}
+    document.getElementById('kpis').innerHTML=OS.kpiRow((d.kpis||[]).map(function(m){return Object.assign(m,{format:m.unit,drillable:true});}),{});
+    var comp=(d.comparison||[]).filter(function(r){return r.value>0;});
+    document.getElementById('comparison').innerHTML=comp.length?OS.bars(comp,{money:true,tab:'deficiencies'}):OS.empty('Office comparison is available to company-wide viewers.');
+    document.getElementById('funnel').innerHTML=(d.funnel||[]).map(function(s){return '<div class="os-kpi"><div class="lab">'+OS.esc(s.step)+'</div><div class="val">'+(s.unit==='usd'?OS.money(s.value):OS.num(s.value))+'</div></div>';}).join('');
   });
+  OS.trend('jobs_completed').then(function(t){
+    document.getElementById('trend').innerHTML=t.supported?OS.lineChart(t.points,{label:'Jobs completed'}):OS.empty('Not enough history yet to draw this trend.');
+  });
+}
+OS.ready(function(){ OS.freshness(document.getElementById('sources')); reload(); });
+OS.onChange(reload);
 </script>
 </body>
 </html>

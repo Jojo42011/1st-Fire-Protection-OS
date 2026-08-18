@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>People Reports · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+</head><body>
+  <div class="os-wrap">
+    <div class="os-head"><div><h1>People Reports</h1><div class="os-q">Headcount and lifecycle. Compensation is never shown without HR permission.</div></div></div>
+    <div id="gate" class="os-empty" style="display:none"></div>
+    <div class="os-kpis" id="kpis"></div>
+    <div class="os-sec">Lifecycle</div>
+    <div class="os-kpis" id="life" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function load(){
+  fetch('/api/people/overview').then(function(r){ if(r.status===401||r.status===403){ throw {gate:true}; } return r.json(); }).then(function(o){
+    document.getElementById('gate').style.display='none';
+    document.getElementById('kpis').innerHTML=[['Active',o.active],['Onboarding',o.onboarding],['Offboarding',o.offboarding],['Positions',o.positions]]
+      .map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1]||0)+'</div></div>';}).join('');
+    document.getElementById('life').innerHTML=[['Open tasks',o.openTasks],['Awaiting approval',o.awaitingApproval],['Blocked',o.blocked],['Templates unreviewed',o.templatesUnreviewed]]
+      .map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1]||0)+'</div></div>';}).join('');
+  }).catch(function(e){
+    var g=document.getElementById('gate'); g.style.display=''; g.textContent='Sign in to People (Microsoft) with the right permission to see People reporting.';
+    document.getElementById('kpis').innerHTML=''; document.getElementById('life').innerHTML='';
+  });
+}
+OS.ready(load);
+</script></body></html>
