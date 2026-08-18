@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IT & Systems · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+</head><body>
+  <div class="os-wrap">
+    <div class="os-head"><div><h1>IT &amp; Systems</h1><div class="os-q">Access, licenses, and system health.</div></div>
+      <div class="os-sources" id="sources"></div></div>
+    <div class="os-kpis" id="kpis"></div>
+    <div class="os-sec">Needs attention</div>
+    <div class="os-attn" id="attn"></div>
+    <div class="os-sec">Sections</div>
+    <div class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+      <div class="os-kpi click" data-tab="spend"><div class="lab">License cleanup</div><div class="val" style="font-size:15px">Reclaim unused seats →</div></div>
+      <div class="os-kpi click" data-tab="integrations"><div class="lab">Integrations</div><div class="val" style="font-size:15px">Connection health →</div></div>
+      <div class="os-kpi click" data-tab="settings"><div class="lab">Access &amp; roles</div><div class="val" style="font-size:15px">Who can see what →</div></div>
+    </div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function load(){
+  OS.freshness(document.getElementById('sources'));
+  Promise.all([
+    fetch('/api/nav-counts').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/exceptions/summary').then(function(r){return r.json();}).catch(function(){return {};}),
+    OS.sources()
+  ]).then(function(res){
+    var nc=res[0]||{}, exc=(res[1]&&res[1].summary)||{byOwner:{}}, src=(res[2].sources||[]);
+    var termAccess=0; // terminated-access findings from exceptions (owner it)
+    // derive from exceptions list by category later; use byOwner.it as a proxy count
+    var itFindings=(exc.byOwner&&exc.byOwner.it)||0;
+    var connected=src.filter(function(s){return s.connected;}).length;
+    document.getElementById('kpis').innerHTML=[
+      ['Seats to reclaim',nc.spend||0],['IT exceptions',itFindings],['Integrations connected',connected+' / '+src.length]
+    ].map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.esc(String(c[1]))+'</div></div>';}).join('');
+    var attn=[];
+    if(nc.spend>0) attn.push({title:nc.spend+' seats look reclaimable',why:'Licenses paid for but unused',count:nc.spend,tone:'warn',tab:'spend',action:'Open cleanup'});
+    if(itFindings>0) attn.push({title:itFindings+' IT exception'+(itFindings===1?'':'s'),why:'Terminated-access or system issues to resolve',count:itFindings,tone:'bad',tab:'exceptions',action:'Open exceptions'});
+    document.getElementById('attn').innerHTML=OS.attnGrid(attn,'No IT items need attention.');
+  });
+}
+OS.ready(load); OS.onChange(load);
+</script></body></html>

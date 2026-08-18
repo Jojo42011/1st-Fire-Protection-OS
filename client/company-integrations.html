@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Integrations · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+<style>
+  .int{display:flex;align-items:center;gap:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 18px;margin-bottom:12px}
+  .int .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .int .dot.fresh{background:var(--os-good)}.int .dot.stale{background:var(--os-warn)}.int .dot.no_sync{background:var(--os-neutral)}.int .dot.not_connected{background:var(--border-strong,#c1c6d0)}
+  .int .body{flex:1;min-width:0}
+  .int .nm{font-weight:750;font-size:15px;color:var(--ink)}
+  .int .det{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:2px}
+  .int .state{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;border-radius:var(--r-pill,999px);padding:5px 11px;flex:none}
+  .int .state.fresh{background:var(--os-good-bg);color:var(--os-good)}
+  .int .state.stale,.int .state.no_sync{background:var(--os-warn-bg);color:var(--os-warn)}
+  .int .state.not_connected{background:var(--fill);color:var(--os-neutral)}
+</style>
+</head><body>
+  <div class="os-wrap">
+    <div class="os-head"><div><h1>Integrations</h1><div class="os-q">Are the systems of record connected and fresh?</div></div></div>
+    <div id="list"></div>
+    <div class="os-q" style="margin-top:14px">These are the systems the OS reads from. A stale or failed source is shown prominently so you know when a number is not current.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function load(){
+  OS.sources().then(function(d){
+    var src=d.sources||[];
+    if(!src.length){document.getElementById('list').innerHTML=OS.empty('No integrations reporting.');return;}
+    document.getElementById('list').innerHTML=src.map(function(s){
+      var stateTxt=s.status==='fresh'?'Fresh':s.status==='stale'?'Stale':s.status==='no_sync'?'Connected · no sync':'Not connected';
+      var when=s.lastSyncedAt?('Last sync '+OS.ago(s.lastSyncedAt)):(s.connected?'No sync yet':'');
+      return '<div class="int"><span class="dot '+s.status+'"></span><div class="body">'+
+        '<div class="nm">'+OS.esc(s.label)+'</div>'+
+        '<div class="det">'+OS.esc(s.detail||'')+(when?(' · '+OS.esc(when)):'')+'</div></div>'+
+        '<span class="state '+s.status+'">'+OS.esc(stateTxt)+'</span></div>';
+    }).join('');
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load integration health.');});
+}
+OS.ready(load); OS.onChange(load);
+</script></body></html>

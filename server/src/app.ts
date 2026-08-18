@@ -188,6 +188,9 @@ app.get('/agreements', page('agreements.html'));
 app.get('/reports-ops', page('reports-ops.html'));
 app.get('/reports-money', page('reports-money.html'));
 app.get('/reports-people', page('reports-people.html'));
+app.get('/offices', page('offices.html'));
+app.get('/it-systems', page('it-systems.html'));
+app.get('/company-integrations', page('company-integrations.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)
