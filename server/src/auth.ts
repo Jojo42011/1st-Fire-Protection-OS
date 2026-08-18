@@ -70,9 +70,21 @@ function passwordMatches(given: string, actual: string): boolean {
   return crypto.timingSafeEqual(g, a);
 }
 
-// Paths reachable without a session: the login flow, the Fly health check, and the two inbound
-// webhooks external services POST to (they carry no cookie).
-const OPEN = new Set(['/login', '/api/login', '/api/logout', '/api/health', '/api/servicetrade/webhook', '/api/webhooks/call']);
+// Paths reachable without a session: the login flow, the Fly health check, the two inbound
+// webhooks external services POST to (they carry no cookie), and the People Entra sign-in flow.
+// People auth has its own security (signed id_token + state + nonce) and MUST be reachable on the
+// cross-site OIDC return: that navigation lands in the People iframe, so the SameSite=Lax app
+// cookie is withheld and this gate would otherwise 401 the callback before it can run.
+const OPEN = new Set([
+  '/login',
+  '/api/login',
+  '/api/logout',
+  '/api/health',
+  '/api/servicetrade/webhook',
+  '/api/webhooks/call',
+  '/api/people/auth/login',
+  '/api/people/auth/callback',
+]);
 function isAsset(p: string): boolean {
   return /\.(css|js|mjs|map|woff2?|ttf|otf|png|jpe?g|gif|svg|ico|webp|mp3|wav)$/i.test(p) || p.startsWith('/brand/');
 }

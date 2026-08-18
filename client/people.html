@@ -100,12 +100,16 @@ function renderGate(){
     return;
   }
   var btn = ME && ME.entraConfigured
-    ? '<button class="ms" onclick="location.href=\'/api/people/auth/login\'"><svg width="16" height="16" viewBox="0 0 23 23"><rect x="1" y="1" width="10" height="10" fill="#f25022"/><rect x="12" y="1" width="10" height="10" fill="#7fba00"/><rect x="1" y="12" width="10" height="10" fill="#00a4ef"/><rect x="12" y="12" width="10" height="10" fill="#ffb900"/></svg>Sign in with Microsoft</button>'
+    ? '<button class="ms" onclick="signIn()"><svg width="16" height="16" viewBox="0 0 23 23"><rect x="1" y="1" width="10" height="10" fill="#f25022"/><rect x="12" y="1" width="10" height="10" fill="#7fba00"/><rect x="1" y="12" width="10" height="10" fill="#00a4ef"/><rect x="12" y="12" width="10" height="10" fill="#ffb900"/></svg>Sign in with Microsoft</button>'
     : (ME && ME.devLogin
-        ? '<button class="ms" onclick="location.href=\'/api/people/auth/login\'">Continue (dev bootstrap sign-in)</button>'
+        ? '<button class="ms" onclick="signIn()">Continue (dev bootstrap sign-in)</button>'
         : '<p class="muted" style="margin-top:14px">Microsoft Entra sign-in is not configured yet. Set <code>ENTRA_*</code> (and a <code>PEOPLE_BOOTSTRAP_EMAIL</code>) to enable secure access. The shared app password is deliberately not enough to see employee data.</p>');
   g.innerHTML='<div class="authwrap"><div class="card card-pad"><h2 style="margin:0 0 6px">Sign in to People</h2><p class="muted">People holds employee and HR information, so it requires your Microsoft identity, not just the office password.</p>'+btn+'</div></div>';
 }
+// Sign-in must run at the TOP level, not inside this iframe: Microsoft's login page refuses to be
+// framed (X-Frame-Options), and the cross-site OIDC return would drop the SameSite=Lax app cookie in
+// a subframe. Break out to the top window; the callback returns to the shell with People open.
+function signIn(){ try{ (window.top||window).location.href='/api/people/auth/login'; }catch(_){ window.location.href='/api/people/auth/login'; } }
 function signOut(){ j('/api/people/auth/logout',{method:'POST'}).then(function(){location.reload();}); }
 
 function renderTabs(){

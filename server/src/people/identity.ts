@@ -98,7 +98,7 @@ export function beginLogin(req: express.Request, res: express.Response): void {
   if (!entraConfigured()) {
     if (devLoginEnabled()) {
       setSession(res, { email: String(process.env.PEOPLE_BOOTSTRAP_EMAIL).toLowerCase(), name: 'Bootstrap Admin' });
-      res.redirect('/people');
+      res.redirect('/?tab=people'); // back to the full shell with People open, not a bare /people
       return;
     }
     res.status(503).json({ ok: false, error: 'entra_not_configured', message: 'Microsoft sign-in is not configured yet (set ENTRA_* to enable).' });
@@ -139,7 +139,7 @@ export async function handleCallback(req: express.Request, res: express.Response
     const email = (claims.email || claims.preferred_username || claims.upn || '').toLowerCase();
     if (!email) { res.status(401).send('Sign-in failed: no email in token.'); return; }
     setSession(res, { email, name: claims.name || null, oid: claims.oid || null });
-    res.redirect('/people');
+    res.redirect('/?tab=people'); // back to the full shell with People open, not a bare /people
   } catch (e) {
     res.status(401).send('Sign-in failed: ' + (e as Error).message);
   }
