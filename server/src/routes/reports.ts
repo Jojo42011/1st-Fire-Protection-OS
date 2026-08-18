@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { currentContext, allowedOffices, OsContext } from '../os/scope';
-import { runMetric, metricByOffice, metricCatalog, metricKeys } from '../os/metrics';
+import { runMetric, metricByOffice, metricCatalog, metricKeys, metricCard, metricTrend, metricDrill } from '../os/metrics';
 import { resolvePeriod, PERIODS } from '../os/period';
 import { officeLabel } from '../os/office';
 
@@ -33,9 +33,30 @@ router.get('/api/reports/catalog', (req, res) => {
 
 router.get('/api/metrics/:key', (req, res) => {
   const ctx = currentContext(req);
-  const r = runMetric(req.params.key, ctx, { office: req.query.office as string, range: rangeFrom(req) });
+  // The canonical KPI card contract: value + format + tone + comparison (pass ?compare=1).
+  const r = metricCard(req.params.key, ctx, { office: req.query.office as string, range: rangeFrom(req), compare: req.query.compare === '1' });
   if ('error' in r) return res.status(r.status).json({ ok: false, error: r.error });
   res.json({ ok: true, metric: r });
+});
+
+/** Real time series for a date-scoped metric (unsupported for point-in-time metrics — no fabrication). */
+router.get('/api/metrics/:key/trend', (req, res) => {
+  const ctx = currentContext(req);
+  const t = metricTrend(req.params.key, ctx, { office: req.query.office as string, range: rangeFrom(req) });
+  res.json({ ok: true, ...t });
+});
+
+/** The authorized records behind a metric (same scope/definition), paginated + sorted. */
+router.get('/api/drilldown/:key', (req, res) => {
+  const ctx = currentContext(req);
+  const r = metricDrill(req.params.key, ctx, {
+    office: req.query.office as string,
+    range: rangeFrom(req),
+    limit: req.query.limit ? Number(req.query.limit) : undefined,
+    offset: req.query.offset ? Number(req.query.offset) : undefined,
+  });
+  if ('error' in r) return res.status(r.status).json({ ok: false, error: r.error });
+  res.json({ ok: true, ...r });
 });
 
 router.get('/api/metrics/:key/by-office', (req, res) => {

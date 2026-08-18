@@ -8,14 +8,19 @@ process.env.OS_REQUIRE_IDENTITY = '0';
 
 import { getDb } from '../db/index';
 import { OsContext } from '../os/scope';
-import { runMetric, metricByOffice } from './metrics';
+import { runMetric, metricByOffice, metricCard, metricTrend, metricDrill } from './metrics';
 import { resolvePeriod } from './period';
 
 const db = getDb();
-db.exec(`CREATE TABLE IF NOT EXISTS quotes (id INTEGER PRIMARY KEY, office TEXT, source TEXT, stage TEXT, amount_cents INTEGER);`);
-db.exec(`CREATE TABLE IF NOT EXISTS deficiencies (id INTEGER PRIMARY KEY, office TEXT, status TEXT, quoted INTEGER, proposed_usd INTEGER);`);
-db.exec(`CREATE TABLE IF NOT EXISTS crm_jobs (id INTEGER PRIMARY KEY, office_name TEXT, source TEXT, completed_at TEXT);`);
+db.exec(`CREATE TABLE IF NOT EXISTS quotes (id INTEGER PRIMARY KEY, office TEXT, source TEXT, stage TEXT, amount_cents INTEGER, number TEXT, title TEXT, sent_at TEXT);`);
+db.exec(`CREATE TABLE IF NOT EXISTS deficiencies (id INTEGER PRIMARY KEY, office TEXT, status TEXT, quoted INTEGER, proposed_usd INTEGER, company_name TEXT, location_name TEXT, description TEXT, reported_at TEXT);`);
+db.exec(`CREATE TABLE IF NOT EXISTS crm_jobs (id INTEGER PRIMARY KEY, office_name TEXT, source TEXT, completed_at TEXT, scheduled_at TEXT, number TEXT, kind TEXT, status TEXT);`);
 db.exec(`DELETE FROM quotes; DELETE FROM deficiencies; DELETE FROM crm_jobs;`);
+// completed jobs across two months for Houston (for trend + comparison + drill)
+const cj = db.prepare(`INSERT INTO crm_jobs (office_name, source, completed_at, status) VALUES (?, 'servicetrade', ?, 'completed')`);
+cj.run('1st FP Houston, LLC (HOU)', '2026-07-10'); cj.run('Houston', '2026-07-20');
+cj.run('1st FP Houston, LLC (HOU)', '2026-08-05');
+cj.run('1st FP Austin, LLC (AUS)', '2026-08-06');
 
 const q = db.prepare(`INSERT INTO quotes (office, source, stage, amount_cents) VALUES (?,?,?,?)`);
 // Austin: 1 won, 1 lost, open pipeline $1000
@@ -85,4 +90,59 @@ test('metricByOffice returns only the caller authorized offices', () => {
   const all = metricByOffice('open_pipeline', exec, { range });
   const keys = all.map((r) => r.office).sort();
   assert.ok(keys.includes('austin') && keys.includes('houston'));
+});
+
+test('drill-down returns exactly the office-scoped records behind a metric', () => {
+  // Houston open pipeline is a single quote ($2000). Drill returns exactly that row, Houston only.
+  const d = metricDrill('open_pipeline', houston, { range });
+  assert.ok(!('error' in d));
+  if (!('error' in d)) {
+    assert.equal(d.total, 1);
+    assert.equal(d.rows.length, 1);
+    assert.equal(Math.round(d.rows[0].amount), 2000);
+    assert.ok(d.columns.some((c) => c.as === 'amount' && c.kind === 'money'));
+  }
+});
+
+test('drill-down cannot cross office scope', () => {
+  assert.deepEqual(metricDrill('open_pipeline', houston, { office: 'austin', range }), { error: 'office_forbidden', status: 403 });
+});
+
+test('drill-down is unavailable for derived metrics', () => {
+  assert.deepEqual(metricDrill('quote_win_rate', exec, { range }), { error: 'no_drilldown', status: 400 });
+});
+
+test('trend is a real monthly series for date-scoped metrics, office-scoped', () => {
+  const t = metricTrend('jobs_completed', houston, { range: resolvePeriod('year', { now: new Date('2026-08-18T00:00:00Z') }) });
+  assert.equal(t.supported, true);
+  // Houston: 2 completed in 2026-07, 1 in 2026-08 (Austin's is excluded by scope)
+  const jul = t.points.find((p) => p.bucket === '2026-07');
+  const aug = t.points.find((p) => p.bucket === '2026-08');
+  assert.equal(jul && jul.value, 2);
+  assert.equal(aug && aug.value, 1);
+});
+
+test('trend is NOT fabricated for point-in-time metrics', () => {
+  const t = metricTrend('ar_90_plus', exec, { range });
+  assert.equal(t.supported, false);
+  assert.equal(t.reason, 'point_in_time');
+});
+
+test('the KPI card carries tone + comparison for flow metrics, none for point-in-time', () => {
+  // "Last month" (all of July) vs the equally-long prior window (June). Houston completed 2 in July, 0 in June.
+  const jul = resolvePeriod('last_month', { now: new Date('2026-08-18T00:00:00Z') });
+  const card = metricCard('jobs_completed', houston, { range: jul, compare: true });
+  assert.ok(!('error' in card));
+  if (!('error' in card)) {
+    assert.equal(card.value, 2);
+    assert.equal(card.direction, 'up_good');
+    assert.ok(card.comparison);
+    assert.equal(card.comparison!.previous, 0);
+    assert.equal(card.comparison!.changeAbs, 2);
+    assert.equal(card.comparison!.changePct, null); // no defensible % from a zero base
+    assert.equal(card.comparison!.tone, 'good'); // more jobs completed is good
+  }
+  // point-in-time metric: never a fabricated comparison
+  const ar = metricCard('ar_90_plus', exec, { range: jul, compare: true });
+  if (!('error' in ar)) assert.equal(ar.comparison, null);
 });
