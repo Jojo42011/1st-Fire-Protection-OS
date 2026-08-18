@@ -1,25 +1,21 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { syncDeficiencies, CLOSED_STATUSES, AVG_REPAIR_USD } from '../services/deficiencySync';
+import { currentContext, resolveOffice, officeScopeClause } from '../os/scope';
+import { officeLabel } from '../os/office';
 
 /**
  * Repair backlog: the open ServiceTrade deficiencies (repairs techs already found) as quotable
  * work, office-scoped. GET serves the backlog summary + the highest-value open items. Sync pulls
  * the mirror. Drafting a repair quote is gated and never writes to ServiceTrade (live:false).
  *
- * Deficiencies are attributed to an office by city (short label), so the office filter normalizes
- * the switcher's full ServiceTrade name to that label. They carry no price, so the value is a
- * PROJECTION: open count x an assumed average repair ticket.
+ * Office scope is enforced server-side via the OS scope layer (os_office_key), so a scoped caller
+ * only ever sees their office's deficiencies. Deficiencies carry no price, so the value is a
+ * PROJECTION: open count x an assumed average repair ticket (always labeled projected).
  */
 const router = Router();
 const ST_APP = 'https://app.servicetrade.com';
 const OPEN_CLAUSE = `lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`).join(',')})`;
-
-/** Full ServiceTrade office name -> friendly label (deficiencies store the label). */
-function shortLabel(o: string): string {
-  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'Riverton' : s || o;
-}
 
 interface DefRow {
   id: number;
@@ -36,10 +32,12 @@ interface DefRow {
 
 router.get('/api/deficiencies', (req, res) => {
   const db = getDb();
-  const raw = String(req.query.office || '').trim();
-  const office = raw && raw !== 'all' ? shortLabel(raw) : '';
-  const oc = office ? ` AND office = @office` : '';
-  const bind = office ? [{ office }] : [];
+  const ctx = currentContext(req);
+  const resolved = resolveOffice(ctx, req.query.office as string);
+  if ('error' in resolved) return res.status(resolved.status).json({ ok: false, error: resolved.error });
+  const scope = officeScopeClause('office', ctx, resolved.office);
+  const oc = ` AND ${scope.sql}`;
+  const bind = scope.params;
   const scalar = (sql: string): number => {
     try {
       return (db.prepare(sql).get(...bind) as { v: number }).v || 0;
@@ -54,7 +52,7 @@ router.get('/api/deficiencies', (req, res) => {
   const unquotedCount = openCount - quotedCount;
   const projectedUsd = unquotedCount * AVG_REPAIR_USD;
   const totalUsd = quotedUsd + projectedUsd;
-  const total = scalar(`SELECT COUNT(*) AS v FROM deficiencies${office ? ' WHERE office = @office' : ''}`);
+  const total = scalar(`SELECT COUNT(*) AS v FROM deficiencies WHERE 1=1${oc}`);
 
   const byStatus = db
     .prepare(`SELECT status, COUNT(*) AS n, COALESCE(SUM(proposed_usd),0) AS usd FROM deficiencies WHERE ${OPEN_CLAUSE}${oc} GROUP BY status ORDER BY n DESC`)
@@ -68,8 +66,9 @@ router.get('/api/deficiencies', (req, res) => {
     )
     .all(...bind) as DefRow[];
 
+  const officeName = resolved.office === 'all' || resolved.office === '__scoped__' ? 'all' : officeLabel(resolved.office);
   res.json({
-    office: office || 'all',
+    office: officeName,
     live: total > 0,
     summary: {
       openCount,

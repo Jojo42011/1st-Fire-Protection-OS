@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { canonicalOffice } from '../os/office';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
@@ -198,7 +199,8 @@ interface SchedRow {
 
 function realScheduleSummary(office = '') {
   const db = getDb();
-  const officeClause = office ? ` AND a.office = @office` : '';
+  office = office ? (canonicalOffice(office) || office) : '';
+  const officeClause = office ? ` AND os_office_key(a.office) = @office` : '';
   const officeArg = office ? { office } : {};
   const monday = weekMondayCentral();
   const dayDates = Array.from({ length: 5 }, (_, i) => { const d = new Date(monday); d.setUTCDate(d.getUTCDate() + i); return d; });

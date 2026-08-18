@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { canonicalOffice } from '../os/office';
 import { computeQuote, draftQuote, getEstimatingSummary, TakeoffItem, Takeoff } from '../services/estimatorAgent';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { hasRealQuotes } from '../services/servicetradeSync';
@@ -35,7 +36,8 @@ function ageInfo(iso: string | null): { days: number | null; label: string; tone
  * dollars are on top, with the oldest called out in the KPIs.
  */
 function realWorklist(db: ReturnType<typeof getDb>, office = '') {
-  const officeClause = office ? ' AND q.office = @office' : '';
+  office = office ? (canonicalOffice(office) || office) : '';
+  const officeClause = office ? ' AND os_office_key(q.office) = @office' : '';
   const stmt = db.prepare(
     `SELECT q.id, q.st_id, q.number, q.title, q.amount_cents, q.st_updated_at, a.name AS customer
        FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id

@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { canonicalOffice } from '../os/office';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
@@ -100,7 +101,8 @@ const officeShort = (o: string) => (o || '').replace(/^Northstar\s*/i, '').repla
 
 function realJobValue(office = '') {
   const db = getDb();
-  const oc = office ? ' AND q.office = @office' : '';
+  office = office ? (canonicalOffice(office) || office) : '';
+  const oc = office ? ' AND os_office_key(q.office) = @office' : '';
   const bind: any = office ? { office } : {};
   const scalar = (sql: string) => (db.prepare(sql).get(...(office ? [bind] : [])) as { v: number }).v || 0;
 

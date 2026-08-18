@@ -27,6 +27,7 @@ const CODE_TO_KEY: Record<string, string> = {
   cst: 'college-station',
   lub: 'lubbock',
   asds: 'asds',
+  osc: 'one-stop-code-consulting',
   sat: 'services',
   sa: 'services',
 };
@@ -39,6 +40,7 @@ const CODE_TO_KEY: Record<string, string> = {
 const NAME_TO_KEY: Array<{ test: RegExp; key: string }> = [
   { test: /\bmcallen\b/, key: 'mcallen' },
   { test: /\bcollege\s*station\b/, key: 'college-station' },
+  { test: /\bone\s*stop\s*code/, key: 'one-stop-code-consulting' },
   { test: /\baustin\s+sprinkler\s+design\b/, key: 'asds' },
   { test: /\bsprinkler\s+design\b/, key: 'asds' },
   { test: /\bsprinkler\s+companies\b/, key: 'management' },
@@ -53,8 +55,20 @@ const NAME_TO_KEY: Array<{ test: RegExp; key: string }> = [
   { test: /^services$/, key: 'services' },
 ];
 
-/** Curated display labels for the known canonical keys. Unknown keys fall back to a title-cased slug. */
-const KEY_TO_LABEL: Record<string, string> = {
+/**
+ * The authoritative office registry, audited against the real operating structure.
+ *
+ * `operating` = a field office that does service/contract work and belongs in operational and office
+ * comparison views (there are 9). `support` = a real legal entity that is NOT a field office
+ * (HQ/admin, design services, code consulting) — its people exist but it is excluded from office
+ * comparisons so operational numbers aren't muddied.
+ *
+ * The sister security company (Video Digital Security / VDS) is not an office at all — canonicalOffice
+ * returns '' for it (see isNonOffice). Demo/legacy metro labels (Riverton, Millbrook, Fairview,
+ * Lakeside) are NOT offices; they only ever appeared via demo deficiency city-mapping and are gone
+ * once deficiencies attribute office from their job's assignedOffice.
+ */
+const OPERATING_OFFICES: Record<string, string> = {
   austin: 'Austin',
   houston: 'Houston',
   mcallen: 'McAllen',
@@ -63,10 +77,25 @@ const KEY_TO_LABEL: Record<string, string> = {
   lubbock: 'Lubbock',
   'college-station': 'College Station',
   extinguishers: 'Extinguishers',
-  management: 'Management (HQ)',
   services: 'Services (San Antonio)',
-  asds: 'Austin Sprinkler Design',
 };
+const SUPPORT_ENTITIES: Record<string, string> = {
+  management: 'Management (HQ)',
+  asds: 'Austin Sprinkler Design',
+  'one-stop-code-consulting': 'One Stop Code Consulting',
+};
+const KEY_TO_LABEL: Record<string, string> = { ...OPERATING_OFFICES, ...SUPPORT_ENTITIES };
+
+export type OfficeKind = 'operating' | 'support' | 'unknown';
+export function officeKind(key: string): OfficeKind {
+  if (OPERATING_OFFICES[key]) return 'operating';
+  if (SUPPORT_ENTITIES[key]) return 'support';
+  return 'unknown';
+}
+/** The 9 true operating offices (key + label), for the operational office selector and comparisons. */
+export function operatingOffices(): Array<{ key: string; label: string }> {
+  return Object.keys(OPERATING_OFFICES).map((key) => ({ key, label: OPERATING_OFFICES[key] }));
+}
 
 /** The sister security company is not a fire office; scope must never surface it. */
 export function isNonOffice(raw: string | null | undefined): boolean {

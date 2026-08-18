@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalOffice, officeLabel, isNonOffice } from './office';
+import { canonicalOffice, officeLabel, isNonOffice, officeKind, operatingOffices } from './office';
 
 test('the three office value-spaces collapse to one key', () => {
   // ServiceTrade LLC name, friendly metro label, and parenthetical code all → "austin".
@@ -44,4 +44,30 @@ test('labels are curated for known keys, title-cased for unknown', () => {
   assert.equal(officeLabel('college-station'), 'College Station');
   assert.equal(officeLabel(''), 'Unassigned');
   assert.equal(officeLabel('somewhereville'), 'Somewhereville');
+});
+
+test('the audited operating-office set is exactly the 9 field offices', () => {
+  const keys = operatingOffices().map((o) => o.key).sort();
+  assert.deepEqual(keys, ['austin', 'college-station', 'extinguishers', 'houston', 'laredo', 'lubbock', 'mcallen', 'services', 'waco']);
+});
+
+test('offices are classified operating vs support vs unknown', () => {
+  assert.equal(officeKind('austin'), 'operating');
+  assert.equal(officeKind('services'), 'operating');
+  // real legal entities that are NOT field offices
+  assert.equal(officeKind('management'), 'support');
+  assert.equal(officeKind('asds'), 'support');
+  assert.equal(officeKind('one-stop-code-consulting'), 'support');
+  // demo/legacy metro labels are not offices at all
+  assert.equal(officeKind('riverton'), 'unknown');
+  assert.equal(officeKind('millbrook'), 'unknown');
+  assert.equal(officeKind('fairview'), 'unknown');
+  assert.equal(officeKind('lakeside'), 'unknown');
+});
+
+test('support entities collapse from their real names/codes', () => {
+  assert.equal(canonicalOffice('1st FP Sprinkler Companies, LLC (MGMT)'), 'management');
+  assert.equal(canonicalOffice('One Stop Code Consulting, LLC (OSC)'), 'one-stop-code-consulting');
+  assert.equal(canonicalOffice('OSC'), 'one-stop-code-consulting');
+  assert.equal(officeLabel('one-stop-code-consulting'), 'One Stop Code Consulting');
 });

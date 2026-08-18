@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
+import { canonicalOffice } from '../os/office';
 
 /**
  * After-hours on-call roster, per office. This is the one net-new data source the AI
@@ -13,10 +14,9 @@ import { getDb } from '../db/index';
  */
 const router = Router();
 
-/** Same normalization the office switcher uses: full ServiceTrade name -> friendly label. */
+/** Normalize any office string to the OS canonical office key (same identity as every other object). */
 function shortLabel(o: string): string {
-  const s = (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim();
-  return /^services$/i.test(s) ? 'Riverton' : s || o;
+  return canonicalOffice(o) || (o || '').trim();
 }
 
 /** YYYY-MM-DD for a Date, using its UTC fields (we treat dates as tz-free calendar days). */
@@ -49,7 +49,7 @@ function currentFor(office: string): Shift | null {
   const row = getDb()
     .prepare(
       `SELECT * FROM oncall_shifts
-        WHERE office = @office AND date('now','localtime') >= starts_on AND date('now','localtime') < ends_on
+        WHERE os_office_key(office) = @office AND date('now','localtime') >= starts_on AND date('now','localtime') < ends_on
         ORDER BY starts_on DESC LIMIT 1`
     )
     .get({ office }) as Shift | undefined;
@@ -84,7 +84,7 @@ router.get('/api/oncall', (req, res) => {
   const raw = String(req.query.office || '').trim();
   const office = raw && raw !== 'all' ? shortLabel(raw) : '';
   const db = getDb();
-  const where = office ? `WHERE office = @office AND ends_on >= date('now','localtime','-14 day')` : `WHERE ends_on >= date('now','localtime','-14 day')`;
+  const where = office ? `WHERE os_office_key(office) = @office AND ends_on >= date('now','localtime','-14 day')` : `WHERE ends_on >= date('now','localtime','-14 day')`;
   const shifts = db
     .prepare(`SELECT * FROM oncall_shifts ${where} ORDER BY starts_on ASC, office ASC LIMIT 400`)
     .all(...(office ? [{ office }] : [])) as Shift[];

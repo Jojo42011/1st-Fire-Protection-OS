@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { canonicalOffice } from '../os/office';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
@@ -153,7 +154,8 @@ function nextOccurrence(iso: string | null, frequency: string | null, interval: 
 
 function realRecurringSummary(office = '') {
   const db = getDb();
-  const oc = office ? ' AND office = @office' : '';
+  office = office ? (canonicalOffice(office) || office) : '';
+  const oc = office ? ' AND os_office_key(office) = @office' : '';
   const nowIso = new Date().toISOString();
   const bind: any = office ? { office, now: nowIso } : { now: nowIso };
   const rows = db
@@ -187,7 +189,7 @@ function realRecurringSummary(office = '') {
 
   // Real opportunity list: accounts we work but have no recurring agreement (recurring revenue left on the table).
   const candBind: any = office ? { office } : {};
-  const candWhere = office ? ' AND j.office_name = @office' : '';
+  const candWhere = office ? ' AND os_office_key(j.office_name) = @office' : '';
   const cands = db
     .prepare(
       `SELECT a.name AS customer, COUNT(j.id) AS jobs

@@ -17,7 +17,7 @@
  */
 import express from 'express';
 import { AppUser, currentUser } from '../people/authz';
-import { canonicalOffice, officeLabel, isNonOffice } from './office';
+import { canonicalOffice, officeLabel, isNonOffice, operatingOffices } from './office';
 import { getDb } from '../db/index';
 
 export interface OsContext {
@@ -58,10 +58,11 @@ export function canSeeOffice(ctx: OsContext, officeKey: string): boolean {
   return ctx.offices.includes(officeKey);
 }
 
-/** The offices this caller may choose from, as {key,label}. Company-wide callers get everything the
- *  data actually contains (discovered from the mirror) plus the curated known set. */
+/** The offices this caller may choose from, as {key,label}. Company-wide callers get the curated set
+ *  of true operating offices (the audited 9), not entity/support/demo values; scoped callers get
+ *  exactly their granted offices. */
 export function allowedOffices(ctx: OsContext): Array<{ key: string; label: string }> {
-  if (ctx.allOffices) return discoverOffices();
+  if (ctx.allOffices) return operatingOffices().sort((a, b) => a.label.localeCompare(b.label));
   return ctx.offices
     .map((key) => ({ key, label: officeLabel(key) }))
     .sort((a, b) => a.label.localeCompare(b.label));

@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { TRADE_CONFIG } from '../config/tradeConfig';
 import { createApproval } from '../routes/approvals';
 import { COMPANY } from '../config/constants';
+import { canonicalOffice } from '../os/office';
 
 /**
  * The Closer engine. Chases every open quote on a cadence (day 1 nudge, day 3 value, day 7
@@ -178,7 +179,10 @@ function shapeQuoteRow(q: QuoteRow & { customer: string | null; st_id?: string |
 /** Real Closer summary computed off pulled ServiceTrade quotes. Optionally scoped to one office. */
 function realPipelineSummary(office = '') {
   const db = getDb();
-  const oc = office ? ' AND office = @office' : '';
+  // Accept a canonical office key (or a raw name) and scope on os_office_key so it matches whatever
+  // value-space the column stores.
+  office = office ? (canonicalOffice(office) || office) : '';
+  const oc = office ? ' AND os_office_key(office) = @office' : '';
   // better-sqlite3 rejects an explicit `undefined` bind, so pass args only when scoping.
   const scalar = (sql: string) => (db.prepare(sql).get(...(office ? [{ office }] : [])) as { v: number }).v || 0;
 
@@ -196,7 +200,7 @@ function realPipelineSummary(office = '') {
   const stmt = db.prepare(
     `SELECT q.id, q.st_id, q.account_id, q.number, q.title, q.amount_cents, q.stage, q.sent_at, a.name AS customer
        FROM quotes q LEFT JOIN accounts a ON a.id = q.account_id
-      WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})${office ? ' AND q.office = @office' : ''}
+      WHERE q.source = 'servicetrade' AND lower(q.stage) IN (${sqlList(ST_OPEN)})${office ? ' AND os_office_key(q.office) = @office' : ''}
       ORDER BY (q.sent_at IS NULL), q.sent_at ASC
       LIMIT 80`
   );

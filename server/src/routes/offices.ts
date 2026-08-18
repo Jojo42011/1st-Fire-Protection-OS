@@ -1,31 +1,19 @@
 import { Router } from 'express';
-import { getDb } from '../db/index';
-import { canonicalOffice, officeLabel, isNonOffice } from '../os/office';
+import { operatingOffices } from '../os/office';
 
 /**
- * The office roster that powers the global location switcher. Data-driven from the mirror
- * (self-maintaining as offices appear), with the sister security company filtered out.
- * value = the full office string rows are tagged with (kept for backward-compatible screen filters);
- * key   = the canonical office key (the security identity used by the OS scope layer);
- * label = the friendly display name.
+ * The office roster that powers the global location switcher. Returns the audited set of true
+ * operating offices (9), keyed by canonical office key so every scope-aware screen filters on the
+ * same identity. Entity/support values (Management HQ, ASDS, OSC), the sister security company (VDS),
+ * and demo/legacy metro labels are intentionally excluded from the operational selector.
+ *
+ * value = key (canonical) so the selection resolves cleanly through the OS scope layer.
  */
 const router = Router();
 
 router.get('/api/offices', (_req, res) => {
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT DISTINCT o FROM (
-         SELECT office AS o FROM sched_appointments WHERE office IS NOT NULL AND office != ''
-         UNION SELECT office_name AS o FROM crm_jobs WHERE office_name IS NOT NULL AND office_name != ''
-         UNION SELECT office AS o FROM quotes WHERE source='servicetrade' AND office IS NOT NULL AND office != ''
-       ) ORDER BY o`
-    )
-    .all() as { o: string }[];
-  const offices = rows
-    .filter((r) => !isNonOffice(r.o)) // the sister security company is not a fire office
-    .map((r) => ({ value: r.o, key: canonicalOffice(r.o), label: officeLabel(canonicalOffice(r.o)) || r.o }))
-    .filter((o) => o.key)
+  const offices = operatingOffices()
+    .map((o) => ({ value: o.key, key: o.key, label: o.label }))
     .sort((a, b) => a.label.localeCompare(b.label));
   res.json({ offices });
 });
