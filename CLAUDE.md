@@ -9,14 +9,21 @@ comma, parentheses, or two separate sentences instead. The same goes for en
 dashes ("–") in prose; write "to" for ranges. If you are about to type "—", stop
 and rewrite the sentence.
 
-## Deployment workflow: ALWAYS merge working branches into `main`
+## Git workflow: ALWAYS pull `main` first, ALWAYS merge back to `main` after every message
 
 A GitHub Action deploys to the Fly app on every push to `main`. Work that
 stays on a feature branch never deploys.
 
-**Rule: every time you create and work off a `claude/*` branch, merge it into
-`main` and push `main` when you finish. Do this every single time, without
-being asked.** Leaving work on a branch is not "done". It must land on `main`.
+**Rule 1 (before any change): pull the latest `main` first.** At the start of
+every task, before editing anything, run `git fetch origin main` and bring your
+working branch up to date with it (`git rebase origin/main` or
+`git merge origin/main`). Never start work on a stale base. Do this every time,
+without being asked.
+
+**Rule 2 (after every message): merge back to `main` and push.** Every time you
+work off a `claude/*` branch, merge it into `main` and push `main` at the end of
+the turn, without being asked. Leaving work on a branch is not "done". It must
+land on `main` after each message.
 
 This is enforced two ways:
 
