@@ -164,6 +164,14 @@ export async function syncDeficiencies(): Promise<{ pulled: number; open: number
         office=excluded.office, reported_at=excluded.reported_at, st_updated_at=excluded.st_updated_at, source='servicetrade'`
   );
 
+  // Preserve human dispositions across the clean rebuild (keyed by ServiceTrade st_id).
+  const dispMap = new Map<number, any>();
+  try {
+    for (const r of db.prepare(`SELECT st_id, disposition, disposition_note, disposition_by, disposition_at FROM deficiencies WHERE disposition IS NOT NULL`).all() as any[]) {
+      dispMap.set(Number(r.st_id), r);
+    }
+  } catch { /* columns may not exist on a very old db */ }
+
   let attributed = 0;
   let quotedCount = 0;
   let viaJob = 0;
@@ -205,6 +213,13 @@ export async function syncDeficiencies(): Promise<{ pulled: number; open: number
     }
   });
   tx(rows);
+
+  // Restore preserved dispositions onto the rebuilt rows that still exist.
+  if (dispMap.size) {
+    const restore = db.prepare(`UPDATE deficiencies SET disposition=@disposition, disposition_note=@disposition_note, disposition_by=@disposition_by, disposition_at=@disposition_at WHERE st_id=@st_id`);
+    const rtx = db.transaction(() => { for (const [st_id, d] of dispMap) restore.run({ ...d, st_id }); });
+    try { rtx(); } catch { /* ignore */ }
+  }
 
   const open = (db
     .prepare(`SELECT COUNT(*) AS v FROM deficiencies WHERE lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`).join(',')})`)

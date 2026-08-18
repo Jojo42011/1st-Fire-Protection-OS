@@ -3,110 +3,74 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Repair backlog · Northstar</title>
+<title>Deficiencies · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
-  .db-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-  @media(max-width:820px){.db-kpis{grid-template-columns:1fr}}
-  .db-kpi{padding:16px 18px}
-  .db-kpi .lab{font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
-  .db-kpi .val{font-weight:800;font-size:26px;color:var(--ink);margin-top:9px;font-variant-numeric:tabular-nums}
-  .db-kpi .val.money{color:var(--money)}
-  .db-kpi .sub{font-weight:500;font-size:11.5px;color:var(--faint);margin-top:4px}
-  .db-status{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 4px}
-  .db-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:999px;padding:6px 13px;font-weight:600;font-size:12px;color:var(--ink-2)}
-  .db-chip b{color:var(--ink);font-variant-numeric:tabular-nums}
-  .db-chip .u{color:var(--money);font-weight:700;font-variant-numeric:tabular-nums}
-  td .desc{font-weight:500;font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;max-width:52ch}
-  .sev{font-family:var(--mono);font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;text-transform:uppercase}
-  .stlink{font-weight:600;font-size:11.5px;color:var(--indigo);text-decoration:none}
-  .stlink:hover{text-decoration:underline}
-  .draft-box{background:var(--panel-alt);border:1px solid var(--divider);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:12.5px;line-height:1.55;color:var(--ink-2);white-space:pre-wrap;display:none}
-  .syncbtn{font-weight:600;font-size:12px;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--r-btn);background:var(--panel);padding:7px 12px;cursor:pointer}
-  .syncbtn:hover{border-color:var(--border-strong)}
+  .age{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+  @media(max-width:640px){.age{grid-template-columns:repeat(2,1fr)}}
+  .ab{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:11px 13px}
+  .ab .bl{font-weight:700;font-size:10.5px;text-transform:uppercase;color:var(--muted)}
+  .ab .bv{font-weight:800;font-size:18px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+  .ab.hot .bv{color:var(--os-bad)}
+  .disp{font-family:var(--sans);font-weight:600;font-size:11.5px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;background:var(--panel);color:var(--ink-2);cursor:pointer}
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:4px">
-    <div>
-      <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Revenue recovery &middot; ServiceTrade</p>
-      <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Repair backlog</h1>
-      <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:74ch">Every open deficiency your technicians already found, waiting to be quoted. This is repair revenue that is documented on site but not yet sold. Draft a quote to start the conversion.</p>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Deficiencies</h1><div class="os-q">What repair opportunity is not being converted?</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+      <button class="os-fb" id="sync">↻ Sync</button>
     </div>
-    <button class="syncbtn" id="sync" title="Pull the latest deficiencies from ServiceTrade">&#8635; Sync</button>
+    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
+    <div class="os-sec">Backlog age</div>
+    <div class="age" id="age"></div>
+    <div class="os-sec">Highest-value open items <span class="n" id="listn"></span></div>
+    <div id="list"></div>
+    <div class="os-q" style="margin-top:14px">Quoted value is REAL (from linked repair quotes). Projected value is an estimate (open count x an assumed ticket), never booked revenue. Set a disposition to explain why an item is not yet quoted.</div>
   </div>
-
-  <div class="db-kpis" id="kpis" style="margin-top:8px"></div>
-  <div class="card card-pad" style="margin-top:16px">
-    <div class="card-head" style="padding:0 0 12px"><h2>By status</h2></div>
-    <div class="db-status" id="status"></div>
-  </div>
-
-  <div class="card card-clip" style="margin-top:16px">
-    <div class="card-head"><h2>Highest-value open repairs</h2><span style="flex:1"></span><span id="count" style="font-weight:500;font-size:12px;color:var(--muted)"></span></div>
-    <table>
-      <thead><tr><th>Site</th><th>What was found</th><th>Status</th><th class="right">Repair value</th><th></th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
-</div>
-
+<script src="/os.js"></script>
 <script>
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function money(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
-function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
-function sevColor(s){s=(s||'').toLowerCase();if(/high|critical|life|urgent/.test(s))return ['rgba(198,40,40,.12)','var(--fp-red,#C62828)'];if(/medium|moderate/.test(s))return ['rgba(185,134,11,.14)','#8a6d0b'];return ['var(--fill)','var(--muted)'];}
-
-function render(d){
-  var s=d.summary||{};
-  var ticket=s.avgTicket||650;
-  document.getElementById('kpis').innerHTML=
-    kpi('Open deficiencies', Number(s.openCount||0).toLocaleString('en-US'), Number(s.quotedCount||0).toLocaleString('en-US')+' already have a repair quote', false)+
-    kpi('Quoted value', money(s.quotedUsd), 'real dollars from linked repair quotes', true)+
-    kpi('Total backlog', money(s.totalUsd), 'quoted + '+Number(s.unquotedCount||0).toLocaleString('en-US')+' un-quoted at ~'+money(ticket), true);
-  document.getElementById('status').innerHTML=(d.byStatus||[]).map(function(x){
-    return '<span class="db-chip">'+esc(x.status)+' <b>'+Number(x.n).toLocaleString('en-US')+'</b></span>';
-  }).join('') || '<span style="color:var(--muted);font-size:12.5px">No open deficiencies for this office.</span>';
-
-  var rows=d.items||[];
-  document.getElementById('count').textContent=rows.length+' shown';
-  document.getElementById('rows').innerHTML=rows.length? rows.map(function(x){
-    return '<tr>'+
-      '<td style="font-weight:600;color:var(--ink)">'+esc(x.company_name||'Unknown site')+
-        (x.location_name?('<div class="desc">'+esc(x.location_name)+'</div>'):'')+'</td>'+
-      '<td><div class="desc" style="color:var(--ink-2);max-width:60ch">'+esc(x.description||'(no description)')+'</div></td>'+
-      '<td style="font-weight:600;font-size:12.5px;color:var(--ink-2)">'+esc(x.status||'')+'</td>'+
-      '<td class="right num" style="white-space:nowrap">'+(x.proposed_usd>0?
-        ('<span style="font-weight:700;color:var(--money)">'+money(x.proposed_usd)+'</span><div style="font-size:10px;color:var(--faint)">quoted</div>'):
-        '<span style="color:var(--faint);font-weight:500;font-size:12px">not quoted</span>')+'</td>'+
-      '<td class="right" style="white-space:nowrap">'+
-        '<button class="btn btn-sm" onclick="draft('+x.id+',this)">Draft quote</button>'+
-        (x.stUrl?(' <a class="stlink" href="'+esc(x.stUrl)+'" target="_blank" rel="noopener">Open</a>'):'')+
-        '<div class="draft-box" id="draft-'+x.id+'"></div>'+
-      '</td>'+
-    '</tr>';
-  }).join('') : '<tr><td colspan="5" class="empty" style="padding:22px">No open deficiencies. Run a sync, or none are attributed to this office yet.</td></tr>';
+"use strict";
+var DISPOSITIONS=[['','—'],['quote_in_progress','Quote in progress'],['needs_review','Needs review'],['waiting_information','Waiting on info'],['customer_declined','Customer declined'],['warranty','Warranty'],['duplicate','Duplicate']];
+function officeParam(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function loadKpis(){
+  document.getElementById('kpis').innerHTML=OS.skeletonKpis(5);
+  OS.metrics(['open_deficiencies','unquoted_deficiencies','quoted_repair_value','projected_repair_opportunity','repair_opportunity_total'],{}).then(function(cards){
+    document.getElementById('kpis').innerHTML=OS.kpiRow(cards.filter(Boolean),{});
+  });
 }
-function kpi(lab,val,sub,money){return '<div class="card db-kpi"><div class="lab">'+esc(lab)+'</div><div class="val'+(money?' money':'')+'">'+esc(val)+'</div><div class="sub">'+esc(sub)+'</div></div>';}
-
-function draft(id,btn){
-  btn.disabled=true;btn.textContent='Drafting…';
-  fetch('/api/deficiencies/'+id+'/quote',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-    btn.disabled=false;btn.textContent='Draft quote';
-    var box=document.getElementById('draft-'+id);
-    if(d.ok){box.textContent=d.draft;box.style.display='block';}
-  }).catch(function(){btn.disabled=false;btn.textContent='Draft quote';});
+function loadList(){
+  fetch('/api/deficiencies'+officeParam()).then(function(r){return r.json();}).then(function(d){
+    var buckets=d.ageBuckets||[];
+    document.getElementById('age').innerHTML=buckets.map(function(b){var hot=b.key==='61-90'||b.key==='90plus';
+      return '<div class="ab'+(hot?' hot':'')+'"><div class="bl">'+b.label+'</div><div class="bv">'+b.n+'</div></div>';}).join('');
+    var items=d.items||[];
+    document.getElementById('listn').textContent='· '+items.length;
+    var cols=[
+      {as:'company_name',label:'Site / customer',strong:true},
+      {as:'description',label:'Deficiency',render:function(v){return OS.esc((v||'').slice(0,60));}},
+      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'';}},
+      {as:'age',label:'Age',render:function(v,r){var days=r.reported_at?Math.round((Date.now()-new Date(r.reported_at).getTime())/86400000):null; return days==null?'':(days>90?OS.pill(days+'d','bad'):days>30?OS.pill(days+'d','warn'):OS.pill(days+'d','neutral'));}},
+      {as:'value',label:'Value',kind:'money',render:function(v,r){return r.quoted?('<span class="strong">'+OS.money(r.proposed_usd)+'</span> <span class="os-tag" style="background:var(--os-good-bg);color:var(--os-good)">quoted</span>'):('<span class="muted">~'+OS.money(650)+' proj</span>');}},
+      {as:'disp',label:'Disposition',render:function(v,r){ if(r.quoted) return '<span class="muted">quoted</span>';
+        return '<select class="disp" data-disp="'+r.id+'">'+DISPOSITIONS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(r.disposition||'')?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';}},
+      {as:'st',label:'',render:function(v,r){return r.stUrl?'<a href="'+r.stUrl+'" target="_blank" rel="noopener" class="os-fb">ServiceTrade ↗</a>':'';}}
+    ];
+    document.getElementById('list').innerHTML=OS.table(cols, items.map(function(i){return {company_name:i.company_name,description:i.description,office:i.office,reported_at:i.reported_at,quoted:i.quoted,proposed_usd:i.proposed_usd,disposition:i.disposition,id:i.id,stUrl:i.stUrl};}),{empty:'No open deficiencies in this office.'});
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load deficiencies.');});
 }
-
-function load(){fetch('/api/deficiencies'+officeParam()).then(function(r){return r.json();}).then(render).catch(function(){});}
-document.getElementById('sync').onclick=function(){var b=this;b.disabled=true;b.textContent='Syncing…';
-  fetch('/api/deficiencies/sync',{method:'POST'}).then(function(r){return r.json();}).then(function(){b.disabled=false;b.innerHTML='&#8635; Sync';load();}).catch(function(){b.disabled=false;b.innerHTML='&#8635; Sync';});};
-load();
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
+function reload(){ document.getElementById('ctxOffice').textContent=OS.officeLabel(); loadKpis(); loadList(); }
+document.addEventListener('change',function(e){
+  var sel=e.target.closest('[data-disp]'); if(sel){ fetch('/api/deficiencies/'+sel.getAttribute('data-disp')+'/disposition',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({disposition:sel.value})}); }
+});
+document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; b.textContent='Syncing…';
+  fetch('/api/deficiencies/sync',{method:'POST'}).then(function(){b.disabled=false;b.textContent='↻ Sync';reload();}).catch(function(){b.disabled=false;b.textContent='↻ Sync';}); });
+OS.ready(reload);
+OS.onChange(reload);
 </script>
 </body>
 </html>

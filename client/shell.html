@@ -217,11 +217,11 @@ var SCREENS = {
   handoffs:    { src:'/exceptions?owner=accounting', title:'Accounting Handoffs', sub:'Catch bad inputs before accounting cleans them up' },
   close:       { src:'/close',       title:'Close',               sub:'Month-end readiness, by office' },
   // OPERATIONS
-  service:     { src:'/soon?s=Service',              title:'Service',             sub:'Active service workload' },
+  service:     { src:'/service',     title:'Service',             sub:'The state of the service book right now' },
   schedule:    { src:'/schedule',    title:'Schedule',            sub:'Jobs matched to crews, cancellations backfilled' },
   deficiencies:{ src:'/deficiencies',title:'Deficiencies',        sub:'Open ServiceTrade deficiencies: quotable repair revenue waiting' },
-  jobs:        { src:'/jobs',        title:'Jobs',                sub:'Every job, live from ServiceTrade' },
-  agreements:  { src:'/plans',       title:'Service Agreements',  sub:'Recurring agreements, renewed before they lapse' },
+  jobs:        { src:'/ops-jobs',    title:'Jobs',                sub:'Job readiness: which are ready to bill, which are blocked' },
+  agreements:  { src:'/agreements',  title:'Service Agreements',  sub:'Recurring obligations, renewed before they lapse' },
   costing:     { src:'/costing',     title:'Job margins',         sub:'Live job value from ServiceTrade, true margins pending Sage' },
   // FRONT DESK
   phones:      { src:'/calls',       title:'Phones',              sub:'Main line, answered 24/7' },

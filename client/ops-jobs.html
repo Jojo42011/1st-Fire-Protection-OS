@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jobs · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+</head>
+<body>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Jobs</h1><div class="os-q">Which jobs need attention or are ready to bill?</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    </div>
+    <div class="os-filters" id="states" style="margin-bottom:12px"></div>
+    <div id="list"></div>
+    <div class="os-q" style="margin-top:14px">Readiness is a first-pass SOP: a completed job is "ready to bill" only when it carries the office/entity and a customer contact accounting needs. These rules will become configurable per office.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var state='attention';
+var STATES=[['attention','Needs attention'],['ready','Ready to bill'],['active','Active'],['completed','Completed']];
+function op(){var o=OS.office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
+function renderStates(){ document.getElementById('states').innerHTML=STATES.map(function(s){return '<button class="os-fb'+(s[0]===state?' on':'')+'" data-state="'+s[0]+'">'+s[1]+'</button>';}).join(''); }
+function readinessPill(r){ return r==='ready'?OS.pill('ready to bill','good'):r==='blocked'?OS.pill('blocked','bad'):r==='scheduled'?OS.pill('scheduled','neutral'):OS.pill('needs scheduling','warn'); }
+function load(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  document.getElementById('list').innerHTML=OS.skeletonKpis(1);
+  fetch('/api/operations/jobs?state='+state+op()).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.errorBox('Could not load jobs.');return;}
+    var cols=[
+      {as:'number',label:'Job #',strong:true},
+      {as:'kind',label:'Type'},
+      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'<span class="os-pill bad">no office</span>';}},
+      {as:'status',label:'Status'},
+      {as:'readiness',label:'Readiness',render:function(v){return readinessPill(v);}},
+      {as:'missing',label:'Blocker',render:function(v){return v&&v.length?OS.esc(v.join(', ')):'<span class="muted">—</span>';}},
+      {as:'when',label:'When',render:function(v,r){return OS.date(r.completed_at||r.scheduled_at);}}
+    ];
+    document.getElementById('list').innerHTML=OS.table(cols, (d.jobs||[]).map(function(j){return {number:j.number,kind:j.kind,office:j.office,status:j.status,readiness:j.readiness,missing:j.missing,completed_at:j.completed_at,scheduled_at:j.scheduled_at};}),{empty:'No jobs in this view.'});
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load jobs.');});
+}
+document.getElementById('states').addEventListener('click',function(e){var b=e.target.closest('[data-state]');if(b){state=b.getAttribute('data-state');renderStates();load();}});
+OS.ready(function(){renderStates();load();}); OS.onChange(load);
+</script>
+</body>
+</html>

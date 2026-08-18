@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Service · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+</head>
+<body>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Service</h1><div class="os-q">The state of the service book right now.</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    </div>
+    <div class="os-kpis" id="kpis"></div>
+    <div class="os-sec">Act on it</div>
+    <div class="os-attn" id="attn"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function op(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function load(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  document.getElementById('kpis').innerHTML=OS.skeletonKpis(5);
+  fetch('/api/operations/service'+op()).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');return;}
+    var s=d.summary;
+    document.getElementById('kpis').innerHTML=[
+      ['Open jobs',s.openTotal],['Scheduled',s.scheduled],['Needs scheduling',s.needsScheduling],['Completed (30d)',s.completed30],['Ready to bill',s.readyToBill]
+    ].map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1])+'</div></div>';}).join('');
+    var attn=[];
+    if(s.needsScheduling>0) attn.push({title:s.needsScheduling+' jobs need scheduling',why:'Open work with no date set',count:s.needsScheduling,tone:'warn',tab:'dispatch',action:'Open schedule'});
+    if(s.readyToBill>0) attn.push({title:s.readyToBill+' jobs are ready to bill',why:'Completed with office + contact on file',count:s.readyToBill,tone:'good',tab:'jobs',action:'Review jobs'});
+    document.getElementById('attn').innerHTML=OS.attnGrid(attn,'Nothing needs action in the service book.');
+  }).catch(function(){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');});
+}
+OS.ready(load); OS.onChange(load);
+</script>
+</body>
+</html>

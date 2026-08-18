@@ -1145,6 +1145,13 @@ export function initDb(): void {
   addColumn('app_users', 'offices', 'TEXT');            // CSV of canonical office keys; null/'' = none
   addColumn('app_users', 'all_offices', 'INTEGER DEFAULT 0'); // 1 = company-wide scope
 
+  // Deficiency disposition (Phase D): why an open, unquoted deficiency is not being converted, so the
+  // backlog is worked deliberately (needs_review|customer_declined|duplicate|warranty|waiting_information|quote_in_progress).
+  addColumn('deficiencies', 'disposition', 'TEXT');
+  addColumn('deficiencies', 'disposition_note', 'TEXT');
+  addColumn('deficiencies', 'disposition_by', 'TEXT');
+  addColumn('deficiencies', 'disposition_at', 'TEXT');
+
   // Saved reports (Phase 2): a stored report *definition*, not a snapshot. Reopened, it reruns
   // against current data UNDER THE VIEWING USER'S authorization (scope is re-resolved at run time).
   db.exec(`

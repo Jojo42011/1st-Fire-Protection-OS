@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Service Agreements · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+</head>
+<body>
+  <div class="os-wrap">
+    <div class="os-head">
+      <div><h1>Service Agreements</h1><div class="os-q">Recurring obligations, and what is ending soon.</div>
+        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    </div>
+    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
+    <div class="os-filters" id="views" style="margin:18px 0 10px"></div>
+    <div id="list"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var view='ending';
+var VIEWS=[['ending','Ending soon'],['all','All active']];
+function op(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function renderViews(){document.getElementById('views').innerHTML=VIEWS.map(function(v){return '<button class="os-fb'+(v[0]===view?' on':'')+'" data-view="'+v[0]+'">'+v[1]+'</button>';}).join('');}
+function load(){
+  document.getElementById('ctxOffice').textContent=OS.officeLabel();
+  fetch('/api/operations/agreements'+op()).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.errorBox('Could not load.');return;}
+    var s=d.summary;
+    document.getElementById('kpis').innerHTML=[['Active',s.active],['Ending within 90 days',s.endingSoon],['Ended',s.ended]]
+      .map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1])+'</div></div>';}).join('');
+    var rows=d.agreements||[];
+    if(view==='ending'){ var soon=Date.now()+90*86400000; rows=rows.filter(function(a){return a.ends_on&&new Date(a.ends_on).getTime()<=soon;}); }
+    var cols=[
+      {as:'site',label:'Site',strong:true},
+      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'';}},
+      {as:'frequency',label:'Frequency'},
+      {as:'ends_on',label:'Ends',kind:'date'},
+      {as:'value',label:'Value',kind:'money'}
+    ];
+    document.getElementById('list').innerHTML=OS.table(cols, rows,{empty:view==='ending'?'Nothing ending in the next 90 days.':'No active agreements in this office.'});
+  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load.');});
+}
+document.getElementById('views').addEventListener('click',function(e){var b=e.target.closest('[data-view]');if(b){view=b.getAttribute('data-view');renderViews();load();}});
+OS.ready(function(){renderViews();load();}); OS.onChange(load);
+</script>
+</body>
+</html>

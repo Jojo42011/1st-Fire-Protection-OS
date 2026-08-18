@@ -28,6 +28,9 @@ interface DefRow {
   proposed_usd: number;
   quoted?: number;
   office: string | null;
+  reported_at?: string | null;
+  disposition?: string | null;
+  disposition_note?: string | null;
 }
 
 router.get('/api/deficiencies', (req, res) => {
@@ -58,9 +61,25 @@ router.get('/api/deficiencies', (req, res) => {
     .prepare(`SELECT status, COUNT(*) AS n, COALESCE(SUM(proposed_usd),0) AS usd FROM deficiencies WHERE ${OPEN_CLAUSE}${oc} GROUP BY status ORDER BY n DESC`)
     .all(...bind) as { status: string; n: number; usd: number }[];
 
+  // Age buckets over the whole OPEN backlog (accurate, not just the top-150 list).
+  const ageBuckets = (() => {
+    try {
+      const r = db.prepare(
+        `SELECT
+           SUM(CASE WHEN reported_at IS NULL OR julianday('now')-julianday(reported_at)<=30 THEN 1 ELSE 0 END) b0,
+           SUM(CASE WHEN julianday('now')-julianday(reported_at)>30 AND julianday('now')-julianday(reported_at)<=60 THEN 1 ELSE 0 END) b30,
+           SUM(CASE WHEN julianday('now')-julianday(reported_at)>60 AND julianday('now')-julianday(reported_at)<=90 THEN 1 ELSE 0 END) b60,
+           SUM(CASE WHEN julianday('now')-julianday(reported_at)>90 THEN 1 ELSE 0 END) b90
+         FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}`
+      ).get(...bind) as any;
+      return [{ key: '0-30', label: '0–30d', n: r.b0 || 0 }, { key: '31-60', label: '31–60d', n: r.b30 || 0 }, { key: '61-90', label: '61–90d', n: r.b60 || 0 }, { key: '90plus', label: '90+d', n: r.b90 || 0 }];
+    } catch { return []; }
+  })();
+
   const rows = db
     .prepare(
-      `SELECT id, st_id, company_name, location_name, description, status, severity, proposed_usd, quoted, office
+      `SELECT id, st_id, company_name, location_name, description, status, severity, proposed_usd, quoted, office,
+              reported_at, disposition, disposition_note
          FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}
         ORDER BY proposed_usd DESC, id DESC LIMIT 150`
     )
@@ -79,12 +98,28 @@ router.get('/api/deficiencies', (req, res) => {
       totalUsd: Math.round(totalUsd),
       avgTicket: AVG_REPAIR_USD,
     },
+    ageBuckets,
     byStatus,
     items: rows.map((r) => ({
       ...r,
       stUrl: r.st_id ? `${ST_APP}/deficiencies/${r.st_id}` : null,
     })),
   });
+});
+
+/** Set a disposition on why an open deficiency isn't being converted. Office scope-checked. */
+const VALID_DISPOSITIONS = ['needs_review', 'customer_declined', 'duplicate', 'warranty', 'waiting_information', 'quote_in_progress'];
+router.post('/api/deficiencies/:id/disposition', (req, res) => {
+  const ctx = currentContext(req);
+  const db = getDb();
+  const row = db.prepare(`SELECT id, office FROM deficiencies WHERE id = ?`).get(Number(req.params.id)) as { id: number; office: string | null } | undefined;
+  if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (row.office && !ctx.allOffices && !ctx.offices.includes(row.office)) return res.status(403).json({ ok: false, error: 'office_forbidden' });
+  const disp = String(req.body?.disposition || '');
+  if (disp && !VALID_DISPOSITIONS.includes(disp)) return res.status(400).json({ ok: false, error: 'bad_disposition' });
+  db.prepare(`UPDATE deficiencies SET disposition = ?, disposition_note = ?, disposition_by = ?, disposition_at = datetime('now') WHERE id = ?`)
+    .run(disp || null, req.body?.note || null, ctx.email || 'system', row.id);
+  res.json({ ok: true });
 });
 
 /** Pull the deficiency backlog from ServiceTrade into the mirror (read-only). */

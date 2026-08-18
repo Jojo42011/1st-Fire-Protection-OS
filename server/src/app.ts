@@ -60,6 +60,7 @@ import sources from './routes/sources';
 import reports from './routes/reports';
 import exceptions from './routes/exceptions';
 import work from './routes/work';
+import operations from './routes/operations';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 
@@ -129,6 +130,7 @@ app.use(sources);
 app.use(reports);
 app.use(exceptions);
 app.use(work);
+app.use(operations);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) => {
@@ -180,6 +182,9 @@ app.get('/access', page('access.html'));
 app.get('/my-tasks', page('my-tasks.html'));
 app.get('/receivables', page('receivables.html'));
 app.get('/close', page('close.html'));
+app.get('/service', page('service.html'));
+app.get('/ops-jobs', page('ops-jobs.html'));
+app.get('/agreements', page('agreements.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)
