@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Custom Reports · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  body{background:var(--bg)}
+  .wrap{max-width:1000px;margin:0 auto;padding:24px 24px 60px}
+  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
+  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px}
+  .builder{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px;margin-top:18px}
+  .sentence{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:650;font-size:15px;color:var(--ink-2);line-height:2.1}
+  .sentence select{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);border:1px solid var(--border);
+    border-radius:9px;padding:7px 30px 7px 11px;background:var(--panel);cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 9px center}
+  .actions{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+  .btn{font-weight:700;font-size:13px;border-radius:9px;padding:9px 15px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .btn.pri{background:var(--fp-red,#E53935);color:#fff;border-color:transparent}
+  .result{margin-top:20px}
+  .rc{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px}
+  .rc .big{font-weight:800;font-size:34px;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+  .rc .lab{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .rc .src{font-weight:600;font-size:11px;color:var(--ink-3);margin-top:8px}
+  .bar{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:10px;margin:8px 0}
+  .bar .nm{font-weight:650;font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .track{height:15px;background:var(--fill);border-radius:7px;overflow:hidden}
+  .bar .fill{height:100%;background:var(--fp-red,#E53935);border-radius:7px}
+  .bar .amt{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .sec-h{font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:30px 0 10px}
+  .saved{display:flex;flex-direction:column;gap:8px}
+  .sr{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:11px;background:var(--panel);padding:11px 14px}
+  .sr .nm{font-weight:700;font-size:13.5px;color:var(--ink)}
+  .sr .meta{font-weight:550;font-size:11.5px;color:var(--muted)}
+  .sr .srx{display:flex;gap:6px}
+  .sr button{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 11px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .empty{color:var(--muted);font-weight:600;font-size:13px;padding:6px 0}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Custom Reports</h1>
+    <div class="lead">Ask a question in plain business terms. It runs against current data under your access.</div>
+
+    <div class="builder">
+      <div class="sentence">
+        Show me <select id="metric"></select>
+        for <select id="scope"></select>
+        during <select id="period"></select>
+        grouped by <select id="groupBy"><option value="none">nothing</option><option value="office">office</option></select>
+      </div>
+      <div class="actions">
+        <button class="btn pri" id="run">Run</button>
+        <button class="btn" id="save">Save this report</button>
+      </div>
+    </div>
+
+    <div class="result" id="result"></div>
+
+    <div class="sec-h">Saved reports</div>
+    <div class="saved" id="saved"></div>
+  </div>
+
+<script>
+"use strict";
+var CAT=null;
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
+function fmtVal(v,unit){return unit==='usd'?money(v):unit==='percent'?(v+'%'):(Number(v)||0).toLocaleString();}
+function opt(v,l){var o=document.createElement('option');o.value=v;o.textContent=l;return o;}
+function unitOf(key){var m=(CAT.metrics||[]).find(function(x){return x.key===key;});return m?m.unit:'count';}
+function labelOf(key){var m=(CAT.metrics||[]).find(function(x){return x.key===key;});return m?m.label:key;}
+
+function boot(){
+  fetch('/api/reports/catalog').then(function(r){return r.json();}).then(function(d){
+    CAT=d;
+    var mSel=document.getElementById('metric');
+    (d.metrics||[]).forEach(function(m){mSel.appendChild(opt(m.key,m.label.toLowerCase()));});
+    var sSel=document.getElementById('scope');
+    if(d.canSeeAllOffices) sSel.appendChild(opt('all','all offices'));
+    (d.offices||[]).forEach(function(o){sSel.appendChild(opt(o.key,o.label));});
+    var pSel=document.getElementById('period');
+    (d.periods||[]).forEach(function(p){pSel.appendChild(opt(p.key,p.label.toLowerCase()));});
+    pSel.value='month';
+    loadSaved();
+  });
+}
+function currentConfig(){
+  return {metric:document.getElementById('metric').value,
+    office:document.getElementById('scope').value,
+    period:document.getElementById('period').value,
+    groupBy:document.getElementById('groupBy').value};
+}
+function run(cfg){
+  var key=cfg.metric, unit=unitOf(key);
+  if(cfg.groupBy==='office'){
+    fetch('/api/metrics/'+key+'/by-office?period='+cfg.period).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){renderErr();return;}
+      renderBars(labelOf(key),unit,d.rows||[]);
+    });
+  }else{
+    fetch('/api/metrics/'+key+'?period='+cfg.period+'&office='+encodeURIComponent(cfg.office)).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){renderErr(d);return;}
+      renderKpi(d.metric);
+    });
+  }
+}
+function renderErr(d){document.getElementById('result').innerHTML='<div class="rc"><div class="empty">'+esc((d&&d.error)||'Could not run. You may not have access to that scope.')+'</div></div>';}
+function renderKpi(m){
+  document.getElementById('result').innerHTML='<div class="rc"><div class="lab">'+esc(m.label)+'</div>'+
+    '<div class="big">'+esc(fmtVal(m.value,m.unit))+'</div>'+
+    '<div class="src">'+esc(m.source)+(m.companyWide?' · company-wide':'')+'</div></div>';
+}
+function renderBars(label,unit,rows){
+  var max=Math.max.apply(null,rows.map(function(r){return r.value;}))||1;
+  var body=rows.length?rows.sort(function(a,b){return b.value-a.value;}).map(function(r){
+    return '<div class="bar"><span class="nm">'+esc(r.label)+'</span><span class="track"><span class="fill" style="width:'+Math.round((r.value/max)*100)+'%"></span></span>'+
+      '<span class="amt">'+fmtVal(r.value,unit)+'</span></div>';
+  }).join(''):'<div class="empty">No data.</div>';
+  document.getElementById('result').innerHTML='<div class="rc"><div class="lab">'+esc(label)+' by office</div><div style="margin-top:12px">'+body+'</div></div>';
+}
+function loadSaved(){
+  fetch('/api/reports/saved').then(function(r){return r.json();}).then(function(d){
+    var el=document.getElementById('saved');
+    if(!d||!d.ok||!d.reports.length){el.innerHTML='<div class="empty">No saved reports yet. Build one above and Save it.</div>';return;}
+    el.innerHTML=d.reports.map(function(r){
+      var c=r.config||{};
+      return '<div class="sr"><div><div class="nm">'+esc(r.name)+'</div>'+
+        '<div class="meta">'+esc(labelOf(c.metric)||c.metric)+' · '+esc(c.office||'all')+' · '+esc(c.period||'month')+(c.groupBy==='office'?' · by office':'')+'</div></div>'+
+        '<div class="srx"><button data-run="'+r.id+'">Run</button><button data-del="'+r.id+'">Delete</button></div></div>';
+    }).join('');
+  });
+}
+document.getElementById('run').addEventListener('click',function(){run(currentConfig());});
+document.getElementById('save').addEventListener('click',function(){
+  var cfg=currentConfig();
+  var name=prompt('Name this report:', labelOf(cfg.metric)+' · '+(cfg.office==='all'?'All offices':cfg.office));
+  if(!name)return;
+  fetch('/api/reports/saved',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,config:cfg})})
+    .then(function(r){return r.json();}).then(function(){loadSaved();});
+});
+document.getElementById('saved').addEventListener('click',function(e){
+  var run_=e.target.closest('[data-run]');
+  if(run_){fetch('/api/reports/saved/'+run_.getAttribute('data-run')+'/run',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){renderErr(d);return;}
+      if(d.groupBy==='office'){renderBars(labelOf(d.config.metric),unitOf(d.config.metric),d.rows||[]);}
+      else{renderKpi(d.metric);}
+    });return;}
+  var del=e.target.closest('[data-del]');
+  if(del){fetch('/api/reports/saved/'+del.getAttribute('data-del'),{method:'DELETE'}).then(function(){loadSaved();});}
+});
+boot();
+</script>
+</body>
+</html>
