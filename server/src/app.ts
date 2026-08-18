@@ -57,6 +57,7 @@ import scorecard from './routes/scorecard';
 import people from './routes/people';
 import me from './routes/me';
 import sources from './routes/sources';
+import reports from './routes/reports';
 import { seedPeopleCatalog } from './people/service';
 
 const PORT = Number(process.env.PORT || 3900);
@@ -122,6 +123,7 @@ app.use(scorecard);
 app.use(people);
 app.use(me);
 app.use(sources);
+app.use(reports);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) => {
@@ -165,6 +167,7 @@ app.get('/costing', page('costing.html'));
 app.get('/oncall', page('oncall.html'));
 app.get('/deficiencies', page('deficiencies.html'));
 app.get('/scoreboard', page('scoreboard.html'));
+app.get('/office-performance', page('office-performance.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)

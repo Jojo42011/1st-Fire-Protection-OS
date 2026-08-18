@@ -1144,6 +1144,20 @@ export function initDb(): void {
   // have company-wide IT access without company-wide financial access. Enforced server-side.
   addColumn('app_users', 'offices', 'TEXT');            // CSV of canonical office keys; null/'' = none
   addColumn('app_users', 'all_offices', 'INTEGER DEFAULT 0'); // 1 = company-wide scope
+
+  // Saved reports (Phase 2): a stored report *definition*, not a snapshot. Reopened, it reruns
+  // against current data UNDER THE VIEWING USER'S authorization (scope is re-resolved at run time).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS saved_reports (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_email TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      config_json TEXT NOT NULL,      -- {metric, office, period, groupBy, viz, ...}
+      created_at  TEXT DEFAULT (datetime('now')),
+      updated_at  TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_saved_reports_owner ON saved_reports(owner_email);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
