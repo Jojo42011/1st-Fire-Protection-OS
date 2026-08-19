@@ -27,6 +27,8 @@
   w.addEventListener('message', function(e){
     var d = e.data || {};
     if (d.type === 'fp-office' || d.type === 'fp-period') { fire(); }
+    // shell → active frame: open a metric's drill drawer (from the ⌘K palette)
+    if (d.type === 'open-drill' && d.key && OS.openDrill) { OS.openDrill(d.key, d.label); }
   });
 
   OS.ready = function(cb){
@@ -209,6 +211,19 @@
     var nav=e.target.closest('[data-tab]');
     if(nav && nav.getAttribute('data-tab')){ OS.go(nav.getAttribute('data-tab'), {office:nav.getAttribute('data-office')||null}); return; }
   });
+
+  /* ---------- toast: bottom-centre, ink bg, green check, auto-dismiss ----------
+     Copy should always name the outcome (and where it routed), never just "Saved". */
+  var toastTimer=null;
+  OS.toast = function(msg, opts){ opts=opts||{};
+    var host=document.getElementById('os-toast-host');
+    if(!host){ host=document.createElement('div'); host.id='os-toast-host'; document.body.appendChild(host); }
+    host.innerHTML='<div class="os-toast'+(opts.tone==='bad'?' bad':'')+'" role="status">'+
+      '<span class="tk">'+(opts.tone==='bad'?'!':'✓')+'</span><span class="tm">'+OS.esc(msg)+'</span></div>';
+    requestAnimationFrame(function(){ var t=host.firstChild; if(t) t.classList.add('on'); });
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){ var t=host.firstChild; if(t){ t.classList.remove('on'); setTimeout(function(){ if(host) host.innerHTML=''; },260); } }, opts.ms||3400);
+  };
 
   /* ---------- period control (renders a period button row into an element) ---------- */
   OS.periodControl = function(el){ if(!el) return;

@@ -10,23 +10,27 @@
    ============================================================ */
 
 :root{
-  /* surfaces */
-  --bg:#F7F8FB; --panel:#FFFFFF; --panel-alt:#FBFCFE; --fill:#F2F4F9;
-  --border:#E9EBF1; --border-strong:#D8DDEA; --divider:#EFF1F6; --divider-soft:#F4F5F9;
+  /* surfaces — premium neutral spine (handoff TOKENS.md) */
+  --bg:#F4F5F7; --panel:#FFFFFF; --panel-alt:#FAFBFD; --panel-subtle:#FBFBFC; --fill:#F1F3F6;
+  --border:#E4E7EC; --border-card:#E7EAEF; --border-strong:#D0D5DD; --border-hover:#B7BEC9;
+  --divider:#F1F3F6; --divider-soft:#F4F5F7;
 
-  /* ink */
-  --ink:#151A2D; --ink-2:#4A5268; --ink-3:#5B6478; --muted:#8B93A9; --faint:#A3AABD;
+  /* ink — AA-safe text tones; #98A0B0 is icon-stroke only, never text */
+  --ink:#0E1420; --ink-hover:#22293A; --ink-2:#414B60; --ink-3:#5E6779; --muted:#5E6779; --faint:#98A0B0;
 
-  /* meaning */
-  --green:#2FA36B; --green-bg:#E7F6EE; --green-soft:#8ECFAC;
-  --money:#E02D62; --money-bg:#FDEBF1;
-  --amber:#E2A93C; --amber-ink:#B87B12; --amber-bg:#FDF4E3;
+  /* meaning — text-safe tones + non-text accents */
+  --green:#0E6B4D; --green-accent:#12805C; --green-bg:#E7F4EE; --green-soft:#8ECFAC;
+  --money:#B3261E; --money-bg:#FBECEA;
+  --amber:#B4690E; --amber-ink:#8A5106; --amber-bg:#FDF3E4;
+  --critical:#B3261E; --critical-bg:#FBECEA;
   --indigo:#4C5BD4; --indigo-deep:#2C36A8; --indigo-bg:#F0F2FE; --indigo-bg-2:#EEF0FE;
-  --teal:#1E8E96; --teal-bg:#E6F4F5;   /* fifth meaning: delivering the work (schedule + service plans) */
+  --teal:#1E8E96; --teal-bg:#E6F4F5;
 
-  /* brand gradients */
+  /* brand */
+  --brand:#D33A2C; --fp-red:#D33A2C; --scope-dot:#D33A2C;
+  --projected-underline:#E7B778;
   --hero:linear-gradient(120deg,#151A2D 0%,#2B2160 58%,#7A2A55 100%);
-  --mark:linear-gradient(140deg,#FF6B4A,#E02D62);
+  --mark:linear-gradient(140deg,#FF6B4A,#D33A2C);
   --ember:#FF6B4A;
 
   /* type */
@@ -34,14 +38,16 @@
   --mono:'Geist Mono',ui-monospace,Menlo,Consolas,monospace;
 
   /* geometry */
-  --r-card:12px; --r-inset:9px; --r-tile:9px; --r-btn:9px; --r-chip:7px; --r-pill:999px;
-  --sidebar:240px; --rail:372px;
+  --r-card:14px; --r-modal:16px; --r-inset:10px; --r-tile:10px; --r-btn:9px; --r-chip:8px; --r-pill:999px;
+  --sidebar:252px; --rail:372px;
 
-  /* elevation */
-  --sh-rest:0 1px 2px rgba(21,26,45,.05);
-  --sh-lift:0 14px 30px rgba(21,26,45,.11);
-  --sh-float:0 6px 20px rgba(21,26,45,.07);
-  --sh-modal:0 30px 80px rgba(21,26,45,.28);
+  /* elevation — premium card + popover + drawer + modal + toast */
+  --sh-rest:0 1px 2px rgba(14,20,32,.03), 0 14px 30px -24px rgba(14,20,32,.45);
+  --sh-lift:0 1px 2px rgba(14,20,32,.04), 0 22px 40px -26px rgba(14,20,32,.55);
+  --sh-float:0 22px 48px -18px rgba(14,20,32,.4);
+  --sh-drawer:-30px 0 70px -30px rgba(0,0,0,.45);
+  --sh-modal:0 40px 80px -30px rgba(0,0,0,.6);
+  --sh-toast:0 24px 50px -20px rgba(0,0,0,.6);
 
   /* motion */
   --ease:cubic-bezier(.2,.7,.3,1);

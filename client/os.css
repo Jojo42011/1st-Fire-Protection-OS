@@ -7,11 +7,11 @@
  */
 
 :root{
-  --os-good:#1f9d55; --os-good-bg:#e9f7ef;
-  --os-warn:#c9821a; --os-warn-bg:#fbf1e2;
-  --os-bad:#d64545;  --os-bad-bg:#fbeaea;
-  --os-neutral:#7c869b; --os-neutral-bg:#eef0f4;
-  --os-accent:var(--fp-red,#E53935);
+  --os-good:#0E6B4D; --os-good-bg:#E7F4EE;
+  --os-warn:#8A5106; --os-warn-bg:#FDF3E4;
+  --os-bad:#B3261E;  --os-bad-bg:#FBECEA;
+  --os-neutral:#5E6779; --os-neutral-bg:#F1F3F6;
+  --os-accent:var(--brand,#D33A2C);
 }
 :root:not([data-theme="light"]) @media (prefers-color-scheme: dark){}
 [data-theme="dark"]{
@@ -35,9 +35,9 @@
 /* ---- KPI cards ---- */
 .os-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
 @media(max-width:640px){.os-kpis{grid-template-columns:repeat(2,1fr);gap:9px}}
-.os-kpi{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:15px 15px 14px;position:relative}
-.os-kpi.click{cursor:pointer;transition:border-color .12s,transform .12s}
-.os-kpi.click:hover{border-color:var(--border-strong)}
+.os-kpi{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:16px 18px;position:relative;box-shadow:var(--sh-rest)}
+.os-kpi.click{cursor:pointer;transition:border-color .18s var(--ease),transform .22s var(--ease),box-shadow .22s var(--ease)}
+.os-kpi.click:hover{border-color:var(--border-strong);transform:translateY(-3px);box-shadow:var(--sh-lift)}
 .os-kpi .lab{font-weight:700;font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
 .os-kpi .val{font-weight:800;font-size:25px;letter-spacing:-.02em;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
 @media(max-width:640px){.os-kpi .val{font-size:21px}}
@@ -81,7 +81,9 @@
 .os-fb:focus-visible{outline:2px solid var(--os-accent);outline-offset:1px}
 
 /* ---- tables ---- */
-.os-tablewrap{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden}
+.os-tablewrap{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);overflow:hidden;box-shadow:var(--sh-rest)}
+.os-table thead th{background:var(--panel-subtle,var(--panel))}
+.os-acard{box-shadow:var(--sh-rest)}
 .os-tablescroll{overflow-x:auto}
 table.os-table{width:100%;border-collapse:collapse;font-size:13px}
 .os-table thead th{position:sticky;top:0;background:var(--panel);z-index:1;text-align:left;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
@@ -115,7 +117,7 @@ table.os-table{width:100%;border-collapse:collapse;font-size:13px}
 /* ---- drill-down drawer ---- */
 .os-scrim{position:fixed;inset:0;background:rgba(15,18,25,.42);z-index:900;opacity:0;transition:opacity .18s;display:flex;justify-content:flex-end}
 .os-scrim.on{opacity:1}
-.os-drawer{width:min(760px,94vw);height:100%;background:var(--panel);box-shadow:-8px 0 40px rgba(0,0,0,.2);display:flex;flex-direction:column;transform:translateX(24px);transition:transform .2s}
+.os-drawer{width:min(520px,100%);height:100%;background:var(--panel);box-shadow:var(--sh-drawer);display:flex;flex-direction:column;transform:translateX(26px);transition:transform .28s var(--ease)}
 .os-scrim.on .os-drawer{transform:none}
 .os-drawer .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border)}
 .os-drawer .dh h2{font-weight:800;font-size:17px;color:var(--ink)}
@@ -125,3 +127,14 @@ table.os-table{width:100%;border-collapse:collapse;font-size:13px}
 .os-drawer .df{padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:600;font-size:12px;color:var(--muted)}
 .os-drawer .df button{font-weight:700;font-size:12px;border:1px solid var(--border);background:var(--panel);color:var(--ink-2);border-radius:8px;padding:6px 12px;cursor:pointer}
 .os-drawer .df button:disabled{opacity:.4;cursor:default}
+
+/* toast: bottom-centre, ink background, green check */
+#os-toast-host{position:fixed;left:0;right:0;bottom:0;z-index:1200;display:flex;justify-content:center;pointer-events:none;padding:0 16px 26px}
+.os-toast{display:inline-flex;align-items:center;gap:11px;max-width:520px;background:var(--ink);color:#fff;
+  border-radius:var(--r-btn,10px);padding:12px 16px 12px 13px;box-shadow:var(--sh-toast);
+  font-weight:600;font-size:13px;line-height:1.35;transform:translateY(14px);opacity:0;transition:transform .26s var(--ease),opacity .26s var(--ease)}
+.os-toast.on{transform:none;opacity:1}
+.os-toast .tk{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;border-radius:50%;
+  background:var(--green-soft,#8ECFAC);color:var(--ink);font-weight:800;font-size:12px}
+.os-toast.bad .tk{background:var(--money,#B3261E);color:#fff}
+.os-toast .tm{min-width:0}

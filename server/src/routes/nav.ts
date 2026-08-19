@@ -35,8 +35,14 @@ router.get('/api/nav-counts', (_req, res) => {
     `SELECT COALESCE(SUM(amount_cents), 0) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN ('draft','submitted','pending','reviewed')`
   );
 
+  // Open deficiency backlog (quotable repair revenue waiting) — a real problem count for the nav.
+  const deficiencies = num(
+    `SELECT COUNT(*) AS v FROM deficiencies WHERE lower(COALESCE(status,'')) NOT IN ('resolved','closed','cancelled','canceled','completed')`
+  );
+
   res.json({
     approvals,
+    deficiencies,
     phones: num(`SELECT COUNT(*) AS v FROM calls WHERE date(started_at) = date('now')`),
     money: num(`SELECT COUNT(*) AS v FROM invoices WHERE status != 'paid'`),
     reviews: num(`SELECT COUNT(*) AS v FROM reviews WHERE reply_status IN ('none','draft') AND stars <= 3`),
