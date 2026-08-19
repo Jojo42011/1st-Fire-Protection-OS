@@ -7,12 +7,23 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
+  .screen{max-width:1160px;margin:0 auto;padding:24px 24px 64px}
+  @media(max-width:640px){.screen{padding:16px 14px 52px}}
+  /* Premium People-family tab strip: ONE strip generated from a single definition (see STRIP
+     in script), rendered on every view with the active tab passed in. overflow-y must be set
+     to hidden or the browser paints a spurious vertical scrollbar next to the horizontal one. */
+  .os-ptabs{display:flex;gap:2px;overflow-x:auto;overflow-y:hidden;padding-bottom:1px;border-bottom:1px solid var(--border);margin:2px 0 20px}
+  .os-ptab{appearance:none;border:0;background:none;padding:11px 15px;font-family:var(--sans);font-weight:650;font-size:13.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+  .os-ptab:hover{color:var(--ink-2)}
+  .os-ptab.on{color:var(--ink);border-bottom-color:var(--brand);cursor:default}
+  .os-ptab .cc{font-family:var(--mono);font-weight:500;font-size:10.5px;min-width:16px;text-align:center;padding:1px 6px;border-radius:999px;background:var(--fill);color:var(--ink-3)}
+  .os-ptab.on .cc{background:var(--brand);color:#fff}
+  /* secondary sub-tab strips inside a view (employee detail, assets, credentials) */
   .ptabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin:6px 0 18px}
   .ptab{appearance:none;border:0;background:none;padding:10px 14px;font-weight:600;font-size:13.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
   .ptab.on{color:var(--ink);border-bottom-color:var(--indigo)}
-  .ptab .b{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--fill);color:var(--muted);font-size:11px;font-weight:700;text-align:center}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px}
   @media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{padding:16px 18px}
@@ -47,19 +58,26 @@
 </head>
 <body>
 <div class="screen view" id="root">
-  <div>
-    <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Restricted · role-based access</p>
-    <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">People</h1>
-    <p class="muted" style="margin-top:6px;max-width:74ch">The employee lifecycle: onboarding, active employees, and offboarding. Who someone is, what they have, what is still outstanding, and what to reverse when they leave.</p>
+  <div class="os-screen-head">
+    <div>
+      <h1>People</h1>
+      <div class="os-question">Who is joining, who is here, and what do we reverse when someone leaves?</div>
+    </div>
+    <div class="os-actions" id="headActions" style="display:none">
+      <button class="os-btn primary" id="startOnb">Start onboarding</button>
+    </div>
   </div>
-  <div id="who" class="muted" style="margin-top:8px"></div>
+  <div id="who" class="muted" style="margin-bottom:6px"></div>
   <div id="tabsWrap" style="display:none">
-    <div class="ptabs" id="ptabs"></div>
+    <div id="metricstrip"></div>
+    <div class="os-ptabs" id="pstrip"></div>
     <div id="view"></div>
+    <div class="os-foot">People holds employee and HR records, so it is gated by Microsoft identity, not the office password. My tasks and Approvals are company-wide queues and open the shared views. Nothing provisions, grants or reverses access on its own: every item waits for its owner to act.</div>
   </div>
   <div id="gate"></div>
 </div>
 
+<script src="/os.js"></script>
 <script>
 "use strict";
 var ME=null, CAT=null;
@@ -69,18 +87,44 @@ function teamColor(k){return ({it:'#4b57c9',hr:'#B9860B',safety:'#1f7a4d',accoun
 function human(s){return String(s||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
 function has(role){return ME&&ME.roles&&(ME.roles.indexOf('people_admin')>=0||ME.roles.indexOf(role)>=0);}
 
-var TABS=[
-  {key:'overview',label:'Overview'},
-  {key:'onboarding',label:'Onboarding'},
-  {key:'employees',label:'Employees'},
-  {key:'assets',label:'Assets'},
-  {key:'credentials',label:'Credentials'},
-  {key:'offboarding',label:'Offboarding'},
-  {key:'tasks',label:'My Tasks'},
-  {key:'approvals',label:'Approvals'},
-  {key:'templates',label:'Role Templates'}
+// ONE seven-tab strip for the whole People family, generated from this single definition and
+// rendered on every view with the active tab passed to renderStrip(). "My tasks" and "Approvals"
+// are company-wide queues, so they LEAVE People via OS.go. "Onboarding" is its own view
+// (onboarding.html). "Role templates" opens a drawer. badge reads a key off /api/people/overview.
+var STRIP=[
+  {key:'overview',   label:'Overview'},
+  {key:'onboarding', label:'Onboarding',     badge:'onboarding',       nav:'/onboarding'},
+  {key:'employees',  label:'Employees',      badge:'active'},
+  {key:'tasks',      label:'My tasks',       badge:'openTasks',        go:'tasks'},
+  {key:'approvals',  label:'Approvals',      badge:'awaitingApproval', go:'approve'},
+  {key:'offboarding',label:'Offboarding',    badge:'offboarding'},
+  {key:'templates',  label:'Role templates', badge:'positions',        drawer:true}
 ];
-var cur='overview';
+var STRIP_VIEWS={overview:1,employees:1,offboarding:1}; // tabs people.html renders in-page
+var OVERVIEW=null, cur='overview';
+function renderStrip(active){
+  var o=OVERVIEW||{};
+  document.getElementById('pstrip').innerHTML=STRIP.map(function(t){
+    var n=t.badge&&o[t.badge]!=null?o[t.badge]:null;
+    var on=t.key===active;
+    return '<button class="os-ptab'+(on?' on':'')+'" data-tab="'+t.key+'"'+(on?' aria-current="page"':'')+'>'+esc(t.label)+(n!=null?'<span class="cc">'+esc(n)+'</span>':'')+'</button>';
+  }).join('');
+}
+function renderMetricStrip(){
+  var o=OVERVIEW||{};
+  document.getElementById('metricstrip').innerHTML=OS.metricStrip([
+    {label:'Active employees', value:o.active||0,     format:'count',drillable:false,sub:'on the roster'},
+    {label:'In onboarding',    value:o.onboarding||0, format:'count',drillable:false,sub:'joining now'},
+    {label:'Offboarding',      value:o.offboarding||0,format:'count',drillable:false,sub:'on notice or leaving'},
+    {label:'Open people tasks',value:o.openTasks||0,  format:'count',drillable:false,sub:'across HR, IT, Safety'}
+  ]);
+}
+function loadOverview(initial){
+  j('/api/people/overview').then(function(r){ OVERVIEW=(r.ok&&r.body)||{}; renderMetricStrip();
+    if(initial){ var h=(location.hash||'').replace(/^#/,'').split('?')[0]; go(STRIP_VIEWS[h]?h:'overview'); }
+    else renderStrip(STRIP_VIEWS[cur]?cur:'');
+  }).catch(function(){ OVERVIEW={}; renderMetricStrip(); if(initial) go('overview'); });
+}
 
 /* ---------- boot: identity gate ---------- */
 function boot(){
@@ -91,11 +135,13 @@ function boot(){
     who.innerHTML='Signed in as <b>'+esc(ME.name||ME.email)+'</b> · roles: '+(ME.roles.map(esc).join(', ')||'none')+' · <span class="link" onclick="signOut()">sign out</span>';
     document.getElementById('gate').innerHTML='';
     document.getElementById('tabsWrap').style.display='';
-    j('/api/people/catalog').then(function(c){CAT=c.ok?c.body:null; renderTabs(); go('overview');});
+    document.getElementById('headActions').style.display='';
+    j('/api/people/catalog').then(function(c){CAT=c.ok?c.body:null; loadOverview(true);});
   }).catch(function(){renderGate();});
 }
 function renderGate(){
   document.getElementById('tabsWrap').style.display='none';
+  document.getElementById('headActions').style.display='none';
   var g=document.getElementById('gate');
   if(ME && ME.authenticated && !ME.authorized){
     g.innerHTML='<div class="authwrap"><div class="card card-pad"><h2 style="margin:0 0 6px">You are signed in, but not authorized for People</h2><p class="muted">Signed in as '+esc(ME.email)+'. Ask a People admin to grant you a role.</p><p style="margin-top:10px"><span class="link" onclick="signOut()">Sign out</span></p></div></div>';
@@ -114,19 +160,44 @@ function renderGate(){
 function signIn(){ try{ (window.top||window).location.href='/api/people/auth/login'; }catch(_){ window.location.href='/api/people/auth/login'; } }
 function signOut(){ j('/api/people/auth/logout',{method:'POST'}).then(function(){location.reload();}); }
 
-function renderTabs(){
-  document.getElementById('ptabs').innerHTML=TABS.map(function(t){
-    return '<button class="ptab'+(t.key===cur?' on':'')+'" data-k="'+t.key+'" onclick="go(\''+t.key+'\')">'+t.label+'<span class="b" id="tabb-'+t.key+'" style="display:none"></span></button>';
-  }).join('');
+function go(k){ cur=k; renderStrip(STRIP_VIEWS[k]?k:''); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v); }
+// Strip navigation: active in-page tab is inert; My tasks / Approvals leave via OS.go; Onboarding
+// opens its own view; Role templates opens a drawer; the rest render in-page.
+document.getElementById('pstrip').addEventListener('click',function(e){
+  var b=e.target.closest('[data-tab]'); if(!b) return;
+  var t=STRIP.filter(function(x){return x.key===b.getAttribute('data-tab');})[0]; if(!t) return;
+  if(t.go){ OS.go(t.go); return; }
+  if(t.drawer){ openTemplatesDrawer(); return; }
+  if(t.nav){ location.href=t.nav; return; }
+  if(t.key===cur) return;
+  go(t.key);
+});
+document.getElementById('startOnb').addEventListener('click',function(){ go('onboarding'); });
+function openTemplatesDrawer(){
+  var scrim=document.createElement('div'); scrim.className='os-scrim';
+  scrim.innerHTML='<div class="os-drawer" role="dialog" aria-label="Role templates"><div class="dh"><div><h2>Role templates</h2><div class="sub">Job positions and their access defaults</div></div><button class="x" aria-label="Close">&times;</button></div><div class="db" id="tmplBody" style="overflow:auto;flex:1;padding:0"><p class="muted" style="padding:18px 20px">Loading…</p></div></div>';
+  document.body.appendChild(scrim);
+  requestAnimationFrame(function(){ scrim.classList.add('on'); });
+  function close(){ scrim.classList.remove('on'); setTimeout(function(){ scrim.remove(); },200); }
+  scrim.addEventListener('click',function(e){ if(e.target===scrim||e.target.closest('.x')) close(); });
+  document.addEventListener('keydown',function esc2(e){ if(e.key==='Escape'){ close(); document.removeEventListener('keydown',esc2);} });
+  j('/api/people/positions').then(function(r){
+    var rows=(r.ok&&r.body&&r.body.positions)||[];
+    var un=rows.filter(function(p){return p.review_status!=='reviewed';}).length;
+    document.getElementById('tmplBody').innerHTML=
+      '<div class="card-pad"><p class="muted">Defaults are configured iteratively. New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.'+(un?' <b>'+un+'</b> still need review.':'')+'</p></div>'+
+      (rows.length?'<table class="os-table"><thead><tr><th>Position</th><th>Template</th><th>Updated</th></tr></thead><tbody>'+rows.map(function(p){
+        return '<tr><td class="strong">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td><td class="muted">'+esc((p.updated_at||'').slice(0,10)||'not set')+'</td></tr>';
+      }).join('')+'</tbody></table>':'<div class="card-pad"><p class="muted">No positions yet.</p></div>');
+  });
 }
-function go(k){ cur=k; renderTabs(); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v); }
 
 /* ---------- views ---------- */
 var VIEWS={};
 VIEWS.overview=function(v){
   Promise.all([j('/api/people/overview'),j('/api/people/attention')]).then(function(res){
     var o=res[0].body||{}; var A=(res[1].ok?res[1].body:{})||{}; var att=A.attention||{}; var soon=A.startingSoon||[];
-    // 1) Needs attention — current employee risk first (config is demoted below).
+    // 1) Needs attention: current employee risk first (config is demoted below).
     var cards=[];
     if(att.startingSoon>0) cards.push(attn('warn',att.startingSoon+' starting within 7 days','Confirm Day-1 readiness before they arrive','onboarding'));
     if(att.blockedOnboarding>0) cards.push(attn('bad',att.blockedOnboarding+' onboarding blocked','A dependency or approval is holding Day-1 readiness','tasks'));
@@ -139,10 +210,9 @@ VIEWS.overview=function(v){
       soon.map(function(s){var tone=s.readiness==='ready'?'completed':s.readiness==='blocked'?'awaiting_approval':'pending';
         return '<tr style="cursor:pointer" onclick="empDetail('+s.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(s.name)+'</td><td>'+esc(s.job_position||'')+'</td><td>'+esc(s.office||'')+'</td><td>'+esc(s.start||'')+(s.daysUntil!=null?' <span class="muted">('+s.daysUntil+'d)</span>':'')+'</td><td><span class="st '+tone+'">'+esc(human(s.readiness))+'</span></td></tr>';}).join('')+
       '</tbody></table></div>' : '';
-    // 3) Lifecycle counts (secondary) + config note (demoted)
-    var counts='<div class="kpis" style="margin-top:14px">'+kpi('Active',o.active)+kpi('In onboarding',o.onboarding)+kpi('Offboarding',o.offboarding)+kpi('Open tasks',o.openTasks)+'</div>';
-    var cfg='<p class="muted" style="margin-top:14px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="go(\'templates\')">Role Templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My Tasks</span>.</p>';
-    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+'<div class="sec" style="margin:20px 0 10px">Lifecycle</div>'+counts+cfg;
+    // 3) Config note (demoted). The headline lifecycle counts now live in the metric strip above.
+    var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My tasks</span>.</p>';
+    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+cfg;
   });
 };
 function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:pointer;border-left:4px solid '+(tone==='bad'?'#d64545':tone==='warn'?'#c9821a':'#7c869b')+'" onclick="go(\''+tab+'\')"><div class="val" style="font-size:15px;line-height:1.3">'+esc(title)+'</div><div class="lab" style="text-transform:none;font-weight:500;margin-top:4px">'+esc(why)+'</div></div>';}
@@ -197,7 +267,7 @@ function renderEmp(){
   var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['credentials','Credentials'],['history','History']];
   var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
     '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(name)+'</h2><p class="muted">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
-    (critical?'<div class="card-pad" style="margin-top:10px;background:#fbeaea;border-radius:8px;padding:10px 12px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted"> — this person is leaving/left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
+    (critical?'<div class="card-pad" style="margin-top:10px;background:#fbeaea;border-radius:8px;padding:10px 12px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted">. This person is leaving or left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
     '</div>'+
     '<div class="ptabs" style="margin-top:12px">'+tabs.map(function(t){return '<button class="ptab'+(t[0]===_empTab?' on':'')+'" onclick="empTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var body='';
@@ -280,7 +350,7 @@ VIEWS.templates=function(v){
     v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>Job positions → role templates</h2><span style="flex:1"></span><span class="muted">'+rows.length+' positions</span></div>'+
       '<div class="card-pad" style="padding-top:0"><p class="muted">Defaults are configured iteratively. New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.</p></div>'+
       '<table><thead><tr><th>Position</th><th>Template</th><th>Updated</th></tr></thead><tbody>'+rows.map(function(p){
-        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td><td class="muted">'+esc((p.updated_at||'').slice(0,10)||'—')+'</td></tr>';
+        return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td><td class="muted">'+esc((p.updated_at||'').slice(0,10)||'not set')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
   });
 };
@@ -292,7 +362,7 @@ VIEWS.assets=function(v){
     var rows=(r.body&&r.body.assets)||[];
     var tabs='<div class="ptabs">'+views.map(function(t){return '<button class="ptab'+(t[0]===_assetView?' on':'')+'" onclick="setAssetView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
     var body=rows.length?'<div class="card card-clip"><table><thead><tr><th>Asset</th><th>Assigned to</th><th>Office</th><th>Status</th><th>Owner</th></tr></thead><tbody>'+
-      rows.map(function(a){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(a.type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td>'+esc(a.employee||'—')+'</td><td>'+esc(a.office||'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';}).join('')+'</tbody></table></div>'
+      rows.map(function(a){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(a.type))+(a.identifier?' · '+esc(a.identifier):'')+'</td><td>'+esc(a.employee||'unassigned')+'</td><td>'+esc(a.office||'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td></tr>';}).join('')+'</tbody></table></div>'
       :'<div class="card card-pad"><p class="muted">No assets in this view.</p></div>';
     v.innerHTML=tabs+body;
   });
@@ -305,7 +375,7 @@ VIEWS.credentials=function(v){
     var rows=(r.body&&r.body.credentials)||[];
     var tabs='<div class="ptabs">'+views.map(function(t){return '<button class="ptab'+(t[0]===_credView?' on':'')+'" onclick="setCredView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
     var body=rows.length?'<div class="card card-clip"><table><thead><tr><th>Credential</th><th>Employee</th><th>Office</th><th>Status</th><th>Expires</th></tr></thead><tbody>'+
-      rows.map(function(c){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(c.type))+'</td><td>'+esc(c.employee||'')+'</td><td>'+esc(c.office||'')+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'—')+'</td></tr>';}).join('')+'</tbody></table></div>'
+      rows.map(function(c){return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(human(c.type))+'</td><td>'+esc(c.employee||'')+'</td><td>'+esc(c.office||'')+'</td><td><span class="st '+esc(c.status)+'">'+esc(human(c.status))+'</span></td><td>'+esc(c.expires_at||'not set')+'</td></tr>';}).join('')+'</tbody></table></div>'
       :'<div class="card card-pad"><p class="muted">Nothing in this view.</p></div>';
     v.innerHTML=tabs+body;
   });
@@ -326,8 +396,8 @@ VIEWS.onboarding=function(v){
     '<div class="sec">1 · Employee</div><div class="grid3">'+
       fld('First name','o_fn')+fld('Last name','o_ln')+fld('Preferred name','o_pn')+
       fld('Personal email','o_pe')+fld('Personal phone','o_pp')+
-      '<div><label class="fld">Office</label><select class="in" id="o_office"><option value="">—</option>'+offices+'</select></div>'+
-      '<div><label class="fld">Job position</label><select class="in" id="o_pos"><option value="">—</option>'+positions+'</select></div>'+
+      '<div><label class="fld">Office</label><select class="in" id="o_office"><option value="">Select</option>'+offices+'</select></div>'+
+      '<div><label class="fld">Job position</label><select class="in" id="o_pos"><option value="">Select</option>'+positions+'</select></div>'+
       fld('Public job title','o_title')+fld('Manager','o_mgr')+
       '<div><label class="fld">Employment type</label><select class="in" id="o_type"><option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contractor">Contractor</option></select></div>'+
       '<div><label class="fld">Anticipated start</label><input class="in" id="o_start" type="date"></div>'+
@@ -340,7 +410,7 @@ VIEWS.onboarding=function(v){
     '</div>'+
     '<div class="sec">3 · Equipment</div><div class="grid3">'+
       wchk('o_comp','Computer needed')+
-      '<div><label class="fld">Computer class</label><select class="in" id="o_class"><option value="">—</option>'+classes+'</select></div>'+
+      '<div><label class="fld">Computer class</label><select class="in" id="o_class"><option value="">Select</option>'+classes+'</select></div>'+
       wchk('o_existing','Reuse existing device')+
       wchk('o_phone','Company phone')+wchk('o_ipad','iPad')+wchk('o_dock','Dock / accessories')+
       '<div><label class="fld">Monitors</label><input class="in" id="o_mon" type="number" min="0" value="0"></div>'+
@@ -391,6 +461,8 @@ function submitOnboarding(){
   });
 }
 
+// Office / period changes broadcast from the shell refresh the headline counts.
+OS.onChange(function(){ if(OVERVIEW!==null) loadOverview(false); });
 boot();
 </script>
 </body>

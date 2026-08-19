@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>New hire setup · 1st Fire Protection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:transparent;font-family:'Figtree',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#0E1420}
+  .card{width:100%;max-width:560px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);overflow:hidden}
+  .head{padding:20px 24px 18px;border-bottom:1px solid #F1F3F6;display:flex;align-items:center;gap:11px}
+  .emblem{width:32px;height:32px;border-radius:50%;object-fit:contain;flex:none;background:#fff}
+  .h-name{font-weight:700;font-size:14px;letter-spacing:-.01em}
+  .h-sub{font-weight:500;font-size:12px;color:#5E6779;margin-top:1px}
+  .h-step{font-family:'Geist Mono',monospace;font-weight:500;font-size:10.5px;color:#5E6779;flex:none}
+  .dots{display:flex;gap:4px;padding:14px 24px 0}
+  .dots button{flex:1;height:4px;border-radius:2px;border:none;padding:0;cursor:pointer;background:#D6DAE2;transition:background .2s ease}
+  .dots button.done{background:#0E6B4D}
+  .dots button.now{background:#0E1420}
+  h2{font-weight:700;font-size:20px;letter-spacing:-.02em;margin:0;line-height:1.3}
+  .blurb{font-weight:500;font-size:13.5px;line-height:1.6;color:#5E6779;margin:7px 0 0}
+  .body{padding:18px 24px 4px}
+  .fields{display:flex;flex-direction:column;gap:16px;padding:18px 24px 4px}
+  label{display:block;font-weight:600;font-size:13px}
+  .help{font-weight:500;font-size:12px;color:#5E6779;margin-top:3px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .chip{min-height:44px;font-family:inherit;font-weight:600;font-size:13px;color:#414B60;background:#fff;border:1px solid #D9DEE6;border-radius:9px;padding:10px 14px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease}
+  .chip:hover{border-color:#98A0B0}
+  .chip[aria-pressed="true"]{color:#fff;background:#0E1420;border-color:#0E1420}
+  .textwrap{margin-top:9px;border:1px solid #D9DEE6;border-radius:9px;padding:11px 13px;transition:border-color .2s ease}
+  .textwrap:focus-within{border-color:#0E1420}
+  .textwrap input{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:#0E1420;background:none}
+  .note{margin:18px 24px 0;padding:13px 15px;background:#FBFBFC;border:1px solid #F1F3F6;border-radius:10px}
+  .note b{display:block;font-weight:600;font-size:12px}
+  .note p{font-weight:500;font-size:12px;line-height:1.55;color:#5E6779;margin:5px 0 0}
+  .actions{display:flex;align-items:center;gap:10px;padding:18px 24px 22px}
+  .btn{font-family:inherit;font-weight:600;font-size:13px;color:#414B60;background:#fff;border:1px solid #E4E7EC;border-radius:9px;padding:11px 16px;cursor:pointer;transition:border-color .2s ease}
+  .btn:hover{border-color:#B7BEC9}
+  .btn-primary{flex:1;font-family:inherit;font-weight:600;font-size:13px;color:#fff;background:#0E1420;border:none;border-radius:9px;padding:11px 16px;cursor:pointer;transition:background .2s ease}
+  .btn-primary:hover{background:#22293A}
+  .foot{padding:0 24px 20px;font-weight:500;font-size:11.5px;color:#5E6779;text-align:center}
+  .done-head{padding:26px 24px 18px;text-align:center}
+  .tick{width:44px;height:44px;border-radius:50%;background:#E7F4EE;color:#0E6B4D;font-weight:700;font-size:20px;display:inline-flex;align-items:center;justify-content:center}
+  .done-head p{font-weight:500;font-size:13.5px;line-height:1.6;color:#5E6779;margin:8px auto 0;max-width:44ch}
+  .summary{display:flex;flex-direction:column;gap:1px;background:#F1F3F6;margin:0 24px;border-radius:10px;overflow:hidden}
+  .srow{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;background:#fff}
+  .srow .l{display:block;font-weight:600;font-size:12.5px}
+  .srow .n{display:block;font-weight:500;font-size:11.5px;color:#5E6779;margin-top:2px}
+  .srow .v{font-weight:650;font-size:12.5px;text-align:right;flex:none}
+  .hidden{display:none!important}
+  @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <img class="emblem" src="/brand/logo-email.png" alt="1st Fire Protection">
+    <div style="flex:1;min-width:0">
+      <div class="h-name">New hire setup</div>
+      <div class="h-sub">1st Fire Protection · for Ray Ellis</div>
+    </div>
+    <span class="h-step" id="stepLabel">Step 1 of 5</span>
+  </div>
+
+  <div id="form">
+    <div class="dots" id="dots"></div>
+    <div class="body">
+      <h2 id="title"></h2>
+      <p class="blurb" id="blurb"></p>
+    </div>
+    <div class="fields" id="fields"></div>
+    <div class="note">
+      <b>You will not be asked for anything sensitive</b>
+      <p>No pay, no social security number, no bank details. HR collects those directly from the employee.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="back">Cancel</button>
+      <button class="btn-primary" id="next">Continue</button>
+    </div>
+    <div class="foot" id="foot">Your answers save as you go. The link expires Aug 21.</div>
+  </div>
+
+  <div id="done" class="hidden">
+    <div class="done-head">
+      <span class="tick">✓</span>
+      <h2 style="margin-top:14px">Sent to 1st Fire Protection</h2>
+      <p>You are done. Here is exactly what your answers created. Nothing gets access until the owning team completes its task.</p>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="actions">
+      <button class="btn" id="restart">Start over</button>
+      <button class="btn-primary" id="finish">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var STEPS = [
+    { label: 'the role', title: 'Who are you hiring, and when do they start?',
+      blurb: 'This decides which tasks get created and who they route to.',
+      fields: [
+        { key: 'title', label: 'Job title', help: 'The role template behind it sets the defaults.', opts: ['Service Technician', 'Inspector', 'Estimator', 'Dispatcher'], def: 'Service Technician' },
+        { key: 'office', label: 'Office', help: 'Scopes every task and report for this person.', opts: ['Houston', 'San Antonio', 'Austin'], def: 'Houston' },
+        { key: 'start', label: 'First day', help: 'IT needs five working days for a clean start.', text: true, placeholder: 'Monday, Aug 24' },
+        { key: 'manager', label: 'Their manager', help: 'You, unless someone else runs their day to day.', text: true, placeholder: 'Ray Ellis' }
+      ] },
+    { label: 'the person', title: 'Who is it?',
+      blurb: 'Legal name has to match their ID for payroll and the MVR check.',
+      fields: [
+        { key: 'legal', label: 'Legal first and last name', help: 'As it appears on their licence.', text: true, placeholder: 'John Smith' },
+        { key: 'preferred', label: 'What they go by', help: 'Optional. Used everywhere except payroll.', text: true, placeholder: 'Johnny' },
+        { key: 'email', label: 'Personal email', help: 'Where we send their first-day instructions.', text: true, placeholder: 'name@email.com' },
+        { key: 'mobile', label: 'Mobile', help: 'For the first-day text only.', text: true, placeholder: '(210) 555-0142' }
+      ] },
+    { label: 'equipment', title: 'What will they need to do the job?',
+      blurb: 'Pick the defaults if you are not sure. IT confirms before anything is ordered.',
+      fields: [
+        { key: 'laptop', label: 'Laptop', help: 'Standard is a 14-inch, 16GB. Estimating work needs 32GB.', opts: ['Standard 16GB', 'Estimating 32GB', 'None needed'], def: 'Standard 16GB' },
+        { key: 'phone', label: 'Company phone', help: 'Field roles get one by default.', opts: ['Yes', 'No'], def: 'Yes' },
+        { key: 'vehicle', label: 'Vehicle', help: 'A truck assignment triggers an MVR check and a WEX fuel card.', opts: ['Assigned truck', 'Shared truck', 'Personal vehicle'], def: 'Assigned truck' },
+        { key: 'equipNotes', label: 'Anything unusual for this role?', help: 'Anything above the role default routes to a partner for approval.', text: true, placeholder: 'Optional, e.g. needs a second monitor' }
+      ] },
+    { label: 'access', title: 'What should they be able to get into?',
+      blurb: 'The role template pre-picks these. Add only what they genuinely need.',
+      fields: [
+        { key: 'systems', label: 'Systems', help: 'Tap to add or remove.', opts: ['ServiceTrade', 'Microsoft 365', 'Payroll self-service', 'Bluebeam', 'Fleet / WEX'], def: ['ServiceTrade', 'Microsoft 365', 'Payroll self-service'], multi: true },
+        { key: 'building', label: 'Building access', help: 'A fob and an alarm code for their home office.', opts: ['Standard hours', '24/7', 'None'], def: 'Standard hours' },
+        { key: 'accessNotes', label: 'Anything restricted?', help: 'Management-level access always needs a partner to approve it.', text: true, placeholder: 'Optional' }
+      ] },
+    { label: 'safety', title: 'Last part: driving and credentials.',
+      blurb: 'Safety cannot clear their start without this, and it is the step that delays people most.',
+      fields: [
+        { key: 'mvr', label: 'Has the candidate agreed to an MVR check?', help: 'We cannot assign a truck without it.', opts: ['Yes', 'Not yet'], def: 'Yes' },
+        { key: 'certs', label: 'Certifications they already hold', help: 'Tap any that apply. We will ask for copies.', opts: ['NICET I', 'NICET II', 'Backflow tester', 'OSHA 10', 'None yet'], def: [], multi: true },
+        { key: 'license', label: "Driver's licence state and number", help: 'Required before the MVR check can run.', text: true, placeholder: 'TX · 1234567' }
+      ] }
+  ];
+
+  function defaults() {
+    var v = {};
+    STEPS.forEach(function (s) {
+      s.fields.forEach(function (f) {
+        if (f.def !== undefined) v[f.key] = Array.isArray(f.def) ? f.def.slice() : f.def;
+      });
+    });
+    return v;
+  }
+
+  var step = 0, vals = defaults();
+  var el = function (id) { return document.getElementById(id); };
+  var post = function (type) {
+    try { parent.postMessage({ source: 'intake-form', type: type, vals: vals }, '*'); } catch (e) {}
+  };
+
+  // the host sizes the frame to the card, so nothing is ever clipped and only the overlay scrolls
+  function reportHeight() {
+    var card = document.querySelector('.card');
+    if (!card) return;
+    var h = Math.ceil(card.getBoundingClientRect().height) + 2;
+    try { parent.postMessage({ source: 'intake-form', type: 'height', height: h }, '*'); } catch (e) {}
+  }
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(reportHeight);
+    ro.observe(document.querySelector('.card'));
+  }
+  window.addEventListener('load', reportHeight);
+
+  function renderDots() {
+    var d = el('dots');
+    d.innerHTML = '';
+    STEPS.forEach(function (s, n) {
+      var b = document.createElement('button');
+      b.className = n < step ? 'done' : n === step ? 'now' : '';
+      b.setAttribute('aria-label', 'Step ' + (n + 1) + ': ' + s.label);
+      b.onclick = function () { step = n; render(); };
+      d.appendChild(b);
+    });
+  }
+
+  function renderFields() {
+    var wrap = el('fields');
+    wrap.innerHTML = '';
+    STEPS[step].fields.forEach(function (f) {
+      var box = document.createElement('div');
+      var lab = document.createElement('label');
+      lab.textContent = f.label;
+      box.appendChild(lab);
+      if (f.help) {
+        var h = document.createElement('div');
+        h.className = 'help';
+        h.textContent = f.help;
+        box.appendChild(h);
+      }
+      if (f.text) {
+        var tw = document.createElement('div');
+        tw.className = 'textwrap';
+        var inp = document.createElement('input');
+        inp.placeholder = f.placeholder || '';
+        inp.value = vals[f.key] || '';
+        inp.oninput = function () { vals[f.key] = inp.value; };
+        tw.appendChild(inp);
+        box.appendChild(tw);
+      } else {
+        var row = document.createElement('div');
+        row.className = 'chips';
+        f.opts.forEach(function (o) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'chip';
+          b.textContent = o;
+          var on = f.multi ? (vals[f.key] || []).indexOf(o) > -1 : vals[f.key] === o;
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          b.onclick = function () {
+            if (f.multi) {
+              var arr = (vals[f.key] || []).slice();
+              var i = arr.indexOf(o);
+              if (i > -1) arr.splice(i, 1); else arr.push(o);
+              vals[f.key] = arr;
+            } else {
+              vals[f.key] = o;
+            }
+            renderFields();
+          };
+          row.appendChild(b);
+        });
+        box.appendChild(row);
+      }
+      wrap.appendChild(box);
+    });
+  }
+
+  function renderSummary() {
+    var rows = [
+      ['Person created', (vals.preferred || vals.legal || 'Unnamed hire') + ' · ' + (vals.title || 'Service Technician'), 'as a pending employee record'],
+      ['Office', vals.office || 'Houston', 'scopes everything downstream'],
+      ['Access requested', (vals.systems || []).length + ' systems', (vals.systems || []).join(', ') || 'none selected'],
+      ['Safety tasks', vals.mvr === 'Yes' ? '3 created' : '3 created, 1 blocked', vals.mvr === 'Yes' ? 'orientation, MVR, credential copies' : 'MVR consent still outstanding'],
+      ['Needs a partner', (vals.accessNotes || vals.equipNotes) ? '1 approval' : 'none', 'anything above the role default']
+    ];
+    var s = el('summary');
+    s.innerHTML = '';
+    rows.forEach(function (r) {
+      var d = document.createElement('div');
+      d.className = 'srow';
+      d.innerHTML = '<span style="flex:1;min-width:0"><span class="l"></span><span class="n"></span></span><span class="v"></span>';
+      d.querySelector('.l').textContent = r[0];
+      d.querySelector('.n').textContent = r[2];
+      d.querySelector('.v').textContent = r[1];
+      s.appendChild(d);
+    });
+  }
+
+  function render() {
+    var s = STEPS[step], last = step === STEPS.length - 1;
+    el('stepLabel').textContent = 'Step ' + (step + 1) + ' of ' + STEPS.length;
+    el('title').textContent = s.title;
+    el('blurb').textContent = s.blurb;
+    el('back').textContent = step === 0 ? 'Cancel' : 'Back';
+    el('next').textContent = last ? 'Submit to 1st Fire Protection' : 'Continue to ' + STEPS[step + 1].label;
+    el('foot').textContent = last
+      ? 'Nothing is created until you submit. The link expires Aug 21.'
+      : 'Your answers save as you go. The link expires Aug 21.';
+    renderDots();
+    renderFields();
+    reportHeight();
+  }
+
+  el('back').onclick = function () {
+    if (step === 0) return post('close');
+    step--; render();
+  };
+  el('next').onclick = function () {
+    if (step < STEPS.length - 1) { step++; render(); return; }
+    renderSummary();
+    el('form').classList.add('hidden');
+    el('done').classList.remove('hidden');
+    el('stepLabel').textContent = 'Submitted';
+    reportHeight();
+  };
+  el('restart').onclick = function () {
+    vals = defaults(); step = 0;
+    el('done').classList.add('hidden');
+    el('form').classList.remove('hidden');
+    render();
+  };
+  el('finish').onclick = function () { post('submitted'); };
+
+  render();
+})();
+</script>
+</body>
+</html>

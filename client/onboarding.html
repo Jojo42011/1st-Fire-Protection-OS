@@ -3,297 +3,403 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Onboarding · Northstar</title>
+<title>Onboarding · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
-<link rel="stylesheet" href="/command.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  /* owner tag - who a field/section routes to. Meaning-only color, calm. */
-  /* owner tags stay inside the three meanings: green=owned/HR-of-record, red=approval,
-     gold=build. Every other owner is neutral ink (no fourth or fifth accent). */
-  .tag{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:1px solid var(--hair-2);color:var(--ink-3);background:var(--s2);white-space:nowrap}
-  .tag.bamboo{color:var(--ok);border-color:rgba(46,158,91,.4);background:rgba(46,158,91,.1)}
-  .tag.it{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
-  .tag.mario{color:var(--red);border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.1)}
-  .tag.rebecca{color:var(--gold);border-color:rgba(245,184,27,.4);background:rgba(245,184,27,.1)}
-  .tag.sandi{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
-  .tag.safety,.tag.denise,.tag.daniel{color:var(--ink-2);border-color:var(--hair-2);background:var(--s2)}
+  /* People-family tab strip: ONE strip generated from a single definition (see STRIP in the
+     script), rendered with the active tab passed in. overflow-y MUST be hidden or the browser
+     paints a spurious vertical scrollbar beside the horizontal one. */
+  .os-ptabs{display:flex;gap:2px;overflow-x:auto;overflow-y:hidden;padding-bottom:1px;border-bottom:1px solid var(--border);margin:2px 0 22px}
+  .os-ptab{appearance:none;border:0;background:none;padding:11px 15px;font-family:var(--sans);font-weight:650;font-size:13.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+  .os-ptab:hover{color:var(--ink-2)}
+  .os-ptab.on{color:var(--ink);border-bottom-color:var(--brand);cursor:default}
+  .os-ptab .cc{font-family:var(--mono);font-weight:500;font-size:10.5px;min-width:16px;text-align:center;padding:1px 6px;border-radius:999px;background:var(--fill);color:var(--ink-3)}
+  .os-ptab.on .cc{background:var(--brand);color:#fff}
 
-  /* form layout */
-  .fsec{margin-top:6px}
-  .fsec .head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:24px 0 12px}
-  .fsec .head .st{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:10px;font-weight:500}
-  .fsec .head .st::before{content:"";width:18px;height:1px;background:var(--red)}
-  .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-  .field{display:flex;flex-direction:column;gap:6px}
-  .field label{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .field input,.field select,.field textarea{font-family:var(--sans);font-size:13.5px;color:var(--ink);background:var(--s2);border:1px solid var(--hair-2);padding:10px 12px;width:100%}
-  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--red)}
-  .field textarea{min-height:64px;resize:vertical}
+  /* intake links */
+  .ilink{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:14px 16px;margin-bottom:10px;box-shadow:var(--sh-rest)}
+  .il-role{font-weight:700;font-size:14.5px;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .il-to{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:3px}
+  .il-life{display:flex;align-items:center;gap:7px;margin-top:9px;font-weight:600;font-size:11.5px;color:var(--ink-3);flex-wrap:wrap}
+  .il-stage{display:inline-flex;align-items:center;gap:6px}
+  .il-stage .dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong,#c9ccd6)}
+  .il-stage.done .dot{background:var(--os-good)}
+  .il-stage.done{color:var(--os-good)}
+  .il-stage.stop .dot{background:var(--os-bad)}
+  .il-stage.stop{color:var(--os-bad)}
+  .il-arrow{color:var(--border-strong,#c9ccd6)}
+  .il-side{display:flex;flex-direction:column;align-items:flex-end;gap:9px;flex:none}
+  .il-exp{font-weight:600;font-size:11.5px;color:var(--ink-3)}
+  .il-exp.soon{color:var(--os-warn)}.il-exp.gone{color:var(--os-bad)}
+  .il-acts{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  .il-btn{font-family:var(--sans);font-weight:650;font-size:12px;border-radius:9px;padding:7px 12px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .il-btn:hover{border-color:var(--border-strong)}
+  .il-btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
 
-  /* checkbox rows */
-  .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 16px}
-  .chk{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--hair);background:var(--s1);cursor:pointer;border-radius:12px;transition:.14s}
-  .chk:hover{border-color:var(--hair-2);background:var(--s2)}
-  .chk input{width:16px;height:16px;flex:0 0 auto;accent-color:var(--red);cursor:pointer}
-  .chk .ct{flex:1;font-size:13px;color:var(--ink)}
-  .chk.on{border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.08)}
+  /* board */
+  .ob-bar{height:8px;background:var(--fill);border-radius:6px;overflow:hidden;min-width:90px}
+  .ob-bar > span{display:block;height:100%;background:var(--os-accent);border-radius:6px}
+  .ob-bar.done > span{background:var(--os-good)}
+  .ob-detail{border:1px solid var(--border-card,var(--border));border-radius:16px;background:var(--panel);padding:18px 20px;margin-bottom:14px;box-shadow:var(--sh-rest)}
+  .ob-detail .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .ob-detail .dh h2{font-weight:800;font-size:19px;color:var(--ink)}
+  .ob-detail .dh .sum{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:5px}
+  .ob-grp{border:1px solid var(--border);border-radius:12px;margin-top:12px;overflow:hidden}
+  .ob-grp .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 13px;background:var(--fill)}
+  .ob-grp .gn{font-weight:700;font-size:13px;color:var(--ink)}
+  .ob-item{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 13px;border-top:1px solid var(--border)}
+  .ob-item .il-x{flex:1;min-width:0}
+  .ob-item .lab{font-weight:650;font-size:13px;color:var(--ink)}
+  .ob-item .dl{font-weight:500;font-size:12px;color:var(--muted);margin-top:4px}
+  .ob-item .ax{display:flex;gap:7px;flex:none;flex-wrap:wrap;justify-content:flex-end}
 
-  /* radio computer picker */
-  .radios{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-  .radio{display:flex;gap:11px;align-items:flex-start;padding:12px 14px;border:1px solid var(--hair);background:var(--s1);cursor:pointer;border-radius:12px;transition:.14s}
-  .radio:hover{border-color:var(--hair-2);background:var(--s2)}
-  .radio.on{border-color:rgba(229,57,53,.4);background:rgba(229,57,53,.08)}
-  .radio input{margin-top:2px;accent-color:var(--red);cursor:pointer}
-  .radio .rt{font-size:13.5px;font-weight:700;color:var(--ink)}
-  .radio .rs{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:4px;line-height:1.4}
+  /* compact create form (preserves POST /api/onboarding) */
+  details.formwrap{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);box-shadow:var(--sh-rest);overflow:hidden}
+  details.formwrap > summary{list-style:none;cursor:pointer;padding:15px 18px;font-weight:700;font-size:14px;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  details.formwrap > summary::-webkit-details-marker{display:none}
+  details.formwrap > summary .hint{font-weight:500;font-size:12px;color:var(--muted)}
+  .fbody{padding:4px 18px 18px;border-top:1px solid var(--border)}
+  .fsec{font-weight:800;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:18px 0 10px}
+  .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .ffield label{display:block;font-weight:600;font-size:12px;color:var(--ink-2);margin:0 0 5px}
+  .ffield input,.ffield select,.ffield textarea{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--ink);padding:9px 11px;font-size:13.5px;font-family:var(--sans)}
+  .ffield textarea{min-height:60px;resize:vertical}
+  .fchecks{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 14px}
+  .fchk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink);padding:5px 0}
+  .fchk input{width:16px;height:16px;accent-color:var(--brand)}
+  .fradios{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:9px}
+  .fradio{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;border:1px solid var(--border);border-radius:11px;cursor:pointer}
+  .fradio input{margin-top:2px;accent-color:var(--brand)}
+  .fradio .rt{font-weight:700;font-size:13px;color:var(--ink)}
+  .fradio .rs{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .fsub{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:20px;flex-wrap:wrap}
+  .fsub .note{margin-right:auto;font-weight:500;font-size:12px;color:var(--muted);max-width:52ch;line-height:1.55}
 
-  .grouplabel{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:16px 0 8px;display:flex;align-items:center;gap:8px}
-  .submit-row{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:24px;flex-wrap:wrap}
-  .submit-row .note{color:var(--ink-3);font-size:12px;margin-right:auto;max-width:52ch;line-height:1.55}
-
-  /* board - full hairline card, status shown by dot + pills (no side stripe) */
-  .req{background:var(--s1);border:1px solid var(--hair);border-radius:14px;padding:16px 18px;margin-top:12px;cursor:pointer;transition:border-color .14s}
-  .req:hover{border-color:var(--hair-2)}
-  .req.complete{border-color:rgba(46,158,91,.32)}
-  .req .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .req .who{font-weight:800;font-size:15px;color:var(--ink)}
-  .req .who small{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--ink-3);margin-left:8px;text-transform:none;letter-spacing:0}
-  .req .prog{display:flex;align-items:center;gap:10px;margin-top:11px}
-  .req .track{flex:1;height:8px;background:var(--s2);overflow:hidden}
-  .req .fill{height:100%;background:var(--red)}
-  .req.complete .fill{background:var(--ok)}
-  .req .pct{font-family:var(--mono);font-size:11px;color:var(--ink-3);min-width:74px;text-align:right}
-  .req .meta{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
-
-  /* detail (grouped by owner) */
-  .detail{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;margin-top:12px;animation:rise .3s cubic-bezier(.2,.7,.3,1)}
-  .detail .dh{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  .detail .dh h2{font-weight:800;font-size:20px;color:var(--ink);letter-spacing:-.01em}
-  .detail .dh .sum{color:var(--ink-2);font-size:12.5px;margin-top:6px;line-height:1.5}
-  .ownergrp{border:1px solid var(--hair);border-radius:14px;margin-top:14px;overflow:hidden}
-  .ownergrp .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--s2);border-bottom:1px solid var(--hair)}
-  .ownergrp .gh .gl{display:flex;align-items:center;gap:10px}
-  .ownergrp .gh .gn{font-weight:700;font-size:13.5px;color:var(--ink)}
-  .item{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:13px 14px;border-bottom:1px solid var(--hair)}
-  .item:last-child{border-bottom:0}
-  .item .lx{flex:1;min-width:0}
-  .item .il{font-size:13.5px;color:var(--ink);font-weight:600}
-  .item .idl{color:var(--ink-2);font-size:12px;margin-top:5px;line-height:1.5;white-space:pre-wrap}
-  .item .ik{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-top:6px;display:inline-block}
-  .item .ax{display:flex;gap:7px;align-items:center;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
-  .close-x{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--hair-2);background:transparent;border-radius:10px;padding:7px 12px;cursor:pointer;transition:.15s}
-  .close-x:hover{border-color:var(--red);color:var(--ink)}
+  /* overlay hosting the intake form iframe */
+  .ov{position:fixed;inset:0;z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto}
+  .ov.on{display:flex}
+  .ov-scrim{position:fixed;inset:0;background:rgba(15,18,25,.55)}
+  .ov-panel{position:relative;z-index:1;width:100%;max-width:560px;margin:auto 0}
+  .ov-x{position:absolute;top:-32px;right:0;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);color:#fff;font-size:16px;cursor:pointer;z-index:2}
+  #intakeFrame{width:100%;border:0;border-radius:16px;display:block;height:640px;background:transparent}
 </style>
-  <script src="/count.js" defer></script>
-  <script src="/motion.js" defer></script>
 </head>
 <body>
-  <div class="page-head">
-    <div class="titles">
-      <p class="kicker">People &times; New-Hire Onboarding</p>
-      <h1>Onboarding</h1>
-      <p>One intake form for a new hire. On submit, every field you set is routed to the person who owns it as a task or an approval. Approvals are explicit human clicks, nothing here provisions or approves automatically.</p>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Onboarding</h1>
+        <div class="os-question">Who is joining, and is every team ready for day one?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="previewForm">Preview the form</button>
+        <button class="os-btn primary" id="newLink">New intake link</button>
+      </div>
     </div>
-    <span id="status-badge" class="badge live"><span class="d"></span>Live workflow</span>
+
+    <div id="metricstrip"></div>
+    <div class="os-ptabs" id="pstrip"></div>
+
+    <div class="os-sec">Intake links <span class="n" id="linkn"></span></div>
+    <div id="links"></div>
+    <div class="os-filter-note" id="linkNote"></div>
+
+    <div class="os-sec os-block">Onboarding board <span class="n" id="boardn"></span></div>
+    <div id="detail"></div>
+    <div id="board"></div>
+
+    <div class="os-sec os-block">Full onboarding request</div>
+    <div id="formCard"></div>
+
+    <div class="os-foot">Sending an intake link invites a hiring manager to describe the role. It never asks for pay, Social Security number or bank details: HR collects those from the employee directly. The board is <b>live</b> from ServiceTrade onboarding: submitting routes each item to the team that owns it, and nothing provisions or approves on its own. Intake links above are a client-side preview: there is no tokens endpoint yet, so those rows are illustrative.</div>
   </div>
 
-  <div class="section-title">New Onboarding Request</div>
-  <div class="card" style="margin-top:0">
-    <form id="onb-form">
-
-      <div class="fsec">
-        <div class="head"><span class="st">New Hire</span><span class="tag bamboo">BambooHR</span></div>
-        <div class="fields">
-          <div class="field"><label>Full name <span class="tag bamboo">BambooHR</span></label><input name="name" required placeholder="Jordan Rivera" /></div>
-          <div class="field"><label>Personal email</label><input name="personal_email" type="email" placeholder="jordan@gmail.com" /></div>
-          <div class="field"><label>Start date</label><input name="start_date" type="date" /></div>
-          <div class="field"><label>Cell phone</label><input name="cell_phone" placeholder="+1 512 555 0100" /></div>
-          <div class="field"><label>Job position</label><input name="job_position" placeholder="Sprinkler Designer" /></div>
-          <div class="field"><label>Salary</label><input name="salary" placeholder="$72,000 / yr" /></div>
-          <div class="field"><label>Manager</label><input name="manager_name" placeholder="Prisha Nadar" /></div>
-        </div>
-      </div>
-
-      <div class="fsec">
-        <div class="head"><span class="st">Pay + HR Exceptions</span><span class="tag bamboo">BambooHR</span></div>
-        <p class="muted" style="font-size:12px;margin-bottom:10px">Check only what differs from the default. Each becomes an HR task.</p>
-        <div class="checks">
-          <label class="chk"><input type="checkbox" name="cell_reimburse"><span class="ct">Cell-phone reimbursement</span></label>
-          <label class="chk"><input type="checkbox" name="pto_plan"><span class="ct">Different PTO plan</span></label>
-          <label class="chk"><input type="checkbox" name="hours_80_40"><span class="ct">80-vs-40 hours approved</span></label>
-          <label class="chk"><input type="checkbox" name="probation_waived"><span class="ct">60-day probation waived</span></label>
-          <label class="chk"><input type="checkbox" name="incentive_plan"><span class="ct">Incentive plan</span></label>
-          <label class="chk"><input type="checkbox" name="vehicle_allowance"><span class="ct">Vehicle allowance (built into pay)</span></label>
-        </div>
-        <div class="field" style="margin-top:12px"><label>Misc pay/HR exceptions (free text)</label><textarea name="misc_exceptions" placeholder="Anything else HR should build into the record"></textarea></div>
-      </div>
-
-      <div class="fsec">
-        <div class="head"><span class="st">IT + Access</span><span class="tag it">IT</span></div>
-        <div class="checks">
-          <label class="chk"><input type="checkbox" name="company_email"><span class="ct">Company email <span class="tag it">IT</span></span></label>
-          <label class="chk"><input type="checkbox" name="teams_number"><span class="ct">Teams number <span class="tag it">IT</span></span></label>
-        </div>
-
-        <div class="grouplabel">SharePoint groups</div>
-        <div class="checks" id="sharepoint-checks"></div>
-
-        <div class="grouplabel">Printers <span class="tag it">IT</span></div>
-        <div class="checks" id="printer-checks"></div>
-      </div>
-
-      <div class="fsec">
-        <div class="head"><span class="st">Equipment + Software</span></div>
-        <div class="grouplabel">Computer <span class="tag mario">Owner approval</span></div>
-        <div class="radios" id="computer-radios"></div>
-
-        <div class="grouplabel">Software</div>
-        <div class="checks" id="software-checks"></div>
-
-        <div class="grouplabel">Safety-issued equipment <span class="tag safety">Safety</span></div>
-        <div class="checks">
-          <label class="chk"><input type="checkbox" name="company_cell"><span class="ct">Company cell phone</span></label>
-          <label class="chk"><input type="checkbox" name="ipad"><span class="ct">Company iPad</span></label>
-          <label class="chk"><input type="checkbox" name="vehicle_transfer"><span class="ct">Company vehicle transfer</span></label>
-          <label class="chk"><input type="checkbox" name="wex_card"><span class="ct">WEX fuel card</span></label>
-        </div>
-      </div>
-
-      <div class="fsec">
-        <div class="head"><span class="st">Vehicle</span><span class="tag safety">Safety + HR</span></div>
-        <p class="muted" style="font-size:12px;margin-bottom:10px">A company vehicle fans out to three owners: HR (license + MVR), Safety (State Auto policy), Ops (confirm the vehicle).</p>
-        <div class="checks">
-          <label class="chk"><input type="checkbox" name="company_vehicle"><span class="ct">Company vehicle needed</span></label>
-        </div>
-        <div class="field" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Ops to confirm"></textarea></div>
-      </div>
-
-      <div class="submit-row">
-        <div class="note">Submitting routes the request. Nothing provisions or approves on its own, each item waits for the owner to act.</div>
-        <button type="submit" class="btn primary" id="submit-btn">Route onboarding</button>
-      </div>
-    </form>
+  <div class="ov" id="ov" aria-hidden="true">
+    <div class="ov-scrim" data-close></div>
+    <div class="ov-panel">
+      <button class="ov-x" data-close aria-label="Close">&times;</button>
+      <iframe id="intakeFrame" title="New hire intake form" src="about:blank"></iframe>
+    </div>
   </div>
 
-  <div class="section-title">Onboarding Board</div>
-  <div id="detail"></div>
-  <div id="board"></div>
-
+<script src="/os.js"></script>
 <script>
-var OPTIONS=null, OPEN_ID=null;
-function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
-function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
+"use strict";
+function esc(t){return OS.esc(t);}
 
-/* ---- render the option-driven parts of the form ---- */
-function renderOptions(o){
-  OPTIONS=o;
-  document.getElementById('sharepoint-checks').innerHTML=o.sharepoint.map(function(g){
-    return '<label class="chk"><input type="checkbox" name="sp" value="'+esc(g.name)+'"><span class="ct">'+esc(g.name)+' <span class="tag '+ownerClass(g.owner)+'">'+(g.kind==='approval'?'Approval':'IT')+'</span></span></label>';
+/* ─────────────── shared People-family tab strip (single definition) ─────────────── */
+// Active tab here is 'onboarding'. My tasks / Approvals are company-wide queues and LEAVE via
+// OS.go. Overview / Employees / Offboarding are people.html views. Role templates opens a drawer.
+var STRIP=[
+  {key:'overview',   label:'Overview',       nav:'/people'},
+  {key:'onboarding', label:'Onboarding'},
+  {key:'employees',  label:'Employees',      badge:'active',           nav:'/people#employees'},
+  {key:'tasks',      label:'My tasks',       badge:'openTasks',        go:'tasks'},
+  {key:'approvals',  label:'Approvals',      badge:'awaitingApproval', go:'approve'},
+  {key:'offboarding',label:'Offboarding',    badge:'offboarding',      nav:'/people#offboarding'},
+  {key:'templates',  label:'Role templates', badge:'positions',        drawer:true}
+];
+var COUNTS={};
+function renderStrip(){
+  document.getElementById('pstrip').innerHTML=STRIP.map(function(t){
+    var n=t.badge&&COUNTS[t.badge]!=null?COUNTS[t.badge]:(t.key==='onboarding'?REQS.length:null);
+    var on=t.key==='onboarding';
+    return '<button class="os-ptab'+(on?' on':'')+'" data-tab="'+t.key+'"'+(on?' aria-current="page"':'')+'>'+esc(t.label)+(n!=null?'<span class="cc">'+esc(n)+'</span>':'')+'</button>';
   }).join('');
-  document.getElementById('printer-checks').innerHTML=o.printers.map(function(p){
-    return '<label class="chk"><input type="checkbox" name="pr" value="'+esc(p)+'"><span class="ct">'+esc(p)+'</span></label>';
-  }).join('');
-  document.getElementById('software-checks').innerHTML=o.software.map(function(s){
-    return '<label class="chk"><input type="checkbox" name="sw" value="'+esc(s.name)+'"><span class="ct">'+esc(s.name)+' <span class="tag '+ownerClass(s.owner)+'">'+(s.kind==='approval'?'Owner':'IT')+'</span></span></label>';
-  }).join('');
-  var radios='<label class="radio on"><input type="radio" name="computer_type" value="none" checked><span><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>';
-  radios+=o.computers.map(function(c){
-    return '<label class="radio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span></label>';
-  }).join('');
-  document.getElementById('computer-radios').innerHTML=radios;
-  wireToggles();
 }
-function wireToggles(){
-  document.querySelectorAll('.chk input[type=checkbox]').forEach(function(cb){
-    var upd=function(){cb.closest('.chk').classList.toggle('on',cb.checked);};
-    cb.addEventListener('change',upd);upd();
-  });
-  document.querySelectorAll('.radio input[type=radio]').forEach(function(rb){
-    rb.addEventListener('change',function(){
-      document.querySelectorAll('.radio').forEach(function(r){r.classList.remove('on');});
-      if(rb.checked)rb.closest('.radio').classList.add('on');
-    });
+document.getElementById('pstrip').addEventListener('click',function(e){
+  var b=e.target.closest('[data-tab]'); if(!b) return;
+  var t=STRIP.filter(function(x){return x.key===b.getAttribute('data-tab');})[0]; if(!t) return;
+  if(t.key==='onboarding') return;      // active tab is inert
+  if(t.go){ OS.go(t.go); return; }
+  if(t.drawer){ openTemplatesDrawer(); return; }
+  if(t.nav){ location.href=t.nav; return; }
+});
+// Best-effort family counts. /api/people/overview is people-gated; if it is not available in this
+// context the badges simply omit their numbers rather than inventing them.
+function loadCounts(){
+  fetch('/api/people/overview',{headers:{'content-type':'application/json'}}).then(function(r){return r.ok?r.json():null;})
+    .then(function(o){ COUNTS=o||{}; renderStrip(); }).catch(function(){ renderStrip(); });
+}
+function openTemplatesDrawer(){
+  var scrim=document.createElement('div'); scrim.className='os-scrim';
+  scrim.innerHTML='<div class="os-drawer" role="dialog" aria-label="Role templates"><div class="dh"><div><h2>Role templates</h2><div class="sub">Job positions and their access defaults</div></div><button class="x" aria-label="Close">&times;</button></div><div class="db" id="tmplBody" style="overflow:auto;flex:1"><p class="muted" style="padding:18px 20px;color:var(--muted)">Loading…</p></div></div>';
+  document.body.appendChild(scrim);
+  requestAnimationFrame(function(){ scrim.classList.add('on'); });
+  function close(){ scrim.classList.remove('on'); setTimeout(function(){ scrim.remove(); },200); }
+  scrim.addEventListener('click',function(e){ if(e.target===scrim||e.target.closest('.x')) close(); });
+  fetch('/api/people/positions',{headers:{'content-type':'application/json'}}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    var rows=(d&&d.positions)||[];
+    var body=document.getElementById('tmplBody'); if(!body) return;
+    if(!d){ body.innerHTML='<div style="padding:20px"><p class="muted" style="color:var(--muted)">Role templates need People access. Open People to review them.</p></div>'; return; }
+    var un=rows.filter(function(p){return p.review_status!=='reviewed';}).length;
+    body.innerHTML='<div style="padding:16px 20px"><p class="muted" style="color:var(--muted)">New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.'+(un?' <b>'+un+'</b> still need review.':'')+'</p></div>'+
+      (rows.length?OS.table([{as:'name',label:'Position',strong:true},{as:'tmpl',label:'Template',render:function(v,r){return r.review_status==='reviewed'?OS.pill('Reviewed','good'):OS.pill('Unreviewed','warn');}},{as:'upd',label:'Updated',render:function(v,r){return esc((r.updated_at||'').slice(0,10)||'not set');}}],rows,{empty:'No positions yet.'}):'<div style="padding:0 20px 20px"><p class="muted" style="color:var(--muted)">No positions yet.</p></div>');
   });
 }
 
-/* ---- board ---- */
+/* ─────────────── intake links (client-side preview: no tokens endpoint yet) ─────────────── */
+var LINKS=[
+  {id:1, role:'Service Technician', office:'Austin',      name:'Maria Vega',  email:'maria.vega@email.com',  stage:'submitted', reached:2, expiresAt:'2026-08-21'},
+  {id:2, role:'Inspector',          office:'Houston',     name:'Devon Pryce', email:'devon.pryce@email.com', stage:'opened',    reached:1, expiresAt:'2026-08-23'},
+  {id:3, role:'Estimator',          office:'San Antonio', name:'Lena Ortiz',  email:'lena.ortiz@email.com',  stage:'sent',      reached:0, expiresAt:'2026-08-25'},
+  {id:4, role:'Dispatcher',         office:'Houston',     name:'Ray Kwan',    email:'ray.kwan@email.com',    stage:'expired',   reached:1, expiresAt:'2026-08-04'}
+];
+var STAGES=['Sent','Opened','Submitted'];
+function daysTo(iso){ return Math.round((new Date(iso).getTime()-Date.now())/86400000); }
+function lifecycle(l){
+  var chain=STAGES.map(function(s,i){
+    var done=i<=l.reached;
+    return (i?'<span class="il-arrow">→</span>':'')+'<span class="'+(done?'il-stage done':'il-stage')+'"><span class="dot"></span>'+s+'</span>';
+  }).join('');
+  if(l.stage==='expired') chain+=' <span class="il-stage stop"><span class="dot"></span>Expired</span>';
+  return chain;
+}
+function linkPrimary(l){
+  if(l.stage==='submitted') return 'View submission';
+  if(l.stage==='expired')   return 'Resend';
+  return 'Nudge';
+}
+function renderLinks(){
+  document.getElementById('linkn').textContent='· '+LINKS.length;
+  document.getElementById('linkNote').textContent='Preview data: intake links are illustrative until the token service lands. The form itself and the board below are live.';
+  document.getElementById('links').innerHTML=LINKS.map(function(l){
+    var d=daysTo(l.expiresAt);
+    var expCls=l.stage==='expired'?'gone':(d<=2?'soon':'');
+    var expTxt=l.stage==='expired'?'Expired '+OS.date(l.expiresAt):(d<=0?'Expires today':'Expires '+OS.date(l.expiresAt));
+    return '<div class="ilink">'+
+      '<div class="il-main">'+
+        '<div class="il-role">'+esc(l.role)+' '+OS.officeTag(esc(l.office))+'</div>'+
+        '<div class="il-to">Sent to <b>'+esc(l.name)+'</b> · '+esc(l.email)+'</div>'+
+        '<div class="il-life">'+lifecycle(l)+'</div>'+
+      '</div>'+
+      '<div class="il-side">'+
+        '<div class="il-exp '+expCls+'">'+expTxt+'</div>'+
+        '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+
+          '<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button></div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+document.getElementById('links').addEventListener('click',function(e){
+  var a=e.target.closest('[data-link-act]');
+  if(a){ var l=LINKS.filter(function(x){return String(x.id)===a.getAttribute('data-link-act');})[0]; if(!l) return;
+    if(l.stage==='submitted'){ OS.toast('Opening '+l.name+'’s submission for '+l.office+'.'); return; }
+    if(l.stage==='expired'){
+      l.stage='sent'; l.reached=0; l.expiresAt=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+      renderLinks();
+      OS.toast('New intake link issued for '+l.role+' ('+l.name+'). A fresh token was created and the previous link is now void.');
+      return;
+    }
+    OS.toast('Reminder queued for '+l.name+'. It nudges them to finish the intake form.');
+    return;
+  }
+  var c=e.target.closest('[data-link-copy]');
+  if(c){ var l2=LINKS.filter(function(x){return String(x.id)===c.getAttribute('data-link-copy');})[0]; if(!l2) return;
+    var url=location.origin+'/intake-form.html?token=preview-'+l2.id;
+    try{ navigator.clipboard.writeText(url); }catch(_){}
+    OS.toast('Intake link copied. It opens the same 5-step form, no pay or SSN collected.');
+  }
+});
+
+/* ─────────────── overlay hosting the intake form ─────────────── */
+var ov=document.getElementById('ov'), iframe=document.getElementById('intakeFrame');
+function openOverlay(){ iframe.src='/intake-form.html?ts='+Date.now(); ov.classList.add('on'); ov.setAttribute('aria-hidden','false'); }
+function closeOverlay(){ ov.classList.remove('on'); ov.setAttribute('aria-hidden','true'); iframe.src='about:blank'; }
+document.getElementById('newLink').addEventListener('click',openOverlay);
+document.getElementById('previewForm').addEventListener('click',openOverlay);
+ov.addEventListener('click',function(e){ if(e.target.closest('[data-close]')) closeOverlay(); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&ov.classList.contains('on')) closeOverlay(); });
+function routedTeams(v){
+  var teams=[];
+  if((v.systems&&v.systems.length) || (v.laptop&&v.laptop!=='None needed') || (v.building&&v.building!=='None')) teams.push('IT');
+  if(v.mvr || (v.vehicle&&v.vehicle!=='Personal vehicle') || (v.certs&&v.certs.length)) teams.push('Safety');
+  teams.push('HR'); // the person record and pay setup always route to HR
+  return teams;
+}
+function joinTeams(a){ if(a.length<=1) return a.join(''); if(a.length===2) return a[0]+' and '+a[1]; return a.slice(0,-1).join(', ')+' and '+a[a.length-1]; }
+window.addEventListener('message',function(e){
+  var d=e.data||{}; if(d.source!=='intake-form') return;
+  if(d.type==='height'){ if(d.height) iframe.style.height=d.height+'px'; return; }
+  if(d.type==='close'){ closeOverlay(); return; }
+  if(d.type==='submitted'){
+    var v=d.vals||{};
+    var who=(v.preferred||v.legal||'The new hire');
+    var office=v.office||'their office';
+    var teams=joinTeams(routedTeams(v));
+    closeOverlay();
+    // reflect the submission in the preview list so the flow reads end-to-end
+    LINKS.unshift({id:Date.now(), role:v.title||'New hire', office:office, name:who, email:v.email||'', stage:'submitted', reached:2, expiresAt:new Date(Date.now()+3*86400000).toISOString().slice(0,10)});
+    renderLinks(); renderStrip();
+    OS.toast(who+' submitted for '+office+'. Tasks routed to '+teams+'. No pay, SSN or bank details were collected.');
+  }
+});
+
+/* ─────────────── onboarding board (live: /api/onboarding) ─────────────── */
+var OPTIONS=null, OPEN_ID=null, REQS=[];
 function loadBoard(){
   return fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){
-    if(d.options && !OPTIONS) renderOptions(d.options);
-    var reqs=d.requests||[];
-    document.getElementById('board').innerHTML= reqs.length? reqs.map(function(r){
-      var ru=r.rollup, done=r.status==='complete';
-      var meta='<span class="pill '+(done?'green':'amber')+'">'+(done?'complete':'open')+'</span>'+
-        '<span class="pill gray">'+ru.total+' item'+(ru.total===1?'':'s')+'</span>'+
-        (ru.pendingApprovals>0?'<span class="pill red">'+ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s')+' pending</span>':'')+
-        (ru.pending>0?'<span class="pill gray">'+ru.pending+' pending</span>':'');
-      return '<div class="req'+(done?' complete':'')+'" onclick="openReq('+r.id+')">'+
-        '<div class="top"><div class="who">'+esc(r.name)+(r.job_position?'<small>'+esc(r.job_position)+'</small>':'')+'</div>'+
-        '<span class="tag">'+(r.start_date?('starts '+esc(r.start_date)):'no start date')+'</span></div>'+
-        '<div class="prog"><div class="track"><div class="fill" style="width:'+ru.progress+'%"></div></div><div class="pct">'+ru.done+'/'+ru.total+' done</div></div>'+
-        '<div class="meta">'+meta+'</div></div>';
-    }).join('') : '<div class="empty">No onboarding requests yet. Fill the form above to route your first one.</div>';
-  });
+    if(d.options && !OPTIONS){ OPTIONS=d.options; renderForm(); }
+    REQS=d.requests||[];
+    renderStrip();
+    renderMetric();
+    document.getElementById('boardn').textContent='· '+REQS.length;
+    if(!REQS.length){ document.getElementById('board').innerHTML=OS.empty('No onboarding requests yet. Send an intake link, or fill the full request below.','✓'); return; }
+    var cols=[
+      {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
+      {as:'starts',label:'Starts',render:function(v,r){return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
+      {as:'prog',label:'Progress',render:function(v,r){var ru=r.rollup||{},done=r.status==='complete';return '<div style="display:flex;align-items:center;gap:9px"><span class="ob-bar'+(done?' done':'')+'"><span style="width:'+(ru.progress||0)+'%"></span></span><span class="muted" style="font-size:11.5px;white-space:nowrap">'+(ru.done||0)+'/'+(ru.total||0)+'</span></div>';}},
+      {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
+    ];
+    document.getElementById('board').innerHTML=OS.table(cols, REQS.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id};}), {onRow:true});
+    if(OPEN_ID) openReq(OPEN_ID);
+  }).catch(function(){ document.getElementById('board').innerHTML=OS.errorBox('Could not load the onboarding board.'); });
 }
-
+document.getElementById('board').addEventListener('click',function(e){
+  var tr=e.target.closest('[data-row]'); if(!tr) return;
+  var idx=Number(tr.getAttribute('data-row')); var r=REQS[idx]; if(r) openReq(r.id);
+});
+function renderMetric(){
+  var open=REQS.filter(function(r){return r.status!=='complete';}).length;
+  var appr=REQS.reduce(function(s,r){return s+((r.rollup&&r.rollup.pendingApprovals)||0);},0);
+  var pend=REQS.reduce(function(s,r){return s+((r.rollup&&r.rollup.pending)||0);},0);
+  var done=REQS.filter(function(r){return r.status==='complete';}).length;
+  document.getElementById('metricstrip').innerHTML=OS.metricStrip([
+    {label:'Open requests',    value:open,format:'count',drillable:false,sub:'still routing'},
+    {label:'Approvals pending',value:appr,format:'count',drillable:false,sub:'waiting on an owner'},
+    {label:'Items outstanding',value:pend,format:'count',drillable:false,sub:'tasks not yet done'},
+    {label:'Completed',        value:done,format:'count',drillable:false,sub:'day-1 ready'}
+  ]);
+}
+function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops'};return m[o]||o;}
 function openReq(id){
   OPEN_ID=id;
   fetch('/api/onboarding/'+id).then(function(r){return r.json();}).then(function(d){
-    if(!d.ok)return;
+    if(!d.ok) return;
     var req=d.request, ru=d.rollup;
     var groups=(d.groups||[]).map(function(g){
-      var items=g.items.map(function(it){return itemRow(it);}).join('');
-      return '<div class="ownergrp"><div class="gh"><div class="gl"><span class="tag '+ownerClass(g.owner)+'">'+ownerTag(g.owner)+'</span>'+
-        '<span class="gn">'+esc(g.owner_label)+'</span></div>'+
-        (g.pending>0?'<span class="pill amber">'+g.pending+' pending</span>':'<span class="pill green">clear</span>')+'</div>'+items+'</div>';
+      var items=g.items.map(itemRow).join('');
+      return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span>'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+'</div>'+items+'</div>';
     }).join('');
-    document.getElementById('detail').innerHTML=
-      '<div class="detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
-      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+
-      ' · <b style="color:var(--navy)">'+ru.done+'/'+ru.total+'</b> done · <b style="color:var(--accent)">'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
-      '<button class="close-x" onclick="closeReq()">Close</button></div>'+groups+'</div>';
+    document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
+      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
+      '<button class="os-btn" id="closeReq">Close</button></div>'+groups+'</div>';
+    document.getElementById('closeReq').addEventListener('click',closeReq);
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }
-function closeReq(){OPEN_ID=null;document.getElementById('detail').innerHTML='';}
-function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops'};return m[o]||o;}
-
+function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; }
 function itemRow(it){
   var st, act='';
-  if(it.status==='pending'){
-    st='<span class="pill gray">pending</span>';
-    if(it.kind==='task'){act='<button class="btn primary" onclick="act(event,'+it.id+',\'complete\')">Complete</button>';}
-    else{act='<button class="btn primary" onclick="act(event,'+it.id+',\'approve\')">Approve</button><button class="btn" onclick="act(event,'+it.id+',\'reject\')">Reject</button>';}
-  } else if(it.status==='done'){st='<span class="pill green">done</span>';}
-  else if(it.status==='approved'){st='<span class="pill green">approved</span>';}
-  else{st='<span class="pill red">rejected</span>';}
-  return '<div class="item"><div class="lx"><div class="il">'+esc(it.label)+'</div>'+
-    (it.detail?'<div class="idl">'+esc(it.detail)+'</div>':'')+
-    '<span class="ik">'+it.kind+(it.decided_by&&it.status!=='pending'?(' · '+it.status+' by '+esc(it.decided_by)):'')+'</span></div>'+
+  if(it.status==='pending'){ st=OS.pill('Pending','neutral');
+    if(it.kind==='task') act='<button class="il-btn primary" data-item="'+it.id+'" data-verb="complete">Complete</button>';
+    else act='<button class="il-btn primary" data-item="'+it.id+'" data-verb="approve">Approve</button><button class="il-btn" data-item="'+it.id+'" data-verb="reject">Reject</button>';
+  } else if(it.status==='done'){ st=OS.pill('Done','good'); }
+  else if(it.status==='approved'){ st=OS.pill('Approved','good'); }
+  else { st=OS.pill('Rejected','bad'); }
+  return '<div class="ob-item"><div class="il-x"><div class="lab">'+esc(it.label)+'</div>'+
+    (it.detail?'<div class="dl">'+esc(it.detail)+'</div>':'')+
+    '<div class="dl" style="font-size:11px">'+esc(it.kind)+(it.decided_by&&it.status!=='pending'?(' · '+esc(it.status)+' by '+esc(it.decided_by)):'')+'</div></div>'+
     '<div class="ax">'+st+act+'</div></div>';
 }
-function act(ev,id,verb){
-  ev.stopPropagation();
-  var btn=ev.target; btn.disabled=true; btn.textContent='...';
+document.getElementById('detail').addEventListener('click',function(e){
+  var b=e.target.closest('[data-item]'); if(!b) return;
+  var id=b.getAttribute('data-item'), verb=b.getAttribute('data-verb');
+  b.disabled=true; b.textContent='…';
   fetch('/api/onboarding/items/'+id+'/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
-    .then(function(r){return r.json();}).then(function(){ loadBoard().then(function(){ if(OPEN_ID)openReq(OPEN_ID); }); });
-}
+    .then(function(r){return r.json();}).then(function(){ OS.toast('Item '+(verb==='complete'?'completed':verb==='approve'?'approved':'rejected')+'.'); loadBoard(); });
+});
 
-/* ---- submit ---- */
-document.getElementById('onb-form').addEventListener('submit',function(e){
+/* ─────────────── full onboarding request form (preserves POST /api/onboarding) ─────────────── */
+function renderForm(){
+  var o=OPTIONS||{};
+  var sp=(o.sharepoint||[]).map(function(g){return fchk('sp',g.name,g.name+(g.kind==='approval'?' (approval)':''));}).join('');
+  var pr=(o.printers||[]).map(function(p){return fchk('pr',p,p);}).join('');
+  var sw=(o.software||[]).map(function(s){return fchk('sw',s.name,s.name+(s.kind==='approval'?' (owner approval)':''));}).join('');
+  var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
+    (o.computers||[]).map(function(c){return '<label class="fradio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span></label>';}).join('');
+  document.getElementById('formCard').innerHTML=
+    '<details class="formwrap"><summary>Fill the full request manually <span class="hint">Every field routes to the team that owns it</span></summary>'+
+    '<form id="onb-form" class="fbody">'+
+      '<div class="fsec">New hire</div><div class="fgrid">'+
+        ffield('Full name','name','Jordan Rivera',true)+ffield('Personal email','personal_email','jordan@email.com')+ffieldDate('Start date','start_date')+
+        ffield('Cell phone','cell_phone','+1 512 555 0100')+ffield('Job position','job_position','Sprinkler Designer')+ffield('Salary','salary','$72,000 / yr')+
+        ffield('Manager','manager_name','Prisha Nadar')+
+      '</div>'+
+      '<div class="fsec">Pay and HR exceptions</div><div class="fchecks">'+
+        fchk('cell_reimburse','','Cell-phone reimbursement')+fchk('pto_plan','','Different PTO plan')+fchk('hours_80_40','','80-vs-40 hours approved')+
+        fchk('probation_waived','','60-day probation waived')+fchk('incentive_plan','','Incentive plan')+fchk('vehicle_allowance','','Vehicle allowance (built into pay)')+
+      '</div><div class="ffield" style="margin-top:12px"><label>Misc pay/HR exceptions</label><textarea name="misc_exceptions" placeholder="Anything else HR should build into the record"></textarea></div>'+
+      '<div class="fsec">IT and access</div><div class="fchecks">'+fchk('company_email','','Company email')+fchk('teams_number','','Teams number')+'</div>'+
+      '<div class="fsec" style="font-size:10px">SharePoint groups</div><div class="fchecks">'+sp+'</div>'+
+      '<div class="fsec" style="font-size:10px">Printers</div><div class="fchecks">'+pr+'</div>'+
+      '<div class="fsec">Equipment and software</div>'+
+      '<div class="fsec" style="font-size:10px">Computer (owner approval)</div><div class="fradios">'+radios+'</div>'+
+      '<div class="fsec" style="font-size:10px">Software</div><div class="fchecks">'+sw+'</div>'+
+      '<div class="fsec" style="font-size:10px">Safety-issued equipment</div><div class="fchecks">'+
+        fchk('company_cell','','Company cell phone')+fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
+      '</div>'+
+      '<div class="fsec">Vehicle</div><div class="fchecks">'+fchk('company_vehicle','','Company vehicle needed')+'</div>'+
+      '<div class="ffield" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Ops to confirm"></textarea></div>'+
+      '<div class="fsub"><div class="note">Submitting routes the request. Nothing provisions or approves on its own: each item waits for the owner to act.</div><button type="submit" class="os-btn brand" id="submit-btn">Route onboarding</button></div>'+
+    '</form></details>';
+  document.getElementById('onb-form').addEventListener('submit',submitForm);
+}
+function ffield(l,name,ph,req){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" placeholder="'+esc(ph||'')+'"'+(req?' required':'')+'></div>';}
+function ffieldDate(l,name){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" type="date"></div>';}
+function fchk(name,val,label){return '<label class="fchk"><input type="checkbox" name="'+name+'"'+(val?' value="'+esc(val)+'"':'')+'> '+esc(label)+'</label>';}
+function submitForm(e){
   e.preventDefault();
   var f=e.target, btn=document.getElementById('submit-btn');
-  var checked=function(n){var el=f.querySelector('input[name="'+n+'"]');return el?el.checked:false;};
+  var checked=function(n){var el=f.querySelector('input[name="'+n+'"]:not([value])');return el?el.checked:false;};
   var multi=function(n){return Array.prototype.slice.call(f.querySelectorAll('input[name="'+n+'"]:checked')).map(function(x){return x.value;});};
   var payload={
-    name:f.name.value.trim(),
-    personal_email:f.personal_email.value.trim(),
-    start_date:f.start_date.value,
-    cell_phone:f.cell_phone.value.trim(),
-    job_position:f.job_position.value.trim(),
-    salary:f.salary.value.trim(),
-    manager_name:f.manager_name.value.trim(),
+    name:f.name.value.trim(), personal_email:f.personal_email.value.trim(), start_date:f.start_date.value,
+    cell_phone:f.cell_phone.value.trim(), job_position:f.job_position.value.trim(), salary:f.salary.value.trim(), manager_name:f.manager_name.value.trim(),
     company_email:checked('company_email'), teams_number:checked('teams_number'),
     cell_reimburse:checked('cell_reimburse'), pto_plan:checked('pto_plan'), hours_80_40:checked('hours_80_40'),
     probation_waived:checked('probation_waived'), incentive_plan:checked('incentive_plan'), vehicle_allowance:checked('vehicle_allowance'),
@@ -304,19 +410,18 @@ document.getElementById('onb-form').addEventListener('submit',function(e){
     computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',
     software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr')
   };
-  if(!payload.name){f.name.focus();return;}
-  btn.disabled=true; btn.textContent='Routing...';
+  if(!payload.name){ f.name.focus(); return; }
+  btn.disabled=true; btn.textContent='Routing…';
   fetch('/api/onboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(function(r){return r.json();}).then(function(d){
       btn.disabled=false; btn.textContent='Route onboarding';
-      if(d.ok){
-        f.reset(); wireToggles();
-        loadBoard().then(function(){ if(d.request)openReq(d.request.id); });
-      }
+      if(d.ok){ f.reset(); OS.toast(payload.name+' routed for onboarding. Each item waits for its owning team to act.'); loadBoard().then(function(){ if(d.request) openReq(d.request.id); }); }
     }).catch(function(){ btn.disabled=false; btn.textContent='Route onboarding'; });
-});
+}
 
-loadBoard();
+/* ─────────────── boot ─────────────── */
+OS.ready(function(){ renderStrip(); renderLinks(); loadCounts(); loadBoard(); });
+OS.onChange(function(){ loadBoard(); });
 </script>
 </body>
 </html>
