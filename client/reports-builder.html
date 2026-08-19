@@ -7,154 +7,297 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  body{background:var(--bg)}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px 24px 60px}
-  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
-  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px}
-  .builder{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px;margin-top:18px}
-  .sentence{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:650;font-size:15px;color:var(--ink-2);line-height:2.1}
-  .sentence select{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);border:1px solid var(--border);
-    border-radius:9px;padding:7px 30px 7px 11px;background:var(--panel);cursor:pointer;appearance:none;-webkit-appearance:none;
+  /* Only what the kit lacks: the inline sentence + its dropdowns, and the definition card. */
+  .rb-sentence{display:flex;flex-wrap:wrap;align-items:center;gap:9px;font-weight:600;font-size:16px;
+    color:var(--ink-2);line-height:2.2}
+  .rb-sentence select{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--ink);
+    border:1px solid var(--border);border-radius:10px;padding:8px 32px 8px 12px;background:var(--panel);
+    cursor:pointer;appearance:none;-webkit-appearance:none;transition:border-color .16s,box-shadow .16s;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4'><path d='M6 9l6 6 6-6'/></svg>");
-    background-repeat:no-repeat;background-position:right 9px center}
-  .actions{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
-  .btn{font-weight:700;font-size:13px;border-radius:9px;padding:9px 15px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .btn.pri{background:var(--fp-red,#E53935);color:#fff;border-color:transparent}
-  .result{margin-top:20px}
-  .rc{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px}
-  .rc .big{font-weight:800;font-size:34px;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
-  .rc .lab{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
-  .rc .src{font-weight:600;font-size:11px;color:var(--ink-3);margin-top:8px}
-  .bar{display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:10px;margin:8px 0}
-  .bar .nm{font-weight:650;font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bar .track{height:15px;background:var(--fill);border-radius:7px;overflow:hidden}
-  .bar .fill{height:100%;background:var(--fp-red,#E53935);border-radius:7px}
-  .bar .amt{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .sec-h{font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:30px 0 10px}
-  .saved{display:flex;flex-direction:column;gap:8px}
-  .sr{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:11px;background:var(--panel);padding:11px 14px}
+    background-repeat:no-repeat;background-position:right 10px center}
+  .rb-sentence select:hover{border-color:var(--border-strong)}
+  .rb-sentence select:focus{outline:none;border-color:var(--os-accent);box-shadow:0 0 0 3px var(--os-warn-bg)}
+  .rb-total{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .rb-total .big{font-weight:800;font-size:38px;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+  .rb-total .big.proj{color:var(--amber-ink,#8A5106);text-decoration:underline dotted;text-underline-offset:5px}
+  .rb-total .lab{font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .rb-def{border:1px solid var(--border);border-left:3px solid var(--os-neutral);border-radius:12px;
+    background:var(--panel-alt,var(--fill));padding:13px 16px;margin-top:14px}
+  .rb-def.proj{border-left-color:var(--os-warn)}
+  .rb-def .dh{font-weight:750;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);margin-bottom:6px}
+  .rb-def p{margin:5px 0 0;font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-2)}
+  .rb-def .src{font-weight:700;color:var(--ink)}
+  .rb-def .est{font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--os-warn);
+    background:var(--os-warn-bg);border-radius:var(--r-pill,999px);padding:2px 7px;margin-left:6px;vertical-align:1px}
+  .rb-def .real{font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--os-good);
+    background:var(--os-good-bg);border-radius:var(--r-pill,999px);padding:2px 7px;margin-left:6px;vertical-align:1px}
+  .sr{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border);
+    border-radius:12px;background:var(--panel);padding:12px 14px}
   .sr .nm{font-weight:700;font-size:13.5px;color:var(--ink)}
-  .sr .meta{font-weight:550;font-size:11.5px;color:var(--muted)}
-  .sr .srx{display:flex;gap:6px}
-  .sr button{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 11px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .empty{color:var(--muted);font-weight:600;font-size:13px;padding:6px 0}
+  .sr .meta{font-weight:550;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .sr .srx{display:flex;gap:6px;flex:none}
+  .sr .srx button{font-family:var(--sans);font-weight:700;font-size:11.5px;border-radius:8px;padding:7px 12px;
+    cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
+  .sr .srx button:hover{border-color:var(--border-strong)}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Custom Reports</h1>
-    <div class="lead">Ask a question in plain business terms. It runs against current data under your access.</div>
-
-    <div class="builder">
-      <div class="sentence">
-        Show me <select id="metric"></select>
-        for <select id="scope"></select>
-        during <select id="period"></select>
-        grouped by <select id="groupBy"><option value="none">nothing</option><option value="office">office</option></select>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Custom reports</h1>
+        <div class="os-question">What do you want to know?</div>
       </div>
-      <div class="actions">
-        <button class="btn pri" id="run">Run</button>
-        <button class="btn" id="save">Save this report</button>
+      <div class="os-actions">
+        <button class="os-btn" id="csv">CSV</button>
+        <button class="os-btn" id="schedule">Schedule weekly</button>
+        <button class="os-btn primary" id="save">Save this report</button>
       </div>
     </div>
 
-    <div class="result" id="result"></div>
+    <div class="os-card" style="margin-bottom:4px">
+      <div class="os-card-b">
+        <div class="rb-sentence">
+          Show me <select id="metric" aria-label="metric"></select>
+          for <select id="scope" aria-label="scope"></select>
+          during <select id="period" aria-label="period"></select>
+          grouped by <select id="groupBy" aria-label="dimension"><option value="none">nothing</option><option value="office">office</option></select>
+        </div>
+      </div>
+    </div>
 
-    <div class="sec-h">Saved reports</div>
-    <div class="saved" id="saved"></div>
+    <div id="result" class="os-block"></div>
+
+    <div class="os-sec">Saved &amp; scheduled reports <span class="n" id="savedN"></span></div>
+    <div class="os-band" id="saved" style="display:flex;flex-direction:column;gap:9px"></div>
+
+    <div class="os-foot" id="foot"></div>
   </div>
 
+<script src="/os.js"></script>
 <script>
 "use strict";
-var CAT=null;
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
-function fmtVal(v,unit){return unit==='usd'?money(v):unit==='percent'?(v+'%'):(Number(v)||0).toLocaleString();}
-function opt(v,l){var o=document.createElement('option');o.value=v;o.textContent=l;return o;}
-function unitOf(key){var m=(CAT.metrics||[]).find(function(x){return x.key===key;});return m?m.unit:'count';}
-function labelOf(key){var m=(CAT.metrics||[]).find(function(x){return x.key===key;});return m?m.label:key;}
+var CAT=null, LAST=null; // LAST holds the most recent rendered result for CSV export
+
+function metricDef(key){ return (CAT.metrics||[]).find(function(x){return x.key===key;})||{key:key,label:key,unit:'count',source:'',officeScoped:true,dateScoped:true}; }
+function isProjected(m){ return /projection|projected/i.test(m.source||'') || m.key==='repair_opportunity_total'; }
+function isRate(m){ return m.unit==='percent'; }
+function fmtVal(v,unit){ return unit==='usd'?OS.money(v):unit==='percent'?((Math.round(v*10)/10)+'%'):OS.num(v); }
+function opt(v,l){ var o=document.createElement('option'); o.value=v; o.textContent=l; return o; }
+function csvCell(s){ s=String(s==null?'':s); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function periodLabel(key){ var p=(CAT.periods||[]).find(function(x){return x[0]===key||x.key===key;}); return p?(p[1]||p.label):key; }
+function scopeLabel(key){ if(key==='all') return 'all offices'; var o=(CAT.offices||[]).find(function(x){return x.key===key;}); return o?o.label:key; }
 
 function boot(){
   fetch('/api/reports/catalog').then(function(r){return r.json();}).then(function(d){
     CAT=d;
     var mSel=document.getElementById('metric');
-    (d.metrics||[]).forEach(function(m){mSel.appendChild(opt(m.key,m.label.toLowerCase()));});
+    (d.metrics||[]).forEach(function(m){ mSel.appendChild(opt(m.key,m.label.toLowerCase())); });
     var sSel=document.getElementById('scope');
     if(d.canSeeAllOffices) sSel.appendChild(opt('all','all offices'));
-    (d.offices||[]).forEach(function(o){sSel.appendChild(opt(o.key,o.label));});
+    (d.offices||[]).forEach(function(o){ sSel.appendChild(opt(o.key,o.label)); });
     var pSel=document.getElementById('period');
-    (d.periods||[]).forEach(function(p){pSel.appendChild(opt(p.key,p.label.toLowerCase()));});
+    (d.periods||[]).forEach(function(p){ pSel.appendChild(opt(p[0]||p.key,(p[1]||p.label).toLowerCase())); });
     pSel.value='month';
+    document.getElementById('foot').innerHTML='Every number is computed live under your access. A saved report stores a question, never a snapshot: opening it re-runs under your current scope, so sharing one never widens access. Scheduling and CSV draft the output and wait: nothing is sent, granted, or emailed without approval.';
+    ['metric','scope','period','groupBy'].forEach(function(id){ document.getElementById(id).addEventListener('change',run); });
+    run();
     loadSaved();
-  });
+  }).catch(function(){ document.getElementById('result').innerHTML=OS.errorBox('Could not load the report catalog.'); });
 }
+
 function currentConfig(){
-  return {metric:document.getElementById('metric').value,
+  return { metric:document.getElementById('metric').value,
     office:document.getElementById('scope').value,
     period:document.getElementById('period').value,
-    groupBy:document.getElementById('groupBy').value};
+    groupBy:document.getElementById('groupBy').value };
 }
-function run(cfg){
-  var key=cfg.metric, unit=unitOf(key);
-  if(cfg.groupBy==='office'){
-    fetch('/api/metrics/'+key+'/by-office?period='+cfg.period).then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok){renderErr();return;}
-      renderBars(labelOf(key),unit,d.rows||[]);
-    });
+
+/* ── run the current sentence live ──
+   Always fetch the real single value (the honest total + the definition source), and additionally
+   fetch the per-office breakdown when grouping by office. The total is never a fabricated average. */
+function run(){
+  if(!CAT) return;
+  var cfg=currentConfig(), m=metricDef(cfg.metric);
+  var single=fetch('/api/metrics/'+encodeURIComponent(cfg.metric)+'?period='+encodeURIComponent(cfg.period)+'&office='+encodeURIComponent(cfg.office))
+    .then(function(r){return r.json();});
+
+  if(cfg.groupBy==='office' && m.officeScoped){
+    var byOffice=fetch('/api/metrics/'+encodeURIComponent(cfg.metric)+'/by-office?period='+encodeURIComponent(cfg.period))
+      .then(function(r){return r.json();});
+    Promise.all([single,byOffice]).then(function(res){
+      var d=res[0], g=res[1];
+      if(!d||!d.ok){ renderErr(d); return; }
+      var rows=(g&&g.ok?g.rows:[])||[];
+      // office scope narrows every grouping: when a single office is chosen, keep only that office's row
+      if(cfg.office!=='all') rows=rows.filter(function(r){return r.office===d.metric.office;});
+      renderResult(m, cfg, rows, 'office', d.metric);
+    }).catch(function(){ renderErr(); });
   }else{
-    fetch('/api/metrics/'+key+'?period='+cfg.period+'&office='+encodeURIComponent(cfg.office)).then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok){renderErr(d);return;}
-      renderKpi(d.metric);
-    });
+    single.then(function(d){
+      if(!d||!d.ok){ renderErr(d); return; }
+      renderResult(m, cfg, [{office:d.metric.office,label:scopeLabel(cfg.office),value:d.metric.value}], 'none', d.metric);
+    }).catch(function(){ renderErr(); });
   }
 }
-function renderErr(d){document.getElementById('result').innerHTML='<div class="rc"><div class="empty">'+esc((d&&d.error)||'Could not run. You may not have access to that scope.')+'</div></div>';}
-function renderKpi(m){
-  document.getElementById('result').innerHTML='<div class="rc"><div class="lab">'+esc(m.label)+'</div>'+
-    '<div class="big">'+esc(fmtVal(m.value,m.unit))+'</div>'+
-    '<div class="src">'+esc(m.source)+(m.companyWide?' · company-wide':'')+'</div></div>';
+
+function renderErr(d){
+  document.getElementById('result').innerHTML='<div class="os-card"><div class="os-card-b">'+
+    OS.errorBox((d&&d.error==='forbidden_office')?'You do not have access to that office scope.':((d&&d.error)||'Could not run that report. You may not have access to that scope.'))+'</div></div>';
+  LAST=null;
 }
-function renderBars(label,unit,rows){
-  var max=Math.max.apply(null,rows.map(function(r){return r.value;}))||1;
-  var body=rows.length?rows.sort(function(a,b){return b.value-a.value;}).map(function(r){
-    return '<div class="bar"><span class="nm">'+esc(r.label)+'</span><span class="track"><span class="fill" style="width:'+Math.round((r.value/max)*100)+'%"></span></span>'+
-      '<span class="amt">'+fmtVal(r.value,unit)+'</span></div>';
-  }).join(''):'<div class="empty">No data.</div>';
-  document.getElementById('result').innerHTML='<div class="rc"><div class="lab">'+esc(label)+' by office</div><div style="margin-top:12px">'+body+'</div></div>';
+
+/* Build the total, the breakdown table + share bands, and the honest definition card. */
+function renderResult(m, cfg, rows, grouping, single){
+  var rate=isRate(m), proj=isProjected(m), companyWide=!m.officeScoped, snapshot=!m.dateScoped;
+
+  // ── AR / company-wide metrics ignore office scope AND office grouping (not attributable until Intacct)
+  if(companyWide){
+    rows=[{office:'all',label:'Company-wide',value:single.value}];
+    grouping='none';
+  }
+
+  // ── total: always the real value computed for the scope, never a fabricated sum-of-rates
+  var total = single.value;
+
+  var totalLab = rate ? (cfg.office==='all'?'company rate':scopeLabel(cfg.office)+' rate')
+    : (grouping==='office' ? (companyWide?'company-wide':'all shown offices') : scopeLabel(cfg.office));
+  var totalHtml='<div class="rb-total"><div class="big'+(proj?' proj':'')+'">'+fmtVal(total,m.unit)+'</div>'+
+    '<div class="lab">'+m.label+' · '+OS.esc(totalLab)+'</div></div>';
+
+  // ── breakdown table + share bands (OS.band)
+  var breakdown='';
+  if(rows.length){
+    var maxRate = Math.max.apply(null, rows.map(function(r){return Math.abs(r.value)||0;}))||1;
+    var band = OS.band(rows.map(function(r){
+      var right;
+      if(rate){
+        right='<b>'+fmtVal(r.value,m.unit)+'</b> <span class="bm">vs '+fmtVal(maxRate,m.unit)+' top</span>';
+      }else if(grouping==='office' && total>0){
+        var share=Math.round((r.value/total)*100);
+        right='<b>'+fmtVal(r.value,m.unit)+'</b> <span class="bm">'+share+'% of total</span>';
+      }else{
+        right='<b>'+fmtVal(r.value,m.unit)+'</b>';
+      }
+      return { label:r.label, value:Math.abs(r.value), right:right, tone: proj?'warn':'accent' };
+    }),{});
+    var colName = rate ? 'Rate against highest' : (grouping==='office' ? 'Share of total' : 'Value');
+    var sub = rate ? 'A rate cannot be shared out, so offices rank against the highest rate.'
+      : grouping==='office' ? 'Bars show each office against the largest; the figure names its true share.'
+      : 'One total for the chosen scope.';
+    breakdown=OS.card(colName, sub, band);
+  }
+
+  // ── honest definition card
+  var def=definitionCard(m, cfg, {rate:rate,proj:proj,companyWide:companyWide,snapshot:snapshot,grouping:grouping});
+
+  document.getElementById('result').innerHTML=
+    '<div class="os-card"><div class="os-card-b">'+totalHtml+def+'</div></div>'+
+    (breakdown?('<div style="margin-top:14px">'+breakdown+'</div>'):'');
+
+  LAST={ m:m, cfg:cfg, rows:rows, grouping:grouping, total:total, rate:rate };
 }
+
+function definitionCard(m, cfg, f){
+  var parts=[];
+  parts.push('Source system: <span class="src">'+OS.esc(m.source||'internal')+'</span>.');
+  if(f.proj) parts.push('This figure is <b>projected</b>, derived from an assumption, not a measured amount. It is never booked revenue.');
+  else parts.push('This figure is <b>real</b>, measured directly from the source.');
+
+  // period behaviour: snapshots do not accumulate; accumulating metrics are bounded by the window
+  if(f.snapshot) parts.push('This is a point-in-time snapshot. The period ('+OS.esc(periodLabel(cfg.period))+') does not change it: snapshot metrics do not accumulate.');
+  else parts.push('This accumulates over time, so the period ('+OS.esc(periodLabel(cfg.period))+') bounds what is counted.');
+
+  // office behaviour
+  if(f.companyWide) parts.push('This metric is <b>company-wide</b> and is not office-attributable until Sage Intacct. The office scope'+(cfg.office!=='all'?' ('+OS.esc(scopeLabel(cfg.office))+')':'')+' and any office grouping are ignored rather than invented into a split.');
+  else if(cfg.office!=='all') parts.push('The office scope ('+OS.esc(scopeLabel(cfg.office))+') narrows the underlying data for every grouping, not only when you group by office.');
+  else if(f.grouping==='office') parts.push('Grouped across every office you are authorized to see. An office scope would narrow all of these rows, not just this grouping.');
+
+  // rate caveat
+  if(f.rate) parts.push('A rate cannot be summed or shared out. Offices are ranked against the highest rate, and the total shows the company rate.');
+
+  var tag=f.proj?'<span class="est">projected</span>':'<span class="real">real</span>';
+  return '<div class="rb-def'+(f.proj?' proj':'')+'"><div class="dh">What this number means'+tag+'</div><p>'+parts.join('</p><p>')+'</p></div>';
+}
+
+/* ── saved & scheduled reports ── */
 function loadSaved(){
   fetch('/api/reports/saved').then(function(r){return r.json();}).then(function(d){
-    var el=document.getElementById('saved');
-    if(!d||!d.ok||!d.reports.length){el.innerHTML='<div class="empty">No saved reports yet. Build one above and Save it.</div>';return;}
+    var el=document.getElementById('saved'), nEl=document.getElementById('savedN');
+    if(!d||!d.ok||!d.reports.length){ el.innerHTML='<div class="os-empty">No saved reports yet. Build a sentence above and Save it, or Schedule it weekly.</div>'; if(nEl) nEl.textContent=''; return; }
+    if(nEl) nEl.textContent='· '+d.reports.length;
     el.innerHTML=d.reports.map(function(r){
-      var c=r.config||{};
-      return '<div class="sr"><div><div class="nm">'+esc(r.name)+'</div>'+
-        '<div class="meta">'+esc(labelOf(c.metric)||c.metric)+' · '+esc(c.office||'all')+' · '+esc(c.period||'month')+(c.groupBy==='office'?' · by office':'')+'</div></div>'+
-        '<div class="srx"><button data-run="'+r.id+'">Run</button><button data-del="'+r.id+'">Delete</button></div></div>';
+      var c=r.config||{}, sched=c.schedule==='weekly';
+      var meta=(metricDef(c.metric).label||c.metric)+' · '+scopeLabel(c.office||'all')+' · '+periodLabel(c.period||'month')+(c.groupBy==='office'?' · by office':'')+(sched?' · scheduled weekly':'');
+      return '<div class="sr" data-load=\''+OS.esc(JSON.stringify(c))+'\'><div><div class="nm">'+OS.esc(r.name)+'</div>'+
+        '<div class="meta">'+OS.esc(meta)+'</div></div>'+
+        '<div class="srx"><button data-open="'+r.id+'">Open</button><button data-del="'+r.id+'">Delete</button></div></div>';
     }).join('');
   });
 }
-document.getElementById('run').addEventListener('click',function(){run(currentConfig());});
+
+/* clicking a saved report reconfigures the builder (and runs it) */
+function applyConfig(c){
+  if(!c) return;
+  if(c.metric) document.getElementById('metric').value=c.metric;
+  if(c.office) document.getElementById('scope').value=c.office;
+  if(c.period) document.getElementById('period').value=c.period;
+  document.getElementById('groupBy').value=c.groupBy==='office'?'office':'none';
+  run();
+  try{ document.getElementById('result').scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(_){}
+}
+
+/* ── actions ── */
 document.getElementById('save').addEventListener('click',function(){
   var cfg=currentConfig();
-  var name=prompt('Name this report:', labelOf(cfg.metric)+' · '+(cfg.office==='all'?'All offices':cfg.office));
-  if(!name)return;
+  var name=prompt('Name this report:', metricDef(cfg.metric).label+' · '+scopeLabel(cfg.office));
+  if(!name) return;
   fetch('/api/reports/saved',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,config:cfg})})
-    .then(function(r){return r.json();}).then(function(){loadSaved();});
+    .then(function(r){return r.json();}).then(function(){ OS.toast('Report saved: "'+name+'". Open it any time to re-run under your current scope.'); loadSaved(); });
+});
+document.getElementById('schedule').addEventListener('click',function(){
+  var cfg=currentConfig(); cfg.schedule='weekly';
+  var name=prompt('Name this weekly report:', metricDef(cfg.metric).label+' · weekly');
+  if(!name) return;
+  fetch('/api/reports/saved',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,config:cfg})})
+    .then(function(r){return r.json();}).then(function(){ OS.toast('Weekly report drafted and saved: "'+name+'". It waits for approval before anything is emailed on its own.'); loadSaved(); });
+});
+document.getElementById('csv').addEventListener('click',function(){
+  if(!LAST){ OS.toast('Nothing to export yet. Build a sentence first.'); return; }
+  var lines=[['Report','Scope','Period','Grouped by','Metric type'].join(',')];
+  lines.push([csvCell(LAST.m.label),csvCell(scopeLabel(LAST.cfg.office)),csvCell(periodLabel(LAST.cfg.period)),csvCell(LAST.grouping==='office'?'office':'nothing'),csvCell(isProjected(LAST.m)?'projected':'real')].join(','));
+  lines.push('');
+  lines.push(['Row', LAST.m.label+' ('+LAST.m.unit+')', LAST.rate?'':'Share of total'].filter(Boolean).join(','));
+  LAST.rows.forEach(function(r){
+    var row=[csvCell(r.label), r.value];
+    if(!LAST.rate && LAST.total>0) row.push(Math.round((r.value/LAST.total)*100)+'%');
+    lines.push(row.join(','));
+  });
+  lines.push('');
+  lines.push([csvCell(LAST.rate?'Company rate':'Total'), LAST.total].join(','));
+  var csv=lines.join('\n');
+  try{
+    var blob=new Blob([csv],{type:'text/csv'}), url=URL.createObjectURL(blob);
+    var a=document.createElement('a'); a.href=url; a.download='report-'+LAST.m.key+'.csv'; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); },400);
+  }catch(_){}
+  OS.toast('CSV of the current result drafted. It is the live numbers you see now, nothing is sent anywhere.');
 });
 document.getElementById('saved').addEventListener('click',function(e){
-  var run_=e.target.closest('[data-run]');
-  if(run_){fetch('/api/reports/saved/'+run_.getAttribute('data-run')+'/run',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})
-    .then(function(r){return r.json();}).then(function(d){
-      if(!d.ok){renderErr(d);return;}
-      if(d.groupBy==='office'){renderBars(labelOf(d.config.metric),unitOf(d.config.metric),d.rows||[]);}
-      else{renderKpi(d.metric);}
-    });return;}
   var del=e.target.closest('[data-del]');
-  if(del){fetch('/api/reports/saved/'+del.getAttribute('data-del'),{method:'DELETE'}).then(function(){loadSaved();});}
+  if(del){ e.stopPropagation(); fetch('/api/reports/saved/'+del.getAttribute('data-del'),{method:'DELETE'}).then(function(){ OS.toast('Report deleted.'); loadSaved(); }); return; }
+  var open=e.target.closest('[data-open]');
+  var row=e.target.closest('[data-load]');
+  if(open || row){
+    var host=row||open.closest('[data-load]');
+    try{ applyConfig(JSON.parse(host.getAttribute('data-load'))); }catch(_){}
+  }
 });
-boot();
+
+OS.ready(function(){ boot(); });
+OS.onChange(function(){ if(CAT) run(); });
 </script>
 </body>
 </html>
