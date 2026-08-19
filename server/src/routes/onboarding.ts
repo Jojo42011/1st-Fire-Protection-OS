@@ -8,8 +8,16 @@ import {
   rejectItem,
   getFormOptions,
 } from '../services/onboardingAgent';
+import {
+  createIntakeLink,
+  listIntakeLinks,
+  resendIntakeLink,
+  nudgeIntakeLink,
+  getSubmission,
+} from '../services/intakeLinks';
 
 const router = Router();
+const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
 
 /** The board: every onboarding request with its progress rollup, plus the form option catalogs. */
 router.get('/api/onboarding', (_req, res) => {
@@ -26,8 +34,9 @@ router.post('/api/onboarding', (req, res) => {
   }
 });
 
-/** One request: the record + its items grouped by owner + the rollup. */
-router.get('/api/onboarding/:id', (req, res) => {
+/** One request: the record + its items grouped by owner + the rollup. (id is numeric so the
+ *  /api/onboarding/intake-links routes below are not captured here.) */
+router.get('/api/onboarding/:id(\\d+)', (req, res) => {
   const out = getRequest(Number(req.params.id));
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
   res.json({ ok: true, ...out });
@@ -58,6 +67,49 @@ router.post('/api/onboarding/items/:id/reject', (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/* ─────────────────────────── intake links (tokenised invites) ─────────────────────────── */
+
+/** The intake-link list for the Onboarding screen. */
+router.get('/api/onboarding/intake-links', (req, res) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, links: listIntakeLinks(base) });
+});
+
+/** Create a new single-use link; returns the shareable URL (nothing is emailed on its own). */
+router.post('/api/onboarding/intake-links', (req, res) => {
+  const b = req.body || {};
+  const { link, token } = createIntakeLink({
+    job_title: b.job_title,
+    office: b.office,
+    recipient_name: b.recipient_name,
+    recipient_email: b.recipient_email,
+    created_by: actor(req),
+  });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, link, url: `${base}/intake/${token}` });
+});
+
+/** Resend: void the old token, issue a fresh one for the same recipient. */
+router.post('/api/onboarding/intake-links/:id/resend', (req, res) => {
+  const out = resendIntakeLink(Number(req.params.id), actor(req));
+  if (!out) return res.status(404).json({ ok: false, error: 'not_found' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, link: out.link, url: `${base}/intake/${out.token}` });
+});
+
+/** Nudge: record that a reminder was due (no email backend yet). */
+router.post('/api/onboarding/intake-links/:id/nudge', (req, res) => {
+  const ok = nudgeIntakeLink(Number(req.params.id));
+  res.json({ ok, error: ok ? undefined : 'not_nudgeable' });
+});
+
+/** The submitted values behind one link (View submission). */
+router.get('/api/onboarding/intake-links/:id/submission', (req, res) => {
+  const sub = getSubmission(Number(req.params.id));
+  if (!sub) return res.status(404).json({ ok: false, error: 'no_submission' });
+  res.json({ ok: true, submission: sub });
 });
 
 export default router;

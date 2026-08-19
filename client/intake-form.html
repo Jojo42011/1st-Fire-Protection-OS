@@ -60,7 +60,7 @@
     <img class="emblem" src="/brand/logo-email.png" alt="1st Fire Protection">
     <div style="flex:1;min-width:0">
       <div class="h-name">New hire setup</div>
-      <div class="h-sub">1st Fire Protection · for Ray Ellis</div>
+      <div class="h-sub" id="hsub">1st Fire Protection</div>
     </div>
     <span class="h-step" id="stepLabel">Step 1 of 5</span>
   </div>
@@ -155,6 +155,36 @@
   var post = function (type) {
     try { parent.postMessage({ source: 'intake-form', type: type, vals: vals }, '*'); } catch (e) {}
   };
+
+  // Real tokenised flow: served at /intake/:token (token in the path). ?preview=1 (the internal
+  // overlay) or a bare /intake-form.html is preview-only and never creates a record.
+  var pathMatch = location.pathname.match(/\/intake\/([^\/?#]+)/);
+  var TOKEN = pathMatch ? pathMatch[1] : null;
+  var PREVIEW = !TOKEN;
+  function showFatal(msg) {
+    var c = document.querySelector('.card');
+    if (c) c.innerHTML = '<div style="padding:30px 26px;text-align:center">' +
+      '<div style="font-weight:800;font-size:17px;color:#0E1420;margin-bottom:8px">This link cannot be used</div>' +
+      '<div style="font-weight:500;font-size:13.5px;color:#5E6779;line-height:1.5">' + msg + '</div></div>';
+    try { reportHeight(); } catch (e) {}
+  }
+  if (TOKEN) {
+    fetch('/api/intake/' + encodeURIComponent(TOKEN)).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d || !res.d.ok) {
+          var reason = res.d && res.d.reason;
+          showFatal(reason === 'already_submitted' ? 'This intake form was already submitted. Ask for a fresh link if you need to make a change.'
+            : reason === 'expired' ? 'This link has expired. Ask your contact at 1st Fire Protection for a new one.'
+            : reason === 'voided' ? 'This link was replaced by a newer one. Ask for the current link.'
+            : 'This link is not valid. Ask for a new one.');
+          return;
+        }
+        if (res.d.job_title) vals.title = res.d.job_title;
+        if (res.d.office) vals.office = res.d.office;
+        if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
+        render();
+      }).catch(function () { /* offline: let them fill; submit will re-check */ });
+  }
 
   // the host sizes the frame to the card, so nothing is ever clipped and only the overlay scrolls
   function reportHeight() {
@@ -262,8 +292,8 @@
     el('back').textContent = step === 0 ? 'Cancel' : 'Back';
     el('next').textContent = last ? 'Submit to 1st Fire Protection' : 'Continue to ' + STEPS[step + 1].label;
     el('foot').textContent = last
-      ? 'Nothing is created until you submit. The link expires Aug 21.'
-      : 'Your answers save as you go. The link expires Aug 21.';
+      ? 'Nothing is created until you submit. This link is single-use and expires in 7 days.'
+      : 'Your answers save as you go. This link is single-use and expires in 7 days.';
     renderDots();
     renderFields();
     reportHeight();
@@ -287,7 +317,23 @@
     el('form').classList.remove('hidden');
     render();
   };
-  el('finish').onclick = function () { post('submitted'); };
+  el('finish').onclick = function () {
+    if (!TOKEN) { post('submitted'); return; }   // preview: hand back to the host, create nothing
+    var btn = el('finish'); btn.disabled = true; btn.textContent = 'Submitting...';
+    fetch('/api/intake/' + encodeURIComponent(TOKEN), {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ vals: vals })
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.d || !res.d.ok) {
+          btn.disabled = false; btn.textContent = 'Done';
+          showFatal(res.d && res.d.reason === 'already_submitted' ? 'This form was already submitted. Nothing further is needed.' : 'Submission failed. Ask for a fresh link and try again.');
+          return;
+        }
+        var teams = (res.d.teams || []);
+        var teamTxt = teams.length ? (teams.length === 1 ? teams[0] : teams.slice(0, -1).join(', ') + ' and ' + teams[teams.length - 1]) : 'the right teams';
+        showFatal('Thank you. ' + (vals.preferred || vals.legal || 'The new hire') + ' has been submitted for ' + (vals.office || 'their office') + '. Onboarding tasks were routed to ' + teamTxt + '. No pay, Social Security number or bank details were collected. You can close this window.');
+      }).catch(function () { btn.disabled = false; btn.textContent = 'Done'; showFatal('Could not reach the server. Check your connection and try again.'); });
+  };
 
   render();
 })();

@@ -35,6 +35,7 @@ import introspect from './routes/introspect';
 import operator from './routes/operator';
 import licenses from './routes/licenses';
 import onboarding from './routes/onboarding';
+import intake from './routes/intake';
 import nav from './routes/nav';
 import approvals from './routes/approvals';
 import home from './routes/home';
@@ -105,6 +106,7 @@ app.use(introspect);
 app.use(operator);
 app.use(licenses);
 app.use(onboarding);
+app.use(intake);
 app.use(nav);
 app.use(approvals);
 app.use(home);
@@ -134,7 +136,7 @@ app.use(operations);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 const page = (name: string) => (_req: express.Request, res: express.Response) => {
-  // App shells are auth-gated and data-driven — never let a browser (or an iframe) serve a stale
+  // App shells are auth-gated and data-driven - never let a browser (or an iframe) serve a stale
   // copy captured before the session was active. Static assets keep their own caching elsewhere.
   res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(CLIENT_DIR, name));
@@ -204,7 +206,7 @@ server.on('upgrade', (req, socket, head) => {
   if (req.url && req.url.startsWith('/ws/stt')) {
     wss.handleUpgrade(req, socket, head, (ws) => {
       if (!sttEnabled()) {
-        // graceful degradation — tell the client to use browser STT and close.
+        // graceful degradation - tell the client to use browser STT and close.
         ws.send(JSON.stringify({ type: 'degraded', reason: 'no ELEVENLABS_API_KEY' }));
         ws.close();
         return;
@@ -226,7 +228,7 @@ setInterval(() => {
 // ---- invoice collection workflow (daily dunning until paid) ----
 // Checks hourly; per-invoice next_run_at gating means each enrolled invoice only gets
 // its email+text once a day until it's marked paid. Sends are simulated (logged) until
-// the Email (M365/Gmail) or SMS (Twilio) integration is present — then the same cycle
+// the Email (M365/Gmail) or SMS (Twilio) integration is present - then the same cycle
 // sends for real. Never throws; a missing integration just no-ops the send.
 const COLLECTION_MS = 1000 * 60 * 60; // check every hour, act once per day per invoice
 const runCollection = () =>
@@ -249,7 +251,7 @@ const AIOS_REPORT_MS = 1000 * 60 * 60 * 24; // daily
 setTimeout(() => void sendAiosReport(), 1000 * 60).unref(); // first report ~1 min after boot
 setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 
-// ---- periodic Vapi backfill (tracking) — only runs when VAPI_API_KEY is present ----
+// ---- periodic Vapi backfill (tracking) - only runs when VAPI_API_KEY is present ----
 // Complements the real-time webhook + manual Sync button: keeps the dashboard current
 // even if a webhook delivery is missed. No-ops (and logs nothing) without the key.
 if (process.env.VAPI_API_KEY) {
@@ -261,7 +263,7 @@ if (process.env.VAPI_API_KEY) {
     });
   runSync(); // initial backfill on boot
   setInterval(runSync, VAPI_SYNC_MS).unref();
-  console.log('[vapi] tracking enabled — auto-syncing calls every 5 min');
+  console.log('[vapi] tracking enabled - auto-syncing calls every 5 min');
 }
 
 // ---- ServiceTrade incremental sync (v2) ----

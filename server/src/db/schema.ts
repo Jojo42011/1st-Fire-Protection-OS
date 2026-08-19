@@ -481,6 +481,33 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_oncall_office_dates ON oncall_shifts(office, starts_on, ends_on);
   `);
 
+  /* ---------- intake links (tokenised, single-use onboarding invites) ----------
+   * A hiring manager needs no OS account: they receive a single-use token link, fill the 5-step
+   * intake form, and submitting generates the onboarding request. Lifecycle is derived from the
+   * timestamps; a token is dead once it is submitted, voided (superseded by a resend), or expired
+   * (7 days). status is stored for fast listing but recomputed on read so expiry is always honest. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS intake_links (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      token          TEXT UNIQUE NOT NULL,
+      job_title      TEXT,
+      office         TEXT,
+      recipient_name TEXT,
+      recipient_email TEXT,
+      status         TEXT NOT NULL DEFAULT 'sent',   -- sent | opened | submitted | voided | expired
+      created_by     TEXT,
+      sent_at        TEXT DEFAULT (datetime('now')),
+      opened_at      TEXT,
+      submitted_at   TEXT,
+      nudged_at      TEXT,
+      voided_at      TEXT,
+      expires_at     TEXT NOT NULL,
+      submission_json TEXT,
+      request_id     INTEGER                         -- onboarding request created on submit
+    );
+    CREATE INDEX IF NOT EXISTS idx_intake_links_status ON intake_links(status, expires_at);
+  `);
+
   /* ---------- open-deficiency backlog (ServiceTrade repairs waiting to be quoted) ----------
    * Deficiencies are the un-converted repair work techs already found. Mirrored from the
    * ServiceTrade /deficiency API so the backlog is office-filterable and fast; office is derived

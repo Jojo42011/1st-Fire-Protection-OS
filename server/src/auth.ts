@@ -88,12 +88,17 @@ const OPEN = new Set([
 function isAsset(p: string): boolean {
   return /\.(css|js|mjs|map|woff2?|ttf|otf|png|jpe?g|gif|svg|ico|webp|mp3|wav)$/i.test(p) || p.startsWith('/brand/');
 }
+// The tokenised intake flow is deliberately public: a hiring manager has no OS account. Security is
+// the single-use, expiring token itself, checked in the intake service, not a session cookie.
+function isPublicIntake(p: string): boolean {
+  return p.startsWith('/intake/') || p.startsWith('/api/intake/');
+}
 
 /** Middleware: allow assets + open paths; else require a valid session (401 for API, redirect for pages). */
 export function gate(req: express.Request, res: express.Response, next: express.NextFunction): void {
   if (!authRequired()) return next();
   const p = req.path;
-  if (OPEN.has(p) || isAsset(p) || isAuthed(req)) return next();
+  if (OPEN.has(p) || isAsset(p) || isPublicIntake(p) || isAuthed(req)) return next();
   if (p.startsWith('/api/')) {
     res.status(401).json({ ok: false, error: 'auth required' });
     return;
