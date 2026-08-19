@@ -42,7 +42,7 @@
   .nav-item .avstack{display:flex}
   .nav-item .avstack i{width:20px;height:20px;border-radius:50%;border:2px solid var(--panel);display:block}
   .nav-item .avstack i+i{margin-left:-7px}
-  /* grouped business nav — always visible (no accordion), red active rail */
+  /* grouped business nav - always visible (no accordion), red active rail */
   .nav .nav-sect.lead{margin-bottom:2px}
   .nav-group{display:flex;align-items:center;width:100%;gap:8px;background:none;border:0;
     font-family:var(--sans);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
@@ -411,7 +411,7 @@ frames.innerHTML=KEYS.map(function(k){
 }).join('');
 function frameEl(k){return document.getElementById('frame-'+k);}
 
-/* ---- render the business navigation (grouped, always visible — no accordion) ---- */
+/* ---- render the business navigation (grouped, always visible - no accordion) ---- */
 var PROBLEM_COUNT={ approve:1, receivables:1, deficiencies:1 }; // counts that read as a problem → amber
 function navItemHTML(k){
   var s=SCREENS[k]; if(!s) return '';

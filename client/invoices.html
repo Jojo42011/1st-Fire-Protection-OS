@@ -34,10 +34,10 @@
       </div>
       <div class="card card-pad" style="display:flex;flex-direction:column">
         <div style="font-weight:700;font-size:12.5px;color:var(--ink-2)">Daily chase, until it's paid</div>
-        <p style="margin:7px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3)">Put an overdue invoice on autopilot and it gets an email and a text every day — friendly, then firm, then final. The moment it's paid, the chasing stops.</p>
+        <p style="margin:7px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3)">Put an overdue invoice on autopilot and it gets an email and a text every day - friendly, then firm, then final. The moment it's paid, the chasing stops.</p>
         <div style="display:flex;gap:26px;margin-top:auto;padding-top:16px">
-          <div><div id="dc-auto" class="num" style="font-weight:800;font-size:22px;color:var(--ink)">—</div><div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">on autopilot</div></div>
-          <div><div id="dc-collected" class="num" style="font-weight:800;font-size:22px;color:var(--green)">—</div><div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">collected this month</div></div>
+          <div><div id="dc-auto" class="num" style="font-weight:800;font-size:22px;color:var(--ink)">-</div><div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">on autopilot</div></div>
+          <div><div id="dc-collected" class="num" style="font-weight:800;font-size:22px;color:var(--green)">-</div><div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">collected this month</div></div>
           <div><div class="num" style="font-weight:800;font-size:22px;color:var(--ink)">47</div><div style="font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px">days to get paid</div></div>
         </div>
       </div>
@@ -93,7 +93,7 @@
 
 <script>
 var fmt = function(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});};
-var BUCKET_META={'0-30':{c:'var(--green)',lab:'0–30 days',pink:false},'31-60':{c:'var(--amber)',lab:'31–60',pink:false},'61-90':{c:'var(--amber)',lab:'61–90',pink:false},'90+':{c:'var(--money)',lab:'90+ days',pink:true}};
+var BUCKET_META={'0-30':{c:'var(--green)',lab:'0 to 30 days',pink:false},'31-60':{c:'var(--amber)',lab:'31 to 60',pink:false},'61-90':{c:'var(--amber)',lab:'61 to 90',pink:false},'90+':{c:'var(--money)',lab:'90+ days',pink:true}};
 function load(){
   fetch('/api/invoices').then(function(r){return r.json();}).then(function(d){
     var s=d.summary;
@@ -121,14 +121,14 @@ function load(){
       var late= i.status==='paid'?'<span class="pill green">paid</span>': od>90?'<span class="pill money">'+od+'d late</span>': od>0?'<span class="pill amber">'+od+'d late</span>':'<span class="pill gray">current</span>';
       var state;
       if(i.status==='paid'){state='Paid in full';}
-      else if(enrolledIds[i.id]){state='On autopilot — chased daily';}
+      else if(enrolledIds[i.id]){state='On autopilot - chased daily';}
       else if(od>0){state=od+' days overdue';}
       else{state='Not yet due';}
       var act;
       if(i.status==='paid'){act='';}
       else if(enrolledIds[i.id]){act='<span class="pill money">on autopilot</span>';}
       else{act='<button class="btn" onclick="draft('+i.id+')">Draft</button> <button class="btn-primary" onclick="enroll('+i.id+',this)">Enroll</button>';}
-      return '<tr><td>'+i.customer+'</td><td class="muted">'+(i.notes?esc(i.notes):'—')+'</td><td class="right mono num">'+fmt(i.amount)+'</td><td>'+late+'</td><td>'+state+'</td><td class="right">'+act+'</td></tr>';
+      return '<tr><td>'+i.customer+'</td><td class="muted">'+(i.notes?esc(i.notes):'-')+'</td><td class="right mono num">'+fmt(i.amount)+'</td><td>'+late+'</td><td>'+state+'</td><td class="right">'+act+'</td></tr>';
     }).join('');
     renderWorkflow(wf);
     var rq=d.reminders||[];

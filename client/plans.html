@@ -53,7 +53,7 @@ window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-o
 
 function render(){
   var d=DATA, s=d.summary;
-  var blurb=s.blurb||(s.agreements+' active agreements. Visits schedule themselves through the Dispatcher and renewals go out before they lapse — this is the revenue you’re entitled to and used to forget to bill.');
+  var blurb=s.blurb||(s.agreements+' active agreements. Visits schedule themselves through the Dispatcher and renewals go out before they lapse - this is the revenue you’re entitled to and used to forget to bill.');
   document.getElementById('head').innerHTML=
     '<div><div class="big">'+esc(s.recurringRevenue)+'</div><div class="biglab">recurring revenue under agreement, per year</div></div>'+
     '<div class="div"></div>'+

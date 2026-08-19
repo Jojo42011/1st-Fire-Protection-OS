@@ -70,7 +70,7 @@ function doLogin(){
     .catch(function(){ err.textContent='Something went wrong. Try again.'; btn.disabled=false; btn.textContent='Sign in'; });
 }
 // Attach via addEventListener (not inline) so the handler can never collide with the form's
-// native submit() method — that collision was making the page reload instead of logging in.
+// native submit() method - that collision was making the page reload instead of logging in.
 document.getElementById('form').addEventListener('submit', function(e){ e.preventDefault(); doLogin(); });
 </script>
 </body>

@@ -86,7 +86,7 @@ function render(){
       '<button class="jc-tab'+(tab==='in_progress'?' on':'')+'" data-t="in_progress">In progress</button>'+
       '<button class="jc-tab'+(tab==='closed'?' on':'')+'" data-t="closed">Closed</button></div>'+
     '<table><thead><tr><th>Job</th><th class="right">Quoted</th><th class="right">Cost so far</th><th class="right">Margin</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'+
-    '<div class="card-foot">Margin is computed, never stored — quoted minus logged labor, material and subs. Change the costs and this moves.</div>';
+    '<div class="card-foot">Margin is computed, never stored - quoted minus logged labor, material and subs. Change the costs and this moves.</div>';
   document.querySelectorAll('.jc-tab').forEach(function(b){b.onclick=function(){tab=b.getAttribute('data-t');render();};});
   document.querySelectorAll('.jc-cta').forEach(function(b){b.onclick=function(){
     if(b.getAttribute('data-cta')==='Draft change order'){changeOrder(+b.getAttribute('data-id'),b);}

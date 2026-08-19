@@ -25,13 +25,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
     </div>
     <h1 id="title">This screen is on the way</h1>
-    <p id="body">It's part of the Signal revamp and ships in an upcoming phase. The design is locked in — the screen and its live data are being wired up.</p>
+    <p id="body">It's part of the Signal revamp and ships in an upcoming phase. The design is locked in - the screen and its live data are being wired up.</p>
     <span class="phase" id="phase">Coming soon</span>
   </div>
 <script>
   var s = new URLSearchParams(location.search).get('s');
   if (s) {
-    document.getElementById('title').textContent = s + ' — coming soon';
+    document.getElementById('title').textContent = s + ' - coming soon';
     var phase = ({ 'Money':'Phase 6 (Intacct)', 'Accounting Handoffs':'Phase 7', 'Close':'Phase 6',
       'Custom Reports':'Phase 8', 'Offices':'Company', 'Settings':'Company', 'My Tasks':'Work',
       'Service':'Operations', 'Money Reports':'Reports', 'Operations Reports':'Reports', 'People Reports':'Reports' })[s];

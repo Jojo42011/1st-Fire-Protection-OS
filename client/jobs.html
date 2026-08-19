@@ -23,7 +23,7 @@ function nav(id){ if(id==null)return; try{window.parent.postMessage({type:'app-n
 function statusPill(s){
   var t=(s||'').toLowerCase();
   var tone= t.indexOf('complete')>=0?'green' : (t.indexOf('cancel')>=0||t.indexOf('void')>=0)?'gray' : t.indexOf('progress')>=0?'indigo' : 'amber';
-  return s?'<span class="pill '+tone+'">'+esc(s)+'</span>':'<span style="color:var(--faint)">—</span>';
+  return s?'<span class="pill '+tone+'">'+esc(s)+'</span>':'<span style="color:var(--faint)">-</span>';
 }
 
 ListView({

@@ -1,5 +1,5 @@
 /*
- * ListView — the shared list component (v2 P0). One vanilla module that renders a searchable,
+ * ListView - the shared list component (v2 P0). One vanilla module that renders a searchable,
  * filterable, sortable, paginated list against any endpoint built on the server-side list
  * contract ({ <dataKey>:[], counts, total, page, pageSize, pages, live }). No build step.
  *
@@ -108,7 +108,7 @@
       emptyEl.innerHTML = data.rows.length ? '' : '<div class="lv-empty">No ' + esc(opts.noun || 'results') + ' match “' + esc(state.q) + '”.</div>';
 
       var total = data.total, from = total ? ((data.page - 1) * data.pageSize + 1) : 0, to = Math.min(data.page * data.pageSize, total);
-      countEl.textContent = total ? ('Showing ' + num(from) + '–' + num(to) + ' of ' + num(total) + (opts.noun ? ' ' + opts.noun : '')) : '';
+      countEl.textContent = total ? ('Showing ' + num(from) + '-' + num(to) + ' of ' + num(total) + (opts.noun ? ' ' + opts.noun : '')) : '';
       pageinfoEl.textContent = 'Page ' + data.page + ' of ' + data.pages;
       prevBtn.disabled = data.page <= 1;
       nextBtn.disabled = data.page >= data.pages;

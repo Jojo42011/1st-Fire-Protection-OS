@@ -1,5 +1,5 @@
 /* ============================================================
-   SIGNAL — 1st Fire Protection OS design system
+   SIGNAL - 1st Fire Protection OS design system
    Replaces command.css. Light-first, calm, SaaS-shaped.
    Colour is meaning: green = phones, pink-red = money,
    amber = reputation, indigo = system / AI / spend.
@@ -10,15 +10,15 @@
    ============================================================ */
 
 :root{
-  /* surfaces — premium neutral spine (handoff TOKENS.md) */
+  /* surfaces - premium neutral spine (handoff TOKENS.md) */
   --bg:#F4F5F7; --panel:#FFFFFF; --panel-alt:#FAFBFD; --panel-subtle:#FBFBFC; --fill:#F1F3F6;
   --border:#E4E7EC; --border-card:#E7EAEF; --border-strong:#D0D5DD; --border-hover:#B7BEC9;
   --divider:#F1F3F6; --divider-soft:#F4F5F7;
 
-  /* ink — AA-safe text tones; #98A0B0 is icon-stroke only, never text */
+  /* ink - AA-safe text tones; #98A0B0 is icon-stroke only, never text */
   --ink:#0E1420; --ink-hover:#22293A; --ink-2:#414B60; --ink-3:#5E6779; --muted:#5E6779; --faint:#98A0B0;
 
-  /* meaning — text-safe tones + non-text accents */
+  /* meaning - text-safe tones + non-text accents */
   --green:#0E6B4D; --green-accent:#12805C; --green-bg:#E7F4EE; --green-soft:#8ECFAC;
   --money:#B3261E; --money-bg:#FBECEA;
   --amber:#B4690E; --amber-ink:#8A5106; --amber-bg:#FDF3E4;
@@ -41,7 +41,7 @@
   --r-card:14px; --r-modal:16px; --r-inset:10px; --r-tile:10px; --r-btn:9px; --r-chip:8px; --r-pill:999px;
   --sidebar:252px; --rail:372px;
 
-  /* elevation — premium card + popover + drawer + modal + toast */
+  /* elevation - premium card + popover + drawer + modal + toast */
   --sh-rest:0 1px 2px rgba(14,20,32,.03), 0 14px 30px -24px rgba(14,20,32,.45);
   --sh-lift:0 1px 2px rgba(14,20,32,.04), 0 22px 40px -26px rgba(14,20,32,.55);
   --sh-float:0 22px 48px -18px rgba(14,20,32,.4);

@@ -53,7 +53,7 @@
   <div class="card card-clip" style="margin-top:14px">
     <div class="card-head">
       <h2>Held for your review</h2>
-      <span id="held-count" style="font-weight:500;font-size:12px;color:var(--muted)">—</span>
+      <span id="held-count" style="font-weight:500;font-size:12px;color:var(--muted)">-</span>
       <span style="flex:1"></span>
       <button class="btn" onclick="runSweep(this)">Refresh from ServiceTrade</button>
       <button class="btn-primary" id="sendall" onclick="sendAll(this)">Send all held</button>
@@ -164,7 +164,7 @@ function sendAll(btn){
   btn.disabled=true;btn.textContent='Sending…';
   fetch('/api/reviews/send-batch',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
     btn.disabled=false;btn.textContent='Send all held';
-    if(res.capped){alert('Sent '+res.sent+' today. Daily cap reached — the rest go out tomorrow to protect deliverability.');}
+    if(res.capped){alert('Sent '+res.sent+' today. Daily cap reached - the rest go out tomorrow to protect deliverability.');}
     load();
   });
 }

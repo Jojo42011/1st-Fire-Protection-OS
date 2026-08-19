@@ -1,5 +1,5 @@
 /*
- * 1st FP OS — shared client runtime. One place for: the OS context (identity, office, period),
+ * 1st FP OS: shared client runtime. One place for: the OS context (identity, office, period),
  * the canonical metric/trend/drill-down data contracts, formatting, reusable render helpers, the
  * freshness strip, and the drill-down drawer. Pages include /os.css + /os.js and compose from these
  * instead of reinventing office state, KPI cards, tables, or drill behavior. No framework.
@@ -73,9 +73,9 @@
 
   // KPI card from the canonical metric-card contract
   OS.kpi = function(card, opts){ opts=opts||{};
-    if(!card) return '<div class="os-kpi"><div class="lab">—</div><div class="val">—</div></div>';
+    if(!card) return '<div class="os-kpi"><div class="lab">n/a</div><div class="val">n/a</div></div>';
     var cmp='';
-    if(card.comparison){ var c=card.comparison; var arrow=c.changeAbs>0?'▲':c.changeAbs<0?'▼':'—';
+    if(card.comparison){ var c=card.comparison; var arrow=c.changeAbs>0?'▲':c.changeAbs<0?'▼':'·';
       var chgTxt=(c.changePct!=null?(Math.abs(c.changePct)+'%'):OS.fmt(Math.abs(c.changeAbs),card.format));
       cmp='<span class="chg '+c.tone+'">'+arrow+' '+chgTxt+' <span class="src">vs '+OS.esc(c.periodLabel)+'</span></span>'; }
     var src = card.companyWide?'<span class="src cw">Company-wide</span>':'<span class="src">'+OS.esc(card.source||'')+'</span>';
@@ -150,7 +150,7 @@
   OS.empty = function(msg, icon){ return '<div class="os-empty">'+(icon?'<div class="ico">'+icon+'</div>':'')+OS.esc(msg||'Nothing here.')+'</div>'; };
 
   /* ---------- premium standard-anatomy components (Phase 2+) ----------
-     One metric strip, one decision queue, one band card — built once, driven by data,
+     One metric strip, one decision queue, one band card, built once, driven by data,
      reused across every standard screen. Honesty rules live in the data the screen passes:
      projected values arrive with projected:true and render amber + dotted; real values are solid. */
 
@@ -167,7 +167,7 @@
       var tag = c.tag ? '<span class="ms-tag '+(c.tag==='real'?'real':'est')+'">'+OS.esc(c.tag)+'</span>' : '';
       var val = c.display!=null ? c.display : OS.fmt(c.value, c.format);
       var sub='';
-      if(c.comparison){ var cm=c.comparison; var ar=cm.changeAbs>0?'▲':cm.changeAbs<0?'▼':'—';
+      if(c.comparison){ var cm=c.comparison; var ar=cm.changeAbs>0?'▲':cm.changeAbs<0?'▼':'·';
         var t=cm.changePct!=null?Math.abs(cm.changePct)+'%':OS.fmt(Math.abs(cm.changeAbs),c.format);
         sub='<span class="ms-chg '+cm.tone+'">'+ar+' '+t+' <span class="mvs">vs '+OS.esc(cm.periodLabel||'prior')+'</span></span>'; }
       else if(c.sub){ sub='<span class="ms-sub'+(c.companyWide?' cw':'')+'">'+OS.esc(c.sub)+'</span>'; }
@@ -282,7 +282,7 @@
       if(!d||!d.ok){ if(body) body.innerHTML='<div style="padding:24px">'+OS.errorBox('You may not have access to these records, or none exist.')+'</div>'; if(count) count.textContent=''; return; }
       s.total=d.total;
       if(body) body.innerHTML=OS.table(d.columns, d.rows, {empty:'No records behind this number.'});
-      if(count) count.textContent=d.total+' record'+(d.total===1?'':'s')+(d.total>d.limit?(' · showing '+(d.offset+1)+'–'+Math.min(d.offset+d.limit,d.total)):'');
+      if(count) count.textContent=d.total+' record'+(d.total===1?'':'s')+(d.total>d.limit?(' · showing '+(d.offset+1)+' to '+Math.min(d.offset+d.limit,d.total)):'');
       var prev=document.getElementById('os-drill-prev'), next=document.getElementById('os-drill-next');
       if(prev) prev.disabled = s.offset<=0;
       if(next) next.disabled = s.offset+s.limit>=d.total;

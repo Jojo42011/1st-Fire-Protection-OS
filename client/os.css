@@ -1,5 +1,5 @@
 /*
- * 1st FP OS — shared UX component kit.
+ * 1st FP OS - shared UX component kit.
  * One set of building blocks every page reuses: page header, context filters, KPI + attention
  * cards, status pills, owner tags, tables, empty states, skeleton loaders, and the drill-down
  * drawer. Built on the existing brand.css / signal.css tokens so it stays theme-consistent.

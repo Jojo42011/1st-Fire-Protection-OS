@@ -109,7 +109,7 @@ function load(){
   ]).then(function(res){data=res[0];settings=res[1];summary=res[2];intacct=res[3];render();});
 }
 
-/* Sage Intacct connector card — same safety model as ServiceTrade, its own toggle. */
+/* Sage Intacct connector card - same safety model as ServiceTrade, its own toggle. */
 function intacctCard(i){
   i=i||{}; var connected=!!i.connected, write=i.mode==='read_write';
   var tileCls=!connected?'off':write?'warn':'';
@@ -117,7 +117,7 @@ function intacctCard(i){
   var connPill=connected?'<span class="pill green">Connected</span>':'<span class="pill gray">Not connected</span>';
   var modePill=write?'<span class="pill money">Write enabled</span>':'<span class="pill amber">Read-only</span>';
   var para=connected
-    ? 'The accounting system of record for A/R. Read-only until you flip it — this is what turns on the Invoice Collector against real receivables.'
+    ? 'The accounting system of record for A/R. Read-only until you flip it - this is what turns on the Invoice Collector against real receivables.'
     : 'Add Sage Intacct credentials (as secrets) to connect. This is the accounting source that will turn on the Invoice Collector.';
   return '<div class="card sy-safety" style="margin-top:16px">'
     +'<span class="sy-tile '+tileCls+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>'
@@ -144,7 +144,7 @@ function testIa(){
   }).catch(function(){btn.disabled=false;btn.textContent=was;if(out)out.textContent='Test failed to run.';});
 }
 
-/* Connection + the read-only/write safety toggle — the real, live control. */
+/* Connection + the read-only/write safety toggle - the real, live control. */
 function safetyCard(s){
   s=s||{};
   var connected=!!s.connected, write=s.mode==='read_write';
@@ -157,9 +157,9 @@ function safetyCard(s){
     ? '<span class="pill money">Write enabled</span>'
     : '<span class="pill amber">Read-only</span>';
   var para=write
-    ? 'Write mode is ON — approved actions can change real ServiceTrade data. Every write still passes the approval rules first.'
+    ? 'Write mode is ON - approved actions can change real ServiceTrade data. Every write still passes the approval rules first.'
     : 'Read-only: the app pulls everything it needs but physically cannot change anything in ServiceTrade. Safe for testing.';
-  if(!connected) para='Add ServiceTrade credentials (as secrets) to connect. Until then this stays a read-only shell — no calls go out.';
+  if(!connected) para='Add ServiceTrade credentials (as secrets) to connect. Until then this stays a read-only shell - no calls go out.';
   return '<div class="card sy-safety">'
     +'<span class="sy-tile '+tileCls+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">'
     +'<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"></path><path d="M9 12l2 2 4-4"></path></svg></span>'
@@ -249,7 +249,7 @@ function conflictsCard(d){
   var list=d.conflicts||[];
   var body=list.length
     ? list.map(conflictBlock).join('')
-    : '<div class="sy-empty" id="conf-empty">No conflicts — everything is in sync.</div>';
+    : '<div class="sy-empty" id="conf-empty">No conflicts - everything is in sync.</div>';
   return '<div class="card card-clip" id="conf-card">'
     +'<div class="card-head"><h2>Conflicts to settle</h2>'
     +'<span class="sy-badge" id="conf-badge">'+list.length+'</span></div>'
@@ -269,7 +269,7 @@ function logCard(d){
   return '<div class="card card-clip">'
     +'<div class="card-head"><h2>Sync log</h2><span class="sy-loghead">live</span></div>'
     +rows
-    +'<div class="card-foot">Nothing writes to ServiceTrade without passing the approval rules — sends, prices and cancellations still wait for a human.</div>'
+    +'<div class="card-foot">Nothing writes to ServiceTrade without passing the approval rules - sends, prices and cancellations still wait for a human.</div>'
   +'</div>';
 }
 
@@ -341,7 +341,7 @@ function resolve(id,choice,el){
     badge.textContent=n;
     if(n===0){
       document.getElementById('conf-list').innerHTML=
-        '<div class="sy-empty">No conflicts — everything is in sync.</div>';
+        '<div class="sy-empty">No conflicts - everything is in sync.</div>';
     }
   }).catch(function(){el.querySelectorAll('button').forEach(function(b){b.disabled=false;});});
 }
@@ -371,11 +371,11 @@ function testConn(){
 function setPullBtns(disabled){document.querySelectorAll('[data-pull]').forEach(function(b){b.disabled=disabled;});}
 function doneMsg(entity,c){
   if(!c)return 'Pull finished.';
-  if(entity==='accounts')return 'Pulled '+c.pulled+' customers — open Accounts to see them.';
+  if(entity==='accounts')return 'Pulled '+c.pulled+' customers - open Accounts to see them.';
   if(entity==='sites')return 'Pulled '+c.pulled+' sites ('+c.linked+' linked to accounts).';
   if(entity==='invoices')return 'Pulled '+c.pulled+' invoices → '+c.accountsUpdated+' account balances updated.';
-  if(entity==='jobs')return 'Pulled '+c.pulled+' jobs — open Jobs to see them.';
-  if(entity==='quotes')return 'Pulled '+c.pulled+' quotes — open Quotes to see them.';
+  if(entity==='jobs')return 'Pulled '+c.pulled+' jobs - open Jobs to see them.';
+  if(entity==='quotes')return 'Pulled '+c.pulled+' quotes - open Quotes to see them.';
   return 'Pull finished.';
 }
 function pull(entity,btn){

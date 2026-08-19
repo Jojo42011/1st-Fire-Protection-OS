@@ -1,24 +1,24 @@
 /* ============================================================
-   1st Fire Protection — font loader
+   1st Fire Protection - font loader
    Self-hosted @font-face only. The design system (colours, type
    roles, geometry) now lives in /signal.css. This file exists so
    every page can load its typefaces from one place.
 
    Load order on every page:
-     <link rel="stylesheet" href="/brand/brand.css">   (font faces — this file)
+     <link rel="stylesheet" href="/brand/brand.css">   (font faces - this file)
      <link rel="stylesheet" href="/signal.css">         (the Signal design system)
 
    Fonts resolve relative to this file (brand/fonts/*.woff2).
    ============================================================ */
 
-/* ---- Figtree — the Signal UI face (everything) ---- */
+/* ---- Figtree - the Signal UI face (everything) ---- */
 @font-face{font-family:'Figtree';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/Figtree-Regular.woff2') format('woff2');}
 @font-face{font-family:'Figtree';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/Figtree-Medium.woff2') format('woff2');}
 @font-face{font-family:'Figtree';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Figtree-SemiBold.woff2') format('woff2');}
 @font-face{font-family:'Figtree';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/Figtree-Bold.woff2') format('woff2');}
 @font-face{font-family:'Figtree';font-style:normal;font-weight:800;font-display:swap;src:url('fonts/Figtree-ExtraBold.woff2') format('woff2');}
 
-/* ---- Geist Mono — numeric / technical micro-text (phone numbers, times, IDs) ---- */
+/* ---- Geist Mono - numeric / technical micro-text (phone numbers, times, IDs) ---- */
 @font-face{font-family:'Geist Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
 @font-face{font-family:'Geist Mono';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/GeistMono-Medium.woff2') format('woff2');}
 
