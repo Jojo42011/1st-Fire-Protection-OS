@@ -1,7 +1,7 @@
 import { getDb } from './index';
 
 /**
- * ONE schema source of truth. Idempotent — safe to run on every boot.
+ * ONE schema source of truth. Idempotent - safe to run on every boot.
  * Never assume a column exists without a migration here.
  */
 export function initDb(): void {
@@ -271,7 +271,7 @@ export function initDb(): void {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
-    /* The interview ladder — persisted so the audit RESUMES and DEEPENS across
+    /* The interview ladder - persisted so the audit RESUMES and DEEPENS across
        sessions instead of living in browser memory. Each answer stores here and
        queues a sharper follow-up one depth level down. */
     CREATE TABLE IF NOT EXISTS audit_questions (
@@ -287,7 +287,7 @@ export function initDb(): void {
       answered_at    TEXT
     );
 
-    /* Daily "getting smarter" log — one row per day, so the OS can show that the
+    /* Daily "getting smarter" log - one row per day, so the OS can show that the
        longer it runs, the more of the company lives inside it. */
     CREATE TABLE IF NOT EXISTS audit_days (
       day           TEXT PRIMARY KEY,           -- YYYY-MM-DD
@@ -295,7 +295,7 @@ export function initDb(): void {
       coverage_pct  INTEGER DEFAULT 0           -- overall coverage snapshot at day end
     );
 
-    /* THE HARNESS — the execution layer over the Operator's build queue.
+    /* THE HARNESS - the execution layer over the Operator's build queue.
        When a human approves a gap (audit_findings.queue_status='approved'), the
        harness picks it up, drafts a build order (the plan to fix it), and stages it
        for a final human ship. This is the OS proposing AND building its own next
@@ -314,7 +314,7 @@ export function initDb(): void {
       shipped_at    TEXT
     );
 
-    /* THE ROSTER — every AI employee this OS runs, founding + harness-built.
+    /* THE ROSTER - every AI employee this OS runs, founding + harness-built.
        An agent here is data the generic runtime executes: a persona (system_prompt),
        the pillar it serves, its capability, and a growing knowledge/skill list. The
        Operator proposes the need; the Harness drafts and (on a human ship) inserts a
@@ -335,7 +335,7 @@ export function initDb(): void {
       created_at    TEXT DEFAULT (datetime('now'))
     );
 
-    /* THE STRENGTHEN LOG — every skill the harness has added to an agent (new or
+    /* THE STRENGTHEN LOG - every skill the harness has added to an agent (new or
        existing). Makes "the OS is getting smarter" literal and auditable. */
     CREATE TABLE IF NOT EXISTS agent_skills (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -509,7 +509,7 @@ export function initDb(): void {
   `);
 
   /* ---------- migrations: extra call-analytics columns (Vapi) ----------
-   * Added after the base table so existing brains upgrade in place. Idempotent —
+   * Added after the base table so existing brains upgrade in place. Idempotent -
    * addColumn checks pragma table_info first (SQLite has no ADD COLUMN IF NOT EXISTS). */
   addColumn('calls', 'vapi_call_id', 'TEXT');           // provider call id (idempotency key)
   addColumn('calls', 'assistant_id', 'TEXT');           // which Vapi assistant answered
@@ -586,14 +586,14 @@ export function initDb(): void {
 
   /* One-time cleanup of dash punctuation in the persisted consult questions. The deck was
    * seeded before the no-dash rule was applied to the department copy, so already-seeded
-   * question rows still carry an em dash (' — ') or an en dash ('–'). The chips are matched
+   * question rows still carry an em dash (' - ') or an en dash ('-'). The chips are matched
    * to a question by its exact text at render time, so a stale dash both shows on screen and
    * breaks the chip lookup against the corrected config. This rewrites the persisted text to
    * match. A fresh database seeds the clean text directly, so this is a harmless no-op there.
    * Idempotent, guarded by a state flag. */
   if (getState('mig_dash_strip_v1') !== '1') {
-    db.prepare("UPDATE audit_questions SET question = REPLACE(question, ' — ', ', ')").run();
-    db.prepare("UPDATE audit_questions SET question = REPLACE(question, '–', '-')").run();
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, ' - ', ', ')").run();
+    db.prepare("UPDATE audit_questions SET question = REPLACE(question, '-', '-')").run();
     setState('mig_dash_strip_v1', '1');
   }
 
@@ -805,7 +805,7 @@ export function initDb(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       crew_id INTEGER, customer TEXT, site TEXT, skill TEXT,
       dow INTEGER,                    -- 0=Mon .. 4=Fri (rendered against the current week)
-      window TEXT,                    -- '8–12'
+      window TEXT,                    -- '8 to 12'
       status TEXT DEFAULT 'confirmed' -- 'proposed' | 'confirmed' | 'done' | 'no_show'
     );
     CREATE TABLE IF NOT EXISTS waitlist (
@@ -817,7 +817,7 @@ export function initDb(): void {
 
   /* ---------- Job Costing (five-agents delta, Phase 6) ----------
    * Tracks logged cost (labour hours × rate, material, subs) against the quoted price per job.
-   * The MARGIN IS NEVER STORED — it is computed on read as quoted − cost, so changing a cost
+   * The MARGIN IS NEVER STORED - it is computed on read as quoted − cost, so changing a cost
    * moves the number and nothing goes stale. A bleeding job's out-of-scope overrun becomes a
    * drafted change order (gated). */
   db.exec(`
@@ -838,7 +838,7 @@ export function initDb(): void {
 
   /* ---------- ServiceTrade webhook inbox ----------
    * Real-time events ServiceTrade PUSHES to us (job completed, invoice created, quote updated…)
-   * over its native webhook API — no Zapier. This is a read-side landing table: events are
+   * over its native webhook API - no Zapier. This is a read-side landing table: events are
    * recorded here as they arrive; routing them to agents (which then DRAFT, gated) comes later.
    * Receiving never writes back to ServiceTrade, so it's safe under read-only mode. */
   db.exec(`
@@ -875,7 +875,7 @@ export function initDb(): void {
   addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "Northstar Austin LLC"), for per-location scoping
   db.exec(`
     /* ---------- service-plan mirror: ServiceTrade recurring services (the real agreement book) ----
-     * One row per ServiceTrade serviceRecurrence — a location serviced on a cadence. Powers the
+     * One row per ServiceTrade serviceRecurrence - a location serviced on a cadence. Powers the
      * live Service plans tab. Rebuilt each sync; read-only. */
     CREATE TABLE IF NOT EXISTS service_recurrences (
       st_id        TEXT PRIMARY KEY,
@@ -1140,7 +1140,7 @@ export function initDb(): void {
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical
-  // office keys) OR company-wide (all_offices=1). Office scope is separate from role — a user can
+  // office keys) OR company-wide (all_offices=1). Office scope is separate from role - a user can
   // have company-wide IT access without company-wide financial access. Enforced server-side.
   addColumn('app_users', 'offices', 'TEXT');            // CSV of canonical office keys; null/'' = none
   addColumn('app_users', 'all_offices', 'INTEGER DEFAULT 0'); // 1 = company-wide scope

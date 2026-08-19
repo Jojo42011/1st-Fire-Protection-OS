@@ -13,7 +13,7 @@ import { COMPANY } from '../config/constants';
 import { SAMPLE_TAKEOFF, type TakeoffItem } from '../services/estimatorAgent';
 
 /**
- * Idempotent seed — guarded by a system_state flag so every dashboard looks alive on first
+ * Idempotent seed - guarded by a system_state flag so every dashboard looks alive on first
  * boot (standalone-until-connected). Safe to call on every boot; only runs once.
  */
 export function seed(): void {
@@ -49,15 +49,15 @@ export function seed(): void {
   };
   const isoAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
 
-  /* ---------- invoices (16 across aging buckets, ~$3.5M outstanding) — real Texas customers + service lines ---------- */
+  /* ---------- invoices (16 across aging buckets, ~$3.5M outstanding) - real Texas customers + service lines ---------- */
   const invoices: [string, string, string, number, number, string][] = [
     // customer, email, phone, amount, dueOffsetDays(negative=overdue), status
     ['Riverton Heights ISD', 'ap@ahisd.example', '+1 512 555 0210', 48200.0, -8, 'sent'],            // district-wide sprinkler inspection & tag
-    ['Riverwalk Hospitality Group', 'billing@rwhg.example', '+1 512 555 0231', 62500.0, -3, 'reminded'], // hood suppression — 9 properties
+    ['Riverwalk Hospitality Group', 'billing@rwhg.example', '+1 512 555 0231', 62500.0, -3, 'reminded'], // hood suppression - 9 properties
     ['College Station Auto Group', 'ap@cstxautogroup.example', '+1 979 555 0338', 19500.0, -2, 'sent'],  // emergency lighting & exit signage
     ['Pecan Grove HOA', 'board@pecangrovehoa.example', '+1 281 555 0305', 6400.0, -5, 'sent'],     // clubhouse & amenity extinguishers
     ['Frost Data Center (Austin)', 'ap@frostdc.example', '+1 512 555 0412', 128000.0, -12, 'sent'], // tenant fit-out pre-action sprinkler
-    ['Millbrook Retail Plaza', 'billing@millbrookretail.example', '+1 254 555 0281', 54000.0, -22, 'sent'],  // quarterly inspection — sprinkler & alarm
+    ['Millbrook Retail Plaza', 'billing@millbrookretail.example', '+1 254 555 0281', 54000.0, -22, 'sent'],  // quarterly inspection - sprinkler & alarm
     ['Buda Logistics Park', 'ap@budalogistics.example', '+1 512 555 0244', 87300.0, -28, 'reminded'], // fire alarm panel upgrade
     ['Museum District Tower (Houston)', 'finance@mdtower.example', '+1 713 555 0455', 210000.0, -35, 'reminded'], // high-rise standpipe & pump ITM
     ['Lakeside Distribution Center', 'ap@lakesidedist.example', '+1 956 555 0268', 36000.0, -42, 'sent'], // dry system service
@@ -88,7 +88,7 @@ export function seed(): void {
     ['Riverwalk Hospitality Group', 'Kitchen hood suppression semi-annual service'],
     ['Buda Logistics Park', 'Fire alarm panel service call'],
     ['Lakeside Self Storage', 'Dry system trip test'],
-    ['Millbrook Retail Plaza', 'Quarterly inspection — sprinkler & alarm'],
+    ['Millbrook Retail Plaza', 'Quarterly inspection - sprinkler & alarm'],
     ['Pecan Grove HOA', 'Clubhouse extinguisher recharge'],
     ['Fairview Bakery Co.', 'Kitchen hood suppression check'],
     ['College Station Auto', 'Emergency lighting & exit sign test'],
@@ -98,7 +98,7 @@ export function seed(): void {
   );
   jobs.forEach((j, i) => insJob.run(j[0], j[1], daysAgo(i + 2)));
 
-  /* ---------- reviews (mostly 4-5★, a couple 3★) — Google + Facebook ---------- */
+  /* ---------- reviews (mostly 4-5★, a couple 3★) - Google + Facebook ---------- */
   const reviews: [string, string, number, string, number][] = [
     ['google', 'Marcus T.', 5, 'Showed up on time, explained everything, and got our sprinkler system tagged same day. White-glove all the way.', 6],
     ['google', 'Priya S.', 5, 'Drove down from Riverton to our Lakeside site without blinking. Single-source for all our life safety now.', 11],
@@ -117,7 +117,7 @@ export function seed(): void {
     insRev.run(source, author, stars, text, daysAgo(dago));
   }
 
-  /* ---------- calls + leads (receptionist demo) — real SA routing outcomes ---------- */
+  /* ---------- calls + leads (receptionist demo) - real SA routing outcomes ---------- */
   const calls: [string, number, string, string, string, number][] = [
     // from, duration, intent, outcome, transcript, minsAgo
     ['+1 512 555 0142', 184, 'Inspection request', 'transferred', 'Caller needs an annual sprinkler inspection for a warehouse near Riverton. Routed to Inspections group (Kayla Brooks / Mia Vance).', 22],
@@ -125,8 +125,8 @@ export function seed(): void {
     ['+1 512 555 0111', 240, 'New install / bid', 'transferred', 'Wants a bid for a new sprinkler system in a 40k sqft facility. Routed to Sales (Colton Chase).', 130],
     ['+1 512 555 0176', 74, 'Billing', 'transferred', 'Caller wants to pay an invoice. Routed to Accounting group.', 155],
     ['+1 512 555 0188', 152, 'Emergency', 'transferred', 'After-hours: alarm going off at a medical plaza. Flagged emergency → After-hours on-call queue.', 200],
-    ['+1 512 555 0155', 63, 'Complaint', 'transferred', 'Upset about a missed appointment window. Empathized, did not argue — routed straight to David Reyes.', 240],
-    ['+1 512 555 0133', 88, 'Spanish-speaking', 'message', 'Spanish caller needing extinguisher recharge. Helped in Spanish, took name/number/reason — Denise to route.', 300],
+    ['+1 512 555 0155', 63, 'Complaint', 'transferred', 'Upset about a missed appointment window. Empathized, did not argue - routed straight to David Reyes.', 240],
+    ['+1 512 555 0133', 88, 'Spanish-speaking', 'message', 'Spanish caller needing extinguisher recharge. Helped in Spanish, took name/number/reason - Denise to route.', 300],
   ];
   const insCall = db.prepare(
     `INSERT INTO calls (from_number, started_at, duration, transcript, intent, outcome) VALUES (?, ?, ?, ?, ?, ?)`
@@ -137,9 +137,9 @@ export function seed(): void {
 
   const leads: [string, string, string, string, string][] = [
     ['Northside Warehouse Co.', '+1 512 555 0142', '1200 Industrial Blvd, Riverton, TX', 'Annual sprinkler inspection', 'booked'],
-    ['Maria Gonzalez', '+1 512 555 0199', '480 Market St, Riverton, TX', 'Leaking sprinkler head — service', 'new'],
-    ['Hill Country Facility Group', '+1 512 555 0111', '900 Bandera Rd, Riverton, TX', 'New sprinkler system — bid', 'contacted'],
-    ['Southtown Medical Plaza', '+1 512 555 0188', '77 Wellness Way, Riverton, TX', 'After-hours alarm — emergency', 'contacted'],
+    ['Maria Gonzalez', '+1 512 555 0199', '480 Market St, Riverton, TX', 'Leaking sprinkler head - service', 'new'],
+    ['Hill Country Facility Group', '+1 512 555 0111', '900 Bandera Rd, Riverton, TX', 'New sprinkler system - bid', 'contacted'],
+    ['Southtown Medical Plaza', '+1 512 555 0188', '77 Wellness Way, Riverton, TX', 'After-hours alarm - emergency', 'contacted'],
     ['José Ramírez', '+1 512 555 0133', 'Fairview, TX', 'Extinguisher recharge (Spanish)', 'new'],
   ];
   const insLead = db.prepare(
@@ -151,7 +151,7 @@ export function seed(): void {
 
   /* ---------- a few seed brain rules (the real SA routing logic) ---------- */
   const insRule = db.prepare(`INSERT INTO rules (rule, scope) VALUES (?, ?)`);
-  insRule.run('Never quote a price on a call — capture details and route to Sales/Ops.', 'receptionist');
+  insRule.run('Never quote a price on a call - capture details and route to Sales/Ops.', 'receptionist');
   insRule.run('Marcus Hale (President) → send to voicemail every time. Do not transfer.', 'receptionist');
   insRule.run('Any complaint → do not handle it; route straight to David Reyes, empathetic, no arguing.', 'receptionist');
   insRule.run('Spanish-speaking caller → help in Spanish, do NOT transfer; capture name/number/reason for callback.', 'receptionist');
@@ -163,7 +163,7 @@ export function seed(): void {
 }
 
 /**
- * Audit foundation — the structural skeleton (pillars + the 9 real locations).
+ * Audit foundation - the structural skeleton (pillars + the 9 real locations).
  * Runs EVERY boot, idempotent via UNIQUE constraints, so upgraded deployments get it.
  */
 function ensureAuditFoundation(): void {
@@ -183,7 +183,7 @@ function ensureAuditFoundation(): void {
       db.prepare(`UPDATE ${table} SET pillar_key = ? WHERE pillar_key = ?`).run(newKey, oldKey);
     }
   }
-  // Evan Porter is Vendor Relations — was filed under sales before vendors existed.
+  // Evan Porter is Vendor Relations - was filed under sales before vendors existed.
   db.prepare(`UPDATE audit_people SET pillar_key = 'vendors' WHERE name = 'Evan Porter'`).run();
   db.prepare(`DELETE FROM audit_pillars WHERE key IN ('dispatch','compliance','people')`).run();
 
@@ -197,7 +197,7 @@ function ensureAuditFoundation(): void {
 }
 
 /**
- * Audit sample content — pre-loads what we already know about Northstar (real stack, real
+ * Audit sample content - pre-loads what we already know about Northstar (real stack, real
  * veterans, benchmark leaks) so The Operator walks into the room already understanding
  * the business. Own flag so existing deployments pick it up.
  */
@@ -210,7 +210,7 @@ function seedAudit(): void {
     // name, category, truth_for, gaps, pillar
     ['ServiceTrade', 'field-service', 'Jobs, inspections, deficiencies, invoices', 'Completions don\'t trigger reviews or collections automatically', 'inspections'],
     ['Microsoft 365 / Teams', 'comms', 'Email, call transfers, office coordination', 'Call outcomes live in chat threads, not in a system', 'ops'],
-    ['Vapi + Twilio (this OS)', 'voice', 'The Riverton line — AI receptionist', '', 'reception'],
+    ['Vapi + Twilio (this OS)', 'voice', 'The Riverton line - AI receptionist', '', 'reception'],
     ['Spreadsheets', 'spreadsheet', 'The real coordination layer between systems', 'Manually re-keyed from ServiceTrade; nine local versions of the truth', 'finance'],
   ];
   const insSys = db.prepare(
@@ -221,7 +221,7 @@ function seedAudit(): void {
   /* the veterans we already know by name (from the routing brain) */
   const people: [string, string, string, string, string, string][] = [
     // name, role, location, carries, risk, pillar
-    ['David Reyes', 'Operations Manager', 'Riverton', 'Every complaint and unclassifiable call routes through him — the escalation brain', 'high', 'ops'],
+    ['David Reyes', 'Operations Manager', 'Riverton', 'Every complaint and unclassifiable call routes through him - the escalation brain', 'high', 'ops'],
     ['Kayla Brooks', 'Inspections Scheduling', 'Riverton', 'Holds the inspection calendar and AHJ scheduling quirks', 'high', 'inspections'],
     ['Ryan Blake', 'Sprinkler Service Manager', 'Riverton', 'Sprinkler service triage and crew knowledge', 'medium', 'service'],
     ['Mitch Shafer', 'Fire Alarm Service Manager', 'Riverton', 'Alarm service triage; panel/system history by account', 'medium', 'service'],
@@ -246,14 +246,14 @@ function seedAudit(): void {
   const findings: [string, string, string, string, string, string, string][] = [
     // pillar, kind, title, detail, severity, cost_hint, capability
     ['inspections', 'leak', 'Deficiency findings are managed informally, not as a pipeline',
-      'Systematic shops convert 30–50% of deficiencies into paid repairs; informal handling leaves that revenue on the table.',
-      'high', '30–50% of repair revenue', 'deficiency_pipeline'],
+      'Systematic shops convert 30 to 50% of deficiencies into paid repairs; informal handling leaves that revenue on the table.',
+      'high', '30 to 50% of repair revenue', 'deficiency_pipeline'],
     ['sales', 'leak', 'Repair quotes take days to go out after an inspection',
-      'Quotes sent within 24h convert 2–3× better than week-old quotes. Turnaround is the #1 conversion lever.',
-      'high', '2–3× conversion delta', 'quote_drafter'],
+      'Quotes sent within 24h convert 2 to 3× better than week-old quotes. Turnaround is the #1 conversion lever.',
+      'high', '2 to 3× conversion delta', 'quote_drafter'],
     ['finance', 'leak', 'Receivables chased by hand, invoices go out late',
-      '~60% of contractor invoices are paid late; manual invoicing adds 15–30 days of DSO.',
-      'high', '15–30 days of DSO', 'invoice_chaser'],
+      '~60% of contractor invoices are paid late; manual invoicing adds 15 to 30 days of DSO.',
+      'high', '15 to 30 days of DSO', 'invoice_chaser'],
     ['ops', 'gap', 'Nine locations, no side-by-side view of the same numbers',
       'Each branch runs its own way; variance is invisible until it becomes a problem. One brain over all nine is the consolidation play.',
       'medium', '', 'location_command'],
@@ -263,7 +263,7 @@ function seedAudit(): void {
   );
   for (const f of findings) insFnd.run(...f);
 
-  // Riverton is where the audit starts — HQ is touched by definition.
+  // Riverton is where the audit starts - HQ is touched by definition.
   db.prepare(`UPDATE audit_locations SET mapped = 1 WHERE role = 'HQ'`).run();
 
   setState('seeded_audit', '1');
@@ -271,7 +271,7 @@ function seedAudit(): void {
 }
 
 /**
- * Growth intelligence — context fed in from Booker Growth's Texas fire-protection market
+ * Growth intelligence - context fed in from Booker Growth's Texas fire-protection market
  * research so The Operator walks in already seeing the GROWTH gaps, not just operational
  * leaks. Illustrative/benchmark findings (no invented accounts); the real targets come
  * from the public feeds (SFMO license DB, permits, bid boards) when connected. Own flag so
@@ -281,14 +281,14 @@ function seedGrowth(): void {
   if (getState('seeded_growth') === '1') return;
   const db = getDb();
 
-  // the public feeds that power expansion — a "system of record" the OS should mine
+  // the public feeds that power expansion - a "system of record" the OS should mine
   db.prepare(
     `INSERT INTO audit_systems (name, category, truth_for, gaps, pillar_key) VALUES (?, ?, ?, ?, ?)`
   ).run(
     'SFMO License DB + Permit Portals + Bid Boards',
     'public-data',
     'Texas competitor map, new-construction signal, and competitively-bid contracts',
-    'All public and free, none of it mined today — competitor/white-space map, acquisition targets, permit-to-ITM signal, and ISD/municipal RFPs are unused',
+    'All public and free, none of it mined today - competitor/white-space map, acquisition targets, permit-to-ITM signal, and ISD/municipal RFPs are unused',
     'growth'
   );
 
@@ -298,10 +298,10 @@ function seedGrowth(): void {
       'Every new commercial building is a code-mandated future inspection account. Catching the permit and timing outreach to the acceptance test converts installs into decades of recurring ITM; today it is relationship-driven, not systematic.',
       'high', 'future recurring ITM', 'permit_hunter'],
     ['growth', 'leak', 'Installs and one-off repairs are not converted into recurring agreements',
-      'Recurring ITM mix is the master value driver — operators at 40%+ recurring trade 2–3 EBITDA turns higher. Every completed install/one-off without an agreement is recurring revenue left on the table.',
-      'high', '2–3 EBITDA turns', 'recurring_capture'],
+      'Recurring ITM mix is the master value driver - operators at 40%+ recurring trade 2 to 3 EBITDA turns higher. Every completed install/one-off without an agreement is recurring revenue left on the table.',
+      'high', '2 to 3 EBITDA turns', 'recurring_capture'],
     ['growth', 'gap', 'Competitor and white-space map lives in people\'s heads, not on a board',
-      'The Texas SFMO publishes every licensed fire contractor. Mapped by metro it shows where coverage is thin (expansion white space) and which small shops are acquisition targets — density-first from Riverton outward.',
+      'The Texas SFMO publishes every licensed fire contractor. Mapped by metro it shows where coverage is thin (expansion white space) and which small shops are acquisition targets - density-first from Riverton outward.',
       'medium', '', 'territory_map'],
     ['growth', 'gap', 'Small independent shops are being consolidated by nationals, not sourced here first',
       'The market is fragmented and consolidating fast; a small shop with an inspection book is a portable recurring-revenue asset. The SFMO DB surfaces tuck-in targets in your own metros before a national buys the route.',
@@ -320,7 +320,7 @@ function seedGrowth(): void {
 }
 
 /**
- * The interview ladder — seed each department's opening question deck (depth 0) so the
+ * The interview ladder - seed each department's opening question deck (depth 0) so the
  * Operator has somewhere to start. Every answer then persists a sharper follow-up one
  * level deeper (auditAgent.capture), so the interview resumes and gets sharper across
  * sessions instead of resetting each visit. Own flag so existing brains pick it up.
@@ -843,7 +843,7 @@ function seedOnboarding(): void {
 
 /**
  * Approvals inbox fixtures (Signal Phase 3). Five pending items, two flagged routine
- * (the SMS reminder and the review reply/request) — those are what "Approve all routine"
+ * (the SMS reminder and the review reply/request) - those are what "Approve all routine"
  * clears. Copy is lifted verbatim from the design so Home + the inbox match it side by
  * side. Own flag so existing brains pick it up on upgrade. */
 function seedApprovals(): void {
@@ -855,13 +855,13 @@ function seedApprovals(): void {
     [
       'invoices', 'send_email', 'sensitive',
       'Final notice to Maplewood Medical Plaza', '$34,800',
-      '"Hi Marcy — invoice #4471 for the Q1 sprinkler inspection is now 98 days past due at $34,800. We’ve sent three reminders. Please confirm today whether this is in your AP queue, or we’ll need to pause scheduled service at the plaza."',
+      '"Hi Marcy - invoice #4471 for the Q1 sprinkler inspection is now 98 days past due at $34,800. We’ve sent three reminders. Please confirm today whether this is in your AP queue, or we’ll need to pause scheduled service at the plaza."',
       'Goes to marcy.d@maplewood.example + AP inbox', 'invoice',
     ],
     [
       'reviews', 'publish', 'routine',
       'Reply to Marcy Delgado ★★★★★', 'Google',
-      '"Thank you, Marcy. Keeping the clinic open during an inspection is the whole job — glad the crew got it done clean. We’ll see you at the next annual."',
+      '"Thank you, Marcy. Keeping the clinic open during an inspection is the whole job - glad the crew got it done clean. We’ll see you at the next annual."',
       'Posts on your Google Business Profile', 'review',
     ],
     [
@@ -873,13 +873,13 @@ function seedApprovals(): void {
     [
       'invoices', 'send_sms', 'routine',
       'Friendly reminder to Stone Oak Retail Partners', '$18,400',
-      '"Hi — just a heads up that invoice #4518 for the extinguisher recharge is 34 days out. Happy to resend the paperwork or take a card over the phone. — Northstar Fire & Safety"',
+      '"Hi - just a heads up that invoice #4518 for the extinguisher recharge is 34 days out. Happy to resend the paperwork or take a card over the phone. - Northstar Fire & Safety"',
       'SMS to the billing contact on file', 'invoice',
     ],
     [
       'reviews', 'send_email', 'routine',
       'Review request to Live Oak Distribution Center', '6 queued',
-      '"Thanks for having us out Tuesday — if the crew took care of you, a quick Google review helps a family business more than you’d think. Here’s the link."',
+      '"Thanks for having us out Tuesday - if the crew took care of you, a quick Google review helps a family business more than you’d think. Here’s the link."',
       'Email; SMS follows in 3 days if unopened', 'review',
     ],
   ];
@@ -968,8 +968,8 @@ function seedCrm(): void {
   const events: [string, string, string, string, string, number][] = [
     ['CALL', 'Marcy called about the invoice', 'Asked for a copy of #4471 and said it is "with the committee". Front desk logged the promise and set a callback for Monday.', 'Front Desk agent', '1:12 · recording saved', 120],
     ['$', 'Final notice drafted, waiting on you', '$34,800 · 98 days · third attempt. Escalates to a service pause if unanswered by Monday.', 'Invoice Collector', 'in your approval inbox', 130],
-    ['JOB', 'Quarterly inspection completed — main plaza', '214 heads checked, 4 deficiencies found: 2 painted heads, 1 obstructed, 1 corroded pipe hanger.', 'ServiceTrade', 'job #88214 · tech R. Blake', 63360],
-    ['QTE', 'Deficiency repair quote sent', '$22,900 for the surgery center items. Opened twice, no reply yet — Estimating Follow-up is on it.', 'ServiceTrade ↔ here', 'quote #Q-2291', 60480],
+    ['JOB', 'Quarterly inspection completed - main plaza', '214 heads checked, 4 deficiencies found: 2 painted heads, 1 obstructed, 1 corroded pipe hanger.', 'ServiceTrade', 'job #88214 · tech R. Blake', 63360],
+    ['QTE', 'Deficiency repair quote sent', '$22,900 for the surgery center items. Opened twice, no reply yet - Estimating Follow-up is on it.', 'ServiceTrade ↔ here', 'quote #Q-2291', 60480],
     ['★', 'Marcy left a 5-star Google review', '"Techs showed up when they said they would… paperwork was in my inbox the same afternoon."', 'Review Collector', 'reply drafted, awaiting approval', 4320],
     ['SYN', 'Billing contact changed on both sides', 'ServiceTrade says ap@maplewood.example; the call today said Ron Beltran. Sitting in the conflict queue.', 'Sync', 'needs a decision', 20],
   ];
@@ -1027,7 +1027,7 @@ function seedCrm(): void {
 
   // ---- sync log (6, most-recent first) ----
   const logs: [string, string, string, number][] = [
-    ['in', 'Job #88301 completed — Bulverde Self Storage', 'applied', 4],
+    ['in', 'Job #88301 completed - Bulverde Self Storage', 'applied', 4],
     ['out', 'Call note + callback task on Maplewood', 'accepted', 5],
     ['out', 'New lead: Northgate Federal Campus annex (from a call)', 'created #41955', 15],
     ['both', 'Billing email on Maplewood', 'conflict', 31],
@@ -1081,17 +1081,17 @@ function seedEstimator(): void {
   );
   const roll = (items: TakeoffItem[]) => items.reduce((s, i) => s + i.confidence, 0) / items.length;
 
-  // Northgate Federal Campus annex — the active takeoff (must be id 1 so the quote reads #Q-2304).
+  // Northgate Federal Campus annex - the active takeoff (must be id 1 so the quote reads #Q-2304).
   ins.run(
     SAMPLE_TAKEOFF.customer, SAMPLE_TAKEOFF.address, SAMPLE_TAKEOFF.source, SAMPLE_TAKEOFF.asset_count,
     SAMPLE_TAKEOFF.scale_ref, JSON.stringify(SAMPLE_TAKEOFF.items), roll(SAMPLE_TAKEOFF.items), 'flagged'
   );
 
-  // The queue — one representative item each drives the descriptor + badge.
+  // The queue - one representative item each drives the descriptor + badge.
   const queue: { customer: string; source: string; assets: number; item: TakeoffItem; status: string }[] = [
     { customer: 'Mi Tierra (Market Sq)', source: 'photos', assets: 8, status: 'read',
       item: { item: 'Hood suppression', where: 'Kitchen line', count: 1, unit: 'system', confidence: 0.9 } },
-    { customer: 'Helotes Crossing — Bldg C', source: 'blueprint', assets: 3, status: 'flagged',
+    { customer: 'Helotes Crossing - Bldg C', source: 'blueprint', assets: 3, status: 'flagged',
       item: { item: 'New construction rough-in', where: 'Sheet A-3', count: 1, unit: 'system', confidence: 0.68, flag: 'low scale confidence' } },
     { customer: 'Converse Fleet Services', source: 'photos', assets: 21, status: 'read',
       item: { item: 'Extinguisher recount', where: 'All bays', count: 21, unit: 'units', confidence: 0.94 } },
@@ -1106,7 +1106,7 @@ function seedEstimator(): void {
 
 /**
  * The Closer (five-agents Phase 3). Logs the last-90-days lost reasons (the "why we lose"
- * distribution — price 14, incumbent 8, budget 6, too slow 3, none 2) and ages one open
+ * distribution - price 14, incumbent 8, budget 6, too slow 3, none 2) and ages one open
  * quote to day 7 so the right-rail last-call draft has a subject. Own flag. */
 function seedCloser(): void {
   if (getState('seeded_closer') === '1') return;
@@ -1155,8 +1155,8 @@ function seedPlans(): void {
 
 /**
  * The Dispatcher (five-agents Phase 5). Four crews with distinct skills/zones/loads, a week of
- * confirmed appointments across Mon–Fri, the one proposed slot (Northgate Federal Campus annex → Crew B,
- * Wed 8–12) that drives the right-rail proposal, and a 7-deep waitlist. Appointments are stored
+ * confirmed appointments across Mon-Fri, the one proposed slot (Northgate Federal Campus annex → Crew B,
+ * Wed 8 to 12) that drives the right-rail proposal, and a 7-deep waitlist. Appointments are stored
  * by day-of-week so the grid always reads as "this week". Own flag. */
 function seedDispatch(): void {
   if (getState('seeded_dispatch') === '1') return;
@@ -1176,23 +1176,23 @@ function seedDispatch(): void {
   // appointments: crew, customer, skill, dow(0=Mon..4=Fri), window, status
   // Crew B keeps Wed as the proposed Northgate Federal Campus slot and Thursday deliberately open.
   const appts: [string, string, string, number, string, string][] = [
-    ['Crew A', 'Maplewood Plaza', 'sprinkler', 0, '8–12', 'confirmed'],
-    ['Crew A', 'Live Oak DC', 'backflow', 1, '8–11', 'confirmed'],
-    ['Crew A', 'Stone Oak Retail', 'sprinkler', 2, '1–4', 'confirmed'],
-    ['Crew A', 'Northside ISD #4', 'sprinkler', 3, '8–12', 'confirmed'],
-    ['Crew A', 'Boerne Ind — Bldg 1', 'backflow', 4, '8–11', 'confirmed'],
-    ['Crew B', 'Converse Fleet', 'clearance', 0, '9–12', 'confirmed'],
-    ['Crew B', 'Helotes Crossing', 'sprinkler', 1, '1–4', 'confirmed'],
-    ['Crew B', 'Northgate Federal Campus annex', 'clearance', 2, '8–12', 'proposed'],
-    ['Crew B', 'Schertz Medical', 'clearance', 4, '8–11', 'confirmed'],
-    ['Crew C', 'Mi Tierra (Market Sq)', 'hood', 0, '8–11', 'confirmed'],
-    ['Crew C', 'Market Sq Grill', 'hood', 1, '8–12', 'confirmed'],
-    ['Crew C', 'La Cantera Mall', 'alarm', 2, '9–12', 'confirmed'],
-    ['Crew C', 'Rim Shopping Center', 'alarm', 3, '1–4', 'confirmed'],
-    ['Crew C', 'Bulverde Storage', 'hood', 4, '8–11', 'confirmed'],
-    ['Crew D', 'Converse Bays', 'extinguisher', 0, '1–3', 'confirmed'],
-    ['Crew D', 'Bandera Rd store', 'extinguisher', 2, '8–10', 'confirmed'],
-    ['Crew D', 'Leon Valley Depot', 'extinguisher', 4, '1–3', 'confirmed'],
+    ['Crew A', 'Maplewood Plaza', 'sprinkler', 0, '8 to 12', 'confirmed'],
+    ['Crew A', 'Live Oak DC', 'backflow', 1, '8 to 11', 'confirmed'],
+    ['Crew A', 'Stone Oak Retail', 'sprinkler', 2, '1 to 4', 'confirmed'],
+    ['Crew A', 'Northside ISD #4', 'sprinkler', 3, '8 to 12', 'confirmed'],
+    ['Crew A', 'Boerne Ind - Bldg 1', 'backflow', 4, '8 to 11', 'confirmed'],
+    ['Crew B', 'Converse Fleet', 'clearance', 0, '9 to 12', 'confirmed'],
+    ['Crew B', 'Helotes Crossing', 'sprinkler', 1, '1 to 4', 'confirmed'],
+    ['Crew B', 'Northgate Federal Campus annex', 'clearance', 2, '8 to 12', 'proposed'],
+    ['Crew B', 'Schertz Medical', 'clearance', 4, '8 to 11', 'confirmed'],
+    ['Crew C', 'Mi Tierra (Market Sq)', 'hood', 0, '8 to 11', 'confirmed'],
+    ['Crew C', 'Market Sq Grill', 'hood', 1, '8 to 12', 'confirmed'],
+    ['Crew C', 'La Cantera Mall', 'alarm', 2, '9 to 12', 'confirmed'],
+    ['Crew C', 'Rim Shopping Center', 'alarm', 3, '1 to 4', 'confirmed'],
+    ['Crew C', 'Bulverde Storage', 'hood', 4, '8 to 11', 'confirmed'],
+    ['Crew D', 'Converse Bays', 'extinguisher', 0, '1 to 3', 'confirmed'],
+    ['Crew D', 'Bandera Rd store', 'extinguisher', 2, '8 to 10', 'confirmed'],
+    ['Crew D', 'Leon Valley Depot', 'extinguisher', 4, '1 to 3', 'confirmed'],
   ];
   const insAppt = db.prepare(`INSERT INTO appointments (crew_id, customer, skill, dow, window, status) VALUES (?, ?, ?, ?, ?, ?)`);
   for (const a of appts) insAppt.run(crewId[a[0]], a[1], a[2], a[3], a[4], a[5]);
@@ -1201,7 +1201,7 @@ function seedDispatch(): void {
   const wait: [number, string, string, string, string][] = [
     [1, 'Culebra Medical Group', 'Sprinkler repair · asked for "any day"', 'sprinkler', 'any day'],
     [2, 'Bandera Rd store', 'Alarm panel · called today', 'alarm', 'this week'],
-    [3, 'Boerne Industrial — Bldg 3', 'Annual · flexible until Sept', 'sprinkler', 'until Sept'],
+    [3, 'Boerne Industrial - Bldg 3', 'Annual · flexible until Sept', 'sprinkler', 'until Sept'],
     [4, 'Schertz Auto Group', 'Extinguisher route · new customer', 'extinguisher', 'flexible'],
     [5, 'Cibolo Town Center', 'Backflow test · overdue', 'backflow', 'this month'],
     [6, 'Northgate Plaza', 'Hood re-cert · code deadline', 'hood', 'by month-end'],
@@ -1217,7 +1217,7 @@ function seedDispatch(): void {
 /**
  * Job Costing (five-agents Phase 6). Every job's margin is COMPUTED on read, so the seed only
  * carries the raw costs. Numbers are chosen so the live compute reproduces the design: five
- * in-progress jobs bleed, Bulverde extinguishers is the 61% best, and Northside ISD — Warehouse
+ * in-progress jobs bleed, Bulverde extinguishers is the 61% best, and Northside ISD - Warehouse
  * 4 lands at -4% (quoted $26,400; 214 labour hrs vs 160 quoted; $7,910 material; $1,140 sub),
  * the anchor for the right-rail breakdown + change order. Own flag. */
 function seedCosting(): void {
@@ -1225,7 +1225,7 @@ function seedCosting(): void {
   const db = getDb();
   // customer, work, quoted$, laborHrs, quotedHrs, material$, sub$, subLabel, status, note
   const jobs: [string, string, number, number, number, number, number, string | null, string, string][] = [
-    ['La Cantera Mall', 'Alarm upgrade — Phase 2', 31200, 300, 250, 6800, 1200, 'monitoring tie-in', 'in_progress', 'Labor 50 hrs over'],
+    ['La Cantera Mall', 'Alarm upgrade - Phase 2', 31200, 300, 250, 6800, 1200, 'monitoring tie-in', 'in_progress', 'Labor 50 hrs over'],
     ['Helotes Crossing', 'New construction rough-in', 19800, 190, 150, 4200, 900, 'fire pump test', 'in_progress', 'Labor 40 hrs over'],
     ['Northside ISD', 'Warehouse 4', 26400, 214, 160, 7910, 1140, 'backflow cert', 'in_progress', 'Labor 54 hrs over'],
     ['Stone Oak Retail', 'Extinguisher recharge', 8400, 74, 60, 2600, 0, null, 'in_progress', 'Material ran high'],
