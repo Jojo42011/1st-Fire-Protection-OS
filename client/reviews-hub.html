@@ -7,66 +7,141 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  html,body{height:100%}
-  .hub{display:flex;flex-direction:column;height:100vh;max-width:none}
-  .hub-head{padding:18px 22px 0}
-  .hub-tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid var(--divider);margin-top:14px}
-  .hub-tab{appearance:none;border:0;background:none;cursor:pointer;font-family:inherit;
-    font-weight:700;font-size:13px;color:var(--muted);padding:11px 14px;border-bottom:2px solid transparent;margin-bottom:-1px}
-  .hub-tab.on{color:var(--ink);border-bottom-color:var(--fp-red,#E53935)}
-  .hub-tab .tag{font-weight:700;font-size:9px;letter-spacing:.06em;text-transform:uppercase;
-    color:var(--muted);background:var(--fill);border-radius:6px;padding:2px 6px;margin-left:7px;vertical-align:middle}
-  .hub-frame{flex:1;width:100%;border:0;background:var(--bg)}
-  .fnl{display:flex;gap:10px;flex-wrap:wrap;padding:14px 22px 0}
-  .fnl .kpi{flex:1;min-width:150px}
-  .fnl .arrow{align-self:center;color:var(--faint);font-size:18px;font-weight:800}
+  /* the review text + drafted reply block inside a table cell (kit has no equivalent) */
+  .rv-quote{font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink-2);max-width:52ch}
+  .rv-draft{margin-top:8px;padding:9px 11px;background:var(--panel-alt);border:1px solid var(--divider);border-radius:9px;max-width:52ch}
+  .rv-draft .lb{font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--indigo)}
+  .rv-draft p{margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--ink-3)}
+  .rv-stars{color:var(--amber);letter-spacing:1px;font-size:12.5px;white-space:nowrap}
 </style>
 </head>
 <body>
-<div class="hub">
-  <div class="hub-head">
-    <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Reputation · The word-of-mouth loop</p>
-    <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:5px">Reviews</h1>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Reviews</h1>
+        <div class="os-question">How is our reputation trending, and who needs a reply?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="requests">Review requests</button>
+        <button class="os-btn primary" id="reputation">Full reputation view</button>
+      </div>
+    </div>
+
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="distCard"></div>
+    </div>
+
+    <div class="os-sec os-block">Replies awaiting approval <span class="n" id="qn"></span></div>
+    <div id="queue"></div>
+
+    <div class="os-foot" id="foot">Ratings and reviews are read from the connected review source. <b>Nothing publishes without your approval:</b> a reply is drafted, then it waits in this queue until you approve it. Requests are sent through Microsoft 365 and are also held for approval.</div>
   </div>
 
-  <!-- the funnel: ask -> earn -> rate -->
-  <div class="fnl" id="funnel"></div>
-
-  <div class="hub-tabs">
-    <button class="hub-tab on" data-src="/review-requests" onclick="tab(this)">Requests</button>
-    <button class="hub-tab" data-src="/reviews" onclick="tab(this)">Reviews &amp; replies<span class="tag" id="rr-tag">demo</span></button>
-  </div>
-
-  <iframe id="frame" class="hub-frame" src="/review-requests?embed=1" allow="clipboard-write"></iframe>
-</div>
-
+<script src="/os.js"></script>
 <script>
-function kpi(l,v,s){return '<div class="kpi"><div class="top"><div class="lab">'+l+'</div></div><div class="val">'+v+'</div><div class="sub">'+(s||'')+'</div></div>';}
-function tab(btn){
-  var tabs=document.querySelectorAll('.hub-tab');
-  for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('on');
-  btn.classList.add('on');
-  document.getElementById('frame').src=btn.getAttribute('data-src')+'?embed=1';
+"use strict";
+var REVIEWS=[], SUMMARY={}, REQ={}, LIVE=false;
+function esc(t){return OS.esc(t);}
+function starStr(n){n=Math.max(0,Math.min(5,Number(n)||0));return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
+function isDone(r){var s=String(r.reply_status||'');return s==='approved'||s==='published';}
+
+function load(){
+  Promise.all([
+    fetch('/api/reviews').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/reviews/targets').then(function(r){return r.json();}).catch(function(){return {};})
+  ]).then(function(res){
+    var rev=res[0]||{}, tg=res[1]||{};
+    REVIEWS=rev.reviews||[]; SUMMARY=rev.summary||{}; LIVE=!!rev.live; REQ=(tg.summary)||{};
+    renderStrip();
+    renderDist();
+    renderQueue();
+    document.getElementById('foot').innerHTML=
+      (LIVE?'Ratings and reviews are <b>live from Google</b>. ':'Ratings and reviews are <b>demo</b> until Google Business connects. ')+
+      '<b>Nothing publishes without your approval:</b> a reply is drafted, then it waits in this queue until you approve it. Requests are sent through Microsoft 365 and are also held for approval.';
+  });
 }
-// funnel numbers from both halves (outbound requests + inbound reputation)
-Promise.all([
-  fetch('/api/reviews/targets').then(function(r){return r.json();}).catch(function(){return {};}),
-  fetch('/api/reviews').then(function(r){return r.json();}).catch(function(){return {};})
-]).then(function(res){
-  var rq=(res[0]&&res[0].summary)||{}, rep=(res[1]&&res[1].summary)||{};
-  var live=res[1]&&res[1].live;
-  if(live){document.getElementById('rr-tag').textContent='live';}
-  var avg=rep.avgRating?Number(rep.avgRating).toFixed(1):'—';
-  document.getElementById('funnel').innerHTML=
-    kpi('Requests sent',(rq.sent||0),'via Microsoft 365')+
-    '<span class="arrow">→</span>'+
-    kpi('Held to send',(rq.held||0),(rq.dailySent||0)+' / '+(rq.dailyCap||40)+' today')+
-    '<span class="arrow">→</span>'+
-    kpi('Reviews earned',(rep.totalReviews!=null?rep.totalReviews:'—'),(rep.thisMonthDelta?('+'+rep.thisMonthDelta+' this month'):'')+(live?'':' · demo'))+
-    '<span class="arrow">→</span>'+
-    kpi('Avg rating',avg,live?'live from Google':'demo until Google connects');
+
+function needsReply(){ return REVIEWS.filter(function(r){return !isDone(r);}); }
+
+function renderStrip(){
+  var s=SUMMARY||{};
+  var avg=s.avgRating!=null?Number(s.avgRating).toFixed(1):'n/a';
+  var total=s.totalReviews!=null?s.totalReviews:0;
+  var cells=[
+    { label:'Rating', display:'<span style="color:var(--amber)">'+esc(avg)+'★</span>', drillable:false, sub:'across '+OS.num(total)+' review'+(total===1?'':'s')+(LIVE?'':' · demo') },
+    { label:'New this month', value:(s.thisMonthDelta||0), format:'count', drillable:false, sub:'new reviews' },
+    { label:'Needs a reply', value:needsReply().length, format:'count', drillable:false, sub:'awaiting a drafted or approved reply' },
+    { label:'Requests sent', value:(REQ.sent||0), format:'count', drillable:false, sub:'via Microsoft 365' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
+function renderDist(){
+  var dist=(SUMMARY&&SUMMARY.distribution)||{};
+  var toneFor={5:'good',4:'good',3:'warn',2:'bad',1:'bad'};
+  var rows=[5,4,3,2,1].map(function(k){
+    var v=dist[k]||0;
+    return { label:k+' star', value:v, tone:toneFor[k], right:'<b>'+OS.num(v)+'</b>' };
+  });
+  var any=rows.some(function(r){return r.value>0;});
+  document.getElementById('distCard').innerHTML=OS.card('Rating breakdown',
+    'How the '+OS.num(SUMMARY.totalReviews||0)+' reviews split by stars'+(LIVE?'':' (demo until Google connects)'),
+    any?OS.band(rows):OS.empty('No reviews yet.'));
+}
+
+function renderQueue(){
+  var rows=needsReply().slice().sort(function(a,b){ return (a.stars-b.stars) || (new Date(b.received_at||0)-new Date(a.received_at||0)); });
+  document.getElementById('qn').textContent=rows.length?('· '+rows.length):'';
+  if(!rows.length){ document.getElementById('queue').innerHTML=OS.empty('Every review has an approved reply. Nothing is waiting on you.','✓'); return; }
+  var cols=[
+    {as:'author',label:'Reviewer',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.author||'Anonymous')+'</span>'+
+      (r.source||r.age?'<br><span class="muted" style="font-size:11.5px">'+esc([r.source,r.age].filter(Boolean).join(' · '))+'</span>':'');}},
+    {as:'stars',label:'Stars',render:function(v,r){return '<span class="rv-stars">'+starStr(r.stars)+'</span>';}},
+    {as:'text',label:'Review and drafted reply',render:function(v,r){
+      var q='<div class="rv-quote">'+esc(r.text||'')+'</div>';
+      var reply=r.reply_draft
+        ? '<div class="rv-draft"><span class="lb">Drafted reply</span><p>'+esc(r.reply_draft)+'</p></div>'
+        : '<div class="muted" style="margin-top:6px;font-size:11.5px">No reply drafted yet.</div>';
+      return q+reply;
+    }},
+    {as:'act',label:'Action',render:function(v,r){
+      return r.reply_draft
+        ? '<button class="os-btn primary" style="padding:6px 11px;font-size:12px" data-approve="'+r.id+'">Approve &amp; post</button>'
+        : '<button class="os-btn" style="padding:6px 11px;font-size:12px" data-draft="'+r.id+'">Draft reply</button>';
+    }}
+  ];
+  document.getElementById('queue').innerHTML=OS.table(cols, rows, {empty:'Nothing is waiting on a reply.'});
+}
+
+document.getElementById('queue').addEventListener('click',function(e){
+  var ap=e.target.closest('[data-approve]');
+  if(ap){ ap.disabled=true; ap.textContent='Posting…';
+    fetch('/api/reviews/'+ap.getAttribute('data-approve')+'/approve-reply',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      OS.toast(d.published?'Reply approved and posted to Google.':'Reply approved. It posts once Google Business connects; nothing sends before then.'); load();
+    }).catch(function(){ ap.disabled=false; ap.textContent='Approve & post'; });
+    return;
+  }
+  var dr=e.target.closest('[data-draft]');
+  if(dr){ dr.disabled=true; dr.textContent='Drafting…';
+    fetch('/api/reviews/'+dr.getAttribute('data-draft')+'/draft-reply',{method:'POST'}).then(function(r){return r.json();}).then(function(){
+      OS.toast('Reply drafted. It waits here for your approval before anything posts.'); load();
+    }).catch(function(){ dr.disabled=false; dr.textContent='Draft reply'; });
+    return;
+  }
 });
+
+// These two legacy workflows are served as their own pages (no separate shell tab), so open them
+// in place, the same views the old hub embedded. The left-nav "Reviews" returns here.
+document.getElementById('requests').addEventListener('click',function(){ try{location.href='/review-requests';}catch(_){} });
+document.getElementById('reputation').addEventListener('click',function(){ try{location.href='/reviews';}catch(_){} });
+
+OS.ready(function(){ load(); });
+OS.onChange(load);
 </script>
 </body>
 </html>

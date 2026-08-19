@@ -7,16 +7,18 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
-  .oc-grid{display:grid;grid-template-columns:1fr 360px;gap:18px;align-items:start}
+  /* Bespoke pieces the kit does not provide: the on-call-now hero, the schedule list rows,
+     and the rotation-builder forms. Kept intact from the original screen, restyled to sit in
+     os.css cards. */
+  .oc-grid{display:grid;grid-template-columns:1fr 360px;gap:14px;align-items:start;margin-top:22px}
   @media (max-width:900px){.oc-grid{grid-template-columns:1fr}}
 
-  /* on-call-now hero */
-  .oc-now{border-left:3px solid #e5484d}
+  .oc-now{border-left:3px solid var(--os-bad)}
   .oc-now .lab{font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
   .oc-now .who{display:flex;align-items:center;gap:14px;margin-top:12px}
-  .oc-now .mono{width:46px;height:46px;border-radius:12px;background:#e5484d;color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none}
+  .oc-now .mono{width:46px;height:46px;border-radius:12px;background:var(--os-bad);color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none}
   .oc-now .nm{font-weight:800;font-size:22px;color:var(--ink);line-height:1.1}
   .oc-now .meta{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:3px}
   .oc-now .meta b{color:var(--ink);font-variant-numeric:tabular-nums}
@@ -24,7 +26,6 @@
   .oc-empty{color:var(--muted);font-size:13px;line-height:1.6;margin-top:10px}
   .oc-empty b{color:var(--ink)}
 
-  /* schedule list */
   .oc-row{display:grid;grid-template-columns:120px 1fr auto;gap:14px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--divider-soft)}
   .oc-row:last-child{border-bottom:none}
   .oc-row.on{background:var(--panel-alt)}
@@ -32,96 +33,177 @@
   .oc-when .sub{display:block;font-weight:500;font-size:10.5px;color:var(--faint);margin-top:2px}
   .oc-p .nm{font-weight:700;font-size:13px;color:var(--ink)}
   .oc-p .ph{font-weight:500;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .oc-badge{font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#e5484d;background:rgba(229,72,77,.12);border-radius:6px;padding:3px 8px}
+  .oc-badge{font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--os-bad);background:var(--os-bad-bg);border-radius:6px;padding:3px 8px}
   .oc-x{border:none;background:none;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:4px 6px;border-radius:6px}
-  .oc-x:hover{color:#e5484d;background:rgba(229,72,77,.10)}
+  .oc-x:hover{color:var(--os-bad);background:var(--os-bad-bg)}
 
-  /* forms */
   .oc-fld{display:flex;flex-direction:column;gap:5px;margin-bottom:11px}
   .oc-fld label{font-weight:700;font-size:11px;color:var(--muted)}
   .oc-in{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px}
   .oc-in:focus{outline:none;border-color:var(--indigo)}
   textarea.oc-in{resize:vertical;min-height:74px;line-height:1.5;font-variant-numeric:tabular-nums}
   .oc-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .oc-hint{font-weight:500;font-size:11px;color:var(--faint);line-height:1.5;margin:-4px 0 11px}
   .oc-tabs{display:flex;gap:6px;margin-bottom:14px}
   .oc-tab{font-weight:700;font-size:12px;padding:7px 13px;border-radius:9px;border:1px solid var(--border);background:var(--panel);color:var(--muted);cursor:pointer}
-  .oc-tab.on{background:#e5484d;border-color:#e5484d;color:#fff}
+  .oc-tab.on{background:var(--os-bad);border-color:var(--os-bad);color:#fff}
   .oc-msg{font-weight:600;font-size:12px;margin-top:8px;min-height:16px}
-  .oc-msg.ok{color:var(--green)} .oc-msg.err{color:#e5484d}
-  .oc-pickall{font-weight:600;font-size:11px;color:var(--muted)}
+  .oc-msg.ok{color:var(--os-good)} .oc-msg.err{color:var(--os-bad)}
   .oc-note{font-weight:500;font-size:11.5px;color:var(--muted);line-height:1.6}
   .oc-note code{background:var(--panel-alt);padding:1px 5px;border-radius:5px;font-size:11px}
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
-  <div class="oc-grid">
-    <div>
-      <div class="card card-pad oc-now" id="now"></div>
-      <div class="card" style="margin-top:18px">
-        <div class="card-head"><h2>Rotation schedule</h2><span style="flex:1"></span><span id="sched-office" style="font-weight:600;font-size:11px;color:var(--faint)"></span></div>
-        <div id="sched"></div>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>On-call</h1>
+        <div class="os-question">Who does the after-hours line reach tonight?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="phones">Open Phones</button>
       </div>
     </div>
-    <div class="card card-pad">
-      <div class="oc-tabs">
-        <button class="oc-tab on" data-form="rotate">Build a rotation</button>
-        <button class="oc-tab" data-form="single">Add one shift</button>
-      </div>
 
-      <!-- rotation generator -->
-      <div id="form-rotate">
-        <div class="oc-note" style="margin-bottom:12px">One line per person: <code>Name, phone, email</code>. They take turns, one week each, starting the date below.</div>
-        <div class="oc-fld">
-          <label>On-call people (in rotation order)</label>
-          <textarea class="oc-in" id="r-people" placeholder="Ryan Blake, +15124016907, ryan.blake@northstardemo.example
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Coverage by office <span class="n" id="byn"></span></div>
+    <div id="byOffice"></div>
+
+    <div class="oc-grid">
+      <div>
+        <div class="os-card oc-now" id="now"></div>
+        <div class="os-card" style="margin-top:14px;padding:0">
+          <div class="os-card-h" style="display:flex;align-items:center;gap:10px;padding:16px 20px 0">
+            <div class="os-card-t">Rotation schedule</div><span style="flex:1"></span>
+            <span id="sched-office" style="font-weight:600;font-size:11px;color:var(--faint)"></span>
+          </div>
+          <div id="sched"></div>
+        </div>
+      </div>
+      <div class="os-card">
+        <div class="oc-tabs">
+          <button class="oc-tab on" data-form="rotate">Build a rotation</button>
+          <button class="oc-tab" data-form="single">Add one shift</button>
+        </div>
+
+        <div id="form-rotate">
+          <div class="oc-note" style="margin-bottom:12px">One line per person: <code>Name, phone, email</code>. They take turns, one week each, starting the date below.</div>
+          <div class="oc-fld">
+            <label>On-call people (in rotation order)</label>
+            <textarea class="oc-in" id="r-people" placeholder="Ryan Blake, +15124016907, ryan.blake@northstardemo.example
 Mitch Shafer, +15127301104, mitch.shafer@northstardemo.example"></textarea>
+          </div>
+          <div class="oc-two">
+            <div class="oc-fld"><label>First week starts</label><input class="oc-in" id="r-start" type="date"></div>
+            <div class="oc-fld"><label>Weeks to generate</label><input class="oc-in" id="r-weeks" type="number" min="1" max="104" value="12"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-bottom:12px;cursor:pointer">
+            <input type="checkbox" id="r-replace" checked> Replace any existing shifts from that date on
+          </label>
+          <button class="os-btn primary" id="r-go" style="width:100%">Generate rotation</button>
+          <div class="oc-msg" id="r-msg"></div>
         </div>
-        <div class="oc-two">
-          <div class="oc-fld"><label>First week starts</label><input class="oc-in" id="r-start" type="date"></div>
-          <div class="oc-fld"><label>Weeks to generate</label><input class="oc-in" id="r-weeks" type="number" min="1" max="104" value="12"></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-bottom:12px;cursor:pointer">
-          <input type="checkbox" id="r-replace" checked> Replace any existing shifts from that date on
-        </label>
-        <button class="btn-primary" id="r-go" style="width:100%">Generate rotation</button>
-        <div class="oc-msg" id="r-msg"></div>
-      </div>
 
-      <!-- single shift -->
-      <div id="form-single" style="display:none">
-        <div class="oc-fld"><label>Name</label><input class="oc-in" id="s-name" placeholder="Ryan Blake"></div>
-        <div class="oc-two">
-          <div class="oc-fld"><label>Phone (E.164)</label><input class="oc-in" id="s-phone" placeholder="+15124016907"></div>
-          <div class="oc-fld"><label>Email</label><input class="oc-in" id="s-email" placeholder="name@northstardemo.example"></div>
+        <div id="form-single" style="display:none">
+          <div class="oc-fld"><label>Name</label><input class="oc-in" id="s-name" placeholder="Ryan Blake"></div>
+          <div class="oc-two">
+            <div class="oc-fld"><label>Phone (E.164)</label><input class="oc-in" id="s-phone" placeholder="+15124016907"></div>
+            <div class="oc-fld"><label>Email</label><input class="oc-in" id="s-email" placeholder="name@northstardemo.example"></div>
+          </div>
+          <div class="oc-two">
+            <div class="oc-fld"><label>Starts</label><input class="oc-in" id="s-start" type="date"></div>
+            <div class="oc-fld"><label>Ends</label><input class="oc-in" id="s-end" type="date"></div>
+          </div>
+          <button class="os-btn primary" id="s-go" style="width:100%">Add shift</button>
+          <div class="oc-msg" id="s-msg"></div>
         </div>
-        <div class="oc-two">
-          <div class="oc-fld"><label>Starts</label><input class="oc-in" id="s-start" type="date"></div>
-          <div class="oc-fld"><label>Ends</label><input class="oc-in" id="s-end" type="date"></div>
-        </div>
-        <button class="btn-primary" id="s-go" style="width:100%">Add shift</button>
-        <div class="oc-msg" id="s-msg"></div>
-      </div>
 
-      <div class="oc-note" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--divider-soft)">
-        The after-hours receptionist reads this roster to know who to reach. Pick a specific office up top to manage its rotation.
+        <div class="oc-note" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--divider-soft)">
+          The after-hours receptionist reads this roster to know who to reach. Pick a specific office up top to manage its rotation.
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
+    <div class="os-foot">The roster is a <b>real read</b>, office-scoped. It is single-cover: one person holds each week, so there is no simultaneous backup in the data. "Next up" is who relieves them in the rotation, and an office is flagged a <b>gap</b> when no one is on call now, a night in the next 14 days is uncovered, or the current person has no phone on file. After-hours call volume and unanswered counts are not in this roster data (they live on the Phones screen), so they are shown as not tracked here rather than guessed.</div>
+  </div>
+
+<script src="/os.js"></script>
 <script>
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function officeRaw(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
+"use strict";
+function esc(t){return OS.esc(t);}
+function officeRaw(){var o=OS.office();return o||'all';}
 function officeParam(){var o=officeRaw();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
 function officeLabel(){var o=officeRaw();if(!o||o==='all')return 'all offices';var s=o.replace(/^Northstar\s*/i,'').replace(/\s*LLC$/i,'').trim();return /^services$/i.test(s)?'Riverton':(s||o);}
 function mono(nm){return (String(nm||'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2)||'?').toUpperCase();}
 function fmtDay(s){if(!s)return '';var d=new Date(s+'T00:00:00');return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function isCurrent(sh){var t=todayISO();return sh.starts_on<=t&&t<sh.ends_on;}
+function isoPlus(days){var d=new Date(todayISO()+'T00:00:00');d.setDate(d.getDate()+days);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
 var DATA={current:null,shifts:[]};
+
+/* Does this office have any uncovered calendar day in the next `days` days? */
+function hasGap(shifts,days){
+  for(var i=0;i<days;i++){
+    var ds=isoPlus(i);
+    var covered=shifts.some(function(s){return s.starts_on<=ds&&ds<s.ends_on;});
+    if(!covered)return true;
+  }
+  return false;
+}
+
+function byOffice(){
+  var map={};
+  (DATA.shifts||[]).forEach(function(s){ (map[s.office]=map[s.office]||[]).push(s); });
+  return Object.keys(map).sort().map(function(off){
+    var shifts=map[off].slice().sort(function(a,b){return a.starts_on<b.starts_on?-1:1;});
+    var current=shifts.filter(isCurrent)[0]||null;
+    var t=todayISO();
+    var nextUp=shifts.filter(function(s){return s.starts_on>t;})[0]||null;
+    return { office:off, shifts:shifts, current:current, nextUp:nextUp, gap:hasGap(shifts,14) };
+  });
+}
+
+function renderStrip(){
+  var rows=byOffice();
+  var specific=officeRaw()&&officeRaw()!=='all';
+  var coveredNow=rows.filter(function(r){return r.current;}).length;
+  var totalOffices=rows.length;
+  var gapCount=rows.filter(function(r){return !r.current||r.gap;}).length;
+  var cur=DATA.current;
+  var cells=[
+    { label:'On call now', value:coveredNow, format:'count', drillable:false,
+      sub:(specific?(cur?esc(cur.person_name):'nobody assigned'):('of '+totalOffices+' office'+(totalOffices===1?'':'s')+' with a roster')) },
+    { label:'After-hours calls', display:'<span class="muted">Not tracked here</span>', drillable:false, sub:'logged on the Phones screen' },
+    { label:'Unanswered', display:'<span class="muted">Not tracked here</span>', drillable:false, sub:'no after-hours flag on calls yet' },
+    { label:'Gaps next 14 days', value:gapCount, format:'count', drillable:false,
+      sub:(gapCount?('office'+(gapCount===1?'':'s')+' with an uncovered night'):'every office covered') }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
+function renderByOffice(){
+  var rows=byOffice();
+  document.getElementById('byn').textContent=rows.length?('· '+rows.length):'';
+  if(!rows.length){ document.getElementById('byOffice').innerHTML=OS.empty('No roster yet. Build a rotation below and offices show up here.'); return; }
+  var cols=[
+    {as:'office',label:'Office',strong:true,render:function(v,r){return '<span class="strong">'+esc(officeShort(r.office))+'</span>';}},
+    {as:'primary',label:'On call now',render:function(v,r){
+      if(!r.current) return '<span style="color:var(--os-bad);font-weight:650">No one on call</span>';
+      return '<span class="strong">'+esc(r.current.person_name)+'</span>'+
+        (r.current.person_phone?'<br><span class="muted" style="font-size:11.5px">'+esc(r.current.person_phone)+'</span>':'<br><span style="color:var(--os-bad);font-size:11.5px">no phone on file</span>');}},
+    {as:'next',label:'Next up',render:function(v,r){
+      if(!r.nextUp) return '<span class="muted">None</span>';
+      return '<span>'+esc(r.nextUp.person_name)+'</span><br><span class="muted" style="font-size:11.5px">from '+esc(fmtDay(r.nextUp.starts_on))+'</span>';}},
+    {as:'status',label:'Status',render:function(v,r){
+      if(!r.current) return OS.pill('No cover now','bad');
+      if(r.gap) return OS.pill('Gap in 14d','warn');
+      if(!r.current.person_phone) return OS.pill('No phone','warn');
+      return OS.pill('Covered','good');}}
+  ];
+  document.getElementById('byOffice').innerHTML=OS.table(cols, rows, {});
+}
+function officeShort(o){var s=String(o||'').replace(/^Northstar\s*/i,'').replace(/\s*LLC$/i,'').trim();return /^services$/i.test(s)?'Riverton':(s||o);}
 
 function renderNow(){
   var el=document.getElementById('now');
@@ -129,7 +211,7 @@ function renderNow(){
   if(!specific){
     el.innerHTML='<div class="lab">On call now</div>'+
       '<div class="oc-empty">Pick a single office from the switcher up top to see and manage its on-call rotation. '+
-      'This roster is what the after-hours line reads to decide who to reach.</div>';
+      'This roster is what the after-hours line reads to decide who to reach. The coverage table above spans every office.</div>';
     return;
   }
   var c=DATA.current;
@@ -142,7 +224,7 @@ function renderNow(){
   el.innerHTML='<div class="lab">On call now · '+esc(officeLabel())+'</div>'+
     '<div class="who"><div class="mono">'+esc(mono(c.person_name))+'</div>'+
     '<div><div class="nm">'+esc(c.person_name)+'</div>'+
-    '<div class="meta">'+(c.person_phone?('<b>'+esc(c.person_phone)+'</b>'):'<span style="color:#e5484d">no phone on file</span>')+
+    '<div class="meta">'+(c.person_phone?('<b>'+esc(c.person_phone)+'</b>'):'<span style="color:var(--os-bad)">no phone on file</span>')+
     (c.person_email?('  ·  '+esc(c.person_email)):'')+'</div></div></div>'+
     '<div class="win">Covering '+esc(fmtDay(c.starts_on))+' to '+esc(fmtDay(c.ends_on))+'</div>';
 }
@@ -159,7 +241,7 @@ function renderSched(){
     var cur=isCurrent(s);
     return '<div class="oc-row'+(cur?' on':'')+'">'+
       '<div class="oc-when">'+esc(fmtDay(s.starts_on))+'<span class="sub">to '+esc(fmtDay(s.ends_on))+'</span></div>'+
-      '<div class="oc-p"><div class="nm">'+esc(s.person_name)+(officeRaw()==='all'?(' <span style="color:var(--faint);font-weight:600">· '+esc(s.office)+'</span>'):'')+'</div>'+
+      '<div class="oc-p"><div class="nm">'+esc(s.person_name)+(officeRaw()==='all'?(' <span style="color:var(--faint);font-weight:600">· '+esc(officeShort(s.office))+'</span>'):'')+'</div>'+
         '<div class="ph">'+(s.person_phone?esc(s.person_phone):'no phone')+'</div></div>'+
       '<div style="display:flex;align-items:center;gap:8px">'+(cur?'<span class="oc-badge">now</span>':'')+
         '<button class="oc-x" title="Remove" onclick="del('+s.id+')">&times;</button></div>'+
@@ -169,13 +251,13 @@ function renderSched(){
 
 function load(){
   fetch('/api/oncall'+officeParam()).then(function(r){return r.json();}).then(function(d){
-    DATA=d;renderNow();renderSched();
-  }).catch(function(){});
+    DATA=d;renderStrip();renderByOffice();renderNow();renderSched();
+  }).catch(function(){ document.getElementById('byOffice').innerHTML=OS.errorBox('Could not load the on-call roster.'); });
 }
 
 function del(id){
   if(!confirm('Remove this shift?'))return;
-  fetch('/api/oncall/'+id+'/delete',{method:'POST'}).then(function(){load();});
+  fetch('/api/oncall/'+id+'/delete',{method:'POST'}).then(function(){OS.toast('Shift removed from the rotation.');load();});
 }
 
 function parsePeople(txt){
@@ -200,7 +282,7 @@ document.getElementById('r-go').onclick=function(){
   fetch('/api/oncall/rotate',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({office:office,start:start,weeks:weeks,people:people,replaceFuture:document.getElementById('r-replace').checked})})
     .then(function(r){return r.json();}).then(function(d){
-      if(d.ok){msg(m,'Created '+d.created+' weekly shifts.',true);load();}
+      if(d.ok){msg(m,'Created '+d.created+' weekly shifts.',true);OS.toast('Rotation generated: '+d.created+' weekly shifts.');load();}
       else msg(m,d.error||'Failed.',false);
     }).catch(function(){msg(m,'Network error.',false);});
 };
@@ -214,7 +296,7 @@ document.getElementById('s-go').onclick=function(){
       person_phone:document.getElementById('s-phone').value,person_email:document.getElementById('s-email').value,
       starts_on:document.getElementById('s-start').value,ends_on:document.getElementById('s-end').value})})
     .then(function(r){return r.json();}).then(function(d){
-      if(d.ok){msg(m,'Shift added.',true);document.getElementById('s-name').value='';load();}
+      if(d.ok){msg(m,'Shift added.',true);OS.toast('Shift added to the rotation.');document.getElementById('s-name').value='';load();}
       else msg(m,d.error||'Failed.',false);
     }).catch(function(){msg(m,'Network error.',false);});
 };
@@ -229,12 +311,14 @@ document.querySelectorAll('.oc-tab').forEach(function(t){
   };
 });
 
+document.getElementById('phones').addEventListener('click',function(){ OS.go('phones'); });
+
 // default the date inputs to today
 document.getElementById('r-start').value=todayISO();
 document.getElementById('s-start').value=todayISO();
 
-load();
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
+OS.ready(function(){ load(); });
+OS.onChange(load);
 </script>
 </body>
 </html>

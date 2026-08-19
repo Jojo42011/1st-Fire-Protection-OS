@@ -7,45 +7,25 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  /* ---- page header + status badge ---- */
-  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
-  .page-head .kicker{font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-  .page-head h1{font-weight:800;font-size:22px;letter-spacing:-.01em;color:var(--ink);margin-top:6px}
-  .page-head p{font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:70ch}
-  .badge{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:11px;padding:5px 11px;border-radius:var(--r-pill);white-space:nowrap;flex:none}
-  .badge .d{width:6px;height:6px;border-radius:50%;display:inline-block}
-  .badge.soon{color:var(--muted);background:var(--fill)}
-  .badge.soon .d{background:var(--faint)}
-  .badge.live{color:var(--green);background:var(--green-bg)}
-  .badge.live .d{background:var(--green);animation:pulseDot 2.2s ease-in-out infinite}
-  .head-right{display:flex;align-items:center;gap:9px;flex:none;flex-wrap:wrap;justify-content:flex-end}
-  .badge.oncall{cursor:pointer;border:1px solid transparent}
-  .badge.oncall.has{color:#e5484d;background:rgba(229,72,77,.12)}
-  .badge.oncall.has .d{background:#e5484d}
-  .badge.oncall.none{color:var(--muted);background:var(--fill)}
-  .badge.oncall.none .d{background:var(--faint)}
-  .badge.oncall b{font-weight:800}
-  .badge.oncall:hover{border-color:rgba(229,72,77,.35)}
+  /* Screen-specific bits the kit does not provide: the expandable call detail (recording,
+     summary, transcript) and the receptionist chat. Both are working sections kept intact. */
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;padding:5px 11px;border-radius:var(--r-pill,999px)}
+  .status-pill .d{width:6px;height:6px;border-radius:50%}
+  .status-pill.soon{color:var(--muted);background:var(--fill)}
+  .status-pill.soon .d{background:var(--faint)}
+  .status-pill.live{color:var(--green);background:var(--green-bg)}
+  .status-pill.live .d{background:var(--green);animation:pulseDot 2.2s ease-in-out infinite}
 
-  /* ---- "Answering now" pill ---- */
-  .answering{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;color:var(--green);background:var(--green-bg);border-radius:var(--r-pill);padding:4px 10px}
-
-  /* ---- sync button ---- */
-  .syncbtn{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;background:transparent;
-    color:var(--muted);border:1px solid var(--border-strong);border-radius:var(--r-btn);padding:6px 11px;cursor:pointer;transition:.15s}
-  .syncbtn:hover{border-color:var(--indigo);color:var(--ink)} .syncbtn[disabled]{opacity:.5;cursor:default}
-
-  /* ---- expandable call detail (recording, summary, cost, transcript) ---- */
   tr.call-row{cursor:pointer}
   tr.call-row .chev{display:inline-block;transition:transform .15s;color:var(--faint);font-size:9px}
   tr.call-row.open .chev{transform:rotate(90deg)}
-  td.detail-cell{padding:0!important;background:var(--panel-alt);border-bottom:1px solid var(--divider)}
+  td.detail-cell{padding:0!important;background:var(--panel-alt)}
   .detail{padding:16px 18px;display:flex;flex-direction:column;gap:14px;animation:rise .3s var(--ease)}
   .detail .row1{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .detail audio{height:34px;max-width:100%}
   .detail .summary{font-size:13px;line-height:1.6;color:var(--ink);padding:12px 14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-inset)}
-  .detail .costs{display:flex;flex-wrap:wrap;gap:6px}
   .detail .cbit{font-family:var(--mono);font-size:10.5px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--muted)}
   .detail .cbit b{color:var(--ink)}
   .detail .label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
@@ -55,161 +35,171 @@
   .detail .turn.bot .who{color:var(--indigo)}
   .detail .none{font-size:12.5px;color:var(--muted)}
 
-  /* ---- assistant chat (kept from the old command room; restyled, unobtrusive) ---- */
   #convo{max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
   .msg{padding:9px 12px;font-size:13px;max-width:82%;line-height:1.5;border-radius:10px}
   .msg.you{align-self:flex-end;background:var(--indigo-bg);color:var(--indigo-deep)}
   .msg.bot{align-self:flex-start;background:var(--fill);color:var(--ink-2)}
   .composer{display:flex;gap:8px;margin-top:12px}
-  .composer input{flex:1;min-width:0}
-  .mic{width:34px;height:34px;border-radius:50%;border:none;background:var(--indigo);color:#fff;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;transition:.15s;flex:none}
+  .composer input{flex:1;min-width:0;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px}
+  .mic{width:34px;height:34px;border-radius:50%;border:none;background:var(--indigo);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s;flex:none}
   .mic:hover{background:var(--indigo-deep)} .mic.listening{animation:pulseDot 1.6s infinite}
   .hint{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
-
-  /* ---- go-live note ---- */
-  .connect{display:flex;gap:12px;align-items:flex-start}
-  .connect .ic{width:30px;height:30px;border-radius:8px;background:var(--indigo-bg);color:var(--indigo);display:flex;align-items:center;justify-content:center;flex:none}
-  .connect .tx{font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3)}
-  .connect .tx b{color:var(--ink);font-weight:700}
-
-  @media (max-width:820px){
-    .split{grid-template-columns:1fr!important}
-    .kpis-5{grid-template-columns:repeat(2,1fr)}
-    .composer input{font-size:16px}   /* 16px stops iOS from zooming on focus */
-  }
+  @media (max-width:820px){.composer input{font-size:16px}}
 </style>
-  <script src="/count.js" defer></script>
-  <script src="/motion.js" defer></script>
 </head>
 <body>
-  <div class="screen">
-    <div class="page-head">
-      <div class="titles">
-        <p class="kicker">Main line</p>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
         <h1>Phones</h1>
-        <p>Answers the main line 24/7, classifies the call, and routes it into Teams, inspections, service, sales, billing, or a named person. Captures every lead. Complaints and emergencies go straight to a human.</p>
+        <div class="os-question">Did every call get handled correctly?</div>
       </div>
-      <div class="head-right">
-        <span id="oncall-chip" class="badge oncall none" title="Who the after-hours line reaches now" onclick="ocGo()"><span class="d"></span>On call: …</span>
-        <span id="status-badge" class="badge soon"><span class="d"></span>Connecting Soon</span>
+      <div class="os-actions">
+        <span id="status" class="status-pill soon"><span class="d"></span>Connecting soon</span>
+        <button class="os-btn" id="oncall-btn" title="Who the after-hours line reaches now">On call: …</button>
+        <button class="os-btn primary" id="sync" title="Backfill recent calls from Vapi">Sync from Vapi</button>
       </div>
     </div>
 
-    <div class="kpis-5" id="kpis"></div>
+    <div id="strip"></div>
 
-    <div class="split" style="grid-template-columns:1fr 400px">
-      <div class="card card-clip">
-        <div class="card-head">
-          <h2>Today's calls</h2>
+    <div class="os-sec os-block">Needs follow-up <span class="n" id="qn"></span><span style="margin-left:auto;font-weight:600;font-size:11.5px;text-transform:none;letter-spacing:0;color:var(--faint)">Uncontacted leads and calls awaiting a callback</span></div>
+    <div id="queue"></div>
+
+    <div class="os-sec os-block">Call log <span class="n" id="logn"></span></div>
+    <div id="log"></div>
+
+    <div class="os-block">
+      <div class="os-card" style="padding:0">
+        <div class="os-card-h" style="display:flex;align-items:center;gap:10px;padding:16px 20px 0">
+          <div><div class="os-card-t">Ask the receptionist</div><div class="os-card-s">Type or talk to the same assistant that answers the line.</div></div>
           <span style="flex:1"></span>
-          <span class="answering"><span class="dot live"></span>Answering now</span>
-          <button class="syncbtn" id="sync" title="Backfill recent calls from Vapi">↻ Sync from Vapi</button>
+          <button class="mic" id="mic" title="Hold to talk"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
         </div>
-        <table>
-          <thead><tr>
-            <th>Time</th><th>Caller</th><th>What they wanted</th><th>Sent to</th><th class="right">Length</th>
-          </tr></thead>
-          <tbody id="call-rows"></tbody>
-        </table>
-      </div>
-
-      <div class="stack">
-        <div class="card card-clip">
-          <div class="card-head"><h2>Live call</h2><span style="flex:1"></span><span class="mono" style="font-size:11.5px;color:var(--muted)">(512) 555-0182 · 0:38</span></div>
-          <div style="padding:14px 18px;display:flex;flex-direction:column;gap:11px">
-            <div style="display:flex;gap:9px"><span style="font-weight:700;font-size:10.5px;color:var(--indigo);width:46px;flex:none;padding-top:2px">Agent</span><span style="font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink)">Thanks for calling Northstar Fire & Safety, this is the front desk. How can I help?</span></div>
-            <div style="display:flex;gap:9px"><span style="font-weight:700;font-size:10.5px;color:var(--muted);width:46px;flex:none;padding-top:2px">Caller</span><span style="font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink-3)">Our alarm panel is beeping at the Bandera Road store and nobody can turn it off.</span></div>
-            <div style="display:flex;gap:9px"><span style="font-weight:700;font-size:10.5px;color:var(--indigo);width:46px;flex:none;padding-top:2px">Agent</span><span style="font-weight:500;font-size:12.5px;line-height:1.55;color:var(--ink)">That's a service call — I'm getting a technician on the line now. Can I confirm the address is 8410 Bandera?</span></div>
-            <div style="display:flex;align-items:center;gap:8px;padding-top:4px"><span class="pill green">Classified: service</span><span class="pill amber">Transferring to Teams</span></div>
-          </div>
-        </div>
-
-        <div class="card card-clip">
-          <div class="card-head"><h2>Leads captured today</h2></div>
-          <div id="leads"></div>
+        <div style="padding:14px 20px 18px">
+          <div id="convo"><div class="msg bot">Welcome to Northstar Fire &amp; Safety. This is an AI, but I can answer any questions that you have and transfer to a real person if not. How can I help you today?</div></div>
+          <div class="composer"><input id="q" placeholder="Type a message, or 'show me the reviews'…" /><button class="os-btn primary" id="send">Send</button></div>
+          <span class="hint" id="mic-hint">Tap to talk</span>
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <h2>Ask the receptionist</h2>
-        <span style="flex:1"></span>
-        <button class="mic" id="mic" title="Hold to talk"><svg width="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg></button>
-      </div>
-      <div style="padding:14px 18px">
-        <div id="convo"><div class="msg bot">Welcome to Northstar Fire & Safety. This is an AI, but I can answer any questions that you have and transfer to a real person if not. How can I help you today?</div></div>
-        <div class="composer"><input id="q" placeholder="Type a message, or 'show me the reviews'…" /><button class="btn-accent" id="send">Send</button></div>
-        <span class="hint" id="mic-hint">Tap to talk</span>
-      </div>
-    </div>
-
-    <div class="card card-pad connect">
-      <div class="ic"><svg width="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L8 11.6a16 16 0 0 0 6 6l1.1-1.1a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2z"/></svg></div>
-      <div class="tx"><b>Connect to go live:</b> forward the main line → Twilio → Vapi (bring-your-own OpenAI key) and the receptionist answers real calls, transferring into Teams. The webhook &amp; lead capture are already built.</div>
-    </div>
+    <div class="os-foot">Calls, leads and outcomes are <b>real reads</b> from the receptionist mirror (Vapi when connected, seeded fixtures otherwise). Answer rate is derived from the outcomes of the calls loaded here: booked and transferred are counted as handled, missed and message are not. To go live, forward the main line to Twilio then Vapi (bring-your-own OpenAI key): the webhook and lead capture are already built. Nothing is sent or booked from this screen without a person.</div>
   </div>
 
+<script src="/os.js"></script>
 <script>
+"use strict";
+var DATA={calls:[],leads:[],metrics:{}};
+function esc(t){return OS.esc(t);}
 function fmtDur(s){s=s||0;var m=Math.floor(s/60);return m+':'+String(s%60).padStart(2,'0');}
 function fmtTime(t){try{return new Date(t).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});}catch(e){return t;}}
+function fmtWhen(t){if(!t)return '';try{var d=new Date(t);var today=new Date();var same=d.toDateString()===today.toDateString();return same?fmtTime(t):OS.date(t);}catch(e){return String(t);}}
+
 function load(){
   fetch('/api/calls').then(function(r){return r.json();}).then(function(d){
-    if(d.live){var b=document.getElementById('status-badge');b.className='badge live';b.innerHTML='<span class="d"></span>Live · 24/7';}
-    var m=d.metrics;
-    document.getElementById('kpis').innerHTML=[
-      kpi('Answered today',m.callsToday,false),
-      kpi('Routed correctly',m.transferred,true),
-      kpi('New leads',m.leadsCaptured,false),
-      kpi('Average length',fmtDur(m.avgDuration),false)
-    ].join('');
-    document.getElementById('call-rows').innerHTML=(d.calls||[]).map(function(c){
-      var oc=c.outcome, pill= oc==='booked'?'green':oc==='transferred'?'amber':'gray';
-      var main='<tr class="call-row" data-id="'+c.id+'" onclick="toggleCall('+c.id+')">'+
-        '<td style="font:500 12px \'Geist Mono\',monospace;color:var(--muted)"><span class="chev">▶</span> '+fmtTime(c.started_at)+'</td>'+
-        '<td style="font:500 12.5px \'Geist Mono\',monospace;color:var(--ink)">'+esc(c.from_number||'')+'</td>'+
-        '<td style="font:600 12.5px \'Figtree\',sans-serif;color:var(--ink)">'+esc(c.intent||'')+'</td>'+
-        '<td><span class="pill '+pill+'">'+esc(oc||'')+'</span></td>'+
-        '<td style="text-align:right;font:500 12px \'Geist Mono\',monospace;color:var(--muted)">'+fmtDur(c.duration)+'</td></tr>';
-      var det='<tr class="detail-tr" data-detail="'+c.id+'" style="display:none"><td class="detail-cell" colspan="5"><div class="detail">'+callDetail(c)+'</div></td></tr>';
-      return main+det;
-    }).join('');
-    document.getElementById('leads').innerHTML=(d.leads||[]).map(function(l){
-      var st=l.status||'', pill=st==='booked'?'green':st==='new'?'money':st==='quote'?'amber':'gray';
-      var sub=[esc(l.need||''),l.address?esc(l.address):'',l.phone?esc(l.phone):''].filter(Boolean).join(' · ');
-      return '<div style="padding:13px 18px;border-bottom:1px solid var(--divider-soft)">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-        '<span style="font:700 13px \'Figtree\',sans-serif;color:var(--ink)">'+esc(l.name||'Unknown')+'</span>'+
-        '<span class="pill '+pill+'">'+esc(st)+'</span></div>'+
-        '<p style="margin:4px 0 0;font:500 12px/1.5 \'Figtree\',sans-serif;color:var(--muted)">'+sub+'</p></div>';
-    }).join('') || '<div class="empty" style="padding:28px 18px"><p>No leads yet.</p></div>';
-  });
+    DATA=d;
+    var b=document.getElementById('status');
+    if(d.live){b.className='status-pill live';b.innerHTML='<span class="d"></span>Live · 24/7';}
+    else{b.className='status-pill soon';b.innerHTML='<span class="d"></span>Connecting soon';}
+    renderStrip();
+    renderQueue();
+    renderLog();
+  }).catch(function(){document.getElementById('queue').innerHTML=OS.errorBox('Could not load calls.');});
 }
-function kpi(l,v,green){return '<div class="kpi" style="padding:15px 17px;cursor:default"><div style="font:700 11.5px \'Figtree\',sans-serif;color:var(--muted)">'+l+'</div><div class="value num" style="font:800 24px \'Figtree\',sans-serif;letter-spacing:0;color:'+(green?'var(--green)':'var(--ink)')+';margin-top:9px">'+v+'</div></div>';}
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-/* --- on-call chip: who the after-hours line reaches now (office-aware) --- */
-function ocOffice(){try{var o=localStorage.getItem('fpos_office')||'';return o&&o!=='all'?o:'Riverton';}catch(_){return 'Riverton';}}
-function ocGo(){try{window.parent.postMessage({type:'app-navigate',tab:'oncall'},'*');}catch(_){}}
+function buildQueue(){
+  var q=[];
+  (DATA.leads||[]).forEach(function(l){
+    var st=String(l.status||'').toLowerCase();
+    if(st===''||st==='new'){
+      q.push({type:'lead',tone:'high',id:l.id,who:l.name||'Unknown caller',
+        detail:[l.need,l.address].filter(Boolean).join(' · ')||'New lead',phone:l.phone||'',when:l.created_at,label:'Uncontacted lead'});
+    }
+  });
+  (DATA.calls||[]).forEach(function(c){
+    var oc=String(c.outcome||'').toLowerCase();
+    if(oc==='missed'||oc==='message'){
+      var intent=String(c.intent||'').toLowerCase();
+      var label=/complaint|repeat/.test(intent)?'Complaint · repeat visit'
+        : /billing|invoice|payment/.test(intent)?'Billing callback'
+        : oc==='missed'?'Missed call':'Message left';
+      var tone=/complaint|repeat/.test(intent)?'critical':oc==='missed'?'high':'medium';
+      q.push({type:'call',tone:tone,who:c.from_number||'Unknown number',
+        detail:c.intent||'No stated reason',phone:c.from_number||'',when:c.started_at,label:label});
+    }
+  });
+  var rank={critical:0,high:1,medium:2,low:3,neutral:4};
+  q.sort(function(a,b){return (rank[a.tone]-rank[b.tone])||(new Date(b.when||0)-new Date(a.when||0));});
+  return q;
+}
+
+function renderStrip(){
+  var m=DATA.metrics||{};
+  var calls=DATA.calls||[];
+  var total=calls.length;
+  var missed=calls.filter(function(c){return String(c.outcome||'').toLowerCase()==='missed';}).length;
+  var answered=total-missed;
+  var rate=total?Math.round(answered/total*100):null;
+  var queueN=buildQueue().length;
+  var cells=[
+    { label:'Calls today', value:(m.callsToday||0), format:'count', drillable:false, sub:'answered on the main line' },
+    { label:'Answer rate', display:(rate==null?'n/a':rate+'%'), drillable:false, sub:(total?answered+' of '+total+' answered':'no calls yet') },
+    { label:'Leads', value:(m.leadsCaptured||0), format:'count', drillable:false, sub:'captured from calls' },
+    { label:'Needs follow-up', value:queueN, format:'count', drillable:false, sub:'uncontacted or awaiting callback' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
+function renderQueue(){
+  var rows=buildQueue();
+  document.getElementById('qn').textContent=rows.length?('· '+rows.length):'';
+  if(!rows.length){ document.getElementById('queue').innerHTML=OS.empty('Every call and lead has been handled. Nothing is waiting on a callback.','✓'); return; }
+  var cols=[
+    {as:'who',label:'Who',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.who)+'</span>'+(r.detail?'<br><span class="muted" style="font-size:11.5px">'+esc(r.detail)+'</span>':'');}},
+    {as:'label',label:'Needs',render:function(v,r){var tone=(r.tone==='critical'||r.tone==='high')?'bad':r.tone==='medium'?'warn':'neutral';return OS.pill(r.label,tone);}},
+    {as:'when',label:'When',render:function(v,r){return r.when?('<span class="muted">'+esc(fmtWhen(r.when))+'</span>'):'';}},
+    {as:'act',label:'Action',render:function(v,r){
+      if(r.type==='lead') return '<button class="os-btn" style="padding:6px 11px;font-size:12px" data-lead-done="'+r.id+'">Mark contacted</button>';
+      return r.phone?('<a class="os-btn" style="padding:6px 11px;font-size:12px;text-decoration:none" href="tel:'+esc(r.phone)+'">Call back</a>'):'<span class="muted">n/a</span>';
+    }}
+  ];
+  document.getElementById('queue').innerHTML=OS.table(cols, rows, {empty:'Nothing is waiting on a callback.'});
+}
+
+function renderLog(){
+  var calls=DATA.calls||[];
+  document.getElementById('logn').textContent=calls.length?('· '+calls.length):'';
+  if(!calls.length){ document.getElementById('log').innerHTML=OS.empty('No calls yet. Sync from Vapi or wait for the first call.'); return; }
+  var body=calls.map(function(c){
+    var oc=String(c.outcome||'').toLowerCase();
+    var tone=oc==='booked'?'good':oc==='transferred'?'warn':oc==='missed'?'bad':'neutral';
+    var main='<tr class="call-row" data-id="'+c.id+'">'+
+      '<td class="muted" style="white-space:nowrap"><span class="chev">▶</span> '+esc(fmtTime(c.started_at))+'</td>'+
+      '<td class="strong" style="font-family:var(--mono)">'+esc(c.from_number||'')+'</td>'+
+      '<td>'+esc(c.intent||'')+'</td>'+
+      '<td>'+OS.pill(c.outcome||'logged',tone)+'</td>'+
+      '<td class="num muted">'+esc(fmtDur(c.duration))+'</td></tr>';
+    var det='<tr class="detail-tr" data-detail="'+c.id+'" style="display:none"><td class="detail-cell" colspan="5"><div class="detail">'+callDetail(c)+'</div></td></tr>';
+    return main+det;
+  }).join('');
+  document.getElementById('log').innerHTML=
+    '<div class="os-tablewrap"><div class="os-tablescroll"><table class="os-table"><thead><tr>'+
+    '<th>Time</th><th>Caller</th><th>What they wanted</th><th>Sent to</th><th class="num">Length</th>'+
+    '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+}
+
+/* on-call button: who the after-hours line reaches now (office-aware) */
+function ocOffice(){var o=OS.office();return o&&o!=='all'?o:'Riverton';}
 function loadOnCall(){
-  var el=document.getElementById('oncall-chip'); if(!el)return;
+  var el=document.getElementById('oncall-btn'); if(!el)return;
   fetch('/api/oncall/current?office='+encodeURIComponent(ocOffice())).then(function(r){return r.json();}).then(function(d){
     var c=d&&d.onCall;
-    if(c){
-      el.className='badge oncall has';
-      el.innerHTML='<span class="d"></span>On call: <b>'+esc(c.person_name)+'</b>'+(c.person_phone?(' · '+esc(c.person_phone)):'');
-    } else {
-      el.className='badge oncall none';
-      el.innerHTML='<span class="d"></span>On call: nobody assigned';
-    }
+    el.textContent=c?('On call: '+(c.person_name||'')+(c.person_phone?(' · '+c.person_phone):'')):'On call: nobody assigned';
   }).catch(function(){});
 }
-loadOnCall();
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){loadOnCall();}});
-function fmtCost(v){v=Number(v)||0;if(v===0)return '$0';if(v<1)return '$'+v.toFixed(3);return '$'+v.toFixed(2);}
 
-/* ---- expandable call detail (recording, summary, cost, transcript) ---- */
+/* expandable call detail (recording, summary, transcript) */
 function toggleCall(id){
   var row=document.querySelector('tr.call-row[data-id="'+id+'"]');
   var det=document.querySelector('tr.detail-tr[data-detail="'+id+'"]');
@@ -234,11 +224,9 @@ function transcriptHtml(c){
 }
 function callDetail(c){
   var parts=[],r1=[];
-  // Play through the server proxy: it re-pulls a fresh URL from Vapi at play time so links
-  // never go stale, and reports when a recording is locked in Vapi private (HIPAA) storage.
   if(c.recording_url||c.vapi_call_id){
     r1.push('<audio controls preload="none" src="/api/calls/'+c.id+'/recording" '+
-      'onerror="this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;none&quot;>Recording locked in Vapi private (HIPAA) storage — turn HIPAA off (or set BYO storage) in Vapi to play here.</span>\');this.remove();"></audio>');
+      'onerror="this.insertAdjacentHTML(\'afterend\',\'<span class=&quot;none&quot;>Recording locked in Vapi private (HIPAA) storage, turn HIPAA off (or set BYO storage) in Vapi to play here.</span>\');this.remove();"></audio>');
   }
   if(c.ended_reason)r1.push('<span class="cbit">ended <b>'+esc(c.ended_reason)+'</b></span>');
   if(c.success_evaluation)r1.push('<span class="cbit">success <b>'+esc(c.success_evaluation)+'</b></span>');
@@ -249,17 +237,31 @@ function callDetail(c){
   if(t)parts.push('<div><div class="label">Transcript</div><div class="transcript">'+t+'</div></div>');
   return parts.join('');
 }
+
+/* delegated actions */
+document.getElementById('log').addEventListener('click',function(e){
+  var row=e.target.closest('tr.call-row'); if(row){ toggleCall(row.getAttribute('data-id')); }
+});
+document.getElementById('queue').addEventListener('click',function(e){
+  var done=e.target.closest('[data-lead-done]'); if(!done) return;
+  done.disabled=true; done.textContent='Saving…';
+  fetch('/api/calls/leads/'+done.getAttribute('data-lead-done')+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:'contacted'})})
+    .then(function(){ OS.toast('Lead marked contacted. It drops off the follow-up queue.'); load(); })
+    .catch(function(){ done.disabled=false; done.textContent='Mark contacted'; });
+});
+document.getElementById('oncall-btn').addEventListener('click',function(){ OS.go('oncall'); });
+
 var syncBtn=document.getElementById('sync');
-if(syncBtn)syncBtn.onclick=function(){
+syncBtn.onclick=function(){
   syncBtn.disabled=true;var orig=syncBtn.textContent;syncBtn.textContent='Syncing…';
   fetch('/api/calls/sync',{method:'POST',headers:{'content-type':'application/json'},body:'{}'})
     .then(function(r){return r.json();})
-    .then(function(d){syncBtn.textContent=d.live?('✓ '+(d.synced||0)+' synced'):'Add VAPI_API_KEY';load();
-      setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},2800);})
-    .catch(function(){syncBtn.textContent='Sync failed';setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},2800);});
+    .then(function(d){ OS.toast(d.live?((d.synced||0)+' calls synced from Vapi.'):'Add VAPI_API_KEY to sync live calls.'); load();
+      setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},1800);})
+    .catch(function(){syncBtn.textContent='Sync failed';setTimeout(function(){syncBtn.textContent=orig;syncBtn.disabled=false;},1800);});
 };
 
-/* ---- chat + navigation contract (voice/text → tab) ---- */
+/* receptionist chat (voice/text → tab), kept intact */
 var convo=document.getElementById('convo');
 function bubble(cls,text){var el=document.createElement('div');el.className='msg '+cls;el.textContent=text;convo.appendChild(el);convo.scrollTop=convo.scrollHeight;return el;}
 function ask(text){
@@ -267,24 +269,21 @@ function ask(text){
   bubble('you',text);
   var bot=bubble('bot','…');var acc='';
   var es=new EventSource('/api/brain/stream?home=true&text='+encodeURIComponent(text));
-  es.addEventListener('navigate',function(e){var d=JSON.parse(e.data);if(d.tab){window.parent.postMessage({type:'app-navigate',tab:d.tab},'*');}});
+  es.addEventListener('navigate',function(e){var d=JSON.parse(e.data);if(d.tab){OS.go(d.tab);}});
   es.addEventListener('token',function(e){acc+=JSON.parse(e.data).text;bot.textContent=acc;convo.scrollTop=convo.scrollHeight;});
   es.addEventListener('done',function(e){var d=JSON.parse(e.data);bot.textContent=d.text||acc;speak(bot.textContent);es.close();load();});
   es.addEventListener('error',function(){bot.textContent=acc||'(offline, add an LLM key for full conversation)';es.close();});
 }
 function speak(text){
-  // Prefer server TTS; fall back to browser speech. Never blocks.
   fetch('/api/voice/tts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:text})}).then(function(r){
     if(r.status===204){browserSpeak(text);return null;}
     return r.blob();
   }).then(function(b){if(b){var a=new Audio(URL.createObjectURL(b));a.play().catch(function(){});}}).catch(function(){browserSpeak(text);});
 }
 function browserSpeak(text){try{var u=new SpeechSynthesisUtterance(text);u.rate=1.03;speechSynthesis.speak(u);}catch(e){}}
-
 document.getElementById('send').onclick=function(){var i=document.getElementById('q');ask(i.value);i.value='';};
 document.getElementById('q').addEventListener('keydown',function(e){if(e.key==='Enter'){document.getElementById('send').click();}});
 
-/* ---- mic (browser STT) ---- */
 var mic=document.getElementById('mic'),hint=document.getElementById('mic-hint'),rec=null,listening=false;
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 mic.onclick=function(){
@@ -297,7 +296,10 @@ mic.onclick=function(){
   rec.onend=function(){listening=false;mic.classList.remove('listening');hint.textContent='Tap to talk';};
   rec.start();
 };
-load();
+
+function reload(){ load(); loadOnCall(); }
+OS.ready(function(){ reload(); });
+OS.onChange(reload);
 </script>
 </body>
 </html>
