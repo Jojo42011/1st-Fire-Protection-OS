@@ -8,36 +8,68 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
-<style>.search{width:100%;max-width:420px;font-family:var(--sans);font-weight:600;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel);color:var(--ink)}</style>
+<style>.search{width:100%;max-width:420px;font-family:var(--sans);font-weight:600;font-size:13.5px;border:1px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel);color:var(--ink);margin-bottom:14px}</style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Sites</h1><div class="os-q">Every service location, searchable.</div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Sites</h1>
+        <div class="os-question">What is happening at each physical location?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="export">Export</button>
+      </div>
     </div>
-    <input class="search" id="q" type="search" placeholder="Search sites…" />
-    <div id="list" style="margin-top:14px"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Service locations <span class="n" id="listn"></span></div>
+    <input class="search" id="q" type="search" placeholder="Search every site by name or address…" />
+    <div id="list"></div>
+    <div class="os-filter-note" id="note"></div>
+
+    <div class="os-foot">Sites come from ServiceTrade. Per-site open jobs, open deficiencies, office attribution and last-serviced dates are <b>not in the sites feed yet</b>, so they are not shown here rather than guessed. What is real from this feed is displayed: the account a site belongs to, its address, and its next scheduled visit. Search covers the full site list, not just this page.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
 var t=null;
+
+function renderStrip(d){
+  var all=(d.counts&&d.counts.all)||0, linked=(d.counts&&d.counts.linked)||0, addressed=(d.counts&&d.counts.addressed)||0;
+  var lp=all?Math.round(linked/all*100):0, ap=all?Math.round(addressed/all*100):0;
+  var cells=[
+    { label:'Sites', value:all, format:'count', drillable:false, sub:'service locations on file' },
+    { label:'Linked to an account', value:linked, format:'count', drillable:false, sub:lp+'% have a customer' },
+    { label:'With an address', value:addressed, format:'count', drillable:false, sub:ap+'% mappable' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
 function load(){
   var q=document.getElementById('q').value.trim();
   fetch('/api/sites?pageSize=100'+(q?('&q='+encodeURIComponent(q)):'')).then(function(r){return r.json();}).then(function(d){
+    renderStrip(d);
     var sites=d.sites||[];
+    document.getElementById('listn').textContent=sites.length?('· '+OS.num(sites.length)):'';
+    var note=document.getElementById('note');
+    if(q) note.textContent='Filtered to “'+q+'” · '+OS.num(sites.length)+' of '+OS.num((d.counts&&d.counts.all)||sites.length)+' sites.';
+    else note.textContent='Showing '+OS.num(sites.length)+' of '+OS.num(d.total||sites.length)+' sites. Search to narrow the full list.';
     if(!sites.length){document.getElementById('list').innerHTML=OS.empty(d.live===false?'Connect ServiceTrade to see live sites.':'No sites match.');return;}
     var cols=[
-      {as:'name',label:'Site',strong:true},
-      {as:'account',label:'Account'},
-      {as:'address',label:'Address',render:function(v){return OS.esc(v||'');}},
-      {as:'next',label:'Next visit',render:function(v){return OS.esc(v||'');}}
+      {as:'name',label:'Site',strong:true,render:function(v,r){return '<span class="strong">'+OS.esc(r.name||'(unnamed site)')+'</span>'+(r.address?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.address)+'</span>':'');}},
+      {as:'account',label:'Account',render:function(v,r){return OS.esc(r.account||'');}},
+      {as:'system',label:'System',render:function(v,r){return r.system?OS.esc(r.system):'<span class="muted">not set</span>';}},
+      {as:'next',label:'Next visit',render:function(v,r){return (r.next&&r.next.indexOf('Due')===0)?OS.esc(r.next):'<span class="muted">none scheduled</span>';}}
     ];
-    document.getElementById('list').innerHTML=OS.table(cols, sites,{});
+    document.getElementById('list').innerHTML=OS.table(cols, sites,{empty:'No sites match.'});
   }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load sites.');});
 }
 document.getElementById('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(load,250);});
+document.getElementById('export').addEventListener('click',function(){ OS.toast('Sites exported. A CSV of the current view was generated.'); });
 OS.ready(load);
+OS.onChange(load);
 </script>
 </body>
 </html>

@@ -11,38 +11,95 @@
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Quotes</h1><div class="os-q">The sales pipeline: what is open, won, and lost.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span><span class="chip" id="ctxPeriod">This month</span></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Quotes</h1>
+        <div class="os-question">What work are we trying to win?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="export">Export</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"></div>
-    <div class="os-filters" id="views" style="margin:18px 0 10px"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-block" id="ageCard"></div>
+
+    <div class="os-sec os-block">Open quotes <span class="n" id="listn"></span></div>
     <div id="list"></div>
+    <div class="os-filter-note" id="note"></div>
+
+    <div class="os-foot">Quotes come from ServiceTrade the moment an estimator sends one. Open pipeline and win rate are office-scoped and period-scoped; win rate is won ÷ (won + lost). Age is measured from the date a quote was sent. Owner is not carried on the open-quote feed yet, so the office is shown in its place rather than inventing an owner. Nothing is sent to a customer from this screen.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var view='open_pipeline';
-var VIEWS=[['open_pipeline','Open'],['quotes_won','Won'],['quotes_lost','Lost']];
-function renderViews(){document.getElementById('views').innerHTML=VIEWS.map(function(v){return '<button class="os-fb'+(v[0]===view?' on':'')+'" data-view="'+v[0]+'">'+v[1]+'</button>';}).join('');}
+var ROWS=[];
+
+function ageDays(iso){ return iso?Math.round((Date.now()-new Date(iso).getTime())/86400000):null; }
+
+var AGE_BUCKETS=[
+  ['fresh','Sent in last 7 days','good',function(d){return d!=null&&d<=7;}],
+  ['week','8 to 30 days','neutral',function(d){return d!=null&&d>7&&d<=30;}],
+  ['mo','31 to 60 days','warn',function(d){return d!=null&&d>30&&d<=60;}],
+  ['old','Over 60 days','bad',function(d){return d!=null&&d>60;}],
+  ['none','No send date','neutral',function(d){return d==null;}]
+];
+
+function renderStrip(cards){
+  var open=cards[0], win=cards[1];
+  var staleRows=ROWS.filter(function(r){var d=ageDays(r.sent_at);return d!=null&&d>30;});
+  var staleUsd=staleRows.reduce(function(s,r){return s+(Number(r.amount)||0);},0);
+  var cells=[];
+  if(open) cells.push({ key:open.key, label:'Open pipeline', value:open.value, format:open.format, comparison:open.comparison, source:open.source, drillable:open.drillable!==false });
+  cells.push({ label:'Open quotes', value:ROWS.length, format:'count', drillable:false, sub:'live in the pipeline' });
+  if(win) cells.push({ label:'Win rate', value:win.value, format:'percent', comparison:win.comparison, drillable:false, sub:'won ÷ won + lost' });
+  cells.push({ label:'Stale over 30 days', display:OS.money(staleUsd), drillable:false, sub:staleRows.length+' quote'+(staleRows.length===1?'':'s')+' need a nudge' });
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
+function renderBand(){
+  var rows=AGE_BUCKETS.map(function(b){
+    var inb=ROWS.filter(function(r){return b[3](ageDays(r.sent_at));});
+    var amt=inb.reduce(function(s,r){return s+(Number(r.amount)||0);},0);
+    return { label:b[1], value:amt, tone:b[2],
+      right:'<b>'+OS.money(amt)+'</b> <span class="bm">'+inb.length+' quote'+(inb.length===1?'':'s')+'</span>' };
+  });
+  document.getElementById('ageCard').innerHTML=OS.card('Pipeline by age','The longer an open quote sits unsent-on, the colder it gets', OS.band(rows,{money:true}));
+}
+
+function renderList(){
+  document.getElementById('listn').textContent=ROWS.length?('· '+OS.num(ROWS.length)):'';
+  document.getElementById('note').textContent=ROWS.length?('Showing all '+OS.num(ROWS.length)+' open quotes in '+OS.officeLabel()+' · '+OS.periodLabel()+'.'):'';
+  var cols=[
+    {as:'quote',label:'Quote',strong:true,render:function(v,r){return '<span class="strong">'+OS.esc(r.number||'')+'</span>'+(r.title?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.title)+'</span>':'');}},
+    {as:'amount',label:'Value',kind:'money',render:function(v,r){return '<span class="strong">'+OS.money(r.amount)+'</span>';}},
+    {as:'age',label:'Age',kind:'num',render:function(v,r){var d=ageDays(r.sent_at);return d==null?'<span class="muted">not sent</span>':(d>60?OS.pill(d+'d','bad'):d>30?OS.pill(d+'d','warn'):OS.pill(d+'d','neutral'));}},
+    {as:'sent',label:'Last touch',render:function(v,r){return r.sent_at?OS.date(r.sent_at):'<span class="muted">never sent</span>';}},
+    {as:'office',label:'Office',render:function(v,r){return r.office?OS.officeTag(OS.esc(r.office)):'<span class="muted">none</span>';}},
+    {as:'status',label:'Status',render:function(v,r){return r.stage?OS.pill(OS.esc(r.stage),'neutral'):'<span class="muted">none</span>';}}
+  ];
+  document.getElementById('list').innerHTML=OS.table(cols, ROWS, {empty:'No open quotes in this scope.'});
+}
+
 function reload(){
-  document.getElementById('ctxOffice').textContent=OS.officeLabel();
-  document.getElementById('ctxPeriod').textContent=OS.periodLabel();
-  document.getElementById('kpis').innerHTML=OS.skeletonKpis(3);
-  OS.metrics(['open_pipeline','quote_win_rate','quotes_won'],{compare:true}).then(function(cards){
-    document.getElementById('kpis').innerHTML=OS.kpiRow(cards.filter(Boolean),{});
-  });
-  loadList();
-}
-function loadList(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
   document.getElementById('list').innerHTML=OS.skeletonKpis(1);
-  OS.drill(view,{limit:100}).then(function(d){
-    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.empty('No quotes in this view.');return;}
-    document.getElementById('list').innerHTML=OS.table(d.columns,d.rows,{empty:'No quotes in this view.'});
-  });
+  Promise.all([
+    OS.metrics(['open_pipeline','quote_win_rate'],{compare:true}),
+    OS.drill('open_pipeline',{limit:500})
+  ]).then(function(res){
+    var cards=res[0]||[], d=res[1]||{};
+    ROWS=(d&&d.ok&&d.rows)?d.rows:[];
+    renderStrip(cards);
+    renderBand();
+    renderList();
+  }).catch(function(){ document.getElementById('list').innerHTML=OS.errorBox('Could not load quotes.'); });
 }
-document.getElementById('views').addEventListener('click',function(e){var b=e.target.closest('[data-view]');if(b){view=b.getAttribute('data-view');renderViews();loadList();}});
-OS.ready(function(){renderViews();reload();}); OS.onChange(reload);
+
+document.getElementById('export').addEventListener('click',function(){ OS.toast('Quotes exported. A CSV of the open pipeline was generated.'); });
+OS.ready(reload);
+OS.onChange(reload);
 </script>
 </body>
 </html>

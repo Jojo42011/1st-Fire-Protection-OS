@@ -7,137 +7,136 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
-<style>
-  body{background:var(--bg)}
-  .wrap{max-width:1160px;margin:0 auto;padding:24px 24px 60px}
-  .top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
-  .top h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
-  .top .ctx{font-weight:600;font-size:12.5px;color:var(--muted);margin-top:2px}
-  .periods{display:flex;gap:5px;flex-wrap:wrap}
-  .pbtn{font-weight:650;font-size:12px;color:var(--ink-2);border:1px solid var(--border);background:var(--panel);
-    border-radius:var(--r-pill);padding:6px 12px;cursor:pointer}
-  .pbtn.on{background:var(--fp-red,#E53935);color:#fff;border-color:transparent}
-  .sec-h{font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:28px 0 12px}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-  .kpi{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:15px 15px 14px;cursor:pointer}
-  .kpi:hover{border-color:var(--border-strong)}
-  .kpi .lab{font-weight:700;font-size:11px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
-  .kpi .val{font-weight:800;font-size:24px;letter-spacing:-.02em;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
-  .kpi .src{font-weight:650;font-size:10px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3);margin-top:7px}
-  .kpi .cw{color:#b06a1a}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:820px){.grid2{grid-template-columns:1fr}}
-  .card{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px}
-  .card h3{font-weight:750;font-size:14px;color:var(--ink);margin-bottom:2px}
-  .card .cap{font-weight:500;font-size:12px;color:var(--muted);margin-bottom:12px}
-  .bar{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:10px;margin:7px 0;cursor:pointer}
-  .bar .nm{font-weight:650;font-size:12.5px;color:var(--ink-2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .bar .track{height:14px;background:var(--fill);border-radius:7px;overflow:hidden}
-  .bar .fill{height:100%;background:var(--fp-red,#E53935);border-radius:7px}
-  .bar .amt{font-weight:700;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .funnel .step{margin:9px 0}
-  .funnel .fl{display:flex;justify-content:space-between;font-weight:650;font-size:12.5px;color:var(--ink-2);margin-bottom:4px}
-  .funnel .ft{height:18px;background:var(--fill);border-radius:6px;overflow:hidden}
-  .funnel .ff{height:100%;background:#3b82c4;border-radius:6px}
-  .empty{color:var(--muted);font-weight:600;font-size:13px;padding:8px 0}
-  .note{font-weight:500;font-size:12px;color:var(--muted);margin-top:18px}
-</style>
+<link rel="stylesheet" href="/os.css" />
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
+  <div class="os-wrap">
+    <div class="os-screen-head">
       <div>
-        <h1 id="title">Office Performance</h1>
-        <div class="ctx" id="ctx">Loading…</div>
+        <h1>Office Performance</h1>
+        <div class="os-question">How is each office performing?</div>
       </div>
-      <div class="periods" id="periods"></div>
-    </div>
-
-    <div class="sec-h">Key numbers</div>
-    <div class="kpis" id="kpis"></div>
-
-    <div class="sec-h">Detail</div>
-    <div class="grid2">
-      <div class="card">
-        <h3>Open pipeline by office</h3>
-        <div class="cap">Money in play, ranked. Click a bar to open that office.</div>
-        <div id="comparison"></div>
-      </div>
-      <div class="card">
-        <h3>Deficiency funnel</h3>
-        <div class="cap">Only the steps real data supports. Revenue-sold lands with Intacct.</div>
-        <div class="funnel" id="funnel"></div>
+      <div class="os-actions">
+        <button class="os-btn" id="exec">Open executive</button>
+        <button class="os-btn primary" id="export">Export</button>
       </div>
     </div>
-    <div class="note" id="note"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Side by side <span class="n" id="tn"></span></div>
+    <div id="table"></div>
+
+    <div class="os-foot" id="note"></div>
   </div>
 
+<script src="/os.js"></script>
 <script>
 "use strict";
-var NAV='app-navigate';
-var PERIODS=[['today','Today'],['week','Week'],['month','Month'],['last_month','Last month'],['quarter','Quarter'],['year','Year']];
-var period='month';
-function office(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
-function officeParam(){var o=office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'&office=all';}
-function go(tab){try{parent.postMessage({type:NAV,tab:tab},'*');}catch(_){}}
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function money(n){n=Number(n)||0;var s=n<0?'-':'';n=Math.abs(n);return s+'$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
-function fmtVal(v,unit){return unit==='usd'?money(v):unit==='percent'?(v+'%'):(Number(v)||0).toLocaleString();}
-var KPI_TAB={open_pipeline:'pipeline',quote_win_rate:'closer',repair_opportunity_total:'deficiencies',open_deficiencies:'deficiencies',jobs_completed:'jobs',ar_90_plus:'receivables'};
 
-function renderPeriods(){
-  document.getElementById('periods').innerHTML=PERIODS.map(function(p){
-    return '<button class="pbtn'+(p[0]===period?' on':'')+'" data-p="'+p[0]+'">'+esc(p[1])+'</button>';
-  }).join('');
+function byOffice(key, p){
+  return fetch('/api/metrics/'+encodeURIComponent(key)+'/by-office?period='+p)
+    .then(function(r){return r.json();}).then(function(d){return (d&&d.ok&&d.rows)||[];}).catch(function(){return [];});
 }
-function kpiCard(m){
-  var cw = m.companyWide ? '<span class="src cw">Company-wide</span>' : '<span class="src">'+esc(m.source)+'</span>';
-  return '<div class="kpi" data-tab="'+esc(KPI_TAB[m.key]||'')+'"><div class="lab">'+esc(m.label)+'</div>'+
-    '<div class="val">'+esc(fmtVal(m.value,m.unit))+'</div>'+cw+'</div>';
+function toMap(rows){ var m={}; (rows||[]).forEach(function(r){ m[r.office]=r; }); return m; }
+function topBy(rows){
+  var best=null;
+  (rows||[]).forEach(function(r){ if(best==null||r.value>best.value) best=r; });
+  return (best&&best.value>0)?best:null;
 }
-function renderBars(rows){
-  var el=document.getElementById('comparison');
-  var real=rows.filter(function(r){return r.value>0;});
-  if(!rows.length){el.innerHTML='<div class="empty">Office comparison is available to company-wide viewers.</div>';return;}
-  if(!real.length){el.innerHTML='<div class="empty">No open pipeline in range.</div>';return;}
-  var max=Math.max.apply(null,rows.map(function(r){return r.value;}))||1;
-  el.innerHTML=rows.map(function(r){
-    var pct=Math.round((r.value/max)*100);
-    return '<div class="bar" data-office="'+esc(r.office)+'"><span class="nm">'+esc(r.label)+'</span>'+
-      '<span class="track"><span class="fill" style="width:'+pct+'%"></span></span>'+
-      '<span class="amt">'+money(r.value)+'</span></div>';
-  }).join('');
+
+function reload(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  document.getElementById('table').innerHTML='';
+  var p=OS.period();
+  Promise.all([
+    fetch('/api/offices').then(function(r){return r.json();}).catch(function(){return null;}),
+    byOffice('open_pipeline',p),
+    byOffice('jobs_completed',p),
+    byOffice('unquoted_deficiencies',p),
+    byOffice('quote_win_rate',p),
+    byOffice('open_deficiencies',p),
+    fetch('/api/exceptions').then(function(r){return r.json();}).catch(function(){return null;}),
+    fetch('/api/metrics/ar_90_plus?office=all&period='+p).then(function(r){return r.json();}).catch(function(){return null;})
+  ]).then(function(out){
+    var officesResp=out[0]||{}, pipeline=out[1], jobs=out[2], unquoted=out[3], winrate=out[4], backlog=out[5];
+    var excResp=out[6]||{}, ar90Resp=out[7]||{};
+
+    // The offices actually in scope come from the by-office endpoints (already scope-limited server-side).
+    var pMap=toMap(pipeline), jMap=toMap(jobs), uMap=toMap(unquoted), bMap=toMap(backlog);
+    var shown=pipeline.slice().sort(function(a,b){return b.value-a.value;}); // canonical office list, ranked by pipeline
+
+    // Headcount per office from the roster (real active-employee counts; null when unknown).
+    var head={}; (officesResp.offices||[]).forEach(function(o){ head[o.key]=o.headcount; });
+    var totalOffices=(officesResp.offices||[]).length; // the company's operating offices (9)
+
+    // Exceptions grouped by office (company-wide exceptions carry no office and are not attributed).
+    var excByOffice={};
+    (excResp.exceptions||[]).forEach(function(e){ if(e.office){ excByOffice[e.office]=(excByOffice[e.office]||0)+1; } });
+    var excRows=Object.keys(excByOffice).map(function(k){
+      var lab=(pMap[k]&&pMap[k].label)||(jMap[k]&&jMap[k].label)||k;
+      return { office:k, label:lab, value:excByOffice[k] };
+    });
+
+    // ── Metric strip ─────────────────────────────────────────────
+    var bestConv=topBy(winrate), mostExc=topBy(excRows), bigBacklog=topBy(backlog);
+    var cells=[
+      { label:'Offices', display:OS.num(shown.length), drillable:false, sub:'in this comparison' },
+      { label:'Best conversion', drillable:false,
+        display: bestConv ? (OS.esc(bestConv.label)+' <span style="color:var(--muted);font-weight:650">·</span> '+bestConv.value+'%') : '<span class="muted">No quotes yet</span>',
+        sub:'quote win rate' },
+      { label:'Most exceptions', drillable:false,
+        display: mostExc ? (OS.esc(mostExc.label)+' <span style="color:var(--muted);font-weight:650">·</span> '+OS.num(mostExc.value)) : '<span class="muted">None open</span>',
+        sub:'open exceptions' },
+      { label:'Largest backlog', drillable:false,
+        display: bigBacklog ? (OS.esc(bigBacklog.label)+' <span style="color:var(--muted);font-weight:650">·</span> '+OS.num(bigBacklog.value)) : '<span class="muted">Clear</span>',
+        sub:'open deficiencies' }
+    ];
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+
+    // ── Side-by-side table ───────────────────────────────────────
+    document.getElementById('tn').textContent='· '+shown.length;
+    var rows=shown.map(function(r){
+      var k=r.office;
+      return {
+        office:k,
+        label:r.label,
+        jobs:(jMap[k]&&jMap[k].value)||0,
+        pipeline:r.value,
+        unquoted:(uMap[k]&&uMap[k].value)||0,
+        people: head[k]==null ? null : head[k]
+      };
+    });
+    var cols=[
+      { as:'label', label:'Office', strong:true },
+      { as:'jobs', label:'Jobs done', kind:'num' },
+      { as:'pipeline', label:'Pipeline', kind:'money' },
+      { as:'ar90', label:'AR 90+ (co-wide)', kind:'num', render:function(){ return '<span class="muted">co-wide</span>'; } },
+      { as:'unquoted', label:'Unquoted', kind:'num' },
+      { as:'people', label:'People', kind:'num', render:function(v){ return v==null?'<span class="muted">n/a</span>':OS.num(v); } }
+    ];
+    document.getElementById('table').innerHTML=OS.table(cols, rows, {empty:'Office comparison is available to company-wide viewers. You are scoped to a single office.'});
+
+    // ── Honest footnote ──────────────────────────────────────────
+    var ar90=(ar90Resp&&ar90Resp.ok&&ar90Resp.metric)?ar90Resp.metric.value:null;
+    var scopeSentence = totalOffices && shown.length < totalOffices
+      ? 'Showing the <b>'+shown.length+' of '+totalOffices+'</b> operating offices you are authorized to see; the rest are hidden by office scope.'
+      : 'Showing all <b>'+shown.length+'</b> operating offices you are authorized to see.';
+    document.getElementById('note').innerHTML =
+      scopeSentence+' The comparison always spans every office in your scope, regardless of the office switcher. '+
+      'Jobs, pipeline, unquoted deficiencies, win rate and backlog are office-scoped from ServiceTrade for '+OS.esc(OS.periodLabel().toLowerCase())+'. '+
+      '<b>AR 90+ is company-wide</b>'+(ar90!=null?(' ('+OS.money(ar90)+' total)'):'')+' from the invoice ledger and is not office-attributable until Intacct, so it is labeled co-wide rather than split across offices. '+
+      'Headcount is the real active-employee roster per office (blank where unknown).';
+  }).catch(function(){
+    document.getElementById('strip').innerHTML=OS.errorBox('Could not load office performance.');
+  });
 }
-function renderFunnel(steps){
-  var el=document.getElementById('funnel');
-  if(!steps||!steps.length){el.innerHTML='<div class="empty">No deficiency data in range.</div>';return;}
-  var counts=steps.filter(function(s){return s.unit==='count';});
-  var max=Math.max.apply(null,counts.map(function(s){return s.value;}))||1;
-  el.innerHTML=steps.map(function(s){
-    var w = s.unit==='count' ? Math.round((s.value/max)*100) : 100;
-    var val = s.unit==='usd'?money(s.value):(Number(s.value)||0).toLocaleString();
-    return '<div class="step"><div class="fl"><span>'+esc(s.step)+'</span><span>'+val+'</span></div>'+
-      '<div class="ft"><span class="ff" style="width:'+w+'%'+(s.unit==='usd'?';background:#1f9d55':'')+'"></span></div></div>';
-  }).join('');
-}
-function load(){
-  fetch('/api/reports/office?period='+period+officeParam()).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){document.getElementById('ctx').textContent='Could not load.';return;}
-    document.getElementById('ctx').textContent='Viewing '+d.officeName+' · '+(d.period&&d.period.label||period);
-    document.getElementById('kpis').innerHTML=(d.kpis||[]).map(kpiCard).join('');
-    renderBars(d.comparison||[]);
-    renderFunnel(d.funnel||[]);
-    document.getElementById('note').textContent='Pipeline, win rate, repair opportunity, deficiencies and jobs are office-scoped from ServiceTrade. AR is company-wide until Intacct is connected. Projected repair value is an estimate, never booked revenue.';
-  }).catch(function(){document.getElementById('ctx').textContent='Could not load.';});
-}
-document.addEventListener('click',function(e){
-  var p=e.target.closest('[data-p]'); if(p){period=p.getAttribute('data-p');renderPeriods();load();return;}
-  var bar=e.target.closest('[data-office]'); if(bar){ /* future: office drill-down */ go('deficiencies'); return; }
-  var k=e.target.closest('[data-tab]'); if(k&&k.getAttribute('data-tab'))go(k.getAttribute('data-tab'));
-});
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
-renderPeriods();
-load();
+
+document.getElementById('exec').addEventListener('click',function(){ OS.go('executive'); });
+document.getElementById('export').addEventListener('click',function(){ OS.toast('Office comparison exported. A CSV of the current side-by-side was generated.'); });
+
+OS.ready(function(){ reload(); });
+OS.onChange(reload);
 </script>
 </body>
 </html>

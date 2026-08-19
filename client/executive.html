@@ -8,43 +8,123 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
+<style>
+  /* Honest empty state for the P&L this view deliberately will not estimate. Same anatomy as money.html. */
+  .locked{border:1px solid var(--os-warn);background:var(--os-warn-bg);border-radius:14px;padding:18px}
+  .locked .top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .locked .badge{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#8a6d1a;background:#fff3e6;border:1px solid var(--os-warn);border-radius:var(--r-pill,999px);padding:5px 11px;flex:none}
+  .locked h3{font-weight:750;font-size:15px;color:var(--ink)}
+  .locked p{font-weight:500;font-size:12.5px;color:var(--ink-2);margin-top:5px;max-width:80ch}
+  .locked .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+  .locked .g{border:1px dashed var(--border-strong,#c9ccd6);border-radius:10px;padding:12px;color:var(--muted)}
+  .locked .g .l{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+  .locked .g .v{font-weight:700;font-size:15px;color:var(--ink-3);margin-top:5px}
+  .locked .cta{margin-top:14px}
+</style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Executive</h1><div class="os-q">The company at a glance: where the money and the risk are.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span><span class="chip" id="ctxPeriod">This month</span></div></div>
-      <div class="os-sources" id="sources"></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Executive</h1>
+        <div class="os-question">How is the company performing?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="receivables">Open receivables</button>
+        <button class="os-btn primary" id="connect">Connect Intacct</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis"></div>
-    <div class="os-sec">Open pipeline by office</div>
-    <div id="comparison"></div>
-    <div class="os-sec">Jobs completed over time</div>
-    <div id="trend"></div>
-    <div class="os-sec">Deficiency opportunity</div>
-    <div id="funnel" class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))"></div>
-    <div class="os-q" style="margin-top:14px">Revenue, gross margin and cash arrive with Sage Intacct. Everything here is operational truth from ServiceTrade; projected values are labeled and never counted as booked revenue.</div>
+
+    <div id="strip"></div>
+
+    <div class="os-block">
+      <div class="locked">
+        <div class="top">
+          <span class="badge">No P&amp;L connected</span>
+          <div>
+            <h3>Revenue and margin are not on this page</h3>
+            <p>An executive view that guessed revenue, gross margin or operating income from operational
+              data would mislead, so this page will not estimate them. Those figures are financial truth
+              that comes only from Sage Intacct. Until it is connected and the entity mapping is
+              configured, the company's health is read here from its operational drivers instead:
+              open pipeline, jobs completed, receivables and the repair opportunity below. Everything
+              shown is operational fact from ServiceTrade and the invoice ledger, never booked revenue.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="g"><div class="l">Revenue</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Gross margin</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Operating income</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Cash collected</div><div class="v">Needs Intacct</div></div>
+        </div>
+        <div class="cta"><button class="os-btn primary" id="connect2">Connect Sage Intacct</button></div>
+      </div>
+    </div>
+
+    <div class="os-two os-block">
+      <div id="officeComp"></div>
+      <div id="svc"></div>
+    </div>
+
+    <div class="os-foot" id="note">Every figure here is <b>operational</b>, not a profit-and-loss. Pipeline,
+      jobs completed and repair opportunity are office-scoped from ServiceTrade; total AR is
+      <b>company-wide</b> from the invoice ledger and is not office-attributable until Intacct. Repair
+      opportunity mixes <b style="color:var(--os-good)">real</b> quoted value with a
+      <span class="os-proj">projected</span> estimate and is never described as booked revenue. Jobs
+      completed accumulates over the period; pipeline and AR are point-in-time snapshots that do not.</div>
   </div>
+
 <script src="/os.js"></script>
 <script>
 "use strict";
+
+function connectIntacct(){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} }
+
 function reload(){
-  document.getElementById('ctxOffice').textContent=OS.officeLabel();
-  document.getElementById('ctxPeriod').textContent=OS.periodLabel();
-  document.getElementById('kpis').innerHTML=OS.skeletonKpis(6);
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
   var o=OS.office(), p=OS.period();
-  fetch('/api/reports/office?office='+encodeURIComponent(o)+'&period='+p).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');return;}
-    document.getElementById('kpis').innerHTML=OS.kpiRow((d.kpis||[]).map(function(m){return Object.assign(m,{format:m.unit,drillable:true});}),{});
-    var comp=(d.comparison||[]).filter(function(r){return r.value>0;});
-    document.getElementById('comparison').innerHTML=comp.length?OS.bars(comp,{money:true,tab:'deficiencies'}):OS.empty('Office comparison is available to company-wide viewers.');
-    document.getElementById('funnel').innerHTML=(d.funnel||[]).map(function(s){return '<div class="os-kpi"><div class="lab">'+OS.esc(s.step)+'</div><div class="val">'+(s.unit==='usd'?OS.money(s.value):OS.num(s.value))+'</div></div>';}).join('');
-  });
-  OS.trend('jobs_completed').then(function(t){
-    document.getElementById('trend').innerHTML=t.supported?OS.lineChart(t.points,{label:'Jobs completed'}):OS.empty('Not enough history yet to draw this trend.');
+  var bundleP=fetch('/api/reports/office?office='+encodeURIComponent(o)+'&period='+p).then(function(r){return r.json();}).catch(function(){return null;});
+  var extraP=OS.metrics(['ar_outstanding','service_agreements'],{compare:false}).catch(function(){return [null,null];});
+  Promise.all([bundleP,extraP]).then(function(out){
+    var d=out[0], extra=out[1]||[];
+    if(!d||!d.ok){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load the executive view.'); return; }
+    var by={}; (d.kpis||[]).forEach(function(k){ by[k.key]=k; });
+    var pipeline=by.open_pipeline, jobs=by.jobs_completed, repair=by.repair_opportunity_total;
+    var arCard=extra[0], saCard=extra[1];
+    var jobsVal=jobs?jobs.value:0, saVal=saCard?saCard.value:0;
+
+    var cells=[
+      { key:'open_pipeline', label:'Open pipeline', display:OS.money(pipeline?pipeline.value:0), sub:'ServiceTrade · quotes in play' },
+      { key:'jobs_completed', label:'Jobs completed', value:jobsVal, format:'count', sub:OS.periodLabel()+' · accumulates' },
+      { key:'ar_outstanding', label:'Total AR', display:OS.money(arCard?arCard.value:0), companyWide:true, sub:'Company-wide' },
+      { key:'repair_opportunity_total', label:'Repair opportunity', tag:'est', projected:true, drillable:false, display:'~'+OS.money(repair?repair.value:0), sub:'real quoted + projected est' }
+    ];
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+
+    // Band 1: open pipeline by office (company-wide comparison from the bundle).
+    var comp=(d.comparison||[]).filter(function(r){return r.value>0;}).map(function(r){
+      return { label:r.label, value:r.value, tone:'accent', right:'<b>'+OS.money(r.value)+'</b>' };
+    });
+    document.getElementById('officeComp').innerHTML = comp.length
+      ? OS.card('Open pipeline by office','Where money is in play, ranked', OS.band(comp,{money:true}))
+      : OS.card('Open pipeline by office','Company-wide comparison', OS.empty('Office comparison is available to company-wide viewers.'));
+
+    // Band 2: service vs contracts (transactional service work against recurring agreements, counts only).
+    var svcRows=[
+      { label:'Service jobs completed', value:jobsVal, tone:'good',
+        right:'<b>'+OS.num(jobsVal)+'</b> <span class="bm">'+OS.esc(OS.periodLabel().toLowerCase())+'</span>' },
+      { label:'Active service agreements', value:saVal, tone:'neutral',
+        right:'<b>'+OS.num(saVal)+'</b> <span class="bm">recurring contracts</span>' }
+    ];
+    document.getElementById('svc').innerHTML=OS.card('Service vs contracts','Transactional service work against recurring agreements (counts from ServiceTrade, not revenue)', OS.band(svcRows));
   });
 }
-OS.ready(function(){ OS.freshness(document.getElementById('sources')); reload(); });
+
+document.getElementById('receivables').addEventListener('click',function(){ OS.go('receivables'); });
+document.getElementById('connect').addEventListener('click',connectIntacct);
+document.getElementById('connect2').addEventListener('click',connectIntacct);
+
+OS.ready(function(){ reload(); });
 OS.onChange(reload);
 </script>
 </body>

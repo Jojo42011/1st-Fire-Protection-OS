@@ -3,80 +3,90 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Pipeline · Northstar</title>
+<title>Pipeline · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
-<style>
-  .screen{max-width:none}
-  .pl-stats{display:flex;align-items:center;gap:26px;padding:16px 20px}
-  @media (max-width:900px){
-    .pl-stats{flex-wrap:wrap;gap:16px 26px}
-    .pl-note{flex-basis:100%;max-width:none}
-  }
-  .pl-fig .pl-lab{font-weight:700;font-size:11px;color:var(--muted)}
-  .pl-fig .pl-val{font-weight:800;font-size:22px;color:var(--ink);margin-top:6px;font-variant-numeric:tabular-nums}
-  .pl-fig .pl-val.money{color:var(--money)}
-  .pl-fig .pl-val.green{color:var(--green)}
-  .pl-note{flex:1;margin:0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3);max-width:46ch}
-  .pl-count{font-weight:600;font-size:11px;color:var(--muted)}
-  .pl-cust{font-weight:700;font-size:12.5px;color:var(--ink)}
-  .deal.lost .pl-cust{color:var(--ink-2)}
-  .pl-detail{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:4px}
-  .pl-foot{display:flex;align-items:center;gap:7px;margin-top:10px}
-  .pl-amt{font-weight:800;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
-  .pl-foot .pl-spacer{flex:1}
-  .deal.lost .pl-chip{display:inline-block;margin-top:10px}
-</style>
+<link rel="stylesheet" href="/os.css" />
 </head>
 <body>
-<div class="screen view" id="root">
-  <div class="card pl-stats" id="stats"></div>
-  <div class="board" id="board"></div>
-</div>
-<script>
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Pipeline</h1>
+        <div class="os-question">Where is open work in the funnel?</div>
+      </div>
+    </div>
 
-function renderStats(s){
-  s=s||{};
-  return ''
-    +fig('Open pipeline',s.open,'')
-    +fig('Quotes aging past 7 days',s.aging,'money')
-    +fig('Win rate, 90 days',s.winRate,'green')
-    +fig('From deficiencies',s.fromDeficiencies,'')
-    +'<p class="pl-note">Quotes come from ServiceTrade the moment an estimator sends one. Stage changes here push straight back.</p>';
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="stageCard"></div>
+      <div id="officeCard"></div>
+    </div>
+
+    <div class="os-foot">Open pipeline is the sum of lead, quoted and following-up stages from ServiceTrade. <b>Weighted pipeline is an estimate</b>: each open stage is discounted by an assumed close probability (lead 20%, quoted 50%, following up 70%), shown amber and dotted. It is a forecast, never booked revenue. Won and lost reflect the current board, not a period-to-date total, because this feed is not period-scoped. The office breakdown is the open-quote cut from ServiceTrade.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+function dollars(s){ return Number(String(s==null?'':s).replace(/[^0-9.\-]/g,''))||0; }
+
+var TONE={lead:'neutral',quoted:'accent',following_up:'warn',won:'good',lost:'bad'};
+var PROB={lead:0.2,quoted:0.5,following_up:0.7};
+
+function renderStrip(data){
+  var stats=data.stats||{}, stages=data.stages||[];
+  var byKey={}; stages.forEach(function(s){ byKey[s.key]=s; });
+  var weighted=0;
+  Object.keys(PROB).forEach(function(k){ if(byKey[k]) weighted+=dollars(byKey[k].total)*PROB[k]; });
+  var wonUsd=byKey.won?dollars(byKey.won.total):0;
+  var lostUsd=byKey.lost?dollars(byKey.lost.total):0;
+  var cells=[
+    { key:'open_pipeline', label:'Open pipeline', display:stats.open!=null?String(stats.open):OS.money(0), sub:'lead + quoted + following up' },
+    { label:'Weighted', tag:'est', display:'~'+OS.money(weighted), projected:true, drillable:false, sub:'stage-probability estimate' },
+    { label:'Won', display:OS.money(wonUsd), drillable:false, sub:(byKey.won?byKey.won.count:0)+' on the board' },
+    { label:'Lost', display:OS.money(lostUsd), drillable:false, sub:(byKey.lost?byKey.lost.count:0)+' on the board' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
 }
-function fig(lab,val,tone){
-  return '<div class="pl-fig"><div class="pl-lab">'+esc(lab)+'</div>'
-    +'<div class="pl-val'+(tone?' '+tone:'')+'">'+esc(val)+'</div></div>';
+
+function renderStageBand(stages){
+  var rows=(stages||[]).map(function(s){
+    return { label:s.label, value:dollars(s.total), tone:TONE[s.key]||'neutral',
+      right:'<b>'+OS.esc(String(s.total))+'</b> <span class="bm">'+OS.num(s.count)+' quote'+(s.count===1?'':'s')+'</span>' };
+  });
+  document.getElementById('stageCard').innerHTML=OS.card('By stage','Where dollars sit across the funnel', OS.band(rows,{money:true}));
 }
-function renderStage(st){
-  var head='<div class="col-head"><span class="sq" style="background:'+esc(st.sq)+'"></span>'
-    +'<span class="n">'+esc(st.label)+'</span>'
-    +'<span class="pl-count">'+esc(st.count)+' · '+esc(st.total)+'</span></div>';
-  var deals=(st.deals||[]).map(renderDeal).join('');
-  return '<div class="pl-col">'+head
-    +'<div style="display:flex;flex-direction:column;gap:10px">'+deals+'</div></div>';
+
+function renderOfficeBand(){
+  OS.drill('open_pipeline',{limit:1000}).then(function(d){
+    var rows=(d&&d.ok&&d.rows)?d.rows:[];
+    if(!rows.length){
+      document.getElementById('officeCard').innerHTML=OS.card('By office','Open pipeline attributed to each office',
+        OS.empty('No office-attributed open quotes in this scope yet.'));
+      return;
+    }
+    var map={};
+    rows.forEach(function(r){ var o=r.office||'Unassigned'; map[o]=(map[o]||0)+(Number(r.amount)||0); });
+    var band=Object.keys(map).map(function(o){ return { label:o, value:map[o], tone:'accent',
+      right:'<b>'+OS.money(map[o])+'</b>' }; }).sort(function(a,b){return b.value-a.value;});
+    document.getElementById('officeCard').innerHTML=OS.card('By office','Open pipeline attributed to each office', OS.band(band,{money:true}));
+  }).catch(function(){
+    document.getElementById('officeCard').innerHTML=OS.card('By office','Open pipeline attributed to each office', OS.errorBox('Could not load the office breakdown.'));
+  });
 }
-function renderDeal(d){
-  var chip='<span class="pill '+esc(d.chipTone||'gray')+' pl-chip">'+esc(d.chip)+'</span>';
-  var body='<div class="pl-cust">'+esc(d.customer)+'</div>'
-    +'<div class="pl-detail">'+esc(d.detail)+'</div>';
-  if(d.lost){
-    return '<div class="deal lost lift">'+body+chip+'</div>';
-  }
-  var foot='<div class="pl-foot"><span class="pl-amt num">'+esc(d.amount)+'</span>'
-    +'<span class="pl-spacer"></span>'+chip+'</div>';
-  return '<div class="deal lift">'+body+foot+'</div>';
-}
-function render(d){
-  document.getElementById('stats').innerHTML=renderStats(d.stats);
-  document.getElementById('board').innerHTML=(d.stages||[]).map(renderStage).join('');
-}
+
 function load(){
-  fetch('/api/pipeline').then(function(r){return r.json();}).then(render);
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  fetch('/api/pipeline').then(function(r){return r.json();}).then(function(d){
+    renderStrip(d);
+    renderStageBand(d.stages||[]);
+    renderOfficeBand();
+  }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load the pipeline.'); });
 }
-load();
+OS.ready(load);
+OS.onChange(load);
 </script>
 </body>
 </html>
