@@ -9,66 +9,139 @@
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
 <style>
-  .age{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
-  @media(max-width:640px){.age{grid-template-columns:repeat(2,1fr)}}
-  .ab{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:11px 13px}
-  .ab .bl{font-weight:700;font-size:10.5px;text-transform:uppercase;color:var(--muted)}
-  .ab .bv{font-weight:800;font-size:18px;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
-  .ab.hot .bv{color:var(--os-bad)}
   .disp{font-family:var(--sans);font-weight:600;font-size:11.5px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;background:var(--panel);color:var(--ink-2);cursor:pointer}
 </style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Deficiencies</h1><div class="os-q">What repair opportunity is not being converted?</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
-      <button class="os-fb" id="sync">↻ Sync</button>
+    <div class="os-screen-head">
+      <div>
+        <h1>Deficiencies</h1>
+        <div class="os-question">What repair opportunity are we failing to convert?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="sync">Sync ServiceTrade</button>
+        <button class="os-btn brand" id="batch">Build quote batch</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
-    <div class="os-sec">Backlog age</div>
-    <div class="age" id="age"></div>
-    <div class="os-sec">Highest-value open items <span class="n" id="listn"></span></div>
+
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="conversion"></div>
+      <div id="agecard"></div>
+    </div>
+
+    <div class="os-sec os-block">Work queue <span class="n" id="listn"></span></div>
+    <div class="os-chips" id="chips"></div>
     <div id="list"></div>
-    <div class="os-q" style="margin-top:14px">Quoted value is REAL (from linked repair quotes). Projected value is an estimate (open count x an assumed ticket), never booked revenue. Set a disposition to explain why an item is not yet quoted.</div>
+    <div class="os-filter-note" id="filterNote"></div>
+
+    <div class="os-foot">Quoted value is <b style="color:var(--os-good)">real</b> (from linked repair quotes). Projected value is an estimate (open count &times; an assumed <span id="ticket">$650</span> ticket), shown amber and never described as booked revenue. Set a disposition to record why an item is not yet quoted. Nothing is sent to ServiceTrade or a customer without approval.</div>
   </div>
+
 <script src="/os.js"></script>
 <script>
 "use strict";
-var DISPOSITIONS=[['','—'],['quote_in_progress','Quote in progress'],['needs_review','Needs review'],['waiting_information','Waiting on info'],['customer_declined','Customer declined'],['warranty','Warranty'],['duplicate','Duplicate']];
+var DISPOSITIONS=[['','No quote yet'],['quote_in_progress','Quote in progress'],['needs_review','Needs review'],['waiting_information','Waiting on info'],['customer_declined','Customer declined'],['warranty','Warranty'],['duplicate','Duplicate']];
+var AVG=650, ALL_ITEMS=[], SUMMARY=null, FILTER='all';
+
 function officeParam(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
-function loadKpis(){
-  document.getElementById('kpis').innerHTML=OS.skeletonKpis(5);
-  OS.metrics(['open_deficiencies','unquoted_deficiencies','quoted_repair_value','projected_repair_opportunity','repair_opportunity_total'],{}).then(function(cards){
-    document.getElementById('kpis').innerHTML=OS.kpiRow(cards.filter(Boolean),{});
-  });
-}
-function loadList(){
+function ageDays(r){ return r.reported_at?Math.round((Date.now()-new Date(r.reported_at).getTime())/86400000):null; }
+
+function loadStrip(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(5);
   fetch('/api/deficiencies'+officeParam()).then(function(r){return r.json();}).then(function(d){
-    var buckets=d.ageBuckets||[];
-    document.getElementById('age').innerHTML=buckets.map(function(b){var hot=b.key==='61-90'||b.key==='90plus';
-      return '<div class="ab'+(hot?' hot':'')+'"><div class="bl">'+b.label+'</div><div class="bv">'+b.n+'</div></div>';}).join('');
-    var items=d.items||[];
-    document.getElementById('listn').textContent='· '+items.length;
-    var cols=[
-      {as:'company_name',label:'Site / customer',strong:true},
-      {as:'description',label:'Deficiency',render:function(v){return OS.esc((v||'').slice(0,60));}},
-      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'';}},
-      {as:'age',label:'Age',render:function(v,r){var days=r.reported_at?Math.round((Date.now()-new Date(r.reported_at).getTime())/86400000):null; return days==null?'':(days>90?OS.pill(days+'d','bad'):days>30?OS.pill(days+'d','warn'):OS.pill(days+'d','neutral'));}},
-      {as:'value',label:'Value',kind:'money',render:function(v,r){return r.quoted?('<span class="strong">'+OS.money(r.proposed_usd)+'</span> <span class="os-tag" style="background:var(--os-good-bg);color:var(--os-good)">quoted</span>'):('<span class="muted">~'+OS.money(650)+' proj</span>');}},
-      {as:'disp',label:'Disposition',render:function(v,r){ if(r.quoted) return '<span class="muted">quoted</span>';
-        return '<select class="disp" data-disp="'+r.id+'">'+DISPOSITIONS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(r.disposition||'')?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';}},
-      {as:'st',label:'',render:function(v,r){return r.stUrl?'<a href="'+r.stUrl+'" target="_blank" rel="noopener" class="os-fb">ServiceTrade ↗</a>':'';}}
+    SUMMARY=d.summary||{}; AVG=SUMMARY.avgTicket||650; ALL_ITEMS=d.items||[];
+    document.getElementById('ticket').textContent=OS.money(AVG);
+    var s=SUMMARY;
+    var pct=s.openCount?Math.round((s.unquotedCount/s.openCount)*100):0;
+    var cells=[
+      { key:'open_deficiencies', label:'Open deficiencies', value:s.openCount, format:'count', sub:'the live backlog' },
+      { key:'unquoted_deficiencies', label:'Unquoted', value:s.unquotedCount, format:'count', sub:pct+'% of open items' },
+      { key:'quoted_repair_value', label:'Quoted value', tag:'real', display:OS.money(s.quotedUsd), sub:'from linked repair quotes' },
+      { label:'Projected', tag:'est', display:'~'+OS.money(s.projectedUsd), projected:true, drillable:false, sub:s.unquotedCount+' unquoted × '+OS.money(AVG) },
+      { label:'Repair opportunity', display:OS.money(s.totalUsd), drillable:false, sub:'real + projected' }
     ];
-    document.getElementById('list').innerHTML=OS.table(cols, items.map(function(i){return {company_name:i.company_name,description:i.description,office:i.office,reported_at:i.reported_at,quoted:i.quoted,proposed_usd:i.proposed_usd,disposition:i.disposition,id:i.id,stUrl:i.stUrl};}),{empty:'No open deficiencies in this office.'});
-  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load deficiencies.');});
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+    renderBands(d.ageBuckets||[]);
+    renderChips(); renderList();
+  }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load deficiencies.'); });
 }
-function reload(){ document.getElementById('ctxOffice').textContent=OS.officeLabel(); loadKpis(); loadList(); }
-document.addEventListener('change',function(e){
-  var sel=e.target.closest('[data-disp]'); if(sel){ fetch('/api/deficiencies/'+sel.getAttribute('data-disp')+'/disposition',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({disposition:sel.value})}); }
+
+function renderBands(buckets){
+  var s=SUMMARY||{};
+  // Conversion: found on inspection → still open → unquoted → quoted (real)
+  var conv=[
+    { label:'Found on inspection', value:s.openCount, right:'<b>'+OS.num(s.openCount)+'</b>', tone:'neutral' },
+    { label:'Unquoted', value:s.unquotedCount, right:'<b>'+OS.num(s.unquotedCount)+'</b> <span class="bm">'+(s.openCount?Math.round(s.unquotedCount/s.openCount*100):0)+'%</span>', tone:'warn' },
+    { label:'Quoted', value:s.quotedCount, right:'<b>'+OS.num(s.quotedCount)+'</b> <span class="bm">'+(s.openCount?Math.round(s.quotedCount/s.openCount*100):0)+'%</span>', tone:'good' }
+  ];
+  document.getElementById('conversion').innerHTML=OS.card('Conversion','From inspection through to a priced repair quote', OS.band(conv));
+  var toneFor={'0-30':'neutral','31-60':'warn','61-90':'bad','90plus':'bad'};
+  var age=buckets.map(function(b){ return { label:b.label, value:b.n, right:'<b>'+OS.num(b.n)+'</b>', tone:toneFor[b.key]||'neutral' }; });
+  document.getElementById('agecard').innerHTML=OS.card('Backlog age','Older items convert worse: the longer a finding sits, the colder it gets', OS.band(age));
+}
+
+var PRED={
+  all:function(){return true;},
+  unquoted:function(r){return !r.quoted;},
+  over30:function(r){var d=ageDays(r);return d!=null&&d>30;},
+  highvalue:function(r){var v=r.quoted?r.proposed_usd:AVG;return v>=1000;}
+};
+function filtered(){ return ALL_ITEMS.filter(PRED[FILTER]||PRED.all); }
+var CHIPS=[['all','All'],['unquoted','Unquoted'],['over30','Over 30 days'],['highvalue','High value']];
+function renderChips(){
+  document.getElementById('chips').innerHTML=CHIPS.map(function(c){
+    var n=ALL_ITEMS.filter(PRED[c[0]]).length;
+    return '<button class="os-chip'+(FILTER===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'<span class="cc">'+n+'</span></button>';
+  }).join('');
+}
+function renderList(){
+  var rows=filtered();
+  document.getElementById('listn').textContent='· '+rows.length;
+  var total=ALL_ITEMS.length;
+  var note=document.getElementById('filterNote');
+  if(FILTER==='all') note.textContent='Showing all '+total+' highest-value open items.';
+  else if(rows.length===total) note.textContent='“'+chipLabel(FILTER)+'” · all '+total+' items match, so nothing is hidden.';
+  else note.textContent='Filtered to “'+chipLabel(FILTER)+'” · '+rows.length+' of '+total+' items.';
+
+  var cols=[
+    {as:'site',label:'Site / customer',strong:true,render:function(v,r){return '<span class="strong">'+OS.esc(r.company_name||'Account')+'</span>'+(r.location_name?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.location_name)+'</span>':'');}},
+    {as:'why',label:'Why it is not quoted',render:function(v,r){ if(r.quoted) return '<span class="os-pill good">Quoted</span>';
+      var lab=(DISPOSITIONS.filter(function(o){return o[0]===(r.disposition||'');})[0]||['','No quote yet'])[1];
+      return '<span class="muted">'+OS.esc(lab)+'</span>'+(r.description?'<br><span class="muted" style="font-size:11px">'+OS.esc((r.description||'').slice(0,54))+'</span>':'');}},
+    {as:'age',label:'Age',kind:'num',render:function(v,r){var d=ageDays(r);return d==null?'':(d>90?OS.pill(d+'d','bad'):d>30?OS.pill(d+'d','warn'):OS.pill(d+'d','neutral'));}},
+    {as:'value',label:'Value',kind:'money',render:function(v,r){ return r.quoted
+      ? '<span class="strong">'+OS.money(r.proposed_usd)+'</span>'
+      : '<span class="os-proj">~'+OS.money(AVG)+'</span>'; }},
+    {as:'office',label:'Office',render:function(v,r){return r.office?OS.officeTag(OS.esc(r.office)):'<span class="muted">—</span>';}},
+    {as:'disp',label:'Set disposition',render:function(v,r){ if(r.quoted) return '<span class="muted">—</span>';
+      return '<select class="disp" data-disp="'+r.id+'">'+DISPOSITIONS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(r.disposition||'')?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>';}},
+    {as:'st',label:'',render:function(v,r){return r.stUrl?'<a href="'+r.stUrl+'" target="_blank" rel="noopener" class="os-btn" style="padding:5px 10px;font-size:11.5px">Open ↗</a>':'';}}
+  ];
+  document.getElementById('list').innerHTML=OS.table(cols, rows, {empty:'No deficiencies match this filter.'});
+}
+function chipLabel(f){ return (CHIPS.filter(function(c){return c[0]===f;})[0]||['','All'])[1]; }
+
+function reload(){ loadStrip(); }
+document.getElementById('chips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-f]'); if(!b) return; FILTER=b.getAttribute('data-f'); renderChips(); renderList();
 });
-document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; b.textContent='Syncing…';
-  fetch('/api/deficiencies/sync',{method:'POST'}).then(function(){b.disabled=false;b.textContent='↻ Sync';reload();}).catch(function(){b.disabled=false;b.textContent='↻ Sync';}); });
+document.addEventListener('change',function(e){
+  var sel=e.target.closest('[data-disp]'); if(sel){
+    var id=sel.getAttribute('data-disp');
+    fetch('/api/deficiencies/'+id+'/disposition',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({disposition:sel.value})})
+      .then(function(){ var it=ALL_ITEMS.filter(function(r){return String(r.id)===String(id);})[0]; if(it) it.disposition=sel.value;
+        OS.toast('Disposition saved: '+(DISPOSITIONS.filter(function(o){return o[0]===sel.value;})[0]||['','cleared'])[1]+'.'); });
+  }
+});
+document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Syncing…';
+  fetch('/api/deficiencies/sync',{method:'POST'}).then(function(){b.disabled=false;b.textContent=t;OS.toast('ServiceTrade deficiencies synced.');reload();}).catch(function(){b.disabled=false;b.textContent=t;}); });
+document.getElementById('batch').addEventListener('click',function(){
+  var n=(SUMMARY&&SUMMARY.unquotedCount)||ALL_ITEMS.filter(function(r){return !r.quoted;}).length;
+  OS.toast('Quote batch drafted for '+OS.num(n)+' unquoted deficiencies. Nothing is sent until you approve it.');
+});
 OS.ready(reload);
 OS.onChange(reload);
 </script>

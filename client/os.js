@@ -148,6 +148,92 @@
       labels+'</svg></div>';
   };
   OS.empty = function(msg, icon){ return '<div class="os-empty">'+(icon?'<div class="ico">'+icon+'</div>':'')+OS.esc(msg||'Nothing here.')+'</div>'; };
+
+  /* ---------- premium standard-anatomy components (Phase 2+) ----------
+     One metric strip, one decision queue, one band card — built once, driven by data,
+     reused across every standard screen. Honesty rules live in the data the screen passes:
+     projected values arrive with projected:true and render amber + dotted; real values are solid. */
+
+  // Metric strip: a single divided white card, N cells in a horizontal scroller so metrics
+  // never orphan onto a second row. Each cell is a button that opens its drill drawer.
+  // cell = {label, value, format?, display?, key?(drill), tag?('real'|'est'), projected?, comparison?, sub?, source?, companyWide?}
+  OS.metricStrip = function(cells, opts){ opts=opts||{};
+    cells=(cells||[]).filter(Boolean);
+    if(!cells.length) return OS.empty(opts.empty||'No metrics.');
+    var n=cells.length;
+    var html=cells.map(function(c){
+      var drill = c.key && c.drillable!==false;
+      var attr = drill ? ' data-drill="'+OS.esc(c.key)+'" data-drill-label="'+OS.esc(c.label)+'"' : '';
+      var tag = c.tag ? '<span class="ms-tag '+(c.tag==='real'?'real':'est')+'">'+OS.esc(c.tag)+'</span>' : '';
+      var val = c.display!=null ? c.display : OS.fmt(c.value, c.format);
+      var sub='';
+      if(c.comparison){ var cm=c.comparison; var ar=cm.changeAbs>0?'▲':cm.changeAbs<0?'▼':'—';
+        var t=cm.changePct!=null?Math.abs(cm.changePct)+'%':OS.fmt(Math.abs(cm.changeAbs),c.format);
+        sub='<span class="ms-chg '+cm.tone+'">'+ar+' '+t+' <span class="mvs">vs '+OS.esc(cm.periodLabel||'prior')+'</span></span>'; }
+      else if(c.sub){ sub='<span class="ms-sub'+(c.companyWide?' cw':'')+'">'+OS.esc(c.sub)+'</span>'; }
+      else if(c.companyWide){ sub='<span class="ms-sub cw">Company-wide</span>'; }
+      else if(c.source){ sub='<span class="ms-sub">'+OS.esc(c.source)+'</span>'; }
+      return '<button class="ms-cell'+(drill?' drill':'')+'"'+attr+'>'+
+        '<span class="ms-lab">'+OS.esc(c.label)+tag+'</span>'+
+        '<span class="ms-val'+(c.projected?' proj':'')+'">'+val+'</span>'+sub+'</button>';
+    }).join('');
+    return '<div class="os-strip"><div class="os-strip-scroll"><div class="os-strip-row" style="min-width:'+(n*184)+'px;grid-template-columns:repeat('+n+',minmax(0,1fr))">'+html+'</div></div></div>';
+  };
+
+  // Decision queue: severity-railed rows. item = {tone, kicker?, domain?, title, why?, tags?[],
+  //   amount?/amountProjected?/count?, delta?/deltaTone?, action?:{label,tab,office}}
+  var SEV_LABEL={critical:'Critical',high:'High',medium:'Medium',low:'Low',bad:'High',warn:'Medium',neutral:''};
+  OS.decisionRow = function(a, i){
+    var tone=a.tone||'neutral';
+    var kick=a.kicker!=null?a.kicker:(SEV_LABEL[tone]||'');
+    var chips=(a.tags||[]).filter(Boolean).map(function(t){ return '<span class="dq-chip">'+OS.esc(t)+'</span>'; }).join('');
+    var amt='';
+    if(a.amount!=null) amt='<span class="dq-amt'+(a.amountProjected?' proj':'')+'">'+(a.amountProjected?'~':'')+OS.money(a.amount)+'</span>';
+    else if(a.count!=null) amt='<span class="dq-amt">'+OS.num(a.count)+'</span>';
+    var delta = a.delta ? '<span class="dq-delta '+(a.deltaTone||'')+'">'+OS.esc(a.delta)+'</span>'
+      : (a.amountProjected?'<span class="dq-delta proj">Projected opportunity</span>':'');
+    var btn = a.action ? '<button class="dq-act" data-tab="'+OS.esc(a.action.tab||'')+'"'+(a.action.office?' data-office="'+OS.esc(a.action.office)+'"':'')+'>'+OS.esc(a.action.label||'View')+'</button>' : '';
+    return '<div class="os-dq-row '+tone+'" style="animation-delay:'+((i||0)*70)+'ms">'+
+      '<span class="dq-rail"></span>'+
+      '<div class="dq-main">'+
+        '<div class="dq-kick">'+(kick?'<span class="dq-sev '+tone+'">'+OS.esc(kick)+'</span>':'')+(a.domain?'<span class="dq-dom">'+OS.esc(a.domain)+'</span>':'')+'</div>'+
+        '<div class="dq-title">'+OS.esc(a.title)+'</div>'+
+        (a.why?'<div class="dq-why">'+OS.esc(a.why)+'</div>':'')+
+        (chips?'<div class="dq-chips">'+chips+'</div>':'')+
+      '</div>'+
+      '<div class="dq-side">'+amt+delta+btn+'</div>'+
+    '</div>';
+  };
+  OS.decisionQueue = function(items, emptyMsg){
+    if(!items||!items.length) return '<div class="os-empty">'+OS.esc(emptyMsg||'Nothing needs a decision right now.')+'</div>';
+    return '<div class="os-dq">'+items.map(OS.decisionRow).join('')+'</div>';
+  };
+
+  // Band card body: labelled horizontal bars with animated widths (share, aging, funnel).
+  // row = {label, value, meta?, right?(html), tone?('good'|'warn'|'bad'|'accent'), filter?}
+  OS.band = function(rows, opts){ opts=opts||{};
+    if(!rows||!rows.length) return OS.empty(opts.empty||'No data.');
+    var max=Math.max.apply(null, rows.map(function(r){return Math.abs(r.value)||0;}))||1;
+    return '<div class="os-band">'+rows.map(function(r){
+      var pct=Math.max(2, Math.round((Math.abs(r.value)/max)*100));
+      var right = (r.right!=null) ? r.right
+        : '<b>'+(opts.money?OS.money(r.value):OS.num(r.value))+'</b>'+(r.meta?' <span class="bm">'+OS.esc(r.meta)+'</span>':'');
+      var cls='os-band-row'+(r.filter?' click':'')+(r.on?' on':'');
+      var fattr=r.filter?' data-filter="'+OS.esc(r.filter)+'"':'';
+      return '<div class="'+cls+'"'+fattr+'><span class="bl">'+OS.esc(r.label)+'</span>'+
+        '<span class="bt"><span class="bf '+(r.tone||'accent')+'" style="width:'+pct+'%"></span></span>'+
+        '<span class="br">'+right+'</span></div>';
+    }).join('')+'</div>';
+  };
+
+  // Card wrapper for bands/sections: title + optional sub + body html.
+  OS.card = function(title, sub, bodyHtml){
+    return '<div class="os-card"><div class="os-card-h"><div class="os-card-t">'+OS.esc(title)+'</div>'+
+      (sub?'<div class="os-card-s">'+OS.esc(sub)+'</div>':'')+'</div><div class="os-card-b">'+bodyHtml+'</div></div>';
+  };
+
+  // Inline projected-value span (amber, dotted underline). Use for any estimate shown in prose.
+  OS.projected = function(html){ return '<span class="os-proj">'+html+'</span>'; };
   OS.skeletonKpis = function(n){ var s=''; for(var i=0;i<(n||4);i++) s+='<div class="os-skel os-skel-kpi"></div>'; return '<div class="os-kpis">'+s+'</div>'; };
   OS.errorBox = function(msg, onRetry){ return '<div class="os-err"><span>'+OS.esc(msg||'Could not load.')+'</span>'+(onRetry?'<button data-retry="1">Retry</button>':'')+'</div>'; };
 

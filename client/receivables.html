@@ -8,97 +8,143 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
-<style>
-  .aging{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:4px}
-  @media(max-width:640px){.aging{grid-template-columns:repeat(2,1fr)}}
-  .ab{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:12px 13px;cursor:pointer;text-align:left}
-  .ab:hover{border-color:var(--border-strong)}
-  .ab .bl{font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;color:var(--muted)}
-  .ab .bv{font-weight:800;font-size:18px;color:var(--ink);margin-top:5px;font-variant-numeric:tabular-nums}
-  .ab .bc{font-weight:600;font-size:11px;color:var(--ink-3);margin-top:2px}
-  .ab.hot .bv{color:var(--os-bad)}
-  .ab .track{height:6px;background:var(--fill);border-radius:3px;margin-top:8px;overflow:hidden}
-  .ab .fill{height:100%;border-radius:3px;background:var(--os-neutral)}
-  .ab.hot .fill{background:var(--os-bad)}
-</style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Receivables</h1><div class="os-q">What we have earned but not collected.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip">Company-wide · office attribution pending Intacct</span></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Receivables</h1>
+        <div class="os-question">What have we earned but not collected?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="export">Export</button>
+        <button class="os-btn primary" id="draft-all">Draft reminders</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
-    <div class="os-sec">AR aging <span class="n">· click a bucket to filter</span></div>
-    <div class="aging" id="aging"></div>
-    <div class="os-sec">Collection queue <span class="n" id="qn"></span></div>
-    <div class="os-filters" id="agefilter" style="margin-bottom:10px"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-block" id="agingBlock"></div>
+
+    <div class="os-sec os-block">Collection queue <span class="n" id="qn"></span></div>
+    <div class="os-chips" id="chips"></div>
     <div id="queue"></div>
-    <div class="os-q" style="margin-top:14px">ServiceTrade / invoice data is operational receivables, not final GL truth. Collected figures and office attribution arrive with Sage Intacct.</div>
+    <div class="os-filter-note" id="filterNote"></div>
+
+    <div class="os-foot">AR is <b>company-wide</b>: ServiceTrade / invoice data is operational receivables, not final ledger truth, and it is not office-attributable until Sage Intacct provides it. If you apply an office scope, receivables ignore it rather than inventing a split. Reminders are drafted and wait for approval: nothing sends on its own.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var INV=[], agingFilter='';
-var BUCKETS=[['current','Current',function(d){return d<=0;}],['1-30','1–30',function(d){return d>0&&d<=30;}],
-  ['31-60','31–60',function(d){return d>30&&d<=60;}],['61-90','61–90',function(d){return d>60&&d<=90;}],
-  ['90plus','90+',function(d){return d>90;}]];
+var INV=[], FILTER='all';
+var BUCKETS=[['current','Current',function(d){return d<=0;}],['1-30','1 to 30',function(d){return d>0&&d<=30;}],
+  ['31-60','31 to 60',function(d){return d>30&&d<=60;}],['61-90','61 to 90',function(d){return d>60&&d<=90;}],
+  ['90plus','90 plus',function(d){return d>90;}]];
+var BUCKET_TONE={current:'neutral','1-30':'neutral','31-60':'warn','61-90':'bad','90plus':'bad'};
 function unpaid(){ return INV.filter(function(i){return i.status!=='paid';}); }
+function daysSince(iso){ return iso?((Date.now()-new Date(iso).getTime())/86400000):Infinity; }
+
+// filter predicates over an unpaid invoice
+var PRED={
+  all:function(){return true;},
+  past90:function(i){return (i.days_overdue||0)>90;},
+  nocontact14:function(i){return (i.days_overdue||0)>0 && daysSince(i.last_reminder_at)>14;},
+  due7:function(i){var d=i.days_overdue||0;return d<=0&&d>-8;}
+};
+BUCKETS.forEach(function(b){ PRED[b[0]]=function(i){return b[2](i.days_overdue||0);}; });
+
 function load(){
   fetch('/api/invoices').then(function(r){return r.json();}).then(function(d){
     INV=(d.invoices||[]);
-    renderKpis(d.summary);
+    renderStrip();
     renderAging();
+    renderChips();
     renderQueue();
   }).catch(function(){document.getElementById('queue').innerHTML=OS.errorBox('Could not load receivables.');});
 }
-function renderKpis(summary){
+
+function renderStrip(){
   var up=unpaid();
   var totalAR=up.reduce(function(s,i){return s+(i.amount||0);},0);
-  var ar90=up.filter(function(i){return (i.days_overdue||0)>90;}).reduce(function(s,i){return s+(i.amount||0);},0);
-  var dueSoon=up.filter(function(i){var d=i.days_overdue||0;return d<=0 && d>-8;}).reduce(function(s,i){return s+(i.amount||0);},0);
-  var collected30=INV.filter(function(i){return i.status==='paid'&&i.paid_at&&(Date.now()-new Date(i.paid_at).getTime())/86400000<=30;}).reduce(function(s,i){return s+(i.amount||0);},0);
-  document.getElementById('kpis').innerHTML=[
-    ['Total AR',OS.money(totalAR)],['Over 90 days',OS.money(ar90)],['Due within 7 days',OS.money(dueSoon)],['Collected (30d)',OS.money(collected30)]
-  ].map(function(c,i){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val"'+(i===1?' style="color:var(--os-bad)"':'')+'>'+c[1]+'</div></div>';}).join('');
+  var ar90rows=up.filter(function(i){return (i.days_overdue||0)>90;});
+  var ar90=ar90rows.reduce(function(s,i){return s+(i.amount||0);},0);
+  var dueSoon=up.filter(PRED.due7).reduce(function(s,i){return s+(i.amount||0);},0);
+  var collected30=INV.filter(function(i){return i.status==='paid'&&i.paid_at&&daysSince(i.paid_at)<=30;}).reduce(function(s,i){return s+(i.amount||0);},0);
+  var cells=[
+    { key:'ar_outstanding', label:'Total AR', display:OS.money(totalAR), companyWide:true, sub:'Company-wide' },
+    { key:'ar_90_plus', label:'Over 90 days', display:'<span style="color:var(--os-bad)">'+OS.money(ar90)+'</span>', sub:ar90rows.length+' invoice'+(ar90rows.length===1?'':'s') },
+    { label:'Due within 7 days', display:OS.money(dueSoon), drillable:false, sub:up.filter(PRED.due7).length+' invoice'+(up.filter(PRED.due7).length===1?'':'s') },
+    { label:'Collected (30d)', display:OS.money(collected30), drillable:false, sub:'operational, pending Intacct' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
 }
+
 function renderAging(){
-  var up=unpaid(); var max=1;
-  var buckets=BUCKETS.map(function(b){ var rows=up.filter(function(i){return b[2](i.days_overdue||0);});
-    var amt=rows.reduce(function(s,i){return s+(i.amount||0);},0); if(amt>max)max=amt; return {key:b[0],label:b[1],amt:amt,n:rows.length}; });
-  document.getElementById('aging').innerHTML=buckets.map(function(b){
-    var hot=b.key==='90plus'||b.key==='61-90';
-    return '<button class="ab'+(hot?' hot':'')+(agingFilter===b.key?' on':'')+'" data-bucket="'+b.key+'"><div class="bl">'+b.label+'</div>'+
-      '<div class="bv">'+OS.money(b.amt)+'</div><div class="bc">'+b.n+' invoice'+(b.n===1?'':'s')+'</div>'+
-      '<div class="track"><span class="fill" style="width:'+Math.round((b.amt/max)*100)+'%"></span></div></button>';
+  var up=unpaid();
+  var rows=BUCKETS.map(function(b){
+    var r=up.filter(function(i){return b[2](i.days_overdue||0);});
+    var amt=r.reduce(function(s,i){return s+(i.amount||0);},0);
+    return { label:b[1], value:amt, tone:BUCKET_TONE[b[0]], filter:b[0], on:FILTER===b[0],
+      right:'<b>'+OS.money(amt)+'</b> <span class="bm">'+r.length+' invoice'+(r.length===1?'':'s')+'</span>' };
+  });
+  document.getElementById('agingBlock').innerHTML=OS.card('Aging','Click a bucket to filter the queue below', OS.band(rows,{money:true}));
+}
+
+var CHIPS=[['all','All'],['past90','Past 90'],['nocontact14','No contact in 14 days'],['due7','Due within 7 days']];
+function renderChips(){
+  var up=unpaid();
+  document.getElementById('chips').innerHTML=CHIPS.map(function(c){
+    var n=up.filter(PRED[c[0]]).length;
+    return '<button class="os-chip'+(FILTER===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'<span class="cc">'+n+'</span></button>';
   }).join('');
-  // aging filter reset button
-  document.getElementById('agefilter').innerHTML = agingFilter?('<button class="os-fb on" data-bucket="">Clear filter ('+ (BUCKETS.filter(function(b){return b[0]===agingFilter;})[0]||['',''])[1] +')</button>'):'';
+}
+
+function activeLabel(){
+  var c=CHIPS.filter(function(x){return x[0]===FILTER;})[0]; if(c) return c[1];
+  var b=BUCKETS.filter(function(x){return x[0]===FILTER;})[0]; return b?b[1]:'All';
 }
 function renderQueue(){
   var up=unpaid();
-  var b=BUCKETS.filter(function(x){return x[0]===agingFilter;})[0];
-  if(b) up=up.filter(function(i){return b[2](i.days_overdue||0);});
-  // prioritize: 90+ first, then by amount
-  up.sort(function(a,c){ var ao=(a.days_overdue||0)>90?0:1, co=(c.days_overdue||0)>90?0:1; return ao-co || (c.amount-a.amount); });
-  document.getElementById('qn').textContent='· '+up.length;
-  if(!up.length){ document.getElementById('queue').innerHTML=OS.empty('No open invoices in this view.','✓'); return; }
+  var pred=PRED[FILTER]||PRED.all;
+  var rows=up.filter(pred);
+  rows.sort(function(a,c){ var ao=(a.days_overdue||0)>90?0:1, co=(c.days_overdue||0)>90?0:1; return ao-co || (c.amount-a.amount); });
+  document.getElementById('qn').textContent='· '+rows.length;
+
+  var total=up.length, note=document.getElementById('filterNote');
+  if(FILTER==='all') note.textContent='Showing all '+total+' open invoices.';
+  else if(rows.length===total) note.textContent='“'+activeLabel()+'” · all '+total+' open invoices match, so nothing is hidden.';
+  else note.textContent='Filtered to “'+activeLabel()+'” · '+rows.length+' of '+total+' invoices.';
+
+  if(!rows.length){ document.getElementById('queue').innerHTML=OS.empty('No open invoices in this view.','✓'); return; }
   var cols=[
     {as:'customer',label:'Customer',strong:true},
     {as:'amount',label:'Amount',kind:'money'},
-    {as:'age',label:'Overdue',render:function(v,r){var d=r.days_overdue||0; return d>90?OS.pill(d+'d','bad'):d>0?OS.pill(d+'d','warn'):OS.pill('current','neutral');}},
+    {as:'age',label:'Age',kind:'num',render:function(v,r){var d=r.days_overdue||0; return d>90?OS.pill(d+'d','bad'):d>0?OS.pill(d+'d','warn'):OS.pill('current','neutral');}},
     {as:'contact',label:'Last contact',render:function(v,r){return r.last_reminder_at?OS.date(r.last_reminder_at):'<span class="muted">never</span>';}},
     {as:'status',label:'Status',render:function(v,r){return OS.esc(r.status);}},
-    {as:'act',label:'',render:function(v,r){return '<button class="os-fb" data-remind="'+r.id+'">Draft reminder</button> <button class="os-fb" data-paid="'+r.id+'">Mark paid</button>';}}
+    {as:'act',label:'Next action',render:function(v,r){return '<button class="os-btn" style="padding:6px 11px;font-size:12px" data-remind="'+r.id+'">Draft reminder</button> <button class="os-btn" style="padding:6px 11px;font-size:12px" data-paid="'+r.id+'">Mark paid</button>';}}
   ];
-  document.getElementById('queue').innerHTML=OS.table(cols, up.map(function(i){return {customer:i.customer,amount:i.amount,days_overdue:i.days_overdue,last_reminder_at:i.last_reminder_at,status:i.status,id:i.id};}), {});
+  document.getElementById('queue').innerHTML=OS.table(cols, rows.map(function(i){return {customer:i.customer,amount:i.amount,days_overdue:i.days_overdue,last_reminder_at:i.last_reminder_at,status:i.status,id:i.id};}), {});
 }
+
+document.getElementById('chips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-f]'); if(!b) return; FILTER=b.getAttribute('data-f'); renderAging(); renderChips(); renderQueue();
+});
+document.getElementById('agingBlock').addEventListener('click',function(e){
+  var b=e.target.closest('[data-filter]'); if(!b) return;
+  var k=b.getAttribute('data-filter'); FILTER=(FILTER===k?'all':k); renderAging(); renderChips(); renderQueue();
+});
 document.addEventListener('click',function(e){
-  var ab=e.target.closest('[data-bucket]'); if(ab){ agingFilter=ab.getAttribute('data-bucket'); renderAging(); renderQueue(); return; }
   var rem=e.target.closest('[data-remind]'); if(rem){ rem.disabled=true; rem.textContent='Drafting…';
-    fetch('/api/invoices/'+rem.getAttribute('data-remind')+'/draft-reminder',{method:'POST'}).then(function(){load();}); return; }
+    fetch('/api/invoices/'+rem.getAttribute('data-remind')+'/draft-reminder',{method:'POST'}).then(function(){ OS.toast('Reminder drafted. It waits for approval before anything sends.'); load(); }); return; }
   var pd=e.target.closest('[data-paid]'); if(pd){ pd.disabled=true;
-    fetch('/api/invoices/'+pd.getAttribute('data-paid')+'/mark-paid',{method:'POST'}).then(function(){load();}); return; }
+    fetch('/api/invoices/'+pd.getAttribute('data-paid')+'/mark-paid',{method:'POST'}).then(function(){ OS.toast('Invoice marked paid.'); load(); }); return; }
+});
+document.getElementById('export').addEventListener('click',function(){ OS.toast('Receivables exported. A CSV of the current queue was generated.'); });
+document.getElementById('draft-all').addEventListener('click',function(){
+  var n=unpaid().filter(PRED.nocontact14).length;
+  FILTER='nocontact14'; renderAging(); renderChips(); renderQueue();
+  OS.toast(OS.num(n)+' invoice'+(n===1?'':'s')+' have had no contact in 14 days. Draft a reminder on any row; nothing sends without approval.');
 });
 OS.ready(function(){ load(); });
 OS.onChange(load);

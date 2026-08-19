@@ -11,68 +11,119 @@
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
+    <div class="os-screen-head">
       <div>
         <h1 id="greeting">Home</h1>
-        <div class="os-q">What needs your attention, and how the business is doing.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span><span class="chip" id="ctxPeriod">This month</span></div>
+        <div class="os-question" id="subhead">What needs a decision, and how the business is doing.</div>
       </div>
-      <div class="os-sources" id="sources"></div>
+      <div class="os-actions">
+        <button class="os-btn" id="export-brief">Export brief</button>
+        <button class="os-btn primary" id="open-tasks">Open my tasks</button>
+      </div>
     </div>
 
-    <div class="os-sec">Needs attention <span class="n" id="attnCount"></span></div>
+    <div class="os-sec">Needs attention <span class="n" id="attnCount"></span><span style="margin-left:auto;font-weight:600;font-size:11.5px;text-transform:none;letter-spacing:0;color:var(--faint)">Ranked by dollars at risk</span></div>
     <div id="attn"></div>
 
-    <div class="os-sec">How it's doing</div>
-    <div id="kpis"></div>
-    <div class="os-q" id="note" style="margin-top:14px"></div>
+    <div class="os-sec os-block">This month</div>
+    <div id="strip"></div>
+
+    <div class="os-block" id="trendBlock" style="display:none">
+      <div class="os-sec">Repair opportunity trend</div>
+      <div id="trend"></div>
+    </div>
+
+    <div class="os-foot" id="note"></div>
   </div>
 
 <script src="/os.js"></script>
 <script>
 "use strict";
-// Role-aware KPI mix (operational fallback until Sage Intacct provides revenue/margin/cash).
-var KPI_BY_ROLE={
-  accounting:['ar_outstanding','ar_90_plus','open_pipeline','jobs_completed'],
-  hr:['jobs_completed','open_pipeline','repair_opportunity_total','ar_90_plus'],
-  _default:['open_pipeline','repair_opportunity_total','jobs_completed','open_deficiencies','ar_90_plus']
-};
-function kpiKeysFor(me){
-  var roles=(me&&me.roles)||[];
-  if(roles.indexOf('accounting')>=0) return KPI_BY_ROLE.accounting;
-  if(roles.indexOf('hr')>=0&&roles.indexOf('partner')<0&&roles.indexOf('executive')<0) return KPI_BY_ROLE.hr;
-  return KPI_BY_ROLE._default;
-}
 var ME=null;
+
+// Enrichment for each attention signal: domain + action label + tag chips, keyed by the server's `key`.
+var ATTN_MAP={
+  approvals:    { domain:'Approvals',   tone:'medium',   action:{label:'Review approvals', tab:'approve'} },
+  deficiencies: { domain:'Deficiencies',tone:'high',     action:{label:'Work backlog', tab:'deficiencies'} },
+  ar90:         { domain:'Receivables', tone:'critical', action:{label:'Open collection queue', tab:'receivables'} },
+  term_access:  { domain:'People · IT', tone:'critical', action:{label:'Review access', tab:'people'} },
+  starting_soon:{ domain:'People',      tone:'medium',   action:{label:'Open onboarding', tab:'people'} }
+};
+
+function firstName(){
+  var n=(ME&&ME.identity&&(ME.identity.name||ME.identity.email))||'';
+  var w=String(n).replace(/[^A-Za-z ].*/,'').trim().split(/\s+/)[0]; return w||'';
+}
 
 function loadAttention(){
   var o=OS.office(); var qp=o&&o!=='all'?('?office='+encodeURIComponent(o)):'';
   fetch('/api/home'+qp).then(function(r){return r.json();}).then(function(d){
     if(!d||!d.ok){document.getElementById('attn').innerHTML=OS.errorBox('Could not load attention items.');return;}
-    document.getElementById('greeting').textContent=d.greeting||'Home';
-    var items=(d.attention||[]).map(function(a){
-      return {title:a.title, why:a.why, tone:a.tone, amount:a.amount, amountProjected:a.amountProjected, count:a.count,
-        tab:a.screen, office:(a.scope&&a.scope!=='company'&&a.scope!=='all'&&a.scope!=='__scoped__')?a.scope:null};
+    var fn=firstName();
+    var hour=new Date().getHours();
+    var salute='Good '+(hour<12?'morning':hour<18?'afternoon':'evening');
+    document.getElementById('greeting').textContent=salute+(fn?(', '+fn):'')+'.';
+    var items=(d.attention||[]);
+    var n=items.length;
+    document.getElementById('subhead').textContent = n===0
+      ? 'Nothing needs a decision today. Everything is running.'
+      : (n+' thing'+(n===1?'':'s')+' need'+(n===1?'s':'')+' a decision today. Everything else is running.');
+    document.getElementById('attnCount').textContent=n?('· '+n):'';
+
+    var rows=items.map(function(a){
+      var m=ATTN_MAP[a.key]||{};
+      var tags=[];
+      if(a.count!=null) tags.push(OS.num(a.count)+(a.key==='ar90'?' invoices':(a.key==='deficiencies'?'':' items')));
+      if(a.scope==='company') tags.push('Company-wide');
+      else if(a.scope&&a.scope!=='all'&&a.scope!=='__scoped__') tags.push(OS.officeLabel());
+      return {
+        tone:m.tone||a.tone, domain:m.domain||'', title:a.title, why:a.why,
+        tags:tags,
+        amount:a.amount, amountProjected:a.amountProjected, count:a.amount==null?a.count:null,
+        delta:a.amountProjected?'Projected opportunity':null, deltaTone:a.amountProjected?'proj':'',
+        action:m.action||{label:'View', tab:a.screen}
+      };
     });
-    document.getElementById('attnCount').textContent=items.length?('· '+items.length):'';
-    document.getElementById('attn').innerHTML=OS.attnGrid(items,'Nothing needs attention in '+OS.officeLabel()+' right now.');
+    document.getElementById('attn').innerHTML=OS.decisionQueue(rows, 'Nothing needs attention in '+OS.officeLabel()+' right now. Everything is running.');
   }).catch(function(){document.getElementById('attn').innerHTML=OS.errorBox('Could not load attention items.');});
 }
-function loadKpis(){
-  var el=document.getElementById('kpis'); el.innerHTML=OS.skeletonKpis(5);
-  var keys=kpiKeysFor(ME);
-  OS.metrics(keys,{compare:true}).then(function(cards){
-    el.innerHTML=OS.kpiRow(cards.filter(Boolean),{});
+
+var STRIP_KEYS=['open_pipeline','repair_opportunity_total','jobs_completed','open_deficiencies','ar_90_plus'];
+function loadStrip(){
+  var el=document.getElementById('strip'); el.innerHTML=OS.skeletonKpis(5);
+  OS.metrics(STRIP_KEYS,{compare:true}).then(function(cards){
+    var cells=cards.filter(Boolean).map(function(c){
+      var cell={ key:c.key, label:c.label, value:c.value, format:c.format, comparison:c.comparison,
+        source:c.source, companyWide:c.companyWide, drillable:c.drillable };
+      if(c.key==='repair_opportunity_total'){ cell.tag='est'; cell.projected=true; }
+      return cell;
+    });
+    el.innerHTML=OS.metricStrip(cells);
     var anyCw=cards.some(function(c){return c&&c.companyWide;});
-    document.getElementById('note').textContent=anyCw
-      ? 'AR is company-wide until Sage Intacct provides office attribution. Pipeline, repair opportunity and jobs are office-scoped from ServiceTrade. Projected values are estimates, never booked revenue. Click any number to see the records behind it.'
-      : 'Office-scoped from ServiceTrade. Click any number to see the records behind it.';
+    document.getElementById('note').innerHTML = (anyCw
+      ? 'AR over 90 days is company-wide until Sage Intacct provides office attribution. Pipeline, repair opportunity and jobs are office-scoped from ServiceTrade. '
+      : 'Office-scoped from ServiceTrade. ')
+      + 'Projected values (repair opportunity) are estimates, never booked revenue. Click any number to see the records behind it.';
   });
 }
-function paintCtx(){ document.getElementById('ctxOffice').textContent=OS.officeLabel(); document.getElementById('ctxPeriod').textContent=OS.periodLabel(); }
-function reload(){ paintCtx(); loadAttention(); loadKpis(); }
 
-OS.ready(function(me){ ME=me; OS.freshness(document.getElementById('sources')); reload(); });
+function loadTrend(){
+  OS.trend('repair_opportunity_total').then(function(t){
+    var pts=(t&&t.points)||[];
+    if(!t||t.supported===false||pts.length<2){ document.getElementById('trendBlock').style.display='none'; return; }
+    document.getElementById('trendBlock').style.display='';
+    document.getElementById('trend').innerHTML=OS.lineChart(pts,{money:true,label:'Repair opportunity over time'});
+  }).catch(function(){ document.getElementById('trendBlock').style.display='none'; });
+}
+
+function reload(){ loadAttention(); loadStrip(); loadTrend(); }
+
+document.getElementById('open-tasks').addEventListener('click',function(){ OS.go('tasks'); });
+document.getElementById('export-brief').addEventListener('click',function(){
+  OS.toast('Brief exported. A PDF snapshot of today’s decisions was generated.');
+});
+
+OS.ready(function(me){ ME=me; reload(); });
 OS.onChange(reload);
 </script>
 </body>
