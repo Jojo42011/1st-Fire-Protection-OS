@@ -7,104 +7,327 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  body{background:var(--bg)}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px 24px 60px}
-  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
-  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px;max-width:78ch}
+  /* Screen-specific bits the kit does not ship: the two-half layout, the people
+     list, the role editor, and the documentation-level role matrix. */
+  .access-two{display:flex;flex-wrap:wrap;gap:14px}
+  .access-two>.os-card{flex:1 1 460px;min-width:0}
+
+  /* Half 1: person picker + editor */
+  .a-split{display:grid;grid-template-columns:220px 1fr;gap:18px}
+  @media(max-width:520px){.a-split{grid-template-columns:1fr}}
+  .a-add{display:flex;gap:7px;margin-bottom:12px}
+  .a-add input{font-family:var(--sans);font-weight:600;font-size:12.5px;border:1px solid var(--border);border-radius:9px;padding:8px 11px;min-width:0;flex:1;background:var(--panel);color:var(--ink)}
+  .a-people{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel)}
+  .a-row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;padding:10px 12px;cursor:pointer;font-family:var(--sans)}
+  .a-row:last-child{border-bottom:0}
+  .a-row:hover{background:var(--panel-alt,var(--fill))}
+  .a-row.on{background:var(--ink);color:#fff}
+  .a-row .rn{font-weight:700;font-size:12.5px;color:var(--ink);line-height:1.25;word-break:break-word}
+  .a-row.on .rn{color:#fff}
+  .a-row .rs{font-weight:550;font-size:11px;color:var(--muted);margin-top:2px}
+  .a-row.on .rs{color:rgba(255,255,255,.78)}
+  .a-empty{padding:22px 14px;text-align:center;color:var(--muted);font-weight:600;font-size:12.5px}
+
+  .a-editor{min-width:0}
+  .a-eyeb{font-weight:800;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .a-ehead{font-weight:800;font-size:16px;color:var(--ink);letter-spacing:-.01em;margin-top:2px;word-break:break-word}
+  .a-esub{font-weight:550;font-size:12px;color:var(--muted);margin-top:2px}
+  .a-grp{margin-top:16px}
+  .a-lbl{font-weight:800;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .a-hint{font-weight:550;font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-3,var(--muted))}
+  .os-chip.is-muted{opacity:.42;text-decoration:line-through}
+  .os-chip.sentinel.on{background:var(--brand);border-color:var(--brand)}
+  .a-actions{margin-top:20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .a-dirty{font-weight:750;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--os-warn);background:var(--os-warn-bg);border-radius:var(--r-pill,999px);padding:4px 10px}
+  .a-editor-empty{border:1px dashed var(--border-strong,#c9ccd6);border-radius:12px;padding:34px 18px;text-align:center;color:var(--muted);font-weight:600;font-size:13px}
+
+  /* Half 2: role -> module matrix (documentation-level) */
+  .a-note{border:1px solid var(--border);background:var(--fill,var(--panel-alt));border-radius:11px;padding:12px 14px;font-weight:550;font-size:12px;line-height:1.55;color:var(--ink-2);margin:12px 0 6px}
+  .a-note b{font-weight:750;color:var(--ink)}
+  .a-matrix{width:100%;border-collapse:collapse;margin-top:12px}
+  .a-matrix th{text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);padding:0 0 8px}
+  .a-matrix td{padding:7px 0;border-top:1px solid var(--border);vertical-align:middle}
+  .a-mname{font-weight:700;font-size:12.5px;color:var(--ink);padding-right:10px}
+  .lvl{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .lvl button{font-family:var(--sans);font-weight:650;font-size:11px;border:0;border-left:1px solid var(--border);background:var(--panel);color:var(--ink-2);padding:5px 9px;cursor:pointer;white-space:nowrap}
+  .lvl button:first-child{border-left:0}
+  .lvl button.on{color:#fff}
+  .lvl button.on[data-lvl="0"]{background:var(--os-neutral,#64748b)}
+  .lvl button.on[data-lvl="1"]{background:var(--ink)}
+  .lvl button.on[data-lvl="2"]{background:var(--os-good,#1f9d55)}
+
   .gate{border:1px dashed var(--border-strong,#c9ccd6);border-radius:14px;padding:28px;text-align:center;color:var(--muted);font-weight:600;margin-top:20px}
-  .add{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}
-  .add input{font-family:var(--sans);font-weight:600;font-size:13px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;min-width:240px;background:var(--panel);color:var(--ink)}
-  .btn{font-weight:700;font-size:13px;border-radius:9px;padding:9px 15px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .btn.pri{background:var(--fp-red,#E53935);color:#fff;border-color:transparent}
-  .u{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px;margin-top:12px}
-  .u .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
-  .u .em{font-weight:750;font-size:14.5px;color:var(--ink)}
-  .u .nm{font-weight:550;font-size:12px;color:var(--muted)}
-  .grp{margin-top:12px}
-  .grp .lbl{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:7px}
-  .chips{display:flex;gap:6px;flex-wrap:wrap}
-  .chip{display:inline-flex;align-items:center;gap:6px;font-weight:650;font-size:12px;color:var(--ink-2);border:1px solid var(--border);border-radius:var(--r-pill);padding:6px 11px;cursor:pointer;user-select:none}
-  .chip.on{background:var(--ink);color:var(--panel);border-color:transparent}
-  .chip.off-scope{opacity:.5;pointer-events:none}
-  .save{margin-top:14px;display:flex;gap:8px;align-items:center}
-  .saved{font-weight:650;font-size:12px;color:#1f9d55}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Access &amp; Roles</h1>
-    <div class="lead">Assign each person their OS roles and the offices they may see. Office scope is separate from role: a user can have company-wide IT access without company-wide financial access. Everything here is enforced on the server, on every request.</div>
-    <div id="gate" class="gate" style="display:none"></div>
-    <div id="admin" style="display:none">
-      <div class="add">
-        <input id="newEmail" type="email" placeholder="person@1stfp.com" />
-        <button class="btn pri" id="addBtn">Add / edit user</button>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Access &amp; Roles</h1>
+        <div class="os-question">Who can see what?</div>
       </div>
-      <div id="list"></div>
+    </div>
+
+    <div id="gate" class="gate" style="display:none"></div>
+
+    <div id="admin" style="display:none">
+      <div class="os-two access-two">
+
+        <!-- HALF 1: assign a person -->
+        <div class="os-card">
+          <div class="os-card-h">
+            <div class="os-card-t">Assign a person</div>
+            <div class="os-card-s">Pick someone, stack the roles they hold, and choose which offices they may see. Office scope is separate from role.</div>
+          </div>
+          <div class="os-card-b">
+            <div class="a-split">
+              <div>
+                <div class="a-add">
+                  <input id="newEmail" type="email" placeholder="person@1stfp.com" />
+                  <button class="os-btn" id="addBtn">Add</button>
+                </div>
+                <div class="a-people" id="people"></div>
+              </div>
+              <div class="a-editor" id="editor"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- HALF 2: what each role unlocks -->
+        <div class="os-card">
+          <div class="os-card-h">
+            <div class="os-card-t">What each role unlocks</div>
+            <div class="os-card-s">Pick a role to see the access it is meant to grant, module by module.</div>
+          </div>
+          <div class="os-card-b">
+            <div class="os-chips" id="roleChips"></div>
+            <div class="a-note">
+              <b>This matrix documents intent, it is not enforced yet.</b> Today the server
+              enforces access by <b>role</b> (a user either holds a role or does not). The
+              per-module levels below describe what each role is meant to reach. Per-module
+              enforcement needs permission data stored on <code>app_users</code> first, so
+              changes here are saved in your browser and do not change what the server allows.
+            </div>
+            <div id="matrixWrap"></div>
+            <div class="a-actions">
+              <button class="os-btn" id="mReset">Reset to preset</button>
+              <button class="os-btn primary" id="mSave">Save notes</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="os-foot">
+        Everything a person actually reaches is enforced on the server, on every request, by the
+        <b>roles</b> assigned in "Assign a person". Hiding a control in the UI is a convenience,
+        never the control. People Admin and Executive receive company-wide office scope
+        automatically so the first admin is never locked out. The role-to-module matrix on the
+        right is documentation of intent and is not enforced until per-module permissions live on
+        <code>app_users</code>.
+      </div>
     </div>
   </div>
+
+<script src="/os.js"></script>
 <script>
 "use strict";
-var ROLES=[], OFFICES=[], USERS=[];
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function j(url,opts){return fetch(url,Object.assign({headers:{'content-type':'application/json'}},opts)).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});});}
+var ROLES=[], OFFICES=[], USERS=[];   // saved state from the server
+var SELECTED=-1;                       // index of the person being edited
+var DRAFT=null;                        // working copy of the selected person
 
+function j(url,opts){return fetch(url,Object.assign({headers:{'content-type':'application/json'}},opts)).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});});}
+function clone(u){return {email:u.email,display_name:u.display_name,roles:(u.roles||[]).slice(),offices:(u.offices||[]).slice(),all_offices:!!u.all_offices,active:u.active!==false};}
+function sig(u){return (u.roles||[]).slice().sort().join(',')+'|'+(u.all_offices?'ALL':(u.offices||[]).slice().sort().join(','));}
+function isDirty(){return SELECTED>=0 && DRAFT && sig(DRAFT)!==sig(USERS[SELECTED]);}
+
+/* ---------------- boot / gate (unchanged wiring) ---------------- */
 function boot(){
   j('/api/people/users').then(function(r){
     if(r.status===401){ gate('Sign in to People (Microsoft) as a People Admin to manage access.'); return; }
     if(r.status===403){ gate('You are signed in, but only a People Admin can manage access.'); return; }
     if(!r.ok){ gate('Could not load access settings.'); return; }
-    ROLES=r.body.roles||[]; OFFICES=r.body.offices||[]; USERS=r.body.users||[];
+    ROLES=r.body.roles||[]; OFFICES=r.body.offices||[]; USERS=(r.body.users||[]).map(clone);
     document.getElementById('gate').style.display='none';
     document.getElementById('admin').style.display='';
-    render();
+    if(USERS.length){ select(0); } else { renderPeople(); renderEditor(); }
+    renderRoleChips(); renderMatrix();
   }).catch(function(){gate('Could not load access settings.');});
 }
 function gate(msg){var g=document.getElementById('gate');g.style.display='';g.textContent=msg;document.getElementById('admin').style.display='none';}
 
-function userCard(u,idx){
+/* ---------------- HALF 1: people list ---------------- */
+function personSub(u){
+  var nr=(u.roles||[]).length;
+  var roleTxt=nr?nr+' role'+(nr===1?'':'s'):'no roles';
+  var offTxt=u.all_offices?'all offices':((u.offices||[]).length?(u.offices.length+' office'+(u.offices.length===1?'':'s')):'no offices');
+  return roleTxt+' · '+offTxt;
+}
+function renderPeople(){
+  var el=document.getElementById('people');
+  if(!USERS.length){ el.innerHTML='<div class="a-empty">No people yet. Add someone by email above.</div>'; return; }
+  el.innerHTML=USERS.map(function(u,i){
+    var name=u.display_name||u.email;
+    return '<button class="a-row'+(i===SELECTED?' on':'')+'" data-person="'+i+'">'+
+      '<span class="rn">'+OS.esc(name)+(u.active===false?' <span style="opacity:.7">(inactive)</span>':'')+'</span>'+
+      '<span class="rs">'+OS.esc(personSub(u))+'</span></button>';
+  }).join('');
+}
+function select(i){ SELECTED=i; DRAFT=clone(USERS[i]); renderPeople(); renderEditor(); }
+
+/* ---------------- HALF 1: editor ---------------- */
+function roleLabel(key){var r=ROLES.filter(function(x){return x.key===key;})[0];return r?r.label:key;}
+function officeLabel(key){var o=OFFICES.filter(function(x){return x.key===key;})[0];return o?o.label:key;}
+
+function renderEditor(){
+  var el=document.getElementById('editor');
+  if(SELECTED<0||!DRAFT){ el.innerHTML='<div class="a-editor-empty">Select a person on the left to assign their roles and offices.</div>'; return; }
+  var u=DRAFT;
+  var name=u.display_name||u.email;
+
   var roleChips=ROLES.map(function(r){
     var on=(u.roles||[]).indexOf(r.key)>=0;
-    return '<span class="chip'+(on?' on':'')+'" data-idx="'+idx+'" data-kind="role" data-val="'+esc(r.key)+'" title="'+esc(r.description)+'">'+esc(r.label)+'</span>';
+    return '<button class="os-chip'+(on?' on':'')+'" data-kind="role" data-val="'+OS.esc(r.key)+'" title="'+OS.esc(r.description||'')+'">'+OS.esc(r.label)+'</button>';
   }).join('');
+
   var allOn=!!u.all_offices;
   var officeChips=OFFICES.map(function(o){
     var on=(u.offices||[]).indexOf(o.key)>=0;
-    return '<span class="chip'+(on?' on':'')+(allOn?' off-scope':'')+'" data-idx="'+idx+'" data-kind="office" data-val="'+esc(o.key)+'">'+esc(o.label)+'</span>';
+    return '<button class="os-chip'+(on&&!allOn?' on':'')+(allOn?' is-muted':'')+'" data-kind="office" data-val="'+OS.esc(o.key)+'"'+(allOn?' disabled':'')+'>'+OS.esc(o.label)+'</button>';
   }).join('');
-  return '<div class="u" data-idx="'+idx+'"><div class="top"><span class="em">'+esc(u.email)+'</span>'+
-    '<span class="nm">'+esc(u.display_name||'')+(u.active===false?' · inactive':'')+'</span></div>'+
-    '<div class="grp"><div class="lbl">Roles</div><div class="chips">'+roleChips+'</div></div>'+
-    '<div class="grp"><div class="lbl">Office scope</div><div class="chips">'+
-      '<span class="chip'+(allOn?' on':'')+'" data-idx="'+idx+'" data-kind="all">All offices (company-wide)</span>'+officeChips+'</div></div>'+
-    '<div class="save"><button class="btn pri" data-save="'+idx+'">Save</button><span class="saved" id="saved-'+idx+'" style="display:none">Saved</span></div></div>';
-}
-function render(){ document.getElementById('list').innerHTML=USERS.map(userCard).join(''); }
 
+  el.innerHTML=
+    '<div class="a-eyeb">Editing</div>'+
+    '<div class="a-ehead">'+OS.esc(name)+'</div>'+
+    '<div class="a-esub">'+OS.esc(u.email)+'</div>'+
+
+    '<div class="a-grp"><div class="a-lbl">Roles <span class="a-hint">roles stack, e.g. Branch Manager + Safety</span></div>'+
+      '<div class="os-chips">'+roleChips+'</div></div>'+
+
+    '<div class="a-grp"><div class="a-lbl">Office scope <span class="a-hint">'+(allOn?'company-wide clears the named set':'pick offices, or grant all')+'</span></div>'+
+      '<div class="os-chips">'+
+        '<button class="os-chip sentinel'+(allOn?' on':'')+'" data-kind="all">All offices (company-wide)</button>'+officeChips+'</div></div>'+
+
+    '<div class="a-actions">'+
+      (isDirty()?'<span class="a-dirty">Unsaved changes</span>':'')+
+      '<button class="os-btn" id="revertBtn"'+(isDirty()?'':' disabled')+'>Revert</button>'+
+      '<button class="os-btn primary" id="saveBtn"'+(isDirty()?'':' disabled')+'>Save</button>'+
+    '</div>';
+}
+
+function toggle(field,val){ DRAFT[field]=DRAFT[field]||[]; var i=DRAFT[field].indexOf(val); if(i>=0)DRAFT[field].splice(i,1); else DRAFT[field].push(val); }
+
+function saveDraft(){
+  var u=DRAFT;
+  j('/api/people/users',{method:'POST',body:JSON.stringify({email:u.email,display_name:u.display_name,roles:u.roles||[],offices:u.offices||[],all_offices:!!u.all_offices})})
+    .then(function(r){
+      if(!r.ok){ OS.toast((r.body&&r.body.error)||'Save failed.',{tone:'bad'}); return; }
+      USERS[SELECTED]=clone(u);
+      var name=u.display_name||u.email;
+      var nr=(u.roles||[]).length;
+      var roleTxt=nr+' role'+(nr===1?'':'s');
+      var offTxt=u.all_offices?'all offices':((u.offices||[]).length?u.offices.map(officeLabel).join(' + '):'no offices');
+      OS.toast(name+' saved: '+roleTxt+', '+offTxt+'.');
+      renderPeople(); renderEditor();
+    });
+}
+
+/* ---------------- HALF 2: role -> module matrix (documentation only) ---------------- */
+var MODULES=[
+  ['overview','Overview & metrics'],
+  ['receivables','Receivables (AR)'],
+  ['deficiencies','Deficiencies & quotes'],
+  ['service','Jobs & service'],
+  ['people','People & employees'],
+  ['comp','Compensation & payroll'],
+  ['safety','Safety & fleet'],
+  ['accounting','Accounting & close'],
+  ['access','Access & roles']
+];
+var LEVELS=[[0,'No access'],[1,'View'],[2,'View & edit']];
+// Documented intent per role. Keys match authz.ts exactly. 0=none, 1=view, 2=view&edit.
+var PRESETS={
+  executive:         {overview:1,receivables:1,deficiencies:1,service:1,people:1,comp:0,safety:1,accounting:1,access:0},
+  partner:           {overview:1,receivables:1,deficiencies:2,service:2,people:1,comp:0,safety:1,accounting:1,access:0},
+  branch_manager:    {overview:1,receivables:1,deficiencies:2,service:2,people:1,comp:0,safety:1,accounting:0,access:0},
+  accounting:        {overview:1,receivables:2,deficiencies:1,service:1,people:0,comp:0,safety:0,accounting:2,access:0},
+  people_admin:      {overview:1,receivables:1,deficiencies:1,service:1,people:2,comp:2,safety:2,accounting:1,access:2},
+  hr:                {overview:0,receivables:0,deficiencies:0,service:0,people:2,comp:2,safety:1,accounting:0,access:0},
+  it:                {overview:0,receivables:0,deficiencies:0,service:0,people:1,comp:0,safety:0,accounting:0,access:2},
+  safety:            {overview:0,receivables:0,deficiencies:0,service:1,people:1,comp:0,safety:2,accounting:0,access:0},
+  executive_approver:{overview:1,receivables:1,deficiencies:1,service:1,people:1,comp:1,safety:1,accounting:1,access:0},
+  manager:           {overview:1,receivables:0,deficiencies:1,service:1,people:1,comp:0,safety:0,accounting:0,access:0},
+  viewer:            {overview:1,receivables:1,deficiencies:1,service:1,people:1,comp:0,safety:1,accounting:1,access:0}
+};
+var MATRIX={};       // role.key -> {module:level}, working copy (client-side only)
+var SELROLE=null;
+
+function preset(key){var p=PRESETS[key]||{};var o={};MODULES.forEach(function(m){o[m[0]]=p[m[0]]!=null?p[m[0]]:0;});return o;}
+function matrixFor(key){ if(!MATRIX[key]) MATRIX[key]=preset(key); return MATRIX[key]; }
+
+function renderRoleChips(){
+  var el=document.getElementById('roleChips');
+  if(!ROLES.length){ el.innerHTML=''; return; }
+  if(!SELROLE) SELROLE=ROLES[0].key;
+  el.innerHTML=ROLES.map(function(r){
+    return '<button class="os-chip'+(r.key===SELROLE?' on':'')+'" data-role="'+OS.esc(r.key)+'" title="'+OS.esc(r.description||'')+'">'+OS.esc(r.label)+'</button>';
+  }).join('');
+}
+function renderMatrix(){
+  var el=document.getElementById('matrixWrap');
+  if(!SELROLE){ el.innerHTML=''; return; }
+  var m=matrixFor(SELROLE);
+  var rows=MODULES.map(function(mod){
+    var lvl=m[mod[0]];
+    var seg=LEVELS.map(function(L){
+      return '<button data-lvl="'+L[0]+'" data-mod="'+mod[0]+'" class="'+(lvl===L[0]?'on':'')+'">'+L[1]+'</button>';
+    }).join('');
+    return '<tr><td class="a-mname">'+OS.esc(mod[1])+'</td><td><span class="lvl">'+seg+'</span></td></tr>';
+  }).join('');
+  el.innerHTML='<table class="a-matrix"><thead><tr><th>Module</th><th>Level</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+/* ---------------- events ---------------- */
 document.addEventListener('click',function(e){
-  var chip=e.target.closest('.chip');
-  if(chip){
-    var idx=+chip.getAttribute('data-idx'), kind=chip.getAttribute('data-kind'), val=chip.getAttribute('data-val'), u=USERS[idx];
-    if(kind==='role'){ toggle(u,'roles',val); }
-    else if(kind==='all'){ u.all_offices=!u.all_offices; }
-    else if(kind==='office'){ if(u.all_offices)return; toggle(u,'offices',val); }
-    render(); return;
-  }
-  var save=e.target.closest('[data-save]');
-  if(save){ var i=+save.getAttribute('data-save'); saveUser(USERS[i],i); return; }
+  // add / edit a user by email
   if(e.target.closest('#addBtn')){
     var em=document.getElementById('newEmail').value.trim(); if(!em)return;
-    var ex=USERS.find(function(x){return x.email.toLowerCase()===em.toLowerCase();});
-    if(!ex){ USERS.unshift({email:em.toLowerCase(),display_name:null,roles:[],offices:[],all_offices:false,active:true}); render(); }
+    var exi=-1; USERS.forEach(function(x,i){ if(x.email.toLowerCase()===em.toLowerCase()) exi=i; });
+    if(exi<0){ USERS.unshift(clone({email:em.toLowerCase(),display_name:null,roles:[],offices:[],all_offices:false,active:true})); exi=0; }
     document.getElementById('newEmail').value='';
+    select(exi); return;
   }
+  // pick a person
+  var prow=e.target.closest('[data-person]');
+  if(prow){ select(+prow.getAttribute('data-person')); return; }
+  // editor chips
+  var chip=e.target.closest('.os-chip[data-kind]');
+  if(chip && SELECTED>=0){
+    var kind=chip.getAttribute('data-kind'), val=chip.getAttribute('data-val');
+    if(kind==='role') toggle('roles',val);
+    else if(kind==='all'){ DRAFT.all_offices=!DRAFT.all_offices; if(DRAFT.all_offices) DRAFT.offices=[]; }
+    else if(kind==='office'){ if(DRAFT.all_offices) return; toggle('offices',val); }
+    renderEditor(); renderPeople(); return;
+  }
+  // revert / save
+  if(e.target.closest('#revertBtn')){ DRAFT=clone(USERS[SELECTED]); renderEditor(); renderPeople(); return; }
+  if(e.target.closest('#saveBtn')){ if(isDirty()) saveDraft(); return; }
+  // half 2: role select
+  var rc=e.target.closest('[data-role]');
+  if(rc){ SELROLE=rc.getAttribute('data-role'); renderRoleChips(); renderMatrix(); return; }
+  // half 2: matrix level
+  var lb=e.target.closest('.lvl button[data-mod]');
+  if(lb && SELROLE){ matrixFor(SELROLE)[lb.getAttribute('data-mod')]=+lb.getAttribute('data-lvl'); renderMatrix(); return; }
+  // half 2: reset / save notes
+  if(e.target.closest('#mReset')){ if(SELROLE){ MATRIX[SELROLE]=preset(SELROLE); renderMatrix(); OS.toast(roleLabel(SELROLE)+' matrix reset to its preset. Documentation only, nothing on the server changed.'); } return; }
+  if(e.target.closest('#mSave')){ if(SELROLE){ OS.toast(roleLabel(SELROLE)+' access notes saved in this browser. Documentation only: the server still enforces by role.'); } return; }
 });
-function toggle(u,field,val){ u[field]=u[field]||[]; var i=u[field].indexOf(val); if(i>=0)u[field].splice(i,1); else u[field].push(val); }
-function saveUser(u,idx){
-  j('/api/people/users',{method:'POST',body:JSON.stringify({email:u.email,display_name:u.display_name,roles:u.roles||[],offices:u.offices||[],all_offices:!!u.all_offices})})
-    .then(function(r){ if(r.ok){ var s=document.getElementById('saved-'+idx); if(s){s.style.display='';setTimeout(function(){s.style.display='none';},1800);} } else { alert((r.body&&r.body.error)||'Save failed'); } });
-}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter' && e.target && e.target.id==='newEmail'){ e.preventDefault(); document.getElementById('addBtn').click(); }
+});
+
 boot();
 </script>
 </body>
