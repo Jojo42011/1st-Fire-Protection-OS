@@ -11,33 +11,91 @@
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Service</h1><div class="os-q">The state of the service book right now.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Service</h1>
+        <div class="os-question">What is happening in service operations?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="open-schedule">Open schedule</button>
+        <button class="os-btn primary" id="review-jobs">Review jobs</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis"></div>
-    <div class="os-sec">Act on it</div>
-    <div class="os-attn" id="attn"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="stateCard"></div>
+      <div id="officeCard"></div>
+    </div>
+
+    <div class="os-sec os-block">Needs a manager decision <span class="n" id="qn"></span></div>
+    <div id="queue"></div>
+
+    <div class="os-foot">Service reads the <b>ServiceTrade</b> mirror, office-scoped. "At risk" counts open jobs that need a scheduling or billing decision before they slip. Open-work aging is not shown: jobs in the mirror do not carry an age date yet, so a "by state" breakdown is shown instead of an honest but empty aging chart. Nothing is scheduled or sent without approval.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-function op(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function opQ(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function opAmp(){var o=OS.office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
+
 function load(){
-  document.getElementById('ctxOffice').textContent=OS.officeLabel();
-  document.getElementById('kpis').innerHTML=OS.skeletonKpis(5);
-  fetch('/api/operations/service'+op()).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');return;}
-    var s=d.summary;
-    document.getElementById('kpis').innerHTML=[
-      ['Open jobs',s.openTotal],['Scheduled',s.scheduled],['Needs scheduling',s.needsScheduling],['Completed (30d)',s.completed30],['Ready to bill',s.readyToBill]
-    ].map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1])+'</div></div>';}).join('');
-    var attn=[];
-    if(s.needsScheduling>0) attn.push({title:s.needsScheduling+' jobs need scheduling',why:'Open work with no date set',count:s.needsScheduling,tone:'warn',tab:'dispatch',action:'Open schedule'});
-    if(s.readyToBill>0) attn.push({title:s.readyToBill+' jobs are ready to bill',why:'Completed with office + contact on file',count:s.readyToBill,tone:'good',tab:'jobs',action:'Review jobs'});
-    document.getElementById('attn').innerHTML=OS.attnGrid(attn,'Nothing needs action in the service book.');
-  }).catch(function(){document.getElementById('kpis').innerHTML=OS.errorBox('Could not load.');});
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  Promise.all([
+    fetch('/api/operations/service'+opQ()).then(function(r){return r.json();}),
+    fetch('/api/operations/jobs?state=attention'+opAmp()).then(function(r){return r.json();})
+  ]).then(function(res){
+    var d=res[0], jr=res[1];
+    if(!d||!d.ok){document.getElementById('strip').innerHTML=OS.errorBox('Could not load the service book.');return;}
+    var s=d.summary; var atRisk=(jr&&jr.ok&&jr.jobs)||[];
+
+    var cells=[
+      { label:'Open work', value:s.openTotal, format:'count', drillable:false, sub:'jobs not yet completed' },
+      { label:'Needs scheduling', value:s.needsScheduling, format:'count', drillable:false, sub:'open, no date set' },
+      { label:'At risk', value:atRisk.length, format:'count', drillable:false, sub:'need a decision now' },
+      { label:'Completed', value:s.completed30, format:'count', drillable:false, sub:'last 30 days' }
+    ];
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+
+    // Band A: open work by state (real, from the service summary)
+    var stateRows=[
+      { label:'Scheduled', value:s.scheduled, tone:'neutral', right:'<b>'+OS.num(s.scheduled)+'</b> <span class="bm">on the calendar</span>' },
+      { label:'Needs scheduling', value:s.needsScheduling, tone:'warn', right:'<b>'+OS.num(s.needsScheduling)+'</b> <span class="bm">no date</span>' },
+      { label:'Ready to bill', value:s.readyToBill, tone:'good', right:'<b>'+OS.num(s.readyToBill)+'</b> <span class="bm">completed, billable</span>' }
+    ];
+    document.getElementById('stateCard').innerHTML=OS.card('Open work by state','Where the book sits: scheduled, waiting on a date, or done and billable', OS.band(stateRows));
+
+    // Band B: at-risk work by office (real, grouped from the attention list)
+    var byOffice={};
+    atRisk.forEach(function(j){ var k=j.office||'No office'; byOffice[k]=(byOffice[k]||0)+1; });
+    var officeRows=Object.keys(byOffice).sort(function(a,b){return byOffice[b]-byOffice[a];}).map(function(k){
+      return { label:k, value:byOffice[k], tone:(k==='No office'?'bad':'warn'), right:'<b>'+OS.num(byOffice[k])+'</b> <span class="bm">at risk</span>' };
+    });
+    document.getElementById('officeCard').innerHTML=OS.card('At-risk work by office','Where the jobs that need a decision are concentrated',
+      officeRows.length?OS.band(officeRows):OS.empty('No jobs are at risk right now.','✓'));
+
+    // Decision queue: the attention jobs that will slip without a call
+    document.getElementById('qn').textContent=atRisk.length?('· '+atRisk.length):'';
+    var items=atRisk.map(function(j){
+      if(j.readiness==='needs_scheduling'){
+        return { tone:'high', domain:'Scheduling', title:'Job '+(j.number||j.id)+' has no date',
+          why:'Open work with no scheduled date. It slips until a manager sets one.',
+          tags:[j.kind||'Service', j.office||'No office'],
+          action:{ label:'Open schedule', tab:'dispatch', office:j.office||null } };
+      }
+      var miss=(j.missing||[]).join(' and ')||'billing detail';
+      return { tone:'medium', domain:'Billing', title:'Job '+(j.number||j.id)+' cannot be billed',
+        why:'Completed but missing '+miss+', so accounting cannot invoice it.',
+        tags:[j.kind||'Service', j.office||'No office'],
+        action:{ label:'Fix in Jobs', tab:'jobs', office:j.office||null } };
+    });
+    document.getElementById('queue').innerHTML=OS.decisionQueue(items, 'Nothing in the service book needs a manager decision right now. Everything is moving.');
+  }).catch(function(){document.getElementById('strip').innerHTML=OS.errorBox('Could not load the service book.');});
 }
+
+document.getElementById('open-schedule').addEventListener('click',function(){ OS.go('dispatch'); });
+document.getElementById('review-jobs').addEventListener('click',function(){ OS.go('jobs'); });
 OS.ready(load); OS.onChange(load);
 </script>
 </body>

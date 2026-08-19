@@ -8,86 +8,151 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
-<style>
-  .tk{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:12px 14px;margin-bottom:8px}
-  .tk .stripe{width:4px;align-self:stretch;border-radius:3px;flex:none}
-  .tk.overdue .stripe{background:var(--os-bad)}.tk.blocked .stripe{background:var(--os-warn)}.tk.needs_you .stripe{background:var(--os-accent)}.tk.upcoming .stripe{background:var(--os-neutral)}.tk.completed .stripe{background:var(--os-good)}
-  .tk .body{flex:1;min-width:0}
-  .tk .subj{font-weight:700;font-size:14px;color:var(--ink)}
-  .tk .det{font-weight:500;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .tk .tags{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center}
-  .tk .acts{display:flex;gap:6px;flex:none}
-  .tk .acts button{font-weight:700;font-size:12px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .tk .acts .open{color:#fff;background:var(--os-accent);border-color:transparent}
-  .grpttl{font-weight:800;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;display:flex;gap:8px;align-items:center}
-  .grpttl .n{color:var(--ink-3)}
-  .segbar{display:flex;gap:6px;margin:14px 0}
-</style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
+    <div class="os-screen-head">
       <div>
         <h1>My Tasks</h1>
-        <div class="os-q">What you need to do, across the whole company.</div>
+        <div class="os-question">What do I need to do?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="refresh">Refresh</button>
       </div>
     </div>
-    <div class="segbar os-filters" id="scope">
-      <button class="os-fb on" data-scope="mine">Mine</button>
-      <button class="os-fb" data-scope="team">My team</button>
-      <button class="os-fb" data-scope="all">Everything I can see</button>
-    </div>
-    <div id="summary" class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-    <div id="list"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-chips" id="lanes"></div>
+    <div class="os-filter-note" id="roleNote"></div>
+
+    <div class="os-sec os-block">Your queue <span class="n" id="qn"></span></div>
+    <div id="queue"></div>
+
+    <div class="os-foot">Your lanes are scoped to the teams you can act for. Completing a task or deciding an approval acts only on this queue and routes the work back to the owning team's onboarding or offboarding workflow. Approvals need the mapped approver role: nothing provisions, sends, or grants without that yes.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var scope='mine';
-var GROUPS=[['overdue','Overdue'],['needs_you','Needs you now'],['blocked','Blocked / waiting'],['upcoming','Upcoming'],['completed','Completed recently']];
-function scopeParam(){ return scope==='mine'?'mine=1':scope==='team'?'':''; } // 'all' = no filter; team handled server-side later
+var LANES=[['mine','My roles'],['it','IT'],['safety','Safety'],['accounting','Accounting'],['operations','Operations']];
+var TEAM_LABEL={it:'IT',safety:'Safety',accounting:'Accounting',operations:'Operations',hr:'HR',executive:'Executive',people:'People'};
+var WF_LABEL={onboarding:'Onboarding',offboarding:'Offboarding',role_change:'Role change',transfer:'Transfer'};
+var DONE={completed:1,approved:1,rejected:1,waived:1};
+var lane='mine', MINE=[], ALL=[], BYID={}, ME=null;
+var todayISO=new Date().toISOString().slice(0,10);
+
+function teamLabel(t){ return TEAM_LABEL[t]||(t?String(t):''); }
+function empName(t){ return t.preferred_name||[t.legal_first_name,t.legal_last_name].filter(Boolean).join(' ')||'a teammate'; }
+function isOverdue(t){ return t.due_date && String(t.due_date).slice(0,10)<todayISO && !DONE[t.status]; }
+function isBlocked(t){ return t.status==='blocked'; }
+function actionable(t){ return t.status==='pending'||t.status==='ready'||t.status==='in_progress'||t.status==='awaiting_approval'; }
+
 function load(){
-  var list=document.getElementById('list'); list.innerHTML=OS.skeletonKpis(1);
-  var q='/api/work/tasks'+(scope==='mine'?'?mine=1':'');
-  fetch(q).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){ list.innerHTML=OS.errorBox('Could not load tasks.'); return; }
-    renderSummary(d.tasks);
-    if(!d.tasks.length){ list.innerHTML=OS.empty('No tasks '+(scope==='mine'?'assigned to you':'in view')+'. You are clear.','✓'); return; }
-    var byGroup={}; d.tasks.forEach(function(t){ (byGroup[t.group]=byGroup[t.group]||[]).push(t); });
-    var html='';
-    GROUPS.forEach(function(g){ var items=byGroup[g[0]]; if(!items||!items.length) return;
-      html+='<div class="grpttl">'+g[1]+' <span class="n">· '+items.length+'</span></div>';
-      html+=items.map(taskRow).join('');
-    });
-    list.innerHTML=html;
-  }).catch(function(){ list.innerHTML=OS.errorBox('Could not load tasks.'); });
+  var q=document.getElementById('queue'); q.innerHTML=OS.skeletonKpis(1);
+  Promise.all([
+    fetch('/api/people/tasks?mine=1&status=open').then(function(r){return r.json();}),
+    fetch('/api/people/tasks?status=open').then(function(r){return r.json();})
+  ]).then(function(res){
+    MINE=(res[0]&&res[0].tasks)||[];
+    ALL=(res[1]&&res[1].tasks)||[];
+    BYID={}; ALL.concat(MINE).forEach(function(t){ BYID[t.id]=t; });
+    var mineIds={}; MINE.forEach(function(t){ mineIds[t.id]=1; });
+    window.__mineIds=mineIds;
+    renderStrip(mineIds); renderLanes(); renderNote(); renderQueue();
+  }).catch(function(){ q.innerHTML=OS.errorBox('Could not load tasks. You may not have People access.'); });
 }
-function renderSummary(tasks){
-  var by={overdue:0,needs_you:0,blocked:0,upcoming:0};
-  tasks.forEach(function(t){ if(by[t.group]!=null) by[t.group]++; });
-  document.getElementById('summary').innerHTML=[
-    ['Overdue',by.overdue],['Needs you',by.needs_you],['Blocked',by.blocked],['Upcoming',by.upcoming]
-  ].map(function(c){ return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+c[1]+'</div></div>'; }).join('');
+
+function renderStrip(mineIds){
+  var yoursNow=MINE.filter(function(t){return actionable(t)&&!isBlocked(t);}).length;
+  var overdue=MINE.filter(isOverdue).length;
+  var blocked=MINE.filter(isBlocked).length;
+  var other=ALL.filter(function(t){return !mineIds[t.id];}).length;
+  document.getElementById('strip').innerHTML=OS.metricStrip([
+    {label:'Yours now', value:yoursNow, format:'count', drillable:false, sub:'ready for you to act'},
+    {label:'Overdue', value:overdue, format:'count', drillable:false, display:overdue?'<span style="color:var(--os-bad)">'+OS.num(overdue)+'</span>':'0', sub:'past their due date'},
+    {label:'Blocked', value:blocked, format:'count', drillable:false, sub:'waiting on a dependency'},
+    {label:'Other teams', value:other, format:'count', drillable:false, sub:'visible, not yours to act on'}
+  ]);
 }
-function taskRow(t){
-  var owner=t.ownerTeam?OS.ownerTag(t.ownerTeam):'';
-  var office=t.officeLabel&&t.officeLabel!=='Unassigned'?OS.officeTag(t.officeLabel):'';
-  var due=t.dueDate?'<span class="os-tag">due '+OS.date(t.dueDate)+'</span>':'';
-  var blockedPill=t.blocked?OS.pill(t.blockedReason||'blocked','warn'):'';
-  var openBtn=t.related?'<button class="open" data-tab="'+OS.esc(t.related.tab)+'"'+(t.related.office?' data-office="'+OS.esc(t.related.office)+'"':'')+'>Open</button>':'';
-  return '<div class="tk '+OS.esc(t.group)+'"><span class="stripe"></span><div class="body">'+
-    '<div class="subj">'+OS.esc(t.subject)+'</div>'+
-    (t.detail?'<div class="det">'+OS.esc(t.detail)+'</div>':'')+
-    '<div class="tags">'+owner+office+due+blockedPill+'<span class="os-tag">'+OS.esc(t.source)+'</span></div></div>'+
-    '<div class="acts">'+openBtn+'</div></div>';
+
+function laneRows(key){ return key==='mine'?MINE:ALL.filter(function(t){return t.team===key;}); }
+function renderLanes(){
+  document.getElementById('lanes').innerHTML=LANES.map(function(l){
+    var n=laneRows(l[0]).length;
+    return '<button class="os-chip'+(lane===l[0]?' on':'')+'" data-lane="'+l[0]+'">'+OS.esc(l[1])+'<span class="cc">'+n+'</span></button>';
+  }).join('');
 }
-document.getElementById('scope').addEventListener('click',function(e){
-  var b=e.target.closest('[data-scope]'); if(!b) return;
-  scope=b.getAttribute('data-scope');
-  [].forEach.call(this.querySelectorAll('.os-fb'),function(x){x.classList.toggle('on',x===b);});
-  load();
+function renderNote(){
+  var roles=(ME&&ME.roles)||[];
+  var el=document.getElementById('roleNote');
+  if(lane==='mine'){
+    el.textContent=roles.length
+      ? 'Opening on My roles because you can act for: '+roles.join(', ')+'. The team lanes show another team’s full queue.'
+      : 'Opening on My roles: the tasks owned by a team you can act for. The team lanes show another team’s full queue.';
+  } else {
+    var lab=(LANES.filter(function(x){return x[0]===lane;})[0]||['','This team'])[1];
+    var rows=laneRows(lane);
+    el.textContent='Filtered to the '+lab+' lane by owning team · '+rows.length+' task'+(rows.length===1?'':'s')+'. These are '+lab+'’s, not scoped to your roles.';
+  }
+}
+
+function toneOf(t){ if(isOverdue(t)) return 'critical'; if(t.kind==='approval'||t.status==='awaiting_approval') return 'high'; if(isBlocked(t)) return 'medium'; return 'medium'; }
+function kickerOf(t){ if(isOverdue(t)) return 'Overdue'; if(t.status==='awaiting_approval'||t.kind==='approval') return 'Needs approval'; if(isBlocked(t)) return 'Blocked'; return 'To do'; }
+
+function taskRow(t,i){
+  var tone=toneOf(t);
+  var chips=['<span class="dq-chip">'+OS.esc(teamLabel(t.team))+'</span>'];
+  if(t.office) chips.push('<span class="dq-chip">'+OS.esc(t.office)+'</span>');
+  if(t.due_date) chips.push('<span class="dq-chip">due '+OS.esc(OS.date(t.due_date))+'</span>');
+  if(t.status) chips.push('<span class="dq-chip">'+OS.esc(t.status.replace(/_/g,' '))+'</span>');
+  var why=[];
+  var wf=WF_LABEL[t.workflow_kind]||'';
+  why.push('For '+empName(t)+(t.job_position?', '+t.job_position:'')+(wf?' · '+wf:''));
+  if(t.detail) why.push(t.detail);
+  var acts = t.kind==='approval'
+    ? '<button class="dq-act" data-approve="'+t.id+'">Approve</button><button class="dq-act" data-reject="'+t.id+'">Reject</button>'
+    : '<button class="dq-act" data-complete="'+t.id+'">Mark complete</button>';
+  return '<div class="os-dq-row '+tone+'" style="animation-delay:'+(i*60)+'ms"><span class="dq-rail"></span>'+
+    '<div class="dq-main"><div class="dq-kick"><span class="dq-sev '+tone+'">'+OS.esc(kickerOf(t))+'</span>'+
+      (wf?'<span class="dq-dom">'+OS.esc(wf)+'</span>':'')+'</div>'+
+    '<div class="dq-title">'+OS.esc(t.title)+'</div>'+
+    '<div class="dq-why">'+OS.esc(why.join(' · '))+'</div>'+
+    '<div class="dq-chips">'+chips.join('')+'</div></div>'+
+    '<div class="dq-side">'+acts+'</div></div>';
+}
+
+function renderQueue(){
+  var rows=laneRows(lane).slice();
+  var rank={critical:0,high:1,medium:2,low:3,neutral:4};
+  rows.sort(function(a,b){ return (rank[toneOf(a)]||9)-(rank[toneOf(b)]||9); });
+  document.getElementById('qn').textContent=rows.length?('· '+rows.length):'';
+  if(!rows.length){ document.getElementById('queue').innerHTML=OS.empty(lane==='mine'?'Nothing is waiting on you. You are clear.':'No open tasks in this lane.','✓'); return; }
+  document.getElementById('queue').innerHTML='<div class="os-dq">'+rows.map(taskRow).join('')+'</div>';
+}
+
+function act(id, path, verb){
+  var t=BYID[id]||{}; var team=teamLabel(t.team)||'the owning team'; var who=empName(t);
+  fetch('/api/people/tasks/'+id+'/'+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({})})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok&&j.ok!==false,j:j};});})
+    .then(function(o){
+      if(!o.ok){ OS.toast('You cannot '+verb+' this task: it belongs to '+team+'.',{tone:'bad'}); return; }
+      if(path==='complete') OS.toast('Task completed. The '+team+' workflow for '+who+' advances.');
+      else if(path==='approve') OS.toast('Approved. '+team+' is cleared to proceed for '+who+'.');
+      else OS.toast('Rejected. Returned to '+team+' for another look on '+who+'.');
+      load();
+    }).catch(function(){ OS.toast('Could not reach the task service.',{tone:'bad'}); });
+}
+
+document.getElementById('lanes').addEventListener('click',function(e){
+  var b=e.target.closest('[data-lane]'); if(!b) return; lane=b.getAttribute('data-lane'); renderLanes(); renderNote(); renderQueue();
 });
-OS.ready(function(){ load(); });
+document.getElementById('queue').addEventListener('click',function(e){
+  var c=e.target.closest('[data-complete]'); if(c){ c.disabled=true; act(c.getAttribute('data-complete'),'complete','complete'); return; }
+  var a=e.target.closest('[data-approve]'); if(a){ a.disabled=true; act(a.getAttribute('data-approve'),'approve','approve'); return; }
+  var r=e.target.closest('[data-reject]'); if(r){ r.disabled=true; act(r.getAttribute('data-reject'),'reject','reject'); return; }
+});
+document.getElementById('refresh').addEventListener('click',load);
+OS.ready(function(me){ ME=me; load(); });
 OS.onChange(load);
 </script>
 </body>

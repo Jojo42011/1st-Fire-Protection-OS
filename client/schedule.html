@@ -3,18 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Schedule · Northstar</title>
+<title>Schedule · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  .screen{max-width:none}
-  .dp-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
-  .dp-kpi{padding:15px 17px}
-  .dp-kpi .lab{font-weight:700;font-size:11.5px;color:var(--muted)}
-  .dp-kpi .val{font-weight:800;font-size:24px;color:var(--ink);margin-top:9px;font-variant-numeric:tabular-nums}
-  .dp-grid{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start}
-  .dp-legend{display:flex;align-items:center;gap:6px;font-weight:600;font-size:11px;border-radius:7px;padding:4px 9px}
+  /* Crew-week grid: bespoke layout the kit does not provide. Kept intact from the original screen. */
+  .dp-legend{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:11px;border-radius:7px;padding:4px 9px}
   .dp-legend .sq{width:7px;height:7px;border-radius:2px}
   .dp-legend.pro{color:var(--indigo);background:var(--indigo-bg-2)}
   .dp-legend.con{color:var(--teal);background:var(--teal-bg)}
@@ -36,52 +32,69 @@
   .dp-job{border-radius:8px;padding:7px 8px;border:1px solid}
   .dp-job .who{font-weight:700;font-size:11px;line-height:1.3}
   .dp-job .win{font-family:var(--mono);font-size:10px;margin-top:2px}
-  .dp-prop .hd{display:flex;align-items:center;gap:9px;padding:13px 18px;border-bottom:1px solid var(--divider-soft)}
-  .dp-prop .sq{width:9px;height:9px;border-radius:3px;background:var(--teal)}
-  .dp-prop .tag{font-weight:700;font-size:11.5px;color:var(--teal)}
-  .dp-prop .bd{padding:15px 18px}
   .dp-prop .ti{font-weight:800;font-size:15px;color:var(--ink)}
   .dp-prop p{margin:8px 0 0;font-weight:500;font-size:12.5px;line-height:1.6;color:var(--ink-3)}
   .dp-wl .row{padding:12px 18px;border-bottom:1px solid var(--divider-soft);display:flex;align-items:center;gap:10px}
+  .dp-wl .row:first-child{border-top:1px solid var(--divider-soft)}
   .dp-wl .row:last-child{border-bottom:none}
   .dp-wl .rk{font-family:var(--mono);font-weight:700;font-size:10.5px;border-radius:6px;padding:3px 7px}
   .dp-wl .nm{font-weight:700;font-size:12.5px;color:var(--ink)}
   .dp-wl .nd{font-weight:500;font-size:11px;color:var(--muted)}
-  .dp-ns{padding:15px 18px}
   .dp-ns .stats{display:flex;gap:20px;margin-top:13px}
   .dp-ns .n{font-weight:800;font-size:18px;font-variant-numeric:tabular-nums}
   .dp-ns .nl{font-weight:500;font-size:11px;color:var(--muted);margin-top:3px}
-  @media (max-width:900px){
-    .dp-kpis{grid-template-columns:repeat(2,1fr)}
-    .dp-grid{grid-template-columns:1fr}
-  }
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
-  <div class="dp-kpis" id="kpis"></div>
-  <div class="dp-grid" style="margin-top:18px">
-    <div class="card card-clip" id="week-card"></div>
-    <div class="stack">
-      <div class="card card-clip dp-prop" id="prop-card" style="border-left:3px solid var(--teal);display:none"></div>
-      <div class="card card-clip dp-wl" id="wl-card"></div>
-      <div class="card dp-ns" id="ns-card"></div>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Schedule</h1>
+        <div class="os-question">Who is doing what, where, and when?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="sync">Sync ServiceTrade</button>
+        <button class="os-btn primary" id="open-dispatch">Open dispatch</button>
+      </div>
     </div>
-  </div>
-</div>
-<script>
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function nav(tab){try{window.parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(e){}}
-function notify(){try{window.parent.postMessage({type:'counts-changed'},'*');}catch(e){}}
-var DATA=null;
 
-function officeParam(){try{var o=localStorage.getItem('fpos_office')||'all';return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}catch(_){return '';}}
-function load(){fetch('/api/schedule'+officeParam()).then(function(r){return r.json();}).then(function(d){DATA=d;render();});}
-load();
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="techCard"></div>
+      <div id="urgencyCard"></div>
+    </div>
+
+    <div class="os-block" id="week-card"></div>
+
+    <div class="os-two os-block">
+      <div id="prop-card" style="display:none"></div>
+      <div id="wl-card"></div>
+    </div>
+
+    <div class="os-block" id="ns-card"></div>
+
+    <div class="os-foot">The week grid, proposal and unscheduled queue are <b>real reads</b> from the ServiceTrade schedule mirror, office-scoped. The metric strip shows the counts the mirror provides: <b>techs available</b> and <b>cancellations</b> are not tracked in the data yet, so the real figures the endpoint returns (scheduled today, unassigned, technicians out) are shown instead of inventing them. Workload bars count booked jobs, not hours, because appointment durations are not always present. Approving a slot commits the crew and starts reminders, so nothing sends without your approval.</div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var DATA=null;
+function esc(t){return OS.esc(t);}
+function nav(tab){ OS.go(tab); }
+function notify(){ try{ window.parent.postMessage({type:'counts-changed'},'*'); }catch(e){} }
+function officeParam(){ var o=OS.office(); return o&&o!=='all'?('?office='+encodeURIComponent(o)):''; }
+
+function load(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(5);
+  fetch('/api/schedule'+officeParam()).then(function(r){return r.json();}).then(function(d){ DATA=d; render(); })
+    .catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load the schedule.'); });
+}
 
 function render(){
   var d=DATA, s=d.summary;
+
+  // Metric strip: the exact KPIs the endpoint returns (real when synced, seeded fixtures otherwise).
   var kpis = s.kpis ? s.kpis.map(function(k){return [k.lab,k.val,k.color];}) : [
     ['Jobs today', s.jobsToday, 'var(--ink)'],
     ['Crew utilization', s.utilization, 'var(--teal)'],
@@ -89,11 +102,34 @@ function render(){
     ['Open slots this week', s.openSlots, 'var(--money)'],
     ['On the waitlist', s.waitlisted, 'var(--ink)']
   ];
-  document.getElementById('kpis').innerHTML=kpis.map(function(k){
-    return '<div class="card dp-kpi"><div class="lab">'+esc(k[0])+'</div><div class="val" style="color:'+k[2]+'">'+esc(k[1])+'</div></div>';
-  }).join('');
+  document.getElementById('strip').innerHTML=OS.metricStrip(kpis.map(function(k){
+    return { label:k[0], drillable:false, display:'<span style="color:'+k[2]+'">'+esc(String(k[1]))+'</span>' };
+  }));
 
-  // crew-week grid
+  // Band: workload by technician this week (real job counts + load bar; who has room)
+  var crewLabel=(d.header&&d.header.crewLabel)||'Crew';
+  var techRows=(d.crews||[]).map(function(c){
+    var n=(c.days||[]).reduce(function(sum,day){return sum+((day.jobs&&day.jobs.length)||0);},0);
+    return { name:c.name, skills:c.skills, n:n };
+  }).sort(function(a,b){return b.n-a.n;}).map(function(c){
+    return { label:c.name, value:c.n, tone:(c.n===0?'good':'accent'),
+      right:'<b>'+OS.num(c.n)+'</b> <span class="bm">'+esc(c.skills||'')+'</span>' };
+  });
+  document.getElementById('techCard').innerHTML=OS.card('Workload by '+crewLabel.toLowerCase()+' this week',
+    'Booked jobs per '+crewLabel.toLowerCase()+'. Fewer jobs means more room to take work. These are job counts, not hours.',
+    techRows.length?OS.band(techRows):OS.empty('No '+crewLabel.toLowerCase()+' assignments this week.'));
+
+  // Band: unscheduled queue by urgency (real, from the waitlist / unassigned reads)
+  var order=[['money','Today or urgent','bad'],['amber','Later this week','warn'],['gray','Lower priority','neutral']];
+  var counts={}; (d.waitlist||[]).forEach(function(w){ counts[w.pill]=(counts[w.pill]||0)+1; });
+  var urgRows=order.map(function(o){
+    return { label:o[1], value:counts[o[0]]||0, tone:o[2], right:'<b>'+OS.num(counts[o[0]]||0)+'</b> <span class="bm">unscheduled</span>' };
+  }).filter(function(r){return r.value>0;});
+  document.getElementById('urgencyCard').innerHTML=OS.card('Unscheduled by urgency',
+    (d.waitlistNote||'Work waiting for a slot')+'. Fill these before they slip.',
+    urgRows.length?OS.band(urgRows):OS.empty('Nothing is waiting to be scheduled.','✓'));
+
+  // Crew-week grid (bespoke, preserved) wrapped in an os.css card
   var head='<div class="dp-wrow dp-whead"><span>'+esc(d.header.crewLabel)+'</span>'+
     d.header.days.map(function(l){return '<span>'+esc(l)+'</span>';}).join('')+'</div>';
   var body=d.crews.map(function(c){
@@ -111,56 +147,69 @@ function render(){
       cells+'</div>';
   }).join('');
   document.getElementById('week-card').innerHTML=
-    '<div class="card-head"><h2>This week by crew</h2><span style="flex:1"></span>'+
-      '<span class="dp-legend pro"><span class="sq" style="background:var(--indigo)"></span>proposed</span>'+
-      '<span class="dp-legend con"><span class="sq" style="background:var(--teal)"></span>confirmed</span></div>'+
-    '<div class="dp-scroll"><div class="dp-week">'+head+body+'</div></div>';
+    '<div class="os-card"><div class="os-card-h">'+
+      '<div class="os-card-t">This week by '+esc(crewLabel.toLowerCase())+'</div>'+
+      '<div class="os-card-s"><span class="dp-legend pro"><span class="sq" style="background:var(--indigo)"></span>proposed</span> '+
+        '<span class="dp-legend con"><span class="sq" style="background:var(--teal)"></span>confirmed</span></div>'+
+    '</div><div class="os-card-b" style="padding:0"><div class="dp-scroll"><div class="dp-week">'+head+body+'</div></div></div></div>';
 
-  // proposal
+  // Proposal (real read) wrapped in an os.css card
   var p=d.proposal, pc=document.getElementById('prop-card');
   if(p){
     pc.style.display='';
     pc.innerHTML=
-      '<div class="hd"><span class="sq"></span><span class="tag">This schedules work</span></div>'+
-      '<div class="bd" id="prop-body"><div class="ti">'+esc(p.title)+'</div>'+
-        '<p>'+esc(p.reason)+'</p>'+
-        '<div style="display:flex;gap:8px;margin-top:13px">'+
-          '<button class="btn-primary" id="approve-slot">Approve slot</button>'+
-          '<button class="btn" id="pick-another">Pick another</button></div></div>';
+      '<div class="os-card dp-prop" style="border-left:3px solid var(--teal)">'+
+        '<div class="os-card-h"><div class="os-card-t">Proposed slot</div><div class="os-card-s" style="color:var(--teal)">This schedules work</div></div>'+
+        '<div class="os-card-b" id="prop-body"><div class="ti">'+esc(p.title)+'</div>'+
+          '<p>'+esc(p.reason)+'</p>'+
+          '<div style="display:flex;gap:8px;margin-top:13px">'+
+            '<button class="os-btn primary" id="approve-slot">Approve slot</button>'+
+            '<button class="os-btn" id="pick-another">Pick another</button></div></div></div>';
     document.getElementById('approve-slot').onclick=function(){approve(p.appointmentId,this);};
     document.getElementById('pick-another').onclick=function(){nav('dispatch');};
   } else { pc.style.display='none'; }
 
-  // waitlist
+  // Waitlist / unassigned (real read) wrapped in an os.css card
   document.getElementById('wl-card').innerHTML=
-    '<div class="card-head"><h2>'+esc(d.waitlistTitle||'Waitlist')+'</h2><span style="flex:1"></span><span style="font-weight:500;font-size:11px;color:var(--faint)">'+esc(d.waitlistNote||'backfills cancellations')+'</span></div>'+
-    d.waitlist.map(function(w){
+    '<div class="os-card dp-wl"><div class="os-card-h">'+
+      '<div class="os-card-t">'+esc(d.waitlistTitle||'Waitlist')+'</div>'+
+      '<div class="os-card-s">'+esc(d.waitlistNote||'backfills cancellations')+'</div>'+
+    '</div><div class="os-card-b" style="padding:0">'+
+    ((d.waitlist&&d.waitlist.length)?d.waitlist.map(function(w){
       var tone=({money:['var(--money)','var(--money-bg)'],amber:['var(--amber-ink)','var(--amber-bg)'],gray:['var(--muted)','var(--fill)']})[w.pill]||['var(--muted)','var(--fill)'];
       return '<div class="row"><span class="rk" style="color:'+tone[0]+';background:'+tone[1]+'">'+esc(w.rank)+'</span>'+
         '<div style="flex:1"><div class="nm">'+esc(w.customer)+'</div><div class="nd">'+esc(w.need)+'</div></div></div>';
-    }).join('');
+    }).join(''):'<div style="padding:16px 18px">'+OS.empty('Nothing is waiting to be scheduled.','✓')+'</div>')+'</div></div>';
 
-  // no-shows
+  // Context panel (real read) wrapped in an os.css card
   var ns=d.noShows;
   var stats = ns.stats ? ns.stats.map(function(x){return '<div><div class="n" style="color:'+(x.color||'var(--ink)')+'">'+esc(x.n)+'</div><div class="nl">'+esc(x.nl)+'</div></div>';}).join('')
     : '<div><div class="n" style="color:var(--green)">'+esc(ns.rate)+'</div><div class="nl">this month</div></div>'+
       '<div><div class="n" style="color:var(--ink)">'+esc(ns.missed)+'</div><div class="nl">missed visits</div></div>'+
       '<div><div class="n" style="color:var(--ink)">'+esc(ns.reminders)+'</div><div class="nl">reminders sent</div></div>';
   document.getElementById('ns-card').innerHTML=
-    '<div style="font-weight:800;font-size:13.5px;color:var(--ink)">'+esc(ns.title||'No-shows')+'</div>'+
-    '<p style="margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)">'+esc(ns.note)+'</p>'+
-    '<div class="stats">'+stats+'</div>';
+    '<div class="os-card dp-ns"><div class="os-card-b">'+
+      '<div style="font-weight:800;font-size:13.5px;color:var(--ink)">'+esc(ns.title||'No-shows')+'</div>'+
+      '<p style="margin:6px 0 0;font-weight:500;font-size:12px;line-height:1.55;color:var(--muted)">'+esc(ns.note)+'</p>'+
+      '<div class="stats">'+stats+'</div></div></div>';
 }
+
 function approve(id,btn){
   btn.disabled=true; btn.textContent='Sending…';
   fetch('/api/schedule/'+id+'/approve',{method:'POST',headers:{'content-type':'application/json'},body:'{}'}).then(function(r){return r.json();}).then(function(){
     notify();
+    OS.toast('Slot sent to the approvals inbox. It commits the crew and starts reminders, so it waits for your yes.');
     document.getElementById('prop-body').innerHTML=
-      '<div class="empty" style="padding:24px 8px"><div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 13l4 4L19 7"/></svg></div>'+
-      '<h3 style="font-size:14px">Slot is in your inbox</h3><p>It commits the crew and starts the reminders, so it waits for your yes.</p>'+
-      '<button class="btn-primary" style="margin-top:12px" onclick="nav(\'approve\')">Open the approvals inbox</button></div>';
+      OS.empty('Slot is in your inbox. It commits the crew and starts the reminders, so it waits for your yes.','✓')+
+      '<div style="text-align:center;margin-top:12px"><button class="os-btn primary" id="open-approvals">Open the approvals inbox</button></div>';
+    var oa=document.getElementById('open-approvals'); if(oa) oa.onclick=function(){nav('approve');};
   }).catch(function(){btn.disabled=false;btn.textContent='Approve slot';});
 }
+
+document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Syncing…';
+  fetch('/api/schedule/sync',{method:'POST'}).then(function(){b.disabled=false;b.textContent=t;OS.toast('ServiceTrade schedule synced.');load();}).catch(function(){b.disabled=false;b.textContent=t;OS.toast('Sync could not complete.');}); });
+document.getElementById('open-dispatch').addEventListener('click',function(){ OS.go('dispatch'); });
+OS.ready(load); OS.onChange(load);
 </script>
 </body>
 </html>

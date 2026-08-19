@@ -5,40 +5,97 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
 <style>
-  .ocards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-  .oc{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px;cursor:pointer;transition:border-color .12s}
-  .oc:hover{border-color:var(--border-strong)}
-  .oc h3{font-weight:800;font-size:16px;color:var(--ink)}
-  .oc .mets{display:flex;gap:18px;margin-top:12px}
-  .oc .m .l{font-weight:650;font-size:10.5px;text-transform:uppercase;color:var(--muted)}
-  .oc .m .v{font-weight:800;font-size:19px;color:var(--ink);margin-top:3px;font-variant-numeric:tabular-nums}
-  .oc .go{font-weight:700;font-size:12px;color:var(--os-accent);margin-top:12px;display:inline-block}
+  /* Office cards: the kit has no multi-metric roster card, so this small block only lays one out. */
+  .ocards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .oc{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:16px 17px 14px;cursor:pointer;box-shadow:var(--sh-rest);transition:border-color .18s var(--ease),transform .22s var(--ease),box-shadow .22s var(--ease);display:flex;flex-direction:column;gap:12px}
+  .oc:hover{border-color:var(--border-strong);transform:translateY(-3px);box-shadow:var(--sh-lift)}
+  .oc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .oc-top h3{font-weight:800;font-size:17px;letter-spacing:-.01em;color:var(--ink);line-height:1.2}
+  .oc-attrs{display:flex;flex-wrap:wrap;gap:6px 14px;font-weight:600;font-size:12px;color:var(--ink-3)}
+  .oc-attrs .k{color:var(--muted)}
+  .oc-mets{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:12px}
+  .oc-m{flex:1;min-width:0}
+  .oc-m .l{font-weight:700;font-size:9.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+  .oc-m .v{font-weight:800;font-size:18px;color:var(--ink);margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oc-go{font-weight:700;font-size:12px;color:var(--os-accent)}
 </style>
 </head><body>
   <div class="os-wrap">
-    <div class="os-head"><div><h1>Offices</h1><div class="os-q">Each office, at a glance. Open one for its full operating profile.</div></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Offices</h1>
+        <div class="os-question">How is each office configured and performing?</div>
+      </div>
+    </div>
+
     <div class="ocards" id="cards"></div>
+    <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
+// Which office metrics each card shows. All office-scoped from ServiceTrade; AR is deliberately
+// excluded because it is company-wide and not office-attributable until Intacct is connected.
 function load(){
   document.getElementById('cards').innerHTML=OS.skeletonKpis(6);
+  document.getElementById('foot').textContent='';
+  var period=OS.period();
   Promise.all([
-    fetch('/api/metrics/open_pipeline/by-office?period='+OS.period()).then(function(r){return r.json();}),
-    fetch('/api/metrics/open_deficiencies/by-office?period='+OS.period()).then(function(r){return r.json();})
+    fetch('/api/metrics/open_pipeline/by-office?period='+encodeURIComponent(period)).then(function(r){return r.json();}),
+    fetch('/api/metrics/open_deficiencies/by-office?period='+encodeURIComponent(period)).then(function(r){return r.json();}),
+    fetch('/api/metrics/jobs_completed/by-office?period='+encodeURIComponent(period)).then(function(r){return r.json();}),
+    fetch('/api/offices').then(function(r){return r.json();}).catch(function(){return {offices:[]};}),
+    fetch('/api/oncall/current').then(function(r){return r.json();}).catch(function(){return {byOffice:{}};}),
+    fetch('/api/me').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
-    var pipe={}, def={};
+    var pipe={}, def={}, jobs={};
     (res[0].rows||[]).forEach(function(r){pipe[r.office]={label:r.label,value:r.value};});
     (res[1].rows||[]).forEach(function(r){def[r.office]=r.value;});
+    (res[2].rows||[]).forEach(function(r){jobs[r.office]=r.value;});
+    var head={}, roster=(res[3].offices||[]);
+    roster.forEach(function(o){head[o.key]=o;});
+    var onCall=(res[4].byOffice)||{};
+    var me=res[5]||{};
+
+    // The set of offices the caller can actually see is the set of scoped metric rows.
     var keys=Object.keys(pipe);
     if(!keys.length){document.getElementById('cards').innerHTML=OS.empty('No offices in your scope.');return;}
+
     document.getElementById('cards').innerHTML=keys.map(function(k){
-      return '<div class="oc" data-office="'+OS.esc(k)+'"><h3>'+OS.esc(pipe[k].label)+'</h3>'+
-        '<div class="mets"><div class="m"><div class="l">Open pipeline</div><div class="v">'+OS.money(pipe[k].value)+'</div></div>'+
-        '<div class="m"><div class="l">Open deficiencies</div><div class="v">'+OS.num(def[k]||0)+'</div></div></div>'+
-        '<span class="go">Open office performance →</span></div>';
+      var label=(pipe[k]&&pipe[k].label)||(head[k]&&head[k].label)||k;
+      var hc=head[k]?head[k].headcount:null;
+      var shift=onCall[k]||null;
+      var covered=!!(shift&&shift.person_name);
+      var statePill=covered?OS.pill('On call','good'):OS.pill('No on-call','warn');
+      var hcTxt=hc==null?'<span class="k">headcount</span> n/a':('<b>'+OS.num(hc)+'</b> <span class="k">on staff</span>');
+      var ocTxt=covered?('<span class="k">on call</span> '+OS.esc(shift.person_name)):'<span class="k">on call</span> <span style="color:var(--os-warn)">unassigned</span>';
+      return '<div class="oc" data-office="'+OS.esc(k)+'">'+
+        '<div class="oc-top"><h3>'+OS.esc(label)+'</h3>'+statePill+'</div>'+
+        '<div class="oc-attrs"><span>'+hcTxt+'</span><span>'+ocTxt+'</span></div>'+
+        '<div class="oc-mets">'+
+          '<div class="oc-m"><div class="l">Open pipeline</div><div class="v">'+OS.money(pipe[k].value)+'</div></div>'+
+          '<div class="oc-m"><div class="l">Open deficiencies</div><div class="v">'+OS.num(def[k]||0)+'</div></div>'+
+          '<div class="oc-m"><div class="l">Jobs completed</div><div class="v">'+OS.num(jobs[k]||0)+'</div></div>'+
+        '</div>'+
+        '<span class="oc-go">Open office performance →</span></div>';
     }).join('');
+
+    // Honest scope footnote: how many offices are shown vs how many operate, and why the rest are hidden.
+    var shown=keys.length;
+    var exist=roster.length||shown;
+    var scopeNote;
+    if(me.canSeeAllOffices){
+      scopeNote='Showing all '+shown+' operating office'+(shown===1?'':'s')+'. You have company-wide scope, so nothing is hidden.';
+    } else {
+      var hidden=Math.max(0, exist-shown);
+      scopeNote='Showing '+shown+' of '+exist+' operating offices. '+(hidden>0
+        ? hidden+' further office'+(hidden===1?' is':'s are')+' operated by the company but not shown here: you are not authorized for '+(hidden===1?'it':'them')+'.'
+        : 'These are the offices you are authorized for.');
+    }
+    document.getElementById('foot').innerHTML=scopeNote+
+      ' Pipeline, deficiencies and jobs completed are office-scoped from ServiceTrade for '+OS.esc(OS.periodLabel())+
+      '. On-call reflects the current roster. The status pill shows whether an on-call person is set right now. '+
+      'AR is not shown per office: it is company-wide until Sage Intacct provides office attribution.';
   }).catch(function(){document.getElementById('cards').innerHTML=OS.errorBox('Could not load offices.');});
 }
 document.addEventListener('click',function(e){var c=e.target.closest('[data-office]');if(c){OS.go('officePerf',{office:c.getAttribute('data-office')});}});

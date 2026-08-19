@@ -5,39 +5,119 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
 <style>
-  .int{display:flex;align-items:center;gap:14px;border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 18px;margin-bottom:12px}
-  .int .dot{width:12px;height:12px;border-radius:50%;flex:none}
-  .int .dot.fresh{background:var(--os-good)}.int .dot.stale{background:var(--os-warn)}.int .dot.no_sync{background:var(--os-neutral)}.int .dot.not_connected{background:var(--border-strong,#c1c6d0)}
-  .int .body{flex:1;min-width:0}
-  .int .nm{font-weight:750;font-size:15px;color:var(--ink)}
-  .int .det{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:2px}
-  .int .state{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;border-radius:var(--r-pill,999px);padding:5px 11px;flex:none}
-  .int .state.fresh{background:var(--os-good-bg);color:var(--os-good)}
-  .int .state.stale,.int .state.no_sync{background:var(--os-warn-bg);color:var(--os-warn)}
-  .int .state.not_connected{background:var(--fill);color:var(--os-neutral)}
+  /* System-of-record cards: the kit has no connector card, so this small block only lays one out. */
+  .ic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .ic{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:17px 18px;box-shadow:var(--sh-rest);display:flex;flex-direction:column;gap:12px}
+  .ic.off{border-style:dashed;border-color:var(--border-strong,#c9ccd6);background:var(--fill)}
+  .ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .ic-nm{font-weight:800;font-size:16px;color:var(--ink)}
+  .ic-role{font-weight:600;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .ic-rows{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border);padding-top:12px}
+  .ic-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12.5px}
+  .ic-row .k{font-weight:600;color:var(--muted);white-space:nowrap}
+  .ic-row .v{font-weight:700;color:var(--ink-2);text-align:right}
+  .ic-row .v.bad{color:var(--os-bad)}.ic-row .v.warn{color:var(--os-warn)}.ic-row .v.good{color:var(--os-good)}
+  .ic-unavail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .ic-unavail li{display:flex;gap:8px;font-weight:600;font-size:12.5px;color:var(--ink-3);line-height:1.4}
+  .ic-unavail li::before{content:"·";color:var(--os-warn);font-weight:800}
+  .ic-connect{align-self:flex-start;font-family:var(--sans);font-weight:700;font-size:12.5px;color:#fff;background:var(--os-accent);border:none;border-radius:10px;padding:9px 15px;cursor:pointer}
+  .ic-connect:hover{filter:brightness(1.08)}
 </style>
 </head><body>
   <div class="os-wrap">
-    <div class="os-head"><div><h1>Integrations</h1><div class="os-q">Are the systems of record connected and fresh?</div></div></div>
-    <div id="list"></div>
-    <div class="os-q" style="margin-top:14px">These are the systems the OS reads from. A stale or failed source is shown prominently so you know when a number is not current.</div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Integrations</h1>
+        <div class="os-question">What is connected, and is it healthy?</div>
+      </div>
+    </div>
+
+    <div class="ic-grid" id="grid"></div>
+    <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-function load(){
-  OS.sources().then(function(d){
-    var src=d.sources||[];
-    if(!src.length){document.getElementById('list').innerHTML=OS.empty('No integrations reporting.');return;}
-    document.getElementById('list').innerHTML=src.map(function(s){
-      var stateTxt=s.status==='fresh'?'Fresh':s.status==='stale'?'Stale':s.status==='no_sync'?'Connected · no sync':'Not connected';
-      var when=s.lastSyncedAt?('Last sync '+OS.ago(s.lastSyncedAt)):(s.connected?'No sync yet':'');
-      return '<div class="int"><span class="dot '+s.status+'"></span><div class="body">'+
-        '<div class="nm">'+OS.esc(s.label)+'</div>'+
-        '<div class="det">'+OS.esc(s.detail||'')+(when?(' · '+OS.esc(when)):'')+'</div></div>'+
-        '<span class="state '+s.status+'">'+OS.esc(stateTxt)+'</span></div>';
-    }).join('');
-  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load integration health.');});
+var ROLE={ servicetrade:'Field service · system of record', bamboo:'People · roster of record',
+  microsoft:'Identity · sign-in &amp; access', intacct:'Finance · accounting of record' };
+
+function statePill(s){
+  if(!s.connected) return OS.pill('Not connected','warn');
+  if(s.status==='stale') return OS.pill('Stale','warn');
+  if(s.status==='no_sync') return OS.pill('Connected','neutral');
+  return OS.pill('Connected','good');
 }
+function syncHealth(s){
+  if(!s.connected) return {t:'not connected', cls:'warn'};
+  if(s.status==='stale') return {t:'sync overdue', cls:'warn'};
+  if(s.status==='no_sync') return {t:'no sync yet', cls:'neutral'};
+  return {t:'no failures reported', cls:'good'};
+}
+function lastSync(s){ return s.lastSyncedAt?('Last sync '+OS.ago(s.lastSyncedAt)):(s.connected?'No sync yet':'not connected'); }
+
+function row(k,v,cls){ return '<div class="ic-row"><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>'; }
+
+function connectorCard(s, records){
+  var health=syncHealth(s);
+  return '<div class="ic'+(s.connected?'':' off')+'">'+
+    '<div class="ic-top"><div><div class="ic-nm">'+OS.esc(s.label)+'</div><div class="ic-role">'+(ROLE[s.key]||'')+'</div></div>'+statePill(s)+'</div>'+
+    '<div class="ic-rows">'+
+      row('Connection', s.connected?'Connected':'Not connected', s.connected?'good':'warn')+
+      row('Last sync', OS.esc(lastSync(s)))+
+      row('Records', records||'<span class="muted">not mirrored</span>')+
+      row('Sync health', health.t, health.cls)+
+    '</div></div>';
+}
+
+function intacctCard(s){
+  var unavailable=[
+    'True accounts receivable and cash collected (only operational invoice data exists today)',
+    'Booked revenue, margin and operating income',
+    'Office-level financials: AR stays company-wide until Intacct attributes it',
+    'General-ledger truth to reconcile ServiceTrade against'
+  ];
+  return '<div class="ic off">'+
+    '<div class="ic-top"><div><div class="ic-nm">'+OS.esc(s.label)+'</div><div class="ic-role">'+ROLE.intacct+'</div></div>'+OS.pill('Not connected','warn')+'</div>'+
+    '<div class="ic-rows"><div style="font-weight:650;font-size:12px;color:var(--muted)">Unavailable until connected:</div>'+
+      '<ul class="ic-unavail">'+unavailable.map(function(u){return '<li>'+OS.esc(u)+'</li>';}).join('')+'</ul></div>'+
+    '<button class="ic-connect" id="ic-connect">Connect Sage Intacct</button></div>';
+}
+
+function load(){
+  document.getElementById('grid').innerHTML=OS.skeletonKpis(4);
+  Promise.all([
+    OS.sources(),
+    fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};})
+  ]).then(function(res){
+    var src=(res[0].sources||[]);
+    var lic=res[1]||{}; var sum=lic.summary||{};
+    var by={}; src.forEach(function(s){by[s.key]=s;});
+
+    // Real record counts where a source exposes them; honest blanks where it does not.
+    var stRecords=(by.servicetrade&&by.servicetrade.detail)?OS.esc(by.servicetrade.detail):null;
+    var roster=(sum.activeEmployees||0)+(sum.terminatedEmployees||0);
+    var bambooRecords=roster>0?('<b>'+OS.num(roster)+'</b> employees on roster'):null;
+
+    var order=['servicetrade','bamboo','microsoft'];
+    var cards=order.map(function(k){
+      var s=by[k]; if(!s) return '';
+      var records = k==='servicetrade'?stRecords : k==='bamboo'?bambooRecords : null;
+      return connectorCard(s, records);
+    });
+    var intacct=by.intacct;
+    cards.push(intacct?intacctCard(intacct):'');
+    document.getElementById('grid').innerHTML=cards.filter(Boolean).join('');
+
+    document.getElementById('foot').innerHTML=
+      'These are the systems of record the OS reads from. Every figure above is reported by the source itself: '+
+      'record counts and sync times are real, and where a source exposes no count (identity sign-in) the field is left blank rather than filled. '+
+      'Sage Intacct is <b>not connected</b>, so financial truth (true AR, revenue, margin, office-level financials) is shown as unavailable and is never estimated in its place. '+
+      'Connecting Intacct opens the setup here in the shell; nothing changes until it is configured.';
+  }).catch(function(){document.getElementById('grid').innerHTML=OS.errorBox('Could not load integration health.');});
+}
+
+document.addEventListener('click',function(e){
+  if(e.target.closest('#ic-connect')){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} }
+});
 OS.ready(load); OS.onChange(load);
 </script></body></html>

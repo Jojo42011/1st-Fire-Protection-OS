@@ -9,110 +9,153 @@
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
 <style>
-  .ex{border:1px solid var(--border);border-left-width:4px;border-radius:12px;background:var(--panel);padding:14px 15px;margin-bottom:10px}
-  .ex.critical{border-left-color:#b3261e}.ex.high{border-left-color:var(--os-bad)}.ex.medium{border-left-color:var(--os-warn)}.ex.low{border-left-color:var(--os-neutral)}
-  .ex .h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-  .ex .t{font-weight:750;font-size:14.5px;color:var(--ink);line-height:1.3}
-  .ex .d{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:4px}
-  .ex .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center}
-  .ex .acts{display:flex;gap:6px;flex:none;position:relative}
-  .ex .acts button{font-weight:700;font-size:11.5px;border-radius:8px;padding:6px 11px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .ex .acts .open{background:var(--os-accent);color:#fff;border-color:transparent}
-  .menu{position:absolute;top:36px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.16);z-index:5;min-width:190px;overflow:hidden}
-  .menu button{display:block;width:100%;text-align:left;border:0;border-radius:0;background:var(--panel);padding:9px 13px;font-weight:600;font-size:12.5px;color:var(--ink-2)}
-  .menu button:hover{background:var(--fill)}
-  .ofc{display:grid;grid-template-columns:150px 1fr auto;gap:10px;align-items:center;padding:8px 0;cursor:pointer}
-  .ofc .nm{font-weight:650;font-size:13px;color:var(--ink-2)}
-  .ofc .track{height:14px;background:var(--fill);border-radius:7px;overflow:hidden}
-  .ofc .fill{height:100%;background:var(--os-bad);border-radius:7px}
-  .ofc .amt{font-weight:700;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  /* Dropdown resolve menu: the kit has no popover primitive. */
+  .exmenu{position:absolute;top:38px;right:0;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.16);z-index:5;min-width:190px;overflow:hidden}
+  .exmenu button{display:block;width:100%;text-align:left;border:0;border-radius:0;background:var(--panel);padding:9px 13px;font-weight:600;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+  .exmenu button:hover{background:var(--fill)}
+  .dq-side{position:relative}
 </style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1 id="title">Exceptions</h1><div class="os-q">Where reality does not match the intended process.</div></div>
-      <button class="os-fb" id="refresh">↻ Re-scan</button>
+    <div class="os-screen-head">
+      <div>
+        <h1 id="title">Exceptions</h1>
+        <div class="os-question" id="question">Where is the process breaking?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="refresh">Re-scan</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-    <div class="os-filters" style="margin:18px 0 4px">
-      <button class="os-fb on" data-view="issue">By issue</button>
-      <button class="os-fb" data-view="office">By office</button>
-      <span style="width:12px"></span>
-      <span id="ownerFilters" class="os-filters"></span>
+
+    <div id="strip"></div>
+
+    <div class="os-two os-block">
+      <div id="officeCard"></div>
+      <div id="ownerCard"></div>
     </div>
-    <div id="body"></div>
+
+    <div class="os-sec os-block">Open exceptions <span class="n" id="qn"></span><span id="ownerActive" style="margin-left:auto;font-weight:600;font-size:11.5px;text-transform:none;letter-spacing:0;color:var(--faint)"></span></div>
+    <div id="queue"></div>
+
+    <div class="os-foot">Ranked by severity, then by dollars at risk. Financial impact blends <b>real</b> ledger dollars (AR aging) with <b style="color:var(--amber-ink,#8A5106)">projected</b> repair value (aged deficiencies at an assumed ticket), so it is a risk figure, not booked revenue. Resolving an exception only changes its status here and records why. It does not touch the source system that produced it.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var view='issue';
 var ownerFilter=(new URLSearchParams(location.search).get('owner'))||'';
-var OWNERS=[['','All owners'],['operations','Operations'],['accounting','Accounting'],['it','IT'],['people','People'],['safety','Safety']];
+var OWNER_LABEL={operations:'Operations',accounting:'Accounting',it:'IT',people:'People',safety:'Safety',executive:'Executive'};
 var CAT_TAB={deficiency_aging:'deficiencies',terminated_access:'people',ar_aging:'receivables',handoff_missing_office:'jobs',handoff_missing_contact:'jobs'};
 var RESOLUTIONS=[['fixed','resolved','Fixed'],['source_corrected','resolved','Source corrected'],['accepted_exception','ignored','Accepted exception'],['false_positive','dismissed','False positive'],['dismissed','dismissed','Dismiss']];
+var SUMMARY=null;
 
 function officeParam(){var o=OS.office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
-function renderOwners(){ document.getElementById('ownerFilters').innerHTML=OWNERS.map(function(o){
-  return '<button class="os-fb'+(o[0]===ownerFilter?' on':'')+'" data-owner="'+o[0]+'">'+OS.esc(o[1])+'</button>'; }).join(''); }
+function ownerLabel(k){ return OWNER_LABEL[k]||(k?String(k):''); }
+
+function applyHeading(){
+  if(ownerFilter==='accounting'){
+    document.getElementById('title').textContent='Accounting handoffs';
+    document.getElementById('question').textContent='Where are jobs reaching Accounting without what they need to invoice?';
+  } else {
+    document.getElementById('title').textContent='Exceptions';
+    document.getElementById('question').textContent='Where is the process breaking?';
+  }
+}
+
 function loadSummary(){
-  fetch('/api/exceptions/summary').then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok)return; var s=d.summary;
-    document.getElementById('kpis').innerHTML=[
-      ['Open',s.open],['Financial impact',OS.money(s.financialImpact)],['Overdue',s.overdue||0],['Resolved (30d)',s.resolvedRecently||0]
-    ].map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+c[1]+'</div></div>';}).join('');
-    window.__byOffice=s.byOffice||{};
+  return fetch('/api/exceptions/summary').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok)return; SUMMARY=d.summary; var s=SUMMARY;
+    document.getElementById('strip').innerHTML=OS.metricStrip([
+      {label:'Open', value:s.open, format:'count', drillable:false, sub:'open exceptions'},
+      {label:'Financial impact', display:OS.money(s.financialImpact), drillable:false, sub:'dollars at risk (real + projected)'},
+      {label:'Overdue', value:s.overdue||0, format:'count', drillable:false, display:(s.overdue||0)?'<span style="color:var(--os-bad)">'+OS.num(s.overdue)+'</span>':'0', sub:'past their due date'},
+      {label:'Resolved (30d)', value:s.resolvedRecently||0, format:'count', drillable:false, sub:'closed in the last 30 days'}
+    ]);
+    renderBands();
   });
 }
-function load(){
-  loadSummary();
-  var body=document.getElementById('body');
-  var url='/api/exceptions?status=open'+officeParam()+(ownerFilter?('&owner='+ownerFilter):'');
-  fetch(url).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){body.innerHTML=OS.errorBox('Could not load.');return;}
-    if(!d.exceptions.length){body.innerHTML=OS.empty('No open exceptions'+(ownerFilter?(' for '+ownerFilter):'')+'. Clean.','✓');return;}
-    if(view==='office'){ renderByOffice(d.exceptions); } else { body.innerHTML=d.exceptions.map(exCard).join(''); }
-  }).catch(function(){body.innerHTML=OS.errorBox('Could not load.');});
+
+function renderBands(){
+  var s=SUMMARY||{};
+  // By office, weighted by dollars at risk (fall back to count only if no office carries a dollar figure).
+  var byOffice=s.byOffice||{}; var okeys=Object.keys(byOffice);
+  var hasImpact=okeys.some(function(k){return (byOffice[k].impact||0)>0;});
+  var offRows=okeys.map(function(k){ var o=byOffice[k];
+    return { label:o.label, value:hasImpact?(o.impact||0):o.count, filter:k,
+      right:'<b>'+(hasImpact?OS.money(o.impact||0):OS.num(o.count))+'</b> <span class="bm">'+o.count+' open</span>',
+      tone:(o.impact>=250000?'bad':o.impact>0?'warn':'neutral') };
+  }).sort(function(a,b){return b.value-a.value;});
+  document.getElementById('officeCard').innerHTML=OS.card('By office', hasImpact?'Weighted by dollars at risk. Click an office to open its records':'No office carries a dollar figure yet, so this is weighted by open count', offRows.length?OS.band(offRows,{money:hasImpact}):OS.empty('No office breakdown.'));
+  // By owner (count of open exceptions the team owns). Click to filter the queue.
+  var byOwner=s.byOwner||{}; var wkeys=Object.keys(byOwner);
+  var ownRows=wkeys.map(function(k){ return { label:ownerLabel(k), value:byOwner[k], filter:k, on:ownerFilter===k,
+    right:'<b>'+OS.num(byOwner[k])+'</b>', tone:ownerFilter===k?'accent':'neutral' }; })
+    .sort(function(a,b){return b.value-a.value;});
+  document.getElementById('ownerCard').innerHTML=OS.card('By owner', ownerFilter?('Filtered to '+ownerLabel(ownerFilter)+'. Click it again to clear'):'Which team is on the hook. Click a team to filter the queue', ownRows.length?OS.band(ownRows):OS.empty('No owner breakdown.'));
 }
-function exCard(e){
-  var impact=e.financial_impact>0?'<span class="os-tag" style="background:var(--os-warn-bg);color:var(--os-warn)">'+(e.financial_projected?'~':'')+OS.money(e.financial_impact)+(e.financial_projected?' projected':'')+'</span>':'';
+
+function queueRow(e,i){
+  var sev=e.severity||'low';
+  var tone=sev==='critical'?'critical':sev==='high'?'high':sev==='medium'?'medium':'low';
   var tab=CAT_TAB[e.category]||'';
-  var openBtn=tab?'<button class="open" data-tab="'+OS.esc(tab)+'"'+(e.office?' data-office="'+OS.esc(e.office)+'"':'')+'>Open</button>':'';
-  return '<div class="ex '+OS.esc(e.severity)+'" data-id="'+e.id+'"><div class="h"><div><div class="t">'+OS.esc(e.title)+'</div>'+
-    '<div class="d">'+OS.esc(e.description||'')+'</div></div><div class="acts">'+openBtn+
-    '<button class="resolve" data-id="'+e.id+'">Resolve ▾</button></div></div>'+
-    '<div class="tags">'+OS.ownerTag(e.owner_team||'')+OS.officeTag(e.officeLabel||'')+OS.pill(e.severity, e.severity==='critical'||e.severity==='high'?'bad':e.severity==='medium'?'warn':'neutral')+
-    '<span class="os-tag">'+OS.esc(e.source_system||'')+'</span>'+impact+'</div></div>';
+  var chips=['<span class="dq-chip">'+OS.esc(ownerLabel(e.owner_team))+'</span>'];
+  if(e.officeLabel) chips.push('<span class="dq-chip">'+OS.esc(e.officeLabel)+'</span>');
+  if(e.source_system) chips.push('<span class="dq-chip">'+OS.esc(e.source_system)+'</span>');
+  if(e.count) chips.push('<span class="dq-chip">'+OS.num(e.count)+' record'+(e.count===1?'':'s')+'</span>');
+  var amt=e.financial_impact>0?'<span class="dq-amt'+(e.financial_projected?' proj':'')+'">'+(e.financial_projected?'~':'')+OS.money(e.financial_impact)+'</span>':'';
+  var openBtn=tab?'<button class="dq-act" data-tab="'+OS.esc(tab)+'"'+(e.office?' data-office="'+OS.esc(e.office)+'"':'')+'>Open records</button>':'';
+  return '<div class="os-dq-row '+tone+'" style="animation-delay:'+(i*55)+'ms"><span class="dq-rail"></span>'+
+    '<div class="dq-main"><div class="dq-kick"><span class="dq-sev '+tone+'">'+OS.esc(sev)+'</span>'+
+      '<span class="dq-dom">'+OS.esc(String(e.category||'').replace(/_/g,' '))+'</span></div>'+
+    '<div class="dq-title">'+OS.esc(e.title)+'</div>'+
+    (e.description?'<div class="dq-why">'+OS.esc(e.description)+'</div>':'')+
+    '<div class="dq-chips">'+chips.join('')+'</div></div>'+
+    '<div class="dq-side">'+amt+openBtn+'<button class="dq-act exresolve" data-id="'+e.id+'">Resolve ▾</button></div></div>';
 }
-function renderByOffice(items){
-  var by=window.__byOffice||{}; var keys=Object.keys(by);
-  if(!keys.length){document.getElementById('body').innerHTML=OS.empty('No open exceptions.');return;}
-  var max=Math.max.apply(null,keys.map(function(k){return by[k].count;}))||1;
-  document.getElementById('body').innerHTML='<div class="os-tablewrap" style="padding:10px 16px">'+keys.sort(function(a,b){return by[b].count-by[a].count;}).map(function(k){
-    var o=by[k];
-    return '<div class="ofc" data-office="'+OS.esc(k==='__company__'?'':k)+'"><span class="nm">'+OS.esc(o.label)+'</span>'+
-      '<span class="track"><span class="fill" style="width:'+Math.round((o.count/max)*100)+'%"></span></span>'+
-      '<span class="amt">'+o.count+(o.impact?(' · '+OS.money(o.impact)):'')+'</span></div>';
-  }).join('')+'</div>';
+
+function loadQueue(){
+  var q=document.getElementById('queue');
+  var url='/api/exceptions?status=open'+officeParam()+(ownerFilter?('&owner='+encodeURIComponent(ownerFilter)):'');
+  fetch(url).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ q.innerHTML=OS.errorBox('Could not load exceptions.'); return; }
+    var rows=d.exceptions||[];
+    document.getElementById('qn').textContent=rows.length?('· '+rows.length):'';
+    document.getElementById('ownerActive').textContent=ownerFilter?('Owner: '+ownerLabel(ownerFilter)):'';
+    if(!rows.length){ q.innerHTML=OS.empty('No open exceptions'+(ownerFilter?(' for '+ownerLabel(ownerFilter)):'')+'. Clean.','✓'); return; }
+    q.innerHTML='<div class="os-dq">'+rows.map(queueRow).join('')+'</div>';
+  }).catch(function(){ q.innerHTML=OS.errorBox('Could not load exceptions.'); });
 }
+
+function load(){ loadSummary(); loadQueue(); }
+
 function setStatus(id,status,reason){
+  var lab=(RESOLUTIONS.filter(function(r){return r[0]===reason;})[0]||['','','updated'])[2];
   fetch('/api/exceptions/'+id+'/status',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({status:status,note:reason})})
-    .then(function(r){return r.json();}).then(function(){load();}).catch(function(){});
+    .then(function(r){return r.json();}).then(function(){ OS.toast('Exception marked "'+lab+'". Removed from the open queue and the reason recorded.'); load(); })
+    .catch(function(){ OS.toast('Could not update the exception.',{tone:'bad'}); });
 }
-function closeMenus(){ document.querySelectorAll('.menu').forEach(function(m){m.remove();}); }
-document.addEventListener('click',function(e){
-  var v=e.target.closest('[data-view]'); if(v){ view=v.getAttribute('data-view'); [].forEach.call(document.querySelectorAll('[data-view]'),function(x){x.classList.toggle('on',x===v);}); load(); return; }
-  var o=e.target.closest('[data-owner]'); if(o){ ownerFilter=o.getAttribute('data-owner'); renderOwners(); load(); return; }
-  if(e.target.closest('#refresh')){ fetch('/api/exceptions/detect',{method:'POST'}).then(function(){load();}); return; }
-  var rez=e.target.closest('.resolve'); if(rez){ e.stopPropagation(); closeMenus();
-    var id=rez.getAttribute('data-id'); var menu=document.createElement('div'); menu.className='menu';
+function closeMenus(){ document.querySelectorAll('.exmenu').forEach(function(m){m.remove();}); }
+
+document.getElementById('officeCard').addEventListener('click',function(e){
+  var row=e.target.closest('[data-filter]'); if(!row) return;
+  var k=row.getAttribute('data-filter'); if(k&&k!=='__company__') OS.go('deficiencies',{office:k});
+});
+document.getElementById('ownerCard').addEventListener('click',function(e){
+  var row=e.target.closest('[data-filter]'); if(!row) return;
+  var k=row.getAttribute('data-filter'); ownerFilter=(ownerFilter===k?'':k); applyHeading(); load();
+});
+document.getElementById('queue').addEventListener('click',function(e){
+  var rez=e.target.closest('.exresolve'); if(rez){ e.stopPropagation(); closeMenus();
+    var id=rez.getAttribute('data-id'); var menu=document.createElement('div'); menu.className='exmenu';
     menu.innerHTML=RESOLUTIONS.map(function(r){return '<button data-reason="'+r[0]+'" data-status="'+r[1]+'" data-id="'+id+'">'+r[2]+'</button>';}).join('');
     rez.parentNode.appendChild(menu); return; }
   var pick=e.target.closest('[data-reason]'); if(pick){ setStatus(pick.getAttribute('data-id'),pick.getAttribute('data-status'),pick.getAttribute('data-reason')); closeMenus(); return; }
-  var ofc=e.target.closest('.ofc[data-office]'); if(ofc){ var off=ofc.getAttribute('data-office'); if(off){OS.go('deficiencies',{office:off});} return; }
-  closeMenus();
 });
-OS.ready(function(){ renderOwners(); load(); });
+document.addEventListener('click',function(e){ if(!e.target.closest('.exmenu')&&!e.target.closest('.exresolve')) closeMenus(); });
+document.getElementById('refresh').addEventListener('click',function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Scanning…';
+  fetch('/api/exceptions/detect',{method:'POST'}).then(function(){ b.disabled=false; b.textContent=t; OS.toast('Re-scanned. The open exception list is refreshed.'); load(); }).catch(function(){ b.disabled=false; b.textContent=t; }); });
+
+OS.ready(function(){ applyHeading(); load(); });
 OS.onChange(load);
 </script>
 </body>

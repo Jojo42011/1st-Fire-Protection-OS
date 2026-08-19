@@ -11,41 +11,90 @@
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Jobs</h1><div class="os-q">Which jobs need attention or are ready to bill?</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Jobs</h1>
+        <div class="os-question">Which jobs are moving and which are stuck?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="service-overview">Service overview</button>
+      </div>
     </div>
-    <div class="os-filters" id="states" style="margin-bottom:12px"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Job queue <span class="n" id="listn"></span></div>
+    <div class="os-chips" id="states"></div>
     <div id="list"></div>
-    <div class="os-q" style="margin-top:14px">Readiness is a first-pass SOP: a completed job is "ready to bill" only when it carries the office/entity and a customer contact accounting needs. These rules will become configurable per office.</div>
+    <div class="os-filter-note" id="filterNote"></div>
+
+    <div class="os-foot">Readiness is a first-pass SOP: a completed job is <b>ready to bill</b> only when it carries the office/entity and a customer contact accounting needs (2 checks). A per-job <b>dollar value</b> is not shown because the ServiceTrade mirror does not carry job amounts yet, so the value column reads n/a rather than inventing a figure. "Owner" shows the owning office and on-file customer contact; there is no individual assignee in the data. Age is measured from the completed or scheduled date where one exists.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var state='attention';
-var STATES=[['attention','Needs attention'],['ready','Ready to bill'],['active','Active'],['completed','Completed']];
-function op(){var o=OS.office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
-function renderStates(){ document.getElementById('states').innerHTML=STATES.map(function(s){return '<button class="os-fb'+(s[0]===state?' on':'')+'" data-state="'+s[0]+'">'+s[1]+'</button>';}).join(''); }
-function readinessPill(r){ return r==='ready'?OS.pill('ready to bill','good'):r==='blocked'?OS.pill('blocked','bad'):r==='scheduled'?OS.pill('scheduled','neutral'):OS.pill('needs scheduling','warn'); }
-function load(){
-  document.getElementById('ctxOffice').textContent=OS.officeLabel();
-  document.getElementById('list').innerHTML=OS.skeletonKpis(1);
-  fetch('/api/operations/jobs?state='+state+op()).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.errorBox('Could not load jobs.');return;}
-    var cols=[
-      {as:'number',label:'Job #',strong:true},
-      {as:'kind',label:'Type'},
-      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'<span class="os-pill bad">no office</span>';}},
-      {as:'status',label:'Status'},
-      {as:'readiness',label:'Readiness',render:function(v){return readinessPill(v);}},
-      {as:'missing',label:'Blocker',render:function(v){return v&&v.length?OS.esc(v.join(', ')):'<span class="muted">—</span>';}},
-      {as:'when',label:'When',render:function(v,r){return OS.date(r.completed_at||r.scheduled_at);}}
-    ];
-    document.getElementById('list').innerHTML=OS.table(cols, (d.jobs||[]).map(function(j){return {number:j.number,kind:j.kind,office:j.office,status:j.status,readiness:j.readiness,missing:j.missing,completed_at:j.completed_at,scheduled_at:j.scheduled_at};}),{empty:'No jobs in this view.'});
-  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load jobs.');});
+var CACHE={}, state='attention';
+var STATES=[['attention','Needs a decision'],['ready','Ready to bill'],['active','Active'],['completed','Completed']];
+function opAmp(){var o=OS.office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'';}
+
+function ageOf(j){ var iso=j.completed_at||j.scheduled_at; if(!iso) return null; return Math.round((Date.now()-new Date(iso).getTime())/86400000); }
+
+function readinessCell(j){
+  var pill = j.readiness==='ready'?OS.pill('ready to bill','good')
+    : j.readiness==='blocked'?OS.pill('blocked','bad')
+    : j.readiness==='scheduled'?OS.pill('scheduled','neutral')
+    : OS.pill('needs scheduling','warn');
+  var frac = j.completed_at ? ((2-((j.missing||[]).length))+' of 2 checks met') : 'not completed';
+  return pill+'<br><span class="muted" style="font-size:11px">'+frac+'</span>';
 }
-document.getElementById('states').addEventListener('click',function(e){var b=e.target.closest('[data-state]');if(b){state=b.getAttribute('data-state');renderStates();load();}});
-OS.ready(function(){renderStates();load();}); OS.onChange(load);
+
+function load(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  Promise.all(STATES.map(function(s){
+    return fetch('/api/operations/jobs?state='+s[0]+opAmp()).then(function(r){return r.json();}).then(function(d){ return (d&&d.ok&&d.jobs)||[]; });
+  })).then(function(lists){
+    STATES.forEach(function(s,i){ CACHE[s[0]]=lists[i]; });
+    var active=CACHE.active.length, ready=CACHE.ready.length, completed=CACHE.completed.length;
+    var blocked=CACHE.attention.filter(function(j){return j.readiness==='blocked';}).length;
+
+    var cells=[
+      { label:'Active', value:active, format:'count', drillable:false, sub:'in flight, not yet done' },
+      { label:'Ready to bill', value:ready, format:'count', drillable:false, sub:'$ pending billing data' },
+      { label:'Blocked before billing', value:blocked, format:'count', drillable:false, sub:'$ pending billing data' },
+      { label:'Completed', value:completed, format:'count', drillable:false, sub:'closed jobs' }
+    ];
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+    renderStates(); renderList();
+  }).catch(function(){document.getElementById('strip').innerHTML=OS.errorBox('Could not load jobs.');});
+}
+
+function renderStates(){
+  document.getElementById('states').innerHTML=STATES.map(function(s){
+    var n=(CACHE[s[0]]||[]).length;
+    return '<button class="os-chip'+(s[0]===state?' on':'')+'" data-state="'+s[0]+'">'+s[1]+'<span class="cc">'+n+'</span></button>';
+  }).join('');
+}
+
+function renderList(){
+  var rows=CACHE[state]||[];
+  document.getElementById('listn').textContent=rows.length?('· '+rows.length):'';
+  var label=(STATES.filter(function(s){return s[0]===state;})[0]||['','All'])[1];
+  document.getElementById('filterNote').textContent='Showing '+rows.length+' job'+(rows.length===1?'':'s')+' in "'+label+'".';
+
+  var cols=[
+    {as:'number',label:'Job',strong:true,render:function(v,r){return '<span class="strong">'+OS.esc(r.number||('#'+r.id))+'</span>'+(r.kind?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.kind)+'</span>':'');}},
+    {as:'value',label:'Value',render:function(){return '<span class="muted">n/a</span>';}},
+    {as:'readiness',label:'Billing readiness',render:function(v,r){return readinessCell(r);}},
+    {as:'missing',label:'Blocker',render:function(v,r){return (r.missing&&r.missing.length)?OS.esc(r.missing.join(', ')):'<span class="muted">none</span>';}},
+    {as:'office',label:'Owner',render:function(v,r){return (r.office?OS.officeTag(OS.esc(r.office)):'<span class="os-pill bad">no office</span>')+(r.contact?'<br><span class="muted" style="font-size:11px">'+OS.esc(r.contact)+'</span>':'');}},
+    {as:'age',label:'Age',kind:'num',render:function(v,r){var d=ageOf(r); if(d==null) return '<span class="muted">n/a</span>'; if(d<0) return OS.pill('in '+(-d)+'d','neutral'); return d>30?OS.pill(d+'d','warn'):OS.pill(d+'d','neutral');}}
+  ];
+  document.getElementById('list').innerHTML=OS.table(cols, rows.map(function(j){return {id:j.id,number:j.number,kind:j.kind,office:j.office,contact:j.contact,readiness:j.readiness,missing:j.missing,completed_at:j.completed_at,scheduled_at:j.scheduled_at};}), {empty:'No jobs in this view.'});
+}
+
+document.getElementById('states').addEventListener('click',function(e){var b=e.target.closest('[data-state]');if(b){state=b.getAttribute('data-state');renderStates();renderList();}});
+document.getElementById('service-overview').addEventListener('click',function(){ OS.go('service'); });
+OS.ready(load); OS.onChange(load);
 </script>
 </body>
 </html>

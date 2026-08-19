@@ -7,86 +7,151 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
 <style>
-  body{background:var(--bg)}
-  .wrap{max-width:1060px;margin:0 auto;padding:24px 24px 60px}
-  h1{font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink)}
-  .lead{font-weight:600;font-size:13px;color:var(--muted);margin-top:3px}
-  .sec-h{font-weight:800;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:28px 0 12px}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
-  .kpi{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 16px 15px;cursor:pointer}
-  .kpi:hover{border-color:var(--border-strong)}
-  .kpi .lab{font-weight:700;font-size:11.5px;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
-  .kpi .val{font-weight:800;font-size:26px;letter-spacing:-.02em;color:var(--ink);margin-top:7px;font-variant-numeric:tabular-nums}
-  .kpi .sub{font-weight:550;font-size:12px;color:var(--ink-3);margin-top:3px}
-  .kpi .tag{display:inline-block;margin-top:8px;font-weight:700;font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);background:var(--fill);border-radius:var(--r-pill);padding:3px 8px}
-  .locked{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:18px;margin-top:4px}
-  .locked .row{display:flex;align-items:center;gap:12px}
-  .locked .badge{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#8a6d1a;background:#fff3e6;border-radius:var(--r-pill);padding:5px 11px;flex:none}
+  /* Honest empty state for a ledger-only view the kit does not have a component for. */
+  .locked{border:1px solid var(--os-warn);background:var(--os-warn-bg);border-radius:14px;padding:18px}
+  .locked .top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .locked .badge{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#8a6d1a;background:#fff3e6;border:1px solid var(--os-warn);border-radius:var(--r-pill,999px);padding:5px 11px;flex:none}
   .locked h3{font-weight:750;font-size:15px;color:var(--ink)}
-  .locked p{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:4px;max-width:70ch}
-  .locked .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:14px}
+  .locked p{font-weight:500;font-size:12.5px;color:var(--ink-2);margin-top:5px;max-width:78ch}
+  .locked .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
   .locked .g{border:1px dashed var(--border-strong,#c9ccd6);border-radius:10px;padding:12px;color:var(--muted)}
   .locked .g .l{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
-  .locked .g .v{font-weight:700;font-size:16px;color:var(--ink-3);margin-top:5px}
-  .note{font-weight:500;font-size:12px;color:var(--muted);margin-top:16px}
+  .locked .g .v{font-weight:700;font-size:15px;color:var(--ink-3);margin-top:5px}
+  .locked .cta{margin-top:14px}
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Money</h1>
-    <div class="lead" id="lead">Receivables, pipeline, and repair opportunity for the selected office. Loading…</div>
-
-    <div class="sec-h">What we can see today</div>
-    <div class="kpis" id="kpis"></div>
-
-    <div class="sec-h">Financial statements</div>
-    <div class="locked">
-      <div class="row">
-        <span class="badge" id="intacctBadge">Not connected</span>
-        <div><h3>Revenue, gross margin, and cash come from Sage Intacct</h3>
-          <p id="intacctNote">P&amp;L, gross profit, operating income, and cash collected are financial truth from Sage Intacct. They stay unavailable until the Intacct connection and the office/entity mapping are configured. ServiceTrade receivables above are operational, not final accounting truth.</p></div>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Money</h1>
+        <div class="os-question">Where is cash and profit stuck?</div>
       </div>
-      <div class="grid">
-        <div class="g"><div class="l">Revenue</div><div class="v">— Intacct</div></div>
-        <div class="g"><div class="l">Gross margin</div><div class="v">— Intacct</div></div>
-        <div class="g"><div class="l">Operating income</div><div class="v">— Intacct</div></div>
-        <div class="g"><div class="l">Cash collected</div><div class="v">— Intacct</div></div>
+      <div class="os-actions">
+        <button class="os-btn" data-tab="receivables">Open receivables</button>
+        <button class="os-btn primary" id="connect">Connect Intacct</button>
       </div>
     </div>
-    <div class="note" id="note"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-block">
+      <div class="locked">
+        <div class="top">
+          <span class="badge" id="intacctBadge">Not connected</span>
+          <div>
+            <h3>Revenue, margin and cash are not available yet</h3>
+            <p>This screen will not estimate a profit-and-loss from operational data. Revenue, gross margin, operating income and cash collected are financial truth that comes only from Sage Intacct. Until Intacct is connected and the office/entity mapping is configured, those figures stay blank rather than guessed. Everything shown below is operational: receivables, collections, pipeline and repair opportunity from ServiceTrade and the invoice ledger, not final accounting.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="g"><div class="l">Revenue</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Gross margin</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Operating income</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Cash collected</div><div class="v">Needs Intacct</div></div>
+        </div>
+        <div class="cta"><button class="os-btn primary" id="connect2">Connect Sage Intacct</button></div>
+      </div>
+    </div>
+
+    <div class="os-two os-block">
+      <div id="stuck"></div>
+      <div id="collected"></div>
+    </div>
+
+    <div class="os-foot" id="note">Every figure here is <b>operational</b>, not a profit-and-loss. AR and collections come from the invoice ledger, pipeline and repair opportunity come from ServiceTrade, and repair opportunity mixes real quoted value with a projected estimate (never booked revenue). Revenue, gross margin, operating income and cash are financial truth from Sage Intacct and stay blank until it is connected. AR is <b>company-wide</b> and not office-attributable yet, so any office scope is ignored for receivables and collections rather than inventing a split.</div>
   </div>
+
+<script src="/os.js"></script>
 <script>
 "use strict";
-var NAV='app-navigate';
-function office(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
-function op(){var o=office();return o&&o!=='all'?('&office='+encodeURIComponent(o)):'&office=all';}
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function money(n){n=Number(n)||0;return '$'+(n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':Math.round(n));}
-function go(tab){try{parent.postMessage({type:NAV,tab:tab},'*');}catch(_){}}
-var KPI=[['ar_outstanding','Accounts receivable','receivables'],['ar_90_plus','AR over 90 days','receivables'],
-  ['open_pipeline','Open pipeline','pipeline'],['repair_opportunity_total','Repair opportunity','deficiencies']];
-function card(m,tab){
-  var cw=m.companyWide?'<span class="tag">company-wide</span>':'<span class="tag">'+esc(m.source)+'</span>';
-  return '<div class="kpi" data-tab="'+esc(tab)+'"><div class="lab">'+esc(m.label)+'</div>'+
-    '<div class="val">'+money(m.value)+'</div>'+cw+'</div>';
-}
-function load(){
-  Promise.all(KPI.map(function(k){return fetch('/api/metrics/'+k[0]+'?period=year'+op()).then(function(r){return r.json();}).then(function(d){return d.ok?{m:d.metric,tab:k[2]}:null;}).catch(function(){return null;});}))
-  .then(function(res){
-    document.getElementById('kpis').innerHTML=res.filter(Boolean).map(function(x){return card(x.m,x.tab);}).join('');
-    var anyCw=res.some(function(x){return x&&x.m.companyWide;});
-    document.getElementById('lead').textContent='Receivables, pipeline, and repair opportunity for '+(office()==='all'?'all offices':office())+'.';
-    document.getElementById('note').textContent=anyCw?'AR is company-wide until Sage Intacct provides office/entity attribution. Pipeline and repair opportunity are office-scoped from ServiceTrade.':'Office-scoped from ServiceTrade. AR is company-wide until Intacct is connected.';
+var INV=[];
+function officeParam(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function daysSince(iso){ return iso?((Date.now()-new Date(iso).getTime())/86400000):Infinity; }
+function unpaid(){ return INV.filter(function(i){return i.status!=='paid';}); }
+
+var BUCKETS=[['current','AR current',function(d){return d<=0;},'neutral'],
+  ['1-30','AR 1 to 30 days',function(d){return d>0&&d<=30;},'neutral'],
+  ['31-60','AR 31 to 60 days',function(d){return d>30&&d<=60;},'warn'],
+  ['61-90','AR 61 to 90 days',function(d){return d>60&&d<=90;},'bad'],
+  ['90plus','AR over 90 days',function(d){return d>90;},'bad']];
+
+function connectIntacct(){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){}}
+
+function loadStrip(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  var invP=fetch('/api/invoices').then(function(r){return r.json();}).catch(function(){return null;});
+  var mP=OS.metrics(['repair_opportunity_total','open_pipeline'],{compare:false}).catch(function(){return [null,null];});
+  Promise.all([invP,mP]).then(function(out){
+    var d=out[0]||{}, cards=out[1]||[];
+    INV=(d.invoices||[]);
+    var repair=cards[0], pipeline=cards[1];
+
+    var up=unpaid();
+    var totalAR=up.reduce(function(s,i){return s+(i.amount||0);},0);
+    var ar90rows=up.filter(function(i){return (i.days_overdue||0)>90;});
+    var ar90=ar90rows.reduce(function(s,i){return s+(i.amount||0);},0);
+
+    var cells=[
+      { key:'ar_outstanding', label:'Total AR', display:OS.money(totalAR), companyWide:true, sub:'operational, company-wide' },
+      { key:'ar_90_plus', label:'Over 90 days', display:'<span style="color:var(--os-bad)">'+OS.money(ar90)+'</span>', companyWide:true, sub:ar90rows.length+' invoice'+(ar90rows.length===1?'':'s') },
+      { label:'Unbilled completed work', display:'<span class="muted">Not tracked</span>', drillable:false, sub:'needs Intacct billing link' },
+      { label:'Repair opportunity', tag:'est', display:'~'+OS.money(repair?repair.value:0), projected:true, drillable:false, sub:'real quoted + projected est' }
+    ];
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+    renderStuck(up, pipeline);
+    renderCollected();
   });
-  fetch('/api/sources').then(function(r){return r.json();}).then(function(d){
+}
+
+function renderStuck(up, pipeline){
+  var rows=[];
+  // AR aging, oldest first (where the risk is)
+  for(var i=BUCKETS.length-1;i>=0;i--){
+    var b=BUCKETS[i];
+    var r=up.filter(function(x){return b[2](x.days_overdue||0);});
+    var amt=r.reduce(function(s,x){return s+(x.amount||0);},0);
+    rows.push({ label:b[1], value:amt, tone:b[3],
+      right:'<b>'+OS.money(amt)+'</b> <span class="bm">'+r.length+' inv</span>' });
+  }
+  var pipe=pipeline?pipeline.value:0;
+  rows.push({ label:'Quotes awaiting decision', value:pipe, tone:'accent',
+    right:'<b>'+OS.money(pipe)+'</b> <span class="bm">open quotes</span>' });
+  rows.push({ label:'Unbilled completed work', value:0, tone:'neutral',
+    right:'<span class="muted">Not tracked · needs Intacct</span>' });
+  document.getElementById('stuck').innerHTML=OS.card('Where money is stuck','AR tied up by age, plus value waiting to convert or be billed', OS.band(rows,{money:true}));
+}
+
+function renderCollected(){
+  var last30=INV.filter(function(i){return i.status==='paid'&&i.paid_at&&daysSince(i.paid_at)<=30;});
+  var prev30=INV.filter(function(i){return i.status==='paid'&&i.paid_at&&daysSince(i.paid_at)>30&&daysSince(i.paid_at)<=60;});
+  var c30=last30.reduce(function(s,i){return s+(i.amount||0);},0);
+  var cPrev=prev30.reduce(function(s,i){return s+(i.amount||0);},0);
+  var rows=[
+    { label:'Last 30 days', value:c30, tone:'good',
+      right:'<b>'+OS.money(c30)+'</b> <span class="bm">'+last30.length+' invoice'+(last30.length===1?'':'s')+'</span>' },
+    { label:'Prior 30 days (31 to 60 ago)', value:cPrev, tone:'neutral',
+      right:'<b>'+OS.money(cPrev)+'</b> <span class="bm">'+prev30.length+' invoice'+(prev30.length===1?'':'s')+'</span>' }
+  ];
+  var sub='Cash receipts recorded against invoices. Both figures are real from the ledger, not a prior-period estimate.';
+  document.getElementById('collected').innerHTML=OS.card('Collected','Operational cash in, pending Intacct reconciliation', OS.band(rows,{money:true})+'<div class="os-card-s" style="margin-top:10px">'+sub+'</div>');
+}
+
+function loadSources(){
+  OS.sources().then(function(d){
     var s=(d.sources||[]).find(function(x){return x.key==='intacct';});
-    if(s){document.getElementById('intacctBadge').textContent=s.connected?('Connected · '+s.status):'Not connected';}
+    if(s){ document.getElementById('intacctBadge').textContent=s.connected?('Connected · '+(s.status||'ok')):'Not connected'; }
   }).catch(function(){});
 }
-document.addEventListener('click',function(e){var b=e.target.closest('[data-tab]');if(b)go(b.getAttribute('data-tab'));});
-window.addEventListener('message',function(e){var d=e.data||{};if(d.type==='fp-office'){load();}});
-load();
+
+document.getElementById('connect').addEventListener('click',connectIntacct);
+document.getElementById('connect2').addEventListener('click',connectIntacct);
+
+function reload(){ loadStrip(); loadSources(); }
+OS.ready(reload);
+OS.onChange(reload);
 </script>
 </body>
 </html>

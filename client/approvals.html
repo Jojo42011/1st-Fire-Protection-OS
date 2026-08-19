@@ -8,35 +8,30 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
-<style>
-  .ap{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 17px;margin-bottom:12px}
-  .ap .h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-  .ap .cat{font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-3)}
-  .ap .t{font-weight:750;font-size:15.5px;color:var(--ink);margin-top:3px;line-height:1.3}
-  .ap .reason{font-weight:500;font-size:12.5px;color:var(--muted);margin-top:5px}
-  .ap .body{font-weight:500;font-size:12.5px;color:var(--ink-2);background:var(--fill);border-radius:10px;padding:11px 13px;margin-top:11px;white-space:pre-wrap;max-height:150px;overflow:auto}
-  .ap .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;align-items:center}
-  .ap .stake{font-weight:800;font-size:16px;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
-  .ap .acts{display:flex;gap:8px;margin-top:13px}
-  .ap .acts button{font-weight:700;font-size:13px;border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
-  .ap .acts .yes{background:var(--os-good);color:#fff;border-color:transparent}
-  .ap .acts .no{background:var(--panel);color:var(--os-bad);border-color:var(--os-bad)}
-</style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Approvals</h1><div class="os-q">What needs your decision. Nothing leaves the building without a yes.</div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Approvals</h1>
+        <div class="os-question">What needs my decision?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="approveRoutine">Approve routine</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"></div>
-    <div class="os-filters" id="catFilters" style="margin:18px 0 8px"></div>
-    <div id="list"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Waiting on you <span class="n" id="qn"></span></div>
+    <div id="queue"></div>
+
+    <div class="os-foot">One executive approval is enough: any single holder of the mapped approver role clears the action, so it does not need to route around the whole leadership team. Approving only records the decision and simulates execution in this shell. Nothing leaves the building until the provider keys exist, and declining dismisses the draft without sending.</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var catFilter='';
-var CATS=[['','All'],['Access','Access'],['Spend','Spend'],['Financial','Financial'],['People','People'],['External communication','External comms']];
+var ITEMS=[];
 function categoryOf(it){
   var k=it.kind||'', a=it.agent_key||'';
   if(/seat|reclaim|cancel/.test(k)||a==='licenses') return 'Spend';
@@ -44,45 +39,69 @@ function categoryOf(it){
   if(a==='people'||/access|provision/.test(k)) return 'Access';
   return 'External communication';
 }
+function spendOf(it){ var m=String(it.stake||'').match(/\$([\d,]+(?:\.\d+)?)/); return m?Number(m[1].replace(/,/g,'')):0; }
+
 function load(){
+  var q=document.getElementById('queue'); q.innerHTML=OS.skeletonKpis(1);
   fetch('/api/approvals').then(function(r){return r.json();}).then(function(d){
-    var items=(d.items||[]).map(function(it){ it._cat=categoryOf(it); return it; });
-    renderKpis(items);
-    renderCats(items);
-    var shown=catFilter?items.filter(function(it){return it._cat===catFilter;}):items;
-    var list=document.getElementById('list');
-    if(!shown.length){ list.innerHTML=OS.empty('Nothing needs your decision right now.','✓'); return; }
-    list.innerHTML=shown.map(card).join('');
-  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load approvals.');});
+    ITEMS=(d.items||[]).map(function(it){ it._cat=categoryOf(it); it._spend=spendOf(it); return it; });
+    renderStrip();
+    renderQueue();
+  }).catch(function(){ q.innerHTML=OS.errorBox('Could not load approvals.'); });
 }
-function renderKpis(items){
-  var byCat={}; items.forEach(function(it){byCat[it._cat]=(byCat[it._cat]||0)+1;});
-  var cards=[['Waiting',items.length]];
-  ['Financial','Spend','External communication'].forEach(function(c){ if(byCat[c]) cards.push([c==='External communication'?'External':c,byCat[c]]); });
-  document.getElementById('kpis').innerHTML=cards.map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+c[1]+'</div></div>';}).join('');
+
+function renderStrip(){
+  var waiting=ITEMS.length;
+  var spend=ITEMS.reduce(function(s,it){return s+it._spend;},0);
+  var withSpend=ITEMS.filter(function(it){return it._spend>0;}).length;
+  document.getElementById('strip').innerHTML=OS.metricStrip([
+    {label:'Waiting on you', value:waiting, format:'count', drillable:false, sub:'pending your decision'},
+    {label:'Spend implied', display:OS.money(spend), drillable:false, sub:withSpend+' item'+(withSpend===1?'':'s')+' carry a $ figure'},
+    {label:'Approved this month', display:'<span class="muted" style="font-size:15px">Not tracked</span>', drillable:false, sub:'needs the decisions ledger; inbox shows only what is pending'},
+    {label:'Declined', display:'<span class="muted" style="font-size:15px">Not tracked</span>', drillable:false, sub:'needs the decisions ledger; not tracked in this inbox'}
+  ]);
 }
-function renderCats(items){
-  var present={}; items.forEach(function(it){present[it._cat]=true;});
-  document.getElementById('catFilters').innerHTML=CATS.filter(function(c){return c[0]===''||present[c[0]];}).map(function(c){
-    return '<button class="os-fb'+(c[0]===catFilter?' on':'')+'" data-cat="'+OS.esc(c[0])+'">'+OS.esc(c[1])+'</button>'; }).join('');
+
+function toneOf(it){ return it.risk==='sensitive'?'high':'medium'; }
+function itemRow(it,i){
+  var tone=toneOf(it);
+  var chips=['<span class="dq-chip">'+OS.esc(it._cat)+'</span>'];
+  chips.push('<span class="dq-chip">'+(it.risk==='sensitive'?'sensitive':'routine')+'</span>');
+  if(it.subject_type) chips.push('<span class="dq-chip">'+OS.esc(it.subject_type)+'</span>');
+  if(!it._spend && it.stake) chips.push('<span class="dq-chip">'+OS.esc(it.stake)+'</span>');
+  var amt=it._spend>0?'<span class="dq-amt">'+OS.money(it._spend)+'</span>':'';
+  var why=it.trail||it.body||'';
+  return '<div class="os-dq-row '+tone+'" style="animation-delay:'+(i*60)+'ms"><span class="dq-rail"></span>'+
+    '<div class="dq-main"><div class="dq-kick"><span class="dq-sev '+tone+'">'+OS.esc(it._cat)+'</span>'+
+      (it.agent_key?'<span class="dq-dom">'+OS.esc(it.agent_key)+'</span>':'')+'</div>'+
+    '<div class="dq-title">'+OS.esc(it.title)+'</div>'+
+    (why?'<div class="dq-why">'+OS.esc(String(why).slice(0,160))+'</div>':'')+
+    '<div class="dq-chips">'+chips.join('')+'</div></div>'+
+    '<div class="dq-side">'+amt+
+      '<button class="dq-act" data-approve="'+it.id+'">Approve</button>'+
+      '<button class="dq-act" data-decline="'+it.id+'">Decline</button></div></div>';
 }
-function card(it){
-  var risk=it.risk==='sensitive'?OS.pill('sensitive','warn'):OS.pill('routine','neutral');
-  var stake=it.stake?'<span class="stake">'+OS.esc(it.stake)+'</span>':'';
-  return '<div class="ap"><div class="h"><div><div class="cat">'+OS.esc(it._cat)+'</div>'+
-    '<div class="t">'+OS.esc(it.title)+'</div>'+
-    (it.trail?'<div class="reason">'+OS.esc(it.trail)+'</div>':'')+'</div>'+stake+'</div>'+
-    (it.body?'<div class="body">'+OS.esc(it.body)+'</div>':'')+
-    '<div class="tags">'+risk+(it.subject_type?'<span class="os-tag">'+OS.esc(it.subject_type)+'</span>':'')+'</div>'+
-    '<div class="acts"><button class="yes" data-approve="'+it.id+'">Approve</button>'+
-      '<button class="no" data-decline="'+it.id+'">Decline</button></div></div>';
+function renderQueue(){
+  document.getElementById('qn').textContent=ITEMS.length?('· '+ITEMS.length):'';
+  if(!ITEMS.length){ document.getElementById('queue').innerHTML=OS.empty('Nothing needs your decision right now.','✓'); return; }
+  document.getElementById('queue').innerHTML='<div class="os-dq">'+ITEMS.map(itemRow).join('')+'</div>';
 }
-document.addEventListener('click',function(e){
-  var c=e.target.closest('[data-cat]'); if(c){ catFilter=c.getAttribute('data-cat'); load(); return; }
+
+document.getElementById('queue').addEventListener('click',function(e){
   var y=e.target.closest('[data-approve]'); if(y){ y.disabled=true; y.textContent='Approving…';
-    fetch('/api/approvals/'+y.getAttribute('data-approve')+'/approve',{method:'POST'}).then(function(){load();}); return; }
-  var n=e.target.closest('[data-decline]'); if(n){ n.disabled=true;
-    fetch('/api/approvals/'+n.getAttribute('data-decline')+'/skip',{method:'POST'}).then(function(){load();}); return; }
+    fetch('/api/approvals/'+y.getAttribute('data-approve')+'/approve',{method:'POST'}).then(function(){
+      OS.toast('Approved. The action is cleared to execute (simulated in this shell until provider keys exist).'); load(); }).catch(function(){ OS.toast('Could not approve.',{tone:'bad'}); }); return; }
+  var n=e.target.closest('[data-decline]'); if(n){ n.disabled=true; n.textContent='Declining…';
+    fetch('/api/approvals/'+n.getAttribute('data-decline')+'/skip',{method:'POST'}).then(function(){
+      OS.toast('Declined. The draft was dismissed and nothing was sent.'); load(); }).catch(function(){ OS.toast('Could not decline.',{tone:'bad'}); }); return; }
+});
+document.getElementById('approveRoutine').addEventListener('click',function(){
+  var b=this; b.disabled=true; var t=b.textContent; b.textContent='Approving…';
+  fetch('/api/approvals/approve-routine',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    var n=(d&&d.approved&&d.approved.length)||0;
+    OS.toast(n?('Approved '+OS.num(n)+' routine item'+(n===1?'':'s')+'. Each is cleared to execute (simulated until keys exist).'):'No routine items were waiting.');
+    b.disabled=false; b.textContent=t; load();
+  }).catch(function(){ b.disabled=false; b.textContent=t; OS.toast('Could not approve routine items.',{tone:'bad'}); });
 });
 OS.ready(function(){ load(); });
 OS.onChange(load);

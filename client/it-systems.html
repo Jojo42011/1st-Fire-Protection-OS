@@ -1,46 +1,156 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>IT & Systems · 1st FP OS</title>
+<title>IT &amp; Systems · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
 </head><body>
   <div class="os-wrap">
-    <div class="os-head"><div><h1>IT &amp; Systems</h1><div class="os-q">Access, licenses, and system health.</div></div>
-      <div class="os-sources" id="sources"></div></div>
-    <div class="os-kpis" id="kpis"></div>
-    <div class="os-sec">Needs attention</div>
-    <div class="os-attn" id="attn"></div>
-    <div class="os-sec">Sections</div>
-    <div class="os-kpis" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
-      <div class="os-kpi click" data-tab="spend"><div class="lab">License cleanup</div><div class="val" style="font-size:15px">Reclaim unused seats →</div></div>
-      <div class="os-kpi click" data-tab="integrations"><div class="lab">Integrations</div><div class="val" style="font-size:15px">Connection health →</div></div>
-      <div class="os-kpi click" data-tab="settings"><div class="lab">Access &amp; roles</div><div class="val" style="font-size:15px">Who can see what →</div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>IT &amp; Systems</h1>
+        <div class="os-question">Are access, devices and licences healthy?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="sync">Sync roster &amp; seats</button>
+        <button class="os-btn primary" id="integrations">Integration health</button>
+      </div>
     </div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Access cleanup <span class="n" id="listn"></span></div>
+    <div class="os-chips" id="chips"></div>
+    <div id="list"></div>
+    <div class="os-filter-note" id="filterNote"></div>
+
+    <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
+var SEATS=[], SUMMARY=null, SRC=[], FILTER='all';
+
+function reasonPill(r){
+  if(r.reason_kind==='terminated') return OS.pill('Terminated · access live','bad');
+  return OS.pill('Off-roster','warn');
+}
+function reclaimTag(r){
+  if(r.reclaim_status==='reclaimed') return ' '+OS.pill('reclaimed','good');
+  if(r.reclaim_status==='approved') return ' '+OS.pill('approved','neutral');
+  if(r.reclaim_status==='proposed') return ' '+OS.pill('flagged','neutral');
+  return '';
+}
+
+var PRED={
+  all:function(){return true;},
+  terminated:function(r){return r.reason_kind==='terminated';},
+  offroster:function(r){return r.reason_kind==='off_roster';},
+  unflagged:function(r){return !r.reclaim_status;}
+};
+var CHIPS=[['all','All'],['terminated','Terminated'],['offroster','Off-roster'],['unflagged','Not yet flagged']];
+
 function load(){
-  OS.freshness(document.getElementById('sources'));
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
   Promise.all([
-    fetch('/api/nav-counts').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/exceptions/summary').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};}),
     OS.sources()
   ]).then(function(res){
-    var nc=res[0]||{}, exc=(res[1]&&res[1].summary)||{byOwner:{}}, src=(res[2].sources||[]);
-    var termAccess=0; // terminated-access findings from exceptions (owner it)
-    // derive from exceptions list by category later; use byOwner.it as a proxy count
-    var itFindings=(exc.byOwner&&exc.byOwner.it)||0;
-    var connected=src.filter(function(s){return s.connected;}).length;
-    document.getElementById('kpis').innerHTML=[
-      ['Seats to reclaim',nc.spend||0],['IT exceptions',itFindings],['Integrations connected',connected+' / '+src.length]
-    ].map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.esc(String(c[1]))+'</div></div>';}).join('');
-    var attn=[];
-    if(nc.spend>0) attn.push({title:nc.spend+' seats look reclaimable',why:'Licenses paid for but unused',count:nc.spend,tone:'warn',tab:'spend',action:'Open cleanup'});
-    if(itFindings>0) attn.push({title:itFindings+' IT exception'+(itFindings===1?'':'s'),why:'Terminated-access or system issues to resolve',count:itFindings,tone:'bad',tab:'exceptions',action:'Open exceptions'});
-    document.getElementById('attn').innerHTML=OS.attnGrid(attn,'No IT items need attention.');
-  });
+    var lic=res[0]||{};
+    SUMMARY=lic.summary||{};
+    SRC=(res[1].sources||[]);
+    // Seats to clean up: confirmed terminated-employee matches first, then off-roster seats.
+    SEATS=(lic.reclaimable||[]).concat(lic.review||[]);
+    renderStrip();
+    renderChips();
+    renderList();
+    renderFoot();
+  }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load IT systems.'); });
 }
+
+function terminatedPeople(){
+  var seen={};
+  (SEATS||[]).forEach(function(r){ if(r.reason_kind==='terminated'){ seen[(r.assignee_email||r.assignee_name||'').toLowerCase()]=1; } });
+  return Object.keys(seen).length;
+}
+function staleSources(){ return SRC.filter(function(s){return s.connected&&s.status==='stale';}).length; }
+
+function renderStrip(){
+  var s=SUMMARY||{};
+  var termPeople=terminatedPeople();
+  var stale=staleSources();
+  var cells=[
+    { label:'Reclaimable spend', display:OS.money(s.savingsAnnual||0), drillable:false, sub:(s.reclaimableSeats||0)+' seat'+((s.reclaimableSeats===1)?'':'s')+' still billing / year' },
+    { label:'Terminated with access', drillable:false,
+      display:'<span style="color:'+(termPeople>0?'var(--os-bad)':'var(--ink)')+'">'+OS.num(termPeople)+'</span>',
+      sub:termPeople>0?'critical: revoke access now':'none with live access' },
+    { label:'Devices unassigned', drillable:false, display:'<span class="muted">n/a</span>',
+      sub:'no device inventory source connected' },
+    { label:'Integration failures', drillable:false,
+      display:'<span style="color:'+(stale>0?'var(--os-warn)':'var(--ink)')+'">'+OS.num(stale)+'</span>',
+      sub:stale>0?'connected source(s) overdue for sync':'no failed syncs reported' }
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+
+function renderChips(){
+  document.getElementById('chips').innerHTML=CHIPS.map(function(c){
+    var n=SEATS.filter(PRED[c[0]]).length;
+    return '<button class="os-chip'+(FILTER===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'<span class="cc">'+n+'</span></button>';
+  }).join('');
+}
+function chipLabel(f){ return (CHIPS.filter(function(c){return c[0]===f;})[0]||['','All'])[1]; }
+
+function renderList(){
+  var rows=SEATS.filter(PRED[FILTER]||PRED.all);
+  // Lead with terminated-then-live access, most expensive first.
+  rows.sort(function(a,b){ var ao=a.reason_kind==='terminated'?0:1, bo=b.reason_kind==='terminated'?0:1; return ao-bo || (b.cost_monthly-a.cost_monthly); });
+  document.getElementById('listn').textContent='· '+rows.length;
+
+  var total=SEATS.length, note=document.getElementById('filterNote');
+  if(FILTER==='all') note.textContent='Showing all '+total+' seat'+(total===1?'':'s')+' that no active employee holds.';
+  else if(rows.length===total) note.textContent='“'+chipLabel(FILTER)+'” · all '+total+' seats match, so nothing is hidden.';
+  else note.textContent='Filtered to “'+chipLabel(FILTER)+'” · '+rows.length+' of '+total+' seats.';
+
+  var cols=[
+    {as:'person',label:'Person',strong:true,render:function(v,r){
+      return '<span class="strong">'+OS.esc(r.assignee_name||'Unknown')+'</span>'+(r.department?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.department)+'</span>':'');}},
+    {as:'system',label:'System',render:function(v,r){
+      return OS.esc(r.vendor_label||r.vendor||'')+(r.product&&r.product!==r.vendor_label?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.product)+'</span>':'');}},
+    {as:'signin',label:'Last sign-in',render:function(v,r){
+      // Source systems here expose no sign-in telemetry; the honest anchor date is the termination date.
+      if(r.reason_kind==='terminated'&&r.terminated_at) return '<span class="muted">terminated '+OS.date(r.terminated_at)+'</span>';
+      return '<span class="muted">not tracked</span>';}},
+    {as:'cost',label:'Cost / year',kind:'money',render:function(v,r){ return '<span class="strong">'+OS.money((r.cost_monthly||0)*12)+'</span>'; }},
+    {as:'status',label:'Status',render:function(v,r){ return reasonPill(r)+reclaimTag(r); }},
+    {as:'act',label:'',render:function(v,r){
+      if(r.reclaim_status) return '<span class="muted">n/a</span>';
+      return '<button class="os-btn" style="padding:6px 11px;font-size:12px" data-flag="'+r.seat_id+'">Flag for reclaim</button>';}}
+  ];
+  document.getElementById('list').innerHTML=OS.table(cols, rows, {empty:'No seats need cleanup in this view.'});
+}
+
+function renderFoot(){
+  var s=SUMMARY||{};
+  document.getElementById('foot').innerHTML=
+    'Reclaimable spend counts only seats assigned to a <b>terminated</b> employee ('+OS.num(s.reclaimableSeats||0)+' seat'+((s.reclaimableSeats===1)?'':'s')+'), never off-roster seats, which need a human look first. '+
+    'Last sign-in is not shown as a live figure: the source systems (BambooHR + the seat vendors) expose no sign-in telemetry, so the termination date is used as the honest anchor. '+
+    'Device inventory has no connected source, so “devices unassigned” is left blank rather than estimated. '+
+    'Flagging a seat only <b>drafts</b> a reclaim for approval: nothing is cancelled until IT runs the offboarding task.';
+}
+
+document.getElementById('chips').addEventListener('click',function(e){
+  var b=e.target.closest('[data-f]'); if(!b) return; FILTER=b.getAttribute('data-f'); renderChips(); renderList();
+});
+document.addEventListener('click',function(e){
+  var f=e.target.closest('[data-flag]'); if(f){ f.disabled=true; f.textContent='Flagging…';
+    fetch('/api/licenses/'+f.getAttribute('data-flag')+'/flag',{method:'POST'}).then(function(r){return r.json();}).then(function(){
+      OS.toast('Reclaim drafted for IT approval. Nothing is cancelled until the offboarding task is run.'); load();
+    }).catch(function(){ f.disabled=false; f.textContent='Flag for reclaim'; }); return; }
+});
+document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Syncing…';
+  fetch('/api/licenses/sync',{method:'POST'}).then(function(){ b.disabled=false; b.textContent=t; OS.toast('Roster and seats synced. License reconciliation re-ran.'); load(); }).catch(function(){ b.disabled=false; b.textContent=t; }); });
+document.getElementById('integrations').addEventListener('click',function(){ OS.go('integrations'); });
+
 OS.ready(load); OS.onChange(load);
 </script></body></html>

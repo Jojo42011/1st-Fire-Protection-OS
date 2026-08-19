@@ -9,45 +9,97 @@
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
 <style>
-  .banner{border:1px solid var(--os-warn);background:var(--os-warn-bg);border-radius:12px;padding:16px 18px;margin:8px 0 20px}
-  .banner h3{font-weight:750;font-size:15px;color:var(--ink)}
-  .banner p{font-weight:500;font-size:12.5px;color:var(--ink-2);margin-top:5px;max-width:76ch}
-  .checklist{border:1px solid var(--border);border-radius:14px;background:var(--panel);overflow:hidden}
-  .clrow{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
-  .clrow:last-child{border-bottom:0}
-  .clrow .ofc{font-weight:700;font-size:13.5px;color:var(--ink)}
-  .steps{display:flex;gap:6px;flex-wrap:wrap}
-  .step{font-weight:650;font-size:11px;border-radius:var(--r-pill,999px);padding:4px 10px;background:var(--fill);color:var(--os-neutral);border:1px solid var(--border)}
-  .pct{font-weight:800;font-size:15px;color:var(--os-neutral);font-variant-numeric:tabular-nums}
+  /* Honest empty state for a ledger-only view the kit does not have a component for. */
+  .locked{border:1px solid var(--os-warn);background:var(--os-warn-bg);border-radius:14px;padding:18px}
+  .locked .top{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .locked .badge{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#8a6d1a;background:#fff3e6;border:1px solid var(--os-warn);border-radius:var(--r-pill,999px);padding:5px 11px;flex:none}
+  .locked h3{font-weight:750;font-size:15px;color:var(--ink)}
+  .locked p{font-weight:500;font-size:12.5px;color:var(--ink-2);margin-top:5px;max-width:78ch}
+  .locked .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+  .locked .g{border:1px dashed var(--border-strong,#c9ccd6);border-radius:10px;padding:12px;color:var(--muted)}
+  .locked .g .l{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+  .locked .g .v{font-weight:700;font-size:15px;color:var(--ink-3);margin-top:5px}
+  .locked .cta{margin-top:14px}
 </style>
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Close</h1><div class="os-q">How ready is each office to close the period?</div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Close</h1>
+        <div class="os-question">How ready are we to close the month?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn primary" id="connect">Connect Intacct</button>
+      </div>
     </div>
-    <div class="banner">
-      <h3>Close tracking is not configured yet</h3>
-      <p>Close readiness is a real checklist per office (billing complete, reconciliations done, AP entered, payroll posted, intercompany matched, imports run). It becomes live once Sage Intacct is connected and the close rules and period calendar are configured. Until then, the structure below shows what will be tracked. No readiness is faked.</p>
+
+    <div class="os-block">
+      <div class="locked">
+        <div class="top">
+          <span class="badge" id="intacctBadge">Not connected</span>
+          <div>
+            <h3>Close status is not available yet</h3>
+            <p>Month-end readiness is a real checklist that lives in the ledger: billing complete, reconciliations done, AP entered, payroll posted, intercompany matched, imports run. None of that can be tracked, and no readiness percentage can be shown, until Sage Intacct is connected and the close calendar and rules are configured. This screen will not fake a close status. What it does show below are the operational items that would hold up any close, from real ServiceTrade and invoice data.</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="g"><div class="l">Billing complete</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Reconciliations</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">AP entered</div><div class="v">Needs Intacct</div></div>
+          <div class="g"><div class="l">Payroll posted</div><div class="v">Needs Intacct</div></div>
+        </div>
+        <div class="cta"><button class="os-btn primary" id="connect2">Connect Sage Intacct</button></div>
+      </div>
     </div>
-    <div class="os-sec">Office close readiness <span class="n">· pending configuration</span></div>
-    <div class="checklist" id="checklist"></div>
+
+    <div class="os-sec os-block">Operational blockers <span class="n">· not a close status</span></div>
+    <div id="blockers"></div>
+
+    <div class="os-foot">This is <b>not a close status</b> and no readiness is faked. These are operational items from ServiceTrade and the invoice ledger that would need clearing before books close. Unbilled work and purchase-order matching are not tracked without Sage Intacct, so they are shown as not tracked rather than guessed. AR is company-wide and not office-attributable until Intacct is connected.</div>
   </div>
+
 <script src="/os.js"></script>
 <script>
 "use strict";
-var STEPS=['Billing','Reconciliations','AP','Payroll','Intercompany','Imports'];
-function render(me){
-  var offices=(me&&me.offices)||[];
-  if(!offices.length){ document.getElementById('checklist').innerHTML='<div style="padding:20px">'+OS.empty('Sign in with office scope to preview close readiness.')+'</div>'; return; }
-  document.getElementById('checklist').innerHTML=offices.map(function(o){
-    return '<div class="clrow"><span class="ofc">'+OS.esc(o.label)+'</span>'+
-      '<span class="steps">'+STEPS.map(function(s){return '<span class="step">'+s+' · —</span>';}).join('')+'</span>'+
-      '<span class="pct">— %</span></div>';
-  }).join('');
+function officeParam(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function connectIntacct(){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){}}
+
+function loadBlockers(){
+  document.getElementById('blockers').innerHTML=OS.skeletonRows();
+  fetch('/api/home'+officeParam()).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ document.getElementById('blockers').innerHTML=OS.errorBox('Could not load operational blockers.'); return; }
+    var k=d.kpis||{};
+    var pipeline=(k.pipeline&&k.pipeline.value)||0;
+    var ar90=(k.ar&&k.ar.ninety)||0;
+    var jobs=(k.jobsCompleted&&k.jobsCompleted.value)||0;
+    var rows=[
+      { label:'Quotes awaiting decision', value:pipeline, tone:'accent',
+        right:'<b>'+OS.money(pipeline)+'</b> <span class="bm">open quotes to win or lose</span>' },
+      { label:'AR over 90 days', value:ar90, tone:'bad',
+        right:'<b>'+OS.money(ar90)+'</b> <span class="bm">uncollected</span>' },
+      { label:'Unbilled completed work', value:0, tone:'neutral',
+        right:'<span class="muted">'+OS.num(jobs)+' jobs completed (30d) · billed status not tracked</span>' },
+      { label:'Invoices with no PO', value:0, tone:'neutral',
+        right:'<span class="muted">Not tracked · needs Intacct</span>' }
+    ];
+    document.getElementById('blockers').innerHTML=OS.card('What would hold up the close','Operational items from real data, in '+OS.officeLabel(), OS.band(rows,{money:true}));
+  }).catch(function(){ document.getElementById('blockers').innerHTML=OS.errorBox('Could not load operational blockers.'); });
 }
-OS.ready(render);
-OS.onChange(function(){ OS.ready(render); });
+
+function loadSources(){
+  OS.sources().then(function(d){
+    var s=(d.sources||[]).find(function(x){return x.key==='intacct';});
+    if(s){ document.getElementById('intacctBadge').textContent=s.connected?('Connected · '+(s.status||'ok')):'Not connected'; }
+  }).catch(function(){});
+}
+
+document.getElementById('connect').addEventListener('click',connectIntacct);
+document.getElementById('connect2').addEventListener('click',connectIntacct);
+
+function reload(){ loadBlockers(); loadSources(); }
+OS.ready(reload);
+OS.onChange(reload);
 </script>
 </body>
 </html>

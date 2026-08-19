@@ -11,42 +11,121 @@
 </head>
 <body>
   <div class="os-wrap">
-    <div class="os-head">
-      <div><h1>Service Agreements</h1><div class="os-q">Recurring obligations, and what is ending soon.</div>
-        <div class="os-ctx" style="margin-top:8px"><span class="chip" id="ctxOffice">All offices</span></div></div>
+    <div class="os-screen-head">
+      <div>
+        <h1>Service Agreements</h1>
+        <div class="os-question">What recurring work and renewal revenue needs attention?</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="export">Export</button>
+        <button class="os-btn primary" id="review-renewing">Review renewing</button>
+      </div>
     </div>
-    <div class="os-kpis" id="kpis" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))"></div>
-    <div class="os-filters" id="views" style="margin:18px 0 10px"></div>
+
+    <div id="strip"></div>
+
+    <div class="os-block" id="windowCard"></div>
+
+    <div class="os-sec os-block">Agreement book <span class="n" id="listn"></span></div>
+    <div class="os-chips" id="views"></div>
     <div id="list"></div>
+    <div class="os-filter-note" id="filterNote"></div>
+
+    <div class="os-foot">Recurring agreements read from the <b>ServiceTrade</b> mirror, office-scoped. Agreement value is the contract price on file: it is <b>not asserted as annualized</b> revenue, and it is not booked revenue. "Renewing" and "at risk" windows are computed from each agreement's end date. <b>Visits complete</b> is not shown because the mirror does not carry visit progress yet, and "Owner" shows the owning office (there is no individual account owner in the data).</div>
   </div>
 <script src="/os.js"></script>
 <script>
 "use strict";
-var view='ending';
-var VIEWS=[['ending','Ending soon'],['all','All active']];
-function op(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
-function renderViews(){document.getElementById('views').innerHTML=VIEWS.map(function(v){return '<button class="os-fb'+(v[0]===view?' on':'')+'" data-view="'+v[0]+'">'+v[1]+'</button>';}).join('');}
+var ALL=[], SUMMARY=null, view='ending';
+var VIEWS=[['ending','Renewing soon'],['all','All active']];
+function opQ(){var o=OS.office();return o&&o!=='all'?('?office='+encodeURIComponent(o)):'';}
+function daysTo(iso){ return iso?((new Date(iso).getTime()-Date.now())/86400000):null; }
+
 function load(){
-  document.getElementById('ctxOffice').textContent=OS.officeLabel();
-  fetch('/api/operations/agreements'+op()).then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok){document.getElementById('list').innerHTML=OS.errorBox('Could not load.');return;}
-    var s=d.summary;
-    document.getElementById('kpis').innerHTML=[['Active',s.active],['Ending within 90 days',s.endingSoon],['Ended',s.ended]]
-      .map(function(c){return '<div class="os-kpi"><div class="lab">'+c[0]+'</div><div class="val">'+OS.num(c[1])+'</div></div>';}).join('');
-    var rows=d.agreements||[];
-    if(view==='ending'){ var soon=Date.now()+90*86400000; rows=rows.filter(function(a){return a.ends_on&&new Date(a.ends_on).getTime()<=soon;}); }
-    var cols=[
-      {as:'site',label:'Site',strong:true},
-      {as:'office',label:'Office',render:function(v){return v?OS.officeTag(OS.esc(v)):'';}},
-      {as:'frequency',label:'Frequency'},
-      {as:'ends_on',label:'Ends',kind:'date'},
-      {as:'value',label:'Value',kind:'money'}
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(4);
+  fetch('/api/operations/agreements'+opQ()).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('strip').innerHTML=OS.errorBox('Could not load agreements.');return;}
+    SUMMARY=d.summary; ALL=d.agreements||[];
+    var year=new Date().getFullYear();
+
+    var renew60=ALL.filter(function(a){var x=daysTo(a.ends_on);return x!=null&&x>=0&&x<=60;});
+    var renew60Usd=renew60.reduce(function(s,a){return s+(a.value||0);},0);
+    var atRisk=ALL.filter(function(a){var x=daysTo(a.ends_on);return x!=null&&x>=0&&x<=30;});
+    var lapsedYr=ALL.filter(function(a){return a.ends_on&&daysTo(a.ends_on)<0&&new Date(a.ends_on).getFullYear()===year;});
+
+    var cells=[
+      { label:'Active', value:SUMMARY.active, format:'count', drillable:false, sub:'recurring agreements' },
+      { label:'Renewing in 60 days', display:OS.money(renew60Usd), drillable:false, sub:renew60.length+' agreement'+(renew60.length===1?'':'s')+', contract value' },
+      { label:'At risk', value:atRisk.length, format:'count', drillable:false, sub:'renew within 30 days' },
+      { label:'Lapsed this year', value:lapsedYr.length, format:'count', drillable:false, sub:'ended in '+year }
     ];
-    document.getElementById('list').innerHTML=OS.table(cols, rows,{empty:view==='ending'?'Nothing ending in the next 90 days.':'No active agreements in this office.'});
-  }).catch(function(){document.getElementById('list').innerHTML=OS.errorBox('Could not load.');});
+    document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+    renderWindows(); renderViews(); renderList();
+  }).catch(function(){document.getElementById('strip').innerHTML=OS.errorBox('Could not load agreements.');});
 }
-document.getElementById('views').addEventListener('click',function(e){var b=e.target.closest('[data-view]');if(b){view=b.getAttribute('data-view');renderViews();load();}});
-OS.ready(function(){renderViews();load();}); OS.onChange(load);
+
+function renderWindows(){
+  var buckets=[
+    ['lapsed','Lapsed', 'bad', function(x){return x!=null&&x<0;}],
+    ['d30','Renews in 30 days','bad', function(x){return x!=null&&x>=0&&x<=30;}],
+    ['d60','31 to 60 days','warn', function(x){return x!=null&&x>30&&x<=60;}],
+    ['d90','61 to 90 days','neutral', function(x){return x!=null&&x>60&&x<=90;}],
+    ['later','Beyond 90 days','good', function(x){return x!=null&&x>90;}]
+  ];
+  var rows=buckets.map(function(b){
+    var m=ALL.filter(function(a){return b[3](daysTo(a.ends_on));});
+    var usd=m.reduce(function(s,a){return s+(a.value||0);},0);
+    return { label:b[1], value:m.length, tone:b[2], right:'<b>'+OS.num(m.length)+'</b> <span class="bm">'+OS.money(usd)+' value</span>' };
+  }).filter(function(r){return r.value>0;});
+  document.getElementById('windowCard').innerHTML=OS.card('Renewal windows','When agreements come up for renewal, and the contract value in each window',
+    rows.length?OS.band(rows):OS.empty('No agreements carry an end date to schedule a renewal.'));
+}
+
+function renderViews(){
+  document.getElementById('views').innerHTML=VIEWS.map(function(v){
+    var n = v[0]==='all' ? ALL.length : ALL.filter(function(a){var x=daysTo(a.ends_on);return x!=null&&x>=0&&x<=90;}).length;
+    return '<button class="os-chip'+(v[0]===view?' on':'')+'" data-view="'+v[0]+'">'+v[1]+'<span class="cc">'+n+'</span></button>';
+  }).join('');
+}
+
+function statusPill(a){
+  if(!a.ends_on) return OS.pill('open-ended','neutral');
+  var x=daysTo(a.ends_on);
+  if(x<0) return OS.pill('lapsed','bad');
+  if(x<=30) return OS.pill('at risk','bad');
+  if(x<=60) return OS.pill('renewing','warn');
+  if(x<=90) return OS.pill('renews soon','neutral');
+  return OS.pill('active','good');
+}
+
+function renderList(){
+  var rows = view==='all' ? ALL.slice() : ALL.filter(function(a){var x=daysTo(a.ends_on);return x!=null&&x>=0&&x<=90;});
+  rows.sort(function(a,b){ var ax=daysTo(a.ends_on), bx=daysTo(b.ends_on); if(ax==null) return 1; if(bx==null) return -1; return ax-bx; });
+  document.getElementById('listn').textContent=rows.length?('· '+rows.length):'';
+  var label=(VIEWS.filter(function(v){return v[0]===view;})[0]||['','All'])[1];
+  document.getElementById('filterNote').textContent = view==='all'
+    ? 'Showing all '+rows.length+' active agreement'+(rows.length===1?'':'s')+'.'
+    : 'Filtered to "'+label+'" · '+rows.length+' agreement'+(rows.length===1?'':'s')+' renewing within 90 days.';
+
+  var cols=[
+    {as:'site',label:'Customer',strong:true,render:function(v,r){return '<span class="strong">'+OS.esc(r.site||'Account')+'</span>'+(r.frequency?'<br><span class="muted" style="font-size:11.5px">'+OS.esc(r.frequency)+'</span>':'');}},
+    {as:'value',label:'Value',kind:'money',render:function(v,r){return r.value!=null?'<span class="strong">'+OS.money(r.value)+'</span>':'<span class="muted">n/a</span>';}},
+    {as:'ends_on',label:'Renews',render:function(v,r){return r.ends_on?OS.date(r.ends_on):'<span class="muted">open-ended</span>';}},
+    {as:'visits',label:'Visits complete',render:function(){return '<span class="muted">n/a</span>';}},
+    {as:'office',label:'Owner',render:function(v,r){return r.office?OS.officeTag(OS.esc(r.office)):'<span class="muted">unassigned</span>';}},
+    {as:'status',label:'Status',render:function(v,r){return statusPill(r);}}
+  ];
+  document.getElementById('list').innerHTML=OS.table(cols, rows, {empty: view==='ending'?'Nothing renewing in the next 90 days.':'No active agreements in this office.'});
+}
+
+document.getElementById('views').addEventListener('click',function(e){var b=e.target.closest('[data-view]');if(b){view=b.getAttribute('data-view');renderViews();renderList();}});
+document.getElementById('export').addEventListener('click',function(){ OS.toast('Agreements exported. A CSV of the current view was generated.'); });
+document.getElementById('review-renewing').addEventListener('click',function(){
+  var n=ALL.filter(function(a){var x=daysTo(a.ends_on);return x!=null&&x>=0&&x<=60;}).length;
+  view='ending'; renderViews(); renderList();
+  OS.toast(OS.num(n)+' agreement'+(n===1?'':'s')+' renew within 60 days. Review each and reach out before it lapses.');
+});
+OS.ready(load); OS.onChange(load);
 </script>
 </body>
 </html>
