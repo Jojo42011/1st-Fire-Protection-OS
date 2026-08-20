@@ -11,6 +11,7 @@ import { getDb } from '../db/index';
 import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
+import { addUserToGroup, removeUserFromGroup, graphConfigured } from '../services/msGraphGroups';
 
 /* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
 export function seedPeopleCatalog(): void {
@@ -247,7 +248,7 @@ export function getEmployeeDetail(id: number, opts: { includeComp: boolean }): a
   const db = getDb();
   const emp = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(id) as any;
   if (!emp) return null;
-  const access = db.prepare(`SELECT id, system, label, status, owner, approved_at, provisioned_at, revoked_at FROM employee_access WHERE employee_id = ? ORDER BY status, system`).all(id);
+  const access = db.prepare(`SELECT id, system, label, access_level, status, owner, external_ref, approved_at, provisioned_at, revoked_at FROM employee_access WHERE employee_id = ? ORDER BY status, system`).all(id);
   const assets = db.prepare(`SELECT id, asset_type, identifier, serial, device_name, status, owner, assigned_at, returned_at, condition FROM employee_assets WHERE employee_id = ? ORDER BY status, asset_type`).all(id);
   const credentials = db.prepare(`SELECT id, credential_type, status, expires_at, verified_at, verified_by FROM employee_credentials WHERE employee_id = ? ORDER BY credential_type`).all(id);
   const workflows = db.prepare(`SELECT id, kind, status, created_at, completed_at FROM people_workflows WHERE employee_id = ? ORDER BY id DESC`).all(id);
@@ -649,4 +650,77 @@ export function addNote(employee_id: number, text: string, actor: string) {
   if (!note) throw new Error('note_required');
   audit('note', note, { actor, employee_id });
   return { ok: true };
+}
+
+/* ─────────────────────────── access provisioning to Microsoft 365 ───────────────────────────
+ * Wires the Access tab to Entra: adding a security-group access grant actually adds the employee to
+ * that Entra group via Graph, and revoking removes them. Keyless-safe: when Graph is not connected or
+ * the employee has no directory identity, the grant is still recorded (status 'requested') with the
+ * reason, so intent is never lost and IT can complete it once identity is in place. */
+
+function employeeUpn(id: number): string | null {
+  const e = getDb().prepare(`SELECT upn, work_email FROM employees WHERE id = ?`).get(id) as any;
+  if (!e) return null;
+  return (e.upn || e.work_email || null) as string | null;
+}
+
+/** The Entra security groups the OS knows about (from the onboarding catalog: printer + SharePoint
+ *  groups carry a group_name/group_id). Used to populate the Access tab's group picker. */
+export function listAccessGroups(): { name: string; id: string | null; kind: string }[] {
+  try {
+    const rows = getDb().prepare(
+      `SELECT DISTINCT group_name AS name, group_id AS id, kind FROM onboarding_catalog
+       WHERE active = 1 AND group_name IS NOT NULL AND group_name != '' ORDER BY group_name`
+    ).all() as any[];
+    return rows.map((r) => ({ name: r.name, id: r.id || null, kind: r.kind }));
+  } catch {
+    return [];
+  }
+}
+
+export async function provisionAccessGroup(employee_id: number, input: { group_name: string; group_id?: string | null }, actor: string): Promise<{ ok: boolean; provisioned: boolean; message?: string; access?: any }> {
+  requireEmployee(employee_id);
+  const groupName = String(input.group_name || '').trim();
+  if (!groupName) throw new Error('group_name_required');
+  const db = getDb();
+  const upn = employeeUpn(employee_id);
+  let status = 'requested';
+  let message: string | undefined;
+  let provisioned = false;
+  if (!graphConfigured()) {
+    message = 'Recorded, but Microsoft 365 is not connected so the group membership was not applied.';
+  } else if (!upn) {
+    message = 'Recorded, but this employee has no work email / UPN on record, so the membership could not be applied. Add their work email and re-run.';
+  } else {
+    const out = await addUserToGroup(upn, { groupId: input.group_id, groupName });
+    if (out.ok) { status = 'provisioned'; provisioned = true; message = out.already ? 'Already a member in Microsoft 365; recorded here.' : 'Added to the group in Microsoft 365.'; }
+    else { status = 'requested'; message = `Recorded, but Microsoft 365 rejected it: ${out.error}`; }
+  }
+  const now = new Date().toISOString();
+  const info = db.prepare(
+    `INSERT INTO employee_access (employee_id, system, label, access_level, status, owner, external_ref, approved_at, provisioned_at)
+     VALUES (?, ?, ?, 'member', ?, 'it', ?, ?, ?)`
+  ).run(employee_id, groupName, `Security group: ${groupName}`, status, input.group_id || null, provisioned ? now : null, provisioned ? now : null);
+  audit(provisioned ? 'access_provisioned' : 'access_requested', `${groupName}${provisioned ? ' (Entra)' : ''}`, { actor, employee_id });
+  const access = db.prepare(`SELECT * FROM employee_access WHERE id = ?`).get(Number(info.lastInsertRowid));
+  return { ok: true, provisioned, message, access };
+}
+
+export async function deprovisionAccessGroup(access_id: number, actor: string): Promise<{ ok: boolean; removed: boolean; message?: string }> {
+  const db = getDb();
+  const row = db.prepare(`SELECT * FROM employee_access WHERE id = ?`).get(access_id) as any;
+  if (!row) throw new Error('access_not_found');
+  const upn = employeeUpn(row.employee_id);
+  let removed = false;
+  let message: string | undefined;
+  if (!graphConfigured()) message = 'Marked revoked here, but Microsoft 365 is not connected so the group membership was not changed.';
+  else if (!upn) message = 'Marked revoked here, but this employee has no work email / UPN, so the membership could not be changed in Microsoft 365.';
+  else {
+    const out = await removeUserFromGroup(upn, { groupId: row.external_ref, groupName: row.system });
+    if (out.ok) { removed = true; message = out.already ? 'Was not a member in Microsoft 365; marked revoked.' : 'Removed from the group in Microsoft 365.'; }
+    else message = `Marked revoked here, but Microsoft 365 rejected the removal: ${out.error}`;
+  }
+  db.prepare(`UPDATE employee_access SET status = 'revoked', revoked_at = datetime('now') WHERE id = ?`).run(access_id);
+  audit(removed ? 'access_deprovisioned' : 'access_revoked', `${row.label || row.system}${removed ? ' (Entra)' : ''}`, { actor, employee_id: row.employee_id });
+  return { ok: true, removed, message };
 }

@@ -14,6 +14,7 @@ import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
 import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
 import { importComputers } from '../services/rmmImport';
+import { graphConfigured } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -137,6 +138,25 @@ router.post('/api/people/access/:id/update', requirePeople('people_admin', 'it')
   edit(() => svc.updateAccessStatus(Number(req.params.id), String((req.body || {}).status || ''), actor(req)), res));
 router.post('/api/people/access/:id/remove', requirePeople('people_admin', 'it'), (req, res) =>
   edit(() => svc.removeAccess(Number(req.params.id), actor(req)), res));
+
+/* Access wired to Microsoft 365: the security groups the OS knows, plus add/remove that actually
+ * change Entra group membership via Graph. IT / admin only. */
+router.get('/api/people/access/groups', requirePeople('people_admin', 'it'), (_req, res) => {
+  res.json({ ok: true, graphConfigured: graphConfigured(), groups: svc.listAccessGroups() });
+});
+router.post('/api/people/employees/:id/access/group', requirePeople('people_admin', 'it'), async (req, res) => {
+  const b = req.body || {};
+  try {
+    const out = await svc.provisionAccessGroup(Number(req.params.id), { group_name: String(b.group_name || ''), group_id: b.group_id || null }, actor(req));
+    res.json(out);
+  } catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+router.post('/api/people/access/:id/deprovision', requirePeople('people_admin', 'it'), async (req, res) => {
+  try {
+    const out = await svc.deprovisionAccessGroup(Number(req.params.id), actor(req));
+    res.json(out);
+  } catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
 
 router.post('/api/people/employees/:id/credentials', requirePeople('people_admin', 'hr'), (req, res) =>
   edit(() => svc.addCredential(Number(req.params.id), req.body || {}, actor(req)), res));

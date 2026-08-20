@@ -59,6 +59,32 @@ test('note writes to the timeline', () => {
   assert.equal(last.detail, 'Called about missing badge');
 });
 
+test('access group provisioning: records the grant even when M365 is not connected', async () => {
+  // No MS_GRAPH_* in this test env, so graphConfigured() is false: the grant is recorded as
+  // requested with a clear message, and nothing throws.
+  const out = await svc.provisionAccessGroup(1, { group_name: 'SG-PR-MCA', group_id: 'abc123' }, 'tester');
+  assert.equal(out.ok, true);
+  assert.equal(out.provisioned, false);
+  assert.match(String(out.message), /not connected/i);
+  const row = db.prepare(`SELECT system, label, status, external_ref FROM employee_access WHERE employee_id = 1 AND system = 'SG-PR-MCA'`).get() as any;
+  assert.equal(row.status, 'requested');
+  assert.equal(row.external_ref, 'abc123');
+  assert.equal(row.label, 'Security group: SG-PR-MCA');
+  const de = await svc.deprovisionAccessGroup((db.prepare(`SELECT id FROM employee_access WHERE system='SG-PR-MCA'`).get() as any).id, 'tester');
+  assert.equal(de.ok, true);
+  assert.equal(de.removed, false);
+  assert.equal((db.prepare(`SELECT status FROM employee_access WHERE system='SG-PR-MCA'`).get() as any).status, 'revoked');
+});
+
+test('listAccessGroups reads security groups from the onboarding catalog', () => {
+  db.exec(`DELETE FROM onboarding_catalog;`);
+  db.prepare(`INSERT INTO onboarding_catalog (kind, name, group_name, group_id, active) VALUES ('printer','McAllen','SG-PR-MCA','g-mca',1)`).run();
+  db.prepare(`INSERT INTO onboarding_catalog (kind, name, active) VALUES ('printer','No Group',1)`).run();
+  const groups = svc.listAccessGroups();
+  assert.ok(groups.some((g) => g.name === 'SG-PR-MCA' && g.id === 'g-mca'));
+  assert.ok(!groups.some((g) => g.name === null || g.name === ''), 'only rows with a group_name are returned');
+});
+
 test('edits reject a missing employee or empty required field', () => {
   assert.throws(() => svc.addAsset(999, { asset_type: 'laptop' }, 'tester'), /employee_not_found/);
   assert.throws(() => svc.addAsset(1, { asset_type: '' }, 'tester'), /asset_type_required/);

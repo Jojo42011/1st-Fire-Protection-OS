@@ -70,3 +70,30 @@ export async function addUserToGroup(upn: string, opts: { groupId?: string | nul
     return { ok: false, error: (err as Error).message };
   }
 }
+
+/**
+ * Remove a user (by UPN/email) from an Entra security group. Idempotent: removing someone who is not
+ * a member (Graph 404) is treated as success, so a revoke never fails just because it already ran.
+ */
+export async function removeUserFromGroup(upn: string, opts: { groupId?: string | null; groupName?: string | null }): Promise<{ ok: boolean; error?: string; already?: boolean }> {
+  if (!graphConfigured()) return { ok: false, error: 'Microsoft Graph is not connected' };
+  if (!upn) return { ok: false, error: 'no user principal name / email given' };
+  try {
+    const token = await graphToken();
+    if (!token) return { ok: false, error: 'could not acquire a Graph token' };
+    const groupId = opts.groupId || (opts.groupName ? await findGroupIdByName(opts.groupName) : null);
+    if (!groupId) return { ok: false, error: `could not resolve group ${opts.groupName || ''}`.trim() };
+    const userId = await resolveUserId(token, upn);
+    if (!userId) return { ok: false, error: `no directory user for ${upn}` };
+    const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${groupId}/members/${userId}/$ref`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (res.status === 204 || res.ok) return { ok: true };
+    if (res.status === 404) return { ok: true, already: true }; // not a member anymore
+    const body = await res.text();
+    return { ok: false, error: `graph removeMember ${res.status}: ${body}` };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
