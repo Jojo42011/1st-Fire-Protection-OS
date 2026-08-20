@@ -187,9 +187,10 @@ function routeItems(req: any): DraftItem[] {
     }
   }
 
-  // ── Safety (Denise): equipment tasks ──
-  if (bool(req.company_cell)) items.push({ owner: 'denise', kind: 'task', label: 'Issue company cell phone' });
-  if (bool(req.ipad)) items.push({ owner: 'denise', kind: 'task', label: 'Issue company iPad' });
+  // ── IT: company devices (cell phone + iPad are provisioned by IT) ──
+  if (bool(req.company_cell)) items.push({ owner: 'it', kind: 'task', label: 'Issue company cell phone' });
+  if (bool(req.ipad)) items.push({ owner: 'it', kind: 'task', label: 'Issue company iPad' });
+  // ── Safety (Denise): fleet/vehicle equipment ──
   if (bool(req.vehicle_transfer)) items.push({ owner: 'denise', kind: 'task', label: 'Company vehicle transfer' });
   if (bool(req.wex_card)) items.push({ owner: 'denise', kind: 'task', label: 'Issue WEX fuel card' });
 
