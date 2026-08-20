@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Department · Northstar</title>
+<title>Department · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/command.css" />
@@ -95,7 +95,7 @@
 
   fetch('/api/department/'+encodeURIComponent(DEPT)).then(function(r){return r.json();}).then(function(d){
     var name=d.name||DEPT_NAME||'Department';
-    document.title=name+' · Northstar';
+    document.title=name+' · 1st FP OS';
     document.getElementById('title').textContent=name;
     document.getElementById('kicker').textContent='Department';
     document.getElementById('role').textContent=d.aiRole||'';

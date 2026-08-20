@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
+import { currentIdentity } from './people/identity';
 
 /**
  * Simple shared-password gate for the whole app.
@@ -60,7 +61,9 @@ function readCookie(req: express.Request, name: string): string | undefined {
 }
 
 function isAuthed(req: express.Request): boolean {
-  return verifySession(readCookie(req, COOKIE));
+  // Either the shared-password session, or a verified Microsoft (Entra) identity. Signing in with
+  // Microsoft is a full app sign-in: a real person in the tenant, not just the office password.
+  return verifySession(readCookie(req, COOKIE)) || !!currentIdentity(req);
 }
 
 /** Constant-time password compare (hash both to a fixed length so length never leaks). */
@@ -84,6 +87,7 @@ const OPEN = new Set([
   '/api/webhooks/call',
   '/api/people/auth/login',
   '/api/people/auth/callback',
+  '/api/people/me', // read-only auth state (entraConfigured/devLogin/authenticated) for the login page
 ]);
 function isAsset(p: string): boolean {
   return /\.(css|js|mjs|map|woff2?|ttf|otf|png|jpe?g|gif|svg|ico|webp|mp3|wav)$/i.test(p) || p.startsWith('/brand/');

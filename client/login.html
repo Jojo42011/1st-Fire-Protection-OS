@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sign in · Northstar OS</title>
+<title>Sign in · 1st FP OS</title>
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
@@ -29,18 +29,24 @@
   button:hover{background:#C62828}
   button:disabled{opacity:.6;cursor:default}
   .err{color:#C62828;font-size:13px;font-weight:600;margin-top:12px;min-height:18px}
+  .orsep{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:#9AA4B0;font-size:12px;font-weight:600}
+  .orsep::before,.orsep::after{content:"";flex:1;height:1px;background:#E3E8EE}
+  .ms-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;
+    text-decoration:none;background:#fff;color:#1E2D40;font-weight:700;font-size:14px;border:1px solid #D8DEE5;
+    border-radius:9px;padding:12px;cursor:pointer;transition:border-color .15s,background .15s}
+  .ms-btn:hover{border-color:#B7BEC9;background:#F7F9FB}
 </style>
 </head>
 <body>
   <form class="card" id="form">
     <div class="top">
-      <div class="wm">NORTHSTAR FIRE & SAFETY</div>
-      <div class="sub">Operations OS</div>
+      <div class="wm">1ST FIRE PROTECTION</div>
+      <div class="sub">Operating System</div>
     </div>
     <div class="rule"></div>
     <div class="body">
       <h1>Sign in</h1>
-      <p>Enter the access password to continue.</p>
+      <p>Enter the access password, or sign in with your Microsoft work account.</p>
       <label for="pw">Password</label>
       <div style="position:relative">
         <input id="pw" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" autofocus style="padding-right:64px" />
@@ -49,6 +55,14 @@
       </div>
       <button id="btn" type="submit">Sign in</button>
       <div class="err" id="err"></div>
+
+      <div class="orline" id="ssoWrap" style="display:none">
+        <div class="orsep"><span>or</span></div>
+        <a class="ms-btn" id="msBtn" href="/api/people/auth/login">
+          <svg width="17" height="17" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+          <span>Sign in with Microsoft</span>
+        </a>
+      </div>
     </div>
   </form>
 <script>
@@ -72,6 +86,10 @@ function doLogin(){
 // Attach via addEventListener (not inline) so the handler can never collide with the form's
 // native submit() method - that collision was making the page reload instead of logging in.
 document.getElementById('form').addEventListener('submit', function(e){ e.preventDefault(); doLogin(); });
+// Offer Microsoft sign-in only when Entra is actually configured (dev login also enables it).
+fetch('/api/people/me').then(function(r){return r.json();}).then(function(m){
+  if(m && (m.entraConfigured || m.devLogin)){ document.getElementById('ssoWrap').style.display=''; }
+}).catch(function(){});
 </script>
 </body>
 </html>
