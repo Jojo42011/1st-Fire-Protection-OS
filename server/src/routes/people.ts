@@ -178,7 +178,12 @@ router.post('/api/people/employees/:id/identity/link', requirePeople('people_adm
 
 /* Company-wide asset library (computers today; iPads/phones later). Any People user can view. */
 router.get('/api/people/assets/library', requirePeople(), (req, res) => {
-  res.json({ ok: true, ...svc.assetLibrary(String(req.query.type || 'computer')) });
+  res.json({ ok: true, tiers: svc.TIER_PRICES, tierLabels: svc.TIER_LABELS, ...svc.assetLibrary(String(req.query.type || 'computer')) });
+});
+router.post('/api/people/assets/:id/attrs', requirePeople('people_admin', 'it'), (req, res) => {
+  const b = req.body || {};
+  try { res.json(svc.setAssetAttributes(Number(req.params.id), { ram: b.ram, tier: b.tier }, actor(req))); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
 });
 
 /* Offboarding gaps: terminated people still enabled/licensed in Microsoft 365. IT / admin only. */

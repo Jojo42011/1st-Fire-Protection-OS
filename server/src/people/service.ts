@@ -905,28 +905,56 @@ function noteField(notes: string | null, key: string): string | null {
   return m ? m[1].trim() : null;
 }
 
-export function assetLibrary(assetType = 'computer'): { type: string; total: number; assigned: number; unassigned: number; assets: any[] } {
+// Estimated replacement value per purchase tier (USD). One place to change if prices move.
+export const TIER_PRICES: Record<string, number> = { standard: 1000, business: 1400, cad: 2000, dock: 200 };
+export const TIER_LABELS: Record<string, string> = { standard: 'Standard', business: 'Business', cad: 'CAD', dock: 'Docking station' };
+function tierPrice(tier: string | null): number { return tier && TIER_PRICES[tier] != null ? TIER_PRICES[tier] : 0; }
+
+export function assetLibrary(assetType = 'computer'): { type: string; total: number; assigned: number; unassigned: number; totalValue: number; byTier: Record<string, number>; assets: any[] } {
   const db = getDb();
   const rows = db.prepare(
-    `SELECT a.id, a.asset_type, a.identifier, a.serial, a.device_name, a.status, a.owner, a.notes, a.assigned_at,
+    `SELECT a.id, a.asset_type, a.identifier, a.serial, a.device_name, a.status, a.owner, a.notes, a.assigned_at, a.ram, a.tier,
             e.id AS employee_id, e.entra_display_name, e.legal_first_name, e.legal_last_name, e.preferred_name, e.office AS emp_office
        FROM employee_assets a LEFT JOIN employees e ON e.id = a.employee_id
       WHERE a.asset_type = ? ORDER BY a.device_name, a.id LIMIT 2000`
   ).all(assetType) as any[];
-  const assets = rows.map((a) => ({
-    id: a.id,
-    device_name: a.device_name || a.identifier || '(unnamed)',
-    serial: a.serial || '',
-    status: a.status,
-    owner: a.owner,
-    employee: a.employee_id ? empName(a) : null,
-    office: a.emp_office || null,
-    rmm_user: noteField(a.notes, 'RMM user'),
-    os: noteField(a.notes, 'OS'),
-    last_seen: noteField(a.notes, 'Last seen'),
-    model: noteField(a.notes, 'Model'),
-  }));
-  return { type: assetType, total: assets.length, assigned: assets.filter((x) => x.employee).length, unassigned: assets.filter((x) => !x.employee).length, assets };
+  const byTier: Record<string, number> = {};
+  const assets = rows.map((a) => {
+    const tier = a.tier || null;
+    if (tier) byTier[tier] = (byTier[tier] || 0) + 1;
+    return {
+      id: a.id,
+      device_name: a.device_name || a.identifier || '(unnamed)',
+      serial: a.serial || '',
+      status: a.status,
+      owner: a.owner,
+      employee: a.employee_id ? empName(a) : null,
+      office: a.emp_office || null,
+      ram: a.ram || '',
+      tier,
+      price: tierPrice(tier),
+      rmm_user: noteField(a.notes, 'RMM user'),
+      os: noteField(a.notes, 'OS'),
+      last_seen: noteField(a.notes, 'Last seen'),
+      model: noteField(a.notes, 'Model'),
+    };
+  });
+  const totalValue = assets.reduce((s, a) => s + a.price, 0);
+  return { type: assetType, total: assets.length, assigned: assets.filter((x) => x.employee).length, unassigned: assets.filter((x) => !x.employee).length, totalValue, byTier, assets };
+}
+
+/** Set the memory and/or purchase tier on an asset (asset library inline edit). */
+export function setAssetAttributes(id: number, input: { ram?: string | null; tier?: string | null }, actor: string): { ok: boolean } {
+  const db = getDb();
+  const row = db.prepare(`SELECT id FROM employee_assets WHERE id = ?`).get(id);
+  if (!row) throw new Error('asset_not_found');
+  if (input.ram !== undefined) db.prepare(`UPDATE employee_assets SET ram = ? WHERE id = ?`).run(String(input.ram || '').trim() || null, id);
+  if (input.tier !== undefined) {
+    const t = input.tier && TIER_PRICES[input.tier] != null ? input.tier : null; // only accept known tiers; anything else clears it
+    db.prepare(`UPDATE employee_assets SET tier = ? WHERE id = ?`).run(t, id);
+  }
+  audit('asset_updated', `Asset ${id}: ${input.tier !== undefined ? `tier=${input.tier || 'none'} ` : ''}${input.ram !== undefined ? `ram=${input.ram || 'none'}` : ''}`.trim(), { actor });
+  return { ok: true };
 }
 
 /* ────────────── offboarding gap finder: terminated people still live in Microsoft 365 ──────────────

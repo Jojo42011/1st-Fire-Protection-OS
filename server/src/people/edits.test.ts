@@ -123,6 +123,20 @@ test('unmatched suggestions are keyless-safe when Graph is not connected', async
   assert.match(String(out.error), /not connected/i);
 });
 
+test('asset tier drives the estimated value, and RAM is stored', () => {
+  const a = svc.addAsset(1, { asset_type: 'computer', device_name: 'CAD-01', status: 'assigned' }, 'tester') as any;
+  svc.setAssetAttributes(a.id, { tier: 'cad', ram: '64 GB' }, 'tester');
+  const lib = svc.assetLibrary('computer');
+  const row = lib.assets.find((x: any) => x.device_name === 'CAD-01')!;
+  assert.equal(row.tier, 'cad');
+  assert.equal(row.price, 2000);
+  assert.equal(row.ram, '64 GB');
+  assert.ok(lib.totalValue >= 2000);
+  // an unknown tier is rejected (cleared), not stored
+  svc.setAssetAttributes(a.id, { tier: 'nonsense' }, 'tester');
+  assert.equal(svc.assetLibrary('computer').assets.find((x: any) => x.device_name === 'CAD-01')!.tier, null);
+});
+
 test('terminated-in-M365 gap check is keyless-safe when Graph is not connected', async () => {
   const out = await svc.terminatedM365Gaps();
   assert.equal(out.ok, false);

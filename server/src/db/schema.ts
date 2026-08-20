@@ -1210,6 +1210,10 @@ export function initDb(): void {
   // The authoritative display name from Microsoft 365 (Entra), set by the identity match. Preferred
   // over the BambooHR nickname wherever a person's name is shown.
   addColumn('employees', 'entra_display_name', 'TEXT');
+  // Asset-library hardware detail: memory, and a purchase tier that drives the estimated value
+  // (standard / business / cad / dock). RAM is not in the RMM export, so it is set in the app.
+  addColumn('employee_assets', 'ram', 'TEXT');
+  addColumn('employee_assets', 'tier', 'TEXT');
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical

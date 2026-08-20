@@ -210,33 +210,67 @@ document.getElementById('sync').addEventListener('click',function(){ var b=this;
 document.getElementById('integrations').addEventListener('click',function(){ OS.go('integrations'); });
 
 /* ---- Asset library ---- */
-var ASSETS=[];
+var ASSETS=[], TIERS={}, TIER_LABELS={};
+function money(n){ return '$'+(n||0).toLocaleString(); }
+function tierSelect(a){
+  var opts='<option value="">—</option>'+Object.keys(TIERS).map(function(t){
+    return '<option value="'+t+'"'+(a.tier===t?' selected':'')+'>'+OS.esc(TIER_LABELS[t]||t)+' ('+money(TIERS[t])+')</option>';
+  }).join('');
+  return '<select data-asset-tier="'+a.id+'" style="padding:4px 6px;border:1px solid var(--os-line,#2a2f3a);border-radius:6px;background:transparent;color:inherit;font:inherit">'+opts+'</select>';
+}
 function assetRowHTML(a){
   return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(a.device_name)+'</td>'+
     '<td>'+OS.esc(a.serial||'—')+'</td>'+
     '<td>'+(a.employee?OS.esc(a.employee):'<span class="muted">unassigned</span>')+'</td>'+
     '<td>'+OS.esc(a.office||'')+'</td>'+
+    '<td><input data-asset-ram="'+a.id+'" value="'+OS.esc(a.ram||'')+'" placeholder="e.g. 16 GB" style="width:80px;padding:4px 6px;border:1px solid var(--os-line,#2a2f3a);border-radius:6px;background:transparent;color:inherit;font:inherit" /></td>'+
+    '<td>'+tierSelect(a)+'</td>'+
+    '<td style="font-variant-numeric:tabular-nums">'+(a.price?money(a.price):'')+'</td>'+
     '<td>'+(a.last_seen?OS.esc(a.last_seen):'')+'</td></tr>';
 }
+function assetSummary(){
+  var shown=CURRENT_ASSETS||ASSETS;
+  var val=shown.reduce(function(s,a){return s+(a.price||0);},0);
+  var counts={}; shown.forEach(function(a){ if(a.tier) counts[a.tier]=(counts[a.tier]||0)+1; });
+  var bits=Object.keys(TIERS).filter(function(t){return counts[t];}).map(function(t){return counts[t]+' '+OS.esc(TIER_LABELS[t]||t);});
+  var untiered=shown.filter(function(a){return !a.tier;}).length;
+  if(untiered) bits.push(untiered+' untiered');
+  return '<div class="os-filter-note" style="margin-top:8px">Estimated value (shown): <b>'+money(val)+'</b>'+(bits.length?' · '+bits.join(' · '):'')+'</div>';
+}
+var CURRENT_ASSETS=null;
 function renderAssets(){
   var q=(document.getElementById('alSearch').value||'').toLowerCase().trim();
   var list=ASSETS.filter(function(a){ if(!q) return true;
-    return (a.device_name+' '+(a.employee||'')+' '+(a.serial||'')+' '+(a.office||'')+' '+(a.rmm_user||'')).toLowerCase().indexOf(q)>=0; });
+    return (a.device_name+' '+(a.employee||'')+' '+(a.serial||'')+' '+(a.office||'')+' '+(a.rmm_user||'')+' '+(a.ram||'')+' '+(a.tier||'')).toLowerCase().indexOf(q)>=0; });
+  CURRENT_ASSETS=list;
   document.getElementById('alCount').textContent=list.length+' of '+ASSETS.length+' shown';
   document.getElementById('alOut').innerHTML = list.length
-    ? '<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Device</th><th>Serial</th><th>Assigned to</th><th>Office</th><th>Last seen</th></tr></thead><tbody>'+list.map(assetRowHTML).join('')+'</tbody></table></div>'
+    ? '<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Device</th><th>Serial</th><th>Assigned to</th><th>Office</th><th>RAM</th><th>Tier</th><th>Value</th><th>Last seen</th></tr></thead><tbody>'+list.map(assetRowHTML).join('')+'</tbody></table></div>'+assetSummary()
     : '<div class="os-filter-note">No matching assets.</div>';
 }
 function loadAssets(){
   fetch('/api/people/assets/library?type=computer').then(function(r){return r.json();}).then(function(d){
     if(!d||!d.ok){ document.getElementById('alOut').innerHTML=OS.empty('No computers in the library yet. Import them from your RMM above.'); return; }
-    ASSETS=d.assets||[];
-    document.getElementById('alN').textContent='· '+d.total+' computers';
+    ASSETS=d.assets||[]; TIERS=d.tiers||{}; TIER_LABELS=d.tierLabels||{};
+    document.getElementById('alN').textContent='· '+d.total+' computers · '+money(d.totalValue||0);
     if(!ASSETS.length){ document.getElementById('alOut').innerHTML=OS.empty('No computers in the library yet. Import them from your RMM above.'); document.getElementById('alCount').textContent=''; return; }
     renderAssets();
   }).catch(function(){ document.getElementById('alOut').innerHTML=OS.errorBox('Could not load the asset library.'); });
 }
 document.getElementById('alSearch').addEventListener('input',renderAssets);
+function saveAssetAttr(id, body){
+  fetch('/api/people/assets/'+id+'/attrs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast('Could not save.','bad'); return; }
+      var a=ASSETS.filter(function(x){return x.id===id;})[0];
+      if(a){ if(body.tier!==undefined){ a.tier=body.tier||null; a.price=a.tier&&TIERS[a.tier]?TIERS[a.tier]:0; } if(body.ram!==undefined) a.ram=body.ram; }
+      renderAssets(); document.getElementById('alN').textContent='· '+ASSETS.length+' computers · '+money(ASSETS.reduce(function(s,x){return s+(x.price||0);},0));
+    }).catch(function(){ OS.toast('Save failed.','bad'); });
+}
+document.getElementById('alOut').addEventListener('change',function(e){
+  var ts=e.target.closest('[data-asset-tier]'); if(ts){ saveAssetAttr(Number(ts.getAttribute('data-asset-tier')),{tier:ts.value}); return; }
+  var rm=e.target.closest('[data-asset-ram]'); if(rm){ saveAssetAttr(Number(rm.getAttribute('data-asset-ram')),{ram:rm.value}); return; }
+});
 
 /* ---- terminated-but-active Microsoft 365 gaps ---- */
 document.getElementById('gapRun').addEventListener('click',function(){
