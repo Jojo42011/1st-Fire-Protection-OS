@@ -62,6 +62,7 @@ import work from './routes/work';
 import operations from './routes/operations';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
+import { seedOnboardingCatalog } from './services/onboardingCatalog';
 import { ensureBootstrapAdmin } from './people/authz';
 import { cleanupDemoData } from './seed/cleanupDemo';
 
@@ -75,6 +76,8 @@ seed();
 cleanupDemoData();
 // Seed the People config catalogs (real job positions + role templates). Idempotent, not demo data.
 seedPeopleCatalog();
+// Seed the editable onboarding form catalog (computers, software, SharePoint, printers). Idempotent.
+seedOnboardingCatalog();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the
 // moment they complete Microsoft sign-in, and they appear in Access & roles.
 ensureBootstrapAdmin();

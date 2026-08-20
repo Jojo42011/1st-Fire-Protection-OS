@@ -12,6 +12,7 @@ import { getMatrix, saveRoleLevels, resetRoleLevels } from '../people/permission
 import * as svc from '../people/service';
 import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
+import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -65,6 +66,29 @@ router.put('/api/people/templates/:position', requirePeople('people_admin', 'hr'
   getDb().prepare(`UPDATE role_templates SET defaults_json = ?, review_status = ?, updated_by = ?, updated_at = datetime('now') WHERE position = ?`)
     .run(JSON.stringify(defaults), review, actor(req), req.params.position);
   svc.audit('role_changed', `Role template updated: ${req.params.position} (${review})`, { actor: actor(req) });
+  res.json({ ok: true });
+});
+
+/* ── the editable onboarding form catalog (computers, software, SharePoint groups, printers) ── */
+router.get('/api/onboarding-catalog', requirePeople(), (_req, res) => {
+  res.json({ ok: true, catalog: catalogAll() });
+});
+router.post('/api/onboarding-catalog', requirePeople('people_admin', 'it', 'hr'), (req, res) => {
+  const item = addCatalogItem(req.body || {});
+  if (!item) return res.status(400).json({ ok: false, error: 'invalid_item' });
+  svc.audit('catalog_changed', `Onboarding catalog: added ${item.kind} "${item.name}"`, { actor: actor(req) });
+  res.json({ ok: true, item });
+});
+router.put('/api/onboarding-catalog/:id', requirePeople('people_admin', 'it', 'hr'), (req, res) => {
+  const item = updateCatalogItem(Number(req.params.id), req.body || {});
+  if (!item) return res.status(404).json({ ok: false, error: 'not_found' });
+  svc.audit('catalog_changed', `Onboarding catalog: edited ${item.kind} "${item.name}"`, { actor: actor(req) });
+  res.json({ ok: true, item });
+});
+router.delete('/api/onboarding-catalog/:id', requirePeople('people_admin', 'it', 'hr'), (req, res) => {
+  const ok = removeCatalogItem(Number(req.params.id));
+  if (!ok) return res.status(404).json({ ok: false, error: 'not_found' });
+  svc.audit('catalog_changed', `Onboarding catalog: removed item ${req.params.id}`, { actor: actor(req) });
   res.json({ ok: true });
 });
 

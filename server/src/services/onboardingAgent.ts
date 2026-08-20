@@ -1,5 +1,5 @@
 import { getDb } from '../db/index';
-import { operatingOffices } from '../os/office';
+import { catalogByKind, catalogAll } from './onboardingCatalog';
 
 /**
  * New-hire Onboarding engine.
@@ -33,53 +33,26 @@ const OWNER_LABEL: Record<Owner, string> = OWNERS.reduce(
 );
 const OWNER_ORDER: Owner[] = OWNERS.map((o) => o.key);
 
-/* ─────────────────────────── the option catalogs ─────────────────────────── */
+/* ─────────────────────────── the option catalogs ───────────────────────────
+ * Software, SharePoint groups, printers and computers are no longer hardcoded: they live in the
+ * editable onboarding_catalog table (a People admin maintains the real company list), and the
+ * routing for each selection (owner team, and whether it needs an approval) is read from the same
+ * rows. See services/onboardingCatalog.ts. */
 
-/** Software the form offers, and who each one routes to when selected. */
-export const SOFTWARE: { name: string; owner: Owner; kind: 'task' | 'approval' }[] = [
-  { name: 'Microsoft 365 desktop apps', owner: 'it', kind: 'task' },
-  { name: 'Adobe Acrobat', owner: 'it', kind: 'task' },
-  { name: 'HFSS', owner: 'it', kind: 'task' },
-  { name: 'Bluebeam', owner: 'mario', kind: 'approval' },
-  { name: 'AutoCAD', owner: 'mario', kind: 'approval' },
-  { name: 'HydraCAD', owner: 'mario', kind: 'approval' },
-];
-const SOFTWARE_ROUTING = new Map(SOFTWARE.map((s) => [s.name, s]));
+/** Look up the routing for one selected software or SharePoint item by name. */
+function catalogRoute(kind: 'software' | 'sharepoint', name: string): { owner: Owner; kind: 'task' | 'approval' } | undefined {
+  const item = catalogByKind(kind).find((c) => c.name === name);
+  if (!item) return undefined;
+  return { owner: item.owner as Owner, kind: item.approval ? 'approval' : 'task' };
+}
 
-/**
- * SharePoint groups the form offers, and who each one routes to when selected. The location groups
- * are derived from the real operating offices (not a hardcoded, out-of-date list), so they always
- * match the company's actual footprint; the function groups are the standard approval-gated ones.
- */
-export const SHAREPOINT: { name: string; owner: Owner; kind: 'task' | 'approval' }[] = [
-  // one IT-provisioned group per real office
-  ...operatingOffices().map((o) => ({ name: o.label, owner: 'it' as Owner, kind: 'task' as const })),
-  // the function groups (approval-gated where an owner must say yes)
-  { name: 'SAFETY', owner: 'it', kind: 'task' },
-  { name: 'MGMT', owner: 'mario', kind: 'approval' },
-  { name: 'ACCT', owner: 'rebecca', kind: 'approval' },
-  { name: 'Payroll', owner: 'rebecca', kind: 'approval' },
-  { name: 'HR', owner: 'sandi', kind: 'approval' },
-];
-const SHAREPOINT_ROUTING = new Map(SHAREPOINT.map((g) => [g.name, g]));
-
-/**
- * Printers the form offers - every printer routes to IT. Empty by default: the demo's fictional
- * printer names were removed, and real printers get added once the company provides its list. The
- * form hides this section while it is empty so a manager never picks a printer that does not exist.
- */
-export const PRINTERS: string[] = [];
-
-/** The computer choices and the spec each carries (for the Mario approval detail). */
-export const COMPUTERS: { key: string; label: string; spec: string }[] = [
-  { key: 'standard', label: 'Standard', spec: 'Standard T16 / Ryzen 7 / 16GB / 512GB' },
-  { key: 'business', label: 'Business', spec: 'Business T16 / Ryzen 7 / 32GB / 512GB' },
-  { key: 'cad', label: 'CAD', spec: 'CAD P16s / Ultra 7 / 32GB / 1TB / 6GB GPU' },
-];
-const COMPUTER_SPEC: Record<string, string> = COMPUTERS.reduce(
-  (m, c) => ((m[c.key] = c.spec), m),
-  {} as Record<string, string>
-);
+/** A chosen computer by its catalog id (the form submits the id as computer_type). */
+function computerById(idLike: string): { label: string; spec: string | null } | undefined {
+  const id = Number(idLike);
+  if (!Number.isFinite(id)) return undefined;
+  const item = catalogByKind('computer').find((c) => c.id === id);
+  return item ? { label: item.name, spec: item.spec } : undefined;
+}
 
 /** The pay/HR exceptions that each route to a BambooHR task when checked. */
 const PAY_EXCEPTIONS: { field: string; label: string }[] = [
@@ -183,17 +156,17 @@ function routeItems(req: any): DraftItem[] {
   // ── software (IT for standard, Mario approval for premium) ──
   const software: string[] = safeArray(req.software_json);
   for (const name of software) {
-    const s = SOFTWARE_ROUTING.get(name);
+    const s = catalogRoute('software', name);
     if (!s) continue;
     if (s.kind === 'approval')
-      items.push({ owner: s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Premium software - needs Mario sign-off.' });
+      items.push({ owner: s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Licensed software - needs an owner sign-off.' });
     else items.push({ owner: s.owner, kind: 'task', label: `Install ${name}` });
   }
 
   // ── SharePoint groups (IT, or Mario/Rebecca/Sandi approval per group) ──
   const groups: string[] = safeArray(req.sharepoint_json);
   for (const name of groups) {
-    const g = SHAREPOINT_ROUTING.get(name);
+    const g = catalogRoute('sharepoint', name);
     if (!g) continue;
     if (g.kind === 'approval')
       items.push({ owner: g.owner, kind: 'approval', label: `Approve SharePoint group: ${name}`, detail: 'Restricted group - needs approval before access.' });
@@ -204,10 +177,14 @@ function routeItems(req: any): DraftItem[] {
   const printers: string[] = safeArray(req.printers_json);
   for (const name of printers) items.push({ owner: 'it', kind: 'task', label: `Connect printer: ${name}` });
 
-  // ── Mario: new computer (approval, carrying the spec) ──
+  // ── Mario: new computer (approval, carrying the label + spec) ──
   const ct = (req.computer_type || 'none') as string;
-  if (ct && ct !== 'none' && COMPUTER_SPEC[ct]) {
-    items.push({ owner: 'mario', kind: 'approval', label: 'Approve new computer', detail: COMPUTER_SPEC[ct] });
+  if (ct && ct !== 'none') {
+    const comp = computerById(ct);
+    if (comp) {
+      const detail = [comp.label, comp.spec].filter(Boolean).join(': ');
+      items.push({ owner: 'mario', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
+    }
   }
 
   // ── Safety (Denise): equipment tasks ──
@@ -425,13 +402,15 @@ function recomputeRequestStatus(requestId: number): void {
   db.prepare(`UPDATE onboarding_requests SET status = ? WHERE id = ?`).run(status, requestId);
 }
 
-/** The catalogs the form needs to render (single source of truth). */
+/** The catalogs the form needs to render, read live from the editable onboarding_catalog table. */
 export function getFormOptions() {
+  const cat = catalogAll();
   return {
     owners: OWNERS,
-    software: SOFTWARE,
-    sharepoint: SHAREPOINT,
-    printers: PRINTERS,
-    computers: COMPUTERS,
+    software: cat.software.map((s) => ({ name: s.name, owner: s.owner, kind: s.approval ? 'approval' : 'task' })),
+    sharepoint: cat.sharepoint.map((g) => ({ name: g.name, owner: g.owner, kind: g.approval ? 'approval' : 'task' })),
+    printers: cat.printer.map((p) => p.name),
+    // computers carry the catalog id as the stable key the form submits back as computer_type.
+    computers: cat.computer.map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
   };
 }

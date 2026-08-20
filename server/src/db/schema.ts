@@ -1213,6 +1213,24 @@ export function initDb(): void {
   addColumn('saved_reports', 'last_sent_at', 'TEXT');
   addColumn('saved_reports', 'next_run_at', 'TEXT');               // when the next delivery is due
 
+  // Editable onboarding form catalog: the computers, software, SharePoint groups, and printers the
+  // onboarding form offers. Kept in the database (not hardcoded) so a People admin maintains the real
+  // company list. `kind` is computer|software|sharepoint|printer. `owner` + `approval` drive routing
+  // (which team the item goes to, and whether it needs a yes). `spec` is the computer description.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS onboarding_catalog (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind     TEXT NOT NULL,                 -- computer | software | sharepoint | printer
+      name     TEXT NOT NULL,                 -- display name (Standard, Bluebeam, Austin, ...)
+      spec     TEXT,                          -- computers: the spec/description line
+      owner    TEXT DEFAULT 'it',             -- routing owner (it|mario|rebecca|sandi|denise|daniel)
+      approval INTEGER DEFAULT 0,             -- 1 = needs an approval before it is granted
+      sort     INTEGER DEFAULT 0,
+      active   INTEGER DEFAULT 1
+    );
+    CREATE INDEX IF NOT EXISTS idx_onboarding_catalog_kind ON onboarding_catalog(kind, active, sort);
+  `);
+
   // Per-integration sync cadence. One row per syncing integration (servicetrade|bamboo|microsoft|
   // calls). interval_minutes is how often it auto-syncs (0 or enabled=0 means paused). The scheduler
   // runs an integration when now - last_run_at >= its interval. Defaults are seeded in code, so an

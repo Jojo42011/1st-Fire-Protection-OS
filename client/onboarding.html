@@ -89,6 +89,24 @@
   .mkl{display:block;font-weight:650;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:12px 0 5px}
   .mki{width:100%;font-family:var(--sans);font-weight:500;font-size:13.5px;color:var(--ink);border:1px solid var(--border);border-radius:9px;padding:9px 11px;background:var(--panel)}
   .mki:focus{outline:none;border-color:var(--brand)}
+  /* onboarding catalog editor */
+  .cat-body{display:flex;flex-direction:column;gap:20px}
+  .cat-sec{display:flex;flex-direction:column;gap:8px}
+  .cat-h{font-weight:800;font-size:12px;color:var(--ink);display:flex;flex-direction:column;gap:2px;margin-bottom:2px}
+  .cat-h .cat-sub{font-weight:500;font-size:11.5px;color:var(--muted)}
+  .cat-row{display:grid;gap:8px;align-items:center}
+  .cat-row.cat-c{grid-template-columns:1fr 2fr auto}
+  .cat-row.cat-s{grid-template-columns:1.6fr auto auto auto}
+  .cat-row.cat-p{grid-template-columns:1fr auto}
+  .cat-in,.cat-new{font-family:var(--sans);font-weight:500;font-size:13px;color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--panel);min-width:0}
+  .cat-in:focus,.cat-new:focus{outline:none;border-color:var(--brand)}
+  .cat-ap{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+  .cat-ap input{width:15px;height:15px;accent-color:var(--brand)}
+  .cat-x{width:30px;height:30px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--muted);font-size:17px;line-height:1;cursor:pointer}
+  .cat-x:hover{border-color:var(--os-bad,#c00);color:var(--os-bad,#c00)}
+  .cat-add{font-family:var(--sans);font-weight:700;font-size:12.5px;color:#fff;background:var(--brand);border:none;border-radius:8px;padding:8px 15px;cursor:pointer;white-space:nowrap}
+  .cat-add:hover{filter:brightness(1.08)}
+  .cat-empty{font-size:12px;color:var(--muted);padding:2px 0}
 </style>
 </head>
 <body>
@@ -117,6 +135,9 @@
 
     <div class="os-sec os-block">Full onboarding request</div>
     <div id="formCard"></div>
+
+    <div class="os-sec os-block">Onboarding catalog</div>
+    <div id="catalogCard"></div>
 
     <div class="os-foot">Sending an intake link invites a hiring manager to describe the role. It never asks for pay, Social Security number or bank details: HR collects those from the employee directly. Each link is a single-use token that expires in 7 days; resending it voids the old one. When the manager submits, the board below fills and each item routes to the team that owns it. Nothing provisions or approves on its own.</div>
   </div>
@@ -490,8 +511,72 @@ function submitForm(e){
     }).catch(function(){ btn.disabled=false; btn.textContent='Route onboarding'; });
 }
 
+/* ─────────────── onboarding catalog editor (computers / software / SharePoint / printers) ─────────────── */
+var CAT_OWNERS=[['it','IT'],['mario','Owner'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['daniel','Ops']];
+function ownerSelect(id,val){ return '<select class="cat-in" data-f="owner" data-id="'+id+'">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; }
+function catItemRow(kind,it){
+  var rm='<button class="cat-x" data-cat-del="'+it.id+'" title="Remove">×</button>';
+  if(kind==='computer') return '<div class="cat-row cat-c"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Name"><input class="cat-in" data-f="spec" data-id="'+it.id+'" value="'+esc(it.spec||'')+'" placeholder="Description (optional)">'+rm+'</div>';
+  if(kind==='printer') return '<div class="cat-row cat-p"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Printer name">'+rm+'</div>';
+  // software + sharepoint: name, owner, approval
+  return '<div class="cat-row cat-s"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Name">'+ownerSelect(it.id,it.owner)+
+    '<label class="cat-ap"><input type="checkbox" data-f="approval" data-id="'+it.id+'"'+(it.approval?' checked':'')+'> needs approval</label>'+rm+'</div>';
+}
+function catAddRow(kind){
+  if(kind==='computer') return '<div class="cat-row cat-c"><input class="cat-new" data-nf="name" placeholder="New computer name"><input class="cat-new" data-nf="spec" placeholder="Description (optional)"><button class="cat-add" data-cat-add="computer">Add</button></div>';
+  if(kind==='printer') return '<div class="cat-row cat-p"><input class="cat-new" data-nf="name" placeholder="New printer name"><button class="cat-add" data-cat-add="printer">Add</button></div>';
+  return '<div class="cat-row cat-s"><input class="cat-new" data-nf="name" placeholder="New '+kind+' name">'+
+    '<select class="cat-new" data-nf="owner">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join('')+'</select>'+
+    '<label class="cat-ap"><input type="checkbox" data-nf="approval"> needs approval</label><button class="cat-add" data-cat-add="'+kind+'">Add</button></div>';
+}
+var CAT_SECTIONS=[['computer','Computers','Described by role, not a specific model. Every choice routes to an owner approval.'],
+  ['software','Software','Routes to IT unless it needs an owner license approval.'],
+  ['sharepoint','SharePoint groups','One per office plus function groups. Approval-gated where marked.'],
+  ['printer','Printers','Every printer routes to IT.']];
+function renderCatalog(cat){
+  var html=CAT_SECTIONS.map(function(s){
+    var kind=s[0], items=(cat[kind]||[]);
+    var rows=items.map(function(it){return catItemRow(kind,it);}).join('')||'<div class="cat-empty">None yet.</div>';
+    return '<div class="cat-sec"><div class="cat-h">'+esc(s[1])+'<span class="cat-sub">'+esc(s[2])+'</span></div>'+rows+catAddRow(kind)+'</div>';
+  }).join('');
+  document.getElementById('catalogCard').innerHTML=
+    '<details class="formwrap"><summary>Edit the catalog <span class="hint">What the onboarding form offers. Changes apply to new requests immediately.</span></summary>'+
+    '<div class="fbody cat-body">'+html+'</div></details>';
+}
+function loadCatalog(){
+  fetch('/api/onboarding-catalog').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ document.getElementById('catalogCard').innerHTML=''; return; }
+    renderCatalog(d.catalog||{});
+  }).catch(function(){ document.getElementById('catalogCard').innerHTML=''; });
+}
+function catPut(id,patch){
+  return fetch('/api/onboarding-catalog/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(patch)}).then(function(r){return r.json();});
+}
+document.getElementById('catalogCard').addEventListener('change',function(e){
+  var el=e.target.closest('[data-f]'); if(!el) return;
+  var id=el.getAttribute('data-id'), f=el.getAttribute('data-f');
+  var val=el.type==='checkbox'?el.checked:el.value;
+  var patch={}; patch[f]=val;
+  catPut(id,patch).then(function(d){ if(!d||!d.ok){ OS.toast('Could not save that change.','bad'); } else { OS.toast('Catalog updated.'); loadMkOptions(); OPTIONS=null; loadCounts(); } });
+});
+document.getElementById('catalogCard').addEventListener('click',function(e){
+  var del=e.target.closest('[data-cat-del]');
+  if(del){ if(!confirm('Remove this item from the onboarding form?')) return;
+    fetch('/api/onboarding-catalog/'+del.getAttribute('data-cat-del'),{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast('Could not remove it.','bad'); return; } OS.toast('Removed.'); OPTIONS=null; loadCatalog(); reloadForm(); }); return; }
+  var add=e.target.closest('[data-cat-add]');
+  if(add){ var kind=add.getAttribute('data-cat-add'); var row=add.closest('.cat-row');
+    var body={kind:kind};
+    row.querySelectorAll('[data-nf]').forEach(function(inp){ body[inp.getAttribute('data-nf')]=inp.type==='checkbox'?inp.checked:inp.value; });
+    if(!body.name||!body.name.trim()){ OS.toast('Enter a name first.','bad'); return; }
+    fetch('/api/onboarding-catalog',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast('Could not add it.','bad'); return; } OS.toast('Added to the form.'); OPTIONS=null; loadCatalog(); reloadForm(); }); }
+});
+// Re-fetch the form options so the full request form reflects catalog edits without a page reload.
+function reloadForm(){ fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){ if(d&&d.options){ OPTIONS=d.options; renderForm(); } }).catch(function(){}); }
+
 /* ─────────────── boot ─────────────── */
-OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); loadMkOptions(); });
+OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); loadMkOptions(); loadCatalog(); });
 OS.onChange(function(){ loadBoard(); });
 </script>
 </body>
