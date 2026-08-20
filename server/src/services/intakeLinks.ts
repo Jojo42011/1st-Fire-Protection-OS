@@ -18,6 +18,7 @@ const LINK_TTL_DAYS = 7;
 export interface IntakeLink {
   id: number;
   token: string;
+  employee_id: number | null;
   job_title: string | null;
   office: string | null;
   recipient_name: string | null;
@@ -44,13 +45,28 @@ function liveStatus(row: IntakeLink): IntakeLink['status'] {
   return row.opened_at ? 'opened' : 'sent';
 }
 
+/** The confirmed BambooHR hire a link is bound to (name, role, office, start), or null when freehand. */
+export function boundHire(row: { employee_id: number | null }): { id: number; name: string; job_position: string | null; office: string | null; start_date: string | null; manager: string | null; work_email: string | null } | null {
+  if (!row.employee_id) return null;
+  const e = getDb().prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, job_position, public_job_title, office, manager, work_email, anticipated_start_date, actual_start_date
+       FROM employees WHERE id = ?`
+  ).get(row.employee_id) as any;
+  if (!e) return null;
+  const name = e.entra_display_name || `${e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim() || e.preferred_name || `Employee ${e.id}`;
+  return { id: e.id, name, job_position: e.job_position || e.public_job_title || null, office: e.office || null, start_date: e.actual_start_date || e.anticipated_start_date || null, manager: e.manager || null, work_email: e.work_email || null };
+}
+
 /** A row shaped for the client: status recomputed, token never leaked into list views. */
 function present(row: IntakeLink) {
   const status = liveStatus(row);
+  const hire = boundHire(row);
   return {
     id: row.id,
-    job_title: row.job_title,
-    office: row.office,
+    employee_id: row.employee_id,
+    hire,
+    job_title: row.job_title || (hire ? hire.job_position : null),
+    office: row.office || (hire ? hire.office : null),
     recipient_name: row.recipient_name,
     recipient_email: row.recipient_email,
     status,
@@ -65,6 +81,7 @@ function present(row: IntakeLink) {
 }
 
 export function createIntakeLink(input: {
+  employee_id?: number;
   job_title?: string;
   office?: string;
   recipient_name?: string;
@@ -74,16 +91,20 @@ export function createIntakeLink(input: {
   const db = getDb();
   const token = newToken();
   const expires = new Date(Date.now() + LINK_TTL_DAYS * 86400000).toISOString();
+  // When bound to a confirmed hire, snapshot their role/office from the employee record so the link
+  // and its list row read correctly even before the manager opens the form.
+  const hire = input.employee_id ? boundHire({ employee_id: input.employee_id }) : null;
   const info = db
     .prepare(
-      `INSERT INTO intake_links (token, job_title, office, recipient_name, recipient_email, status, created_by, expires_at)
-       VALUES (?, ?, ?, ?, ?, 'sent', ?, ?)`
+      `INSERT INTO intake_links (token, employee_id, job_title, office, recipient_name, recipient_email, status, created_by, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?)`
     )
     .run(
       token,
-      input.job_title || null,
-      input.office || null,
-      input.recipient_name || null,
+      input.employee_id || null,
+      input.job_title || (hire ? hire.job_position : null),
+      input.office || (hire ? hire.office : null),
+      input.recipient_name || (hire ? hire.manager : null),
       input.recipient_email || null,
       input.created_by || 'system',
       expires
@@ -157,6 +178,17 @@ export function submitIntake(token: string, vals: any): { ok: true; request_id: 
   const check = resolveToken(token);
   if (!check.ok) return { ok: false, reason: check.reason };
   const payload = toPayload(vals || {});
+  // Bound to a confirmed hire: the person's identity comes from BambooHR, not from the manager. Only
+  // the operational fields (equipment/access) are taken from the form, and the request attaches to
+  // the real employee instead of creating a duplicate.
+  const hire = boundHire(check.link);
+  if (hire) {
+    payload.employee_id = hire.id;
+    payload.name = hire.name;
+    payload.job_position = hire.job_position || payload.job_position;
+    payload.manager_name = hire.manager || payload.manager_name;
+    payload.start_date = hire.start_date || payload.start_date;
+  }
   if (!payload.name) return { ok: false, reason: 'name_required' };
   const out = createRequest(payload);
   const requestId = out.request?.id ?? null;
@@ -179,6 +211,7 @@ export function resendIntakeLink(id: number, actor: string): { link: ReturnType<
     db.prepare(`UPDATE intake_links SET status = 'voided', voided_at = datetime('now') WHERE id = ?`).run(id);
   }
   return createIntakeLink({
+    employee_id: row.employee_id || undefined,
     job_title: row.job_title || undefined,
     office: row.office || undefined,
     recipient_name: row.recipient_name || undefined,

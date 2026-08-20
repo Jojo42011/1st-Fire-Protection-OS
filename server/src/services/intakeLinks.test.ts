@@ -66,6 +66,25 @@ test('submit is single-use: creates an onboarding request and closes the token',
   assert.equal(sub.legal, 'Nadia Farr');
 });
 
+test('a link bound to a confirmed hire pre-fills identity and attaches the request to that employee', () => {
+  const empId = Number(db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, entra_display_name, job_position, office, manager, employment_status) VALUES ('Maria','Reyes','Maria Reyes','Service Fitter','McAllen','Ed Valdez','onboarding')`).run().lastInsertRowid);
+  const { link, token } = createIntakeLink({ employee_id: empId });
+  // The link snapshots role/office from the employee, and carries the bound hire.
+  assert.equal(link.job_title, 'Service Fitter');
+  assert.equal(link.office, 'McAllen');
+  assert.ok(link.hire && link.hire.name === 'Maria Reyes');
+  // The manager submits ONLY operational fields (no identity); it still attaches to Maria.
+  const out = submitIntake(token, { computer_type: 'cad', accounts: ['Company email'], printers: [] });
+  assert.equal(out.ok, true);
+  if (out.ok) {
+    const req = db.prepare(`SELECT name, employee_id, job_position, computer_type FROM onboarding_requests WHERE id = ?`).get(out.request_id) as any;
+    assert.equal(req.employee_id, empId, 'request bound to the real employee');
+    assert.equal(req.name, 'Maria Reyes', 'name came from BambooHR, not the manager');
+    assert.equal(req.job_position, 'Service Fitter');
+    assert.equal(req.computer_type, 'cad');
+  }
+});
+
 test('submit refuses a payload with no name', () => {
   const { token } = createIntakeLink({ job_title: 'Dispatcher', office: 'Austin', recipient_name: 'No Name' });
   const out = submitIntake(token, { legal: '', preferred: '' });

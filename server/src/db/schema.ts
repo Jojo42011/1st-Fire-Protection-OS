@@ -1214,6 +1214,10 @@ export function initDb(): void {
   // (standard / business / cad / dock). RAM is not in the RMM export, so it is set in the app.
   addColumn('employee_assets', 'ram', 'TEXT');
   addColumn('employee_assets', 'tier', 'TEXT');
+  // Intake links and onboarding requests can now bind to an existing employee (the confirmed BambooHR
+  // hire the manager is setting up), so the manager form is pre-filled and no duplicate person is made.
+  addColumn('intake_links', 'employee_id', 'INTEGER');
+  addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical

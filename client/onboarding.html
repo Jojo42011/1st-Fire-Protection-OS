@@ -176,15 +176,12 @@
       <button class="ov-x" data-mkclose aria-label="Close">&times;</button>
       <div class="card card-pad" style="background:var(--panel);border-radius:16px;padding:22px">
         <h2 style="font-weight:800;font-size:18px;color:var(--ink);margin:0 0 4px">New intake link</h2>
-        <p class="muted" style="font-size:12.5px;margin:0 0 16px">Creates a single-use link to send to the hiring manager. They fill it in; nothing sends on its own.</p>
-        <label class="mkl">Role</label>
-        <select id="mk-role" class="mki"></select>
-        <label class="mkl">Office</label>
-        <select id="mk-office" class="mki"></select>
-        <label class="mkl">Who is it for (name)</label>
-        <input id="mk-name" class="mki" placeholder="Hiring manager or candidate" />
-        <label class="mkl">Their email (optional)</label>
-        <input id="mk-email" class="mki" placeholder="name@email.com" />
+        <p class="muted" style="font-size:12.5px;margin:0 0 16px">Send this after the offer is signed in BambooHR. Pick the new hire; the manager just fills in their equipment and access. Nothing sends on its own.</p>
+        <label class="mkl">New hire (from BambooHR)</label>
+        <select id="mk-hire" class="mki"></select>
+        <div id="mk-hire-sum" class="muted" style="font-size:12px;margin:6px 0 2px"></div>
+        <label class="mkl">Send to hiring manager (email, optional)</label>
+        <input id="mk-email" class="mki" placeholder="manager@1stfp.com" />
         <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:18px">
           <button class="os-btn" data-mkclose>Cancel</button>
           <button class="os-btn primary" id="mk-create">Create link</button>
@@ -287,10 +284,15 @@ function linkCardHTML(l){
   var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
   // Discard is offered only while a link is still live (sent or opened, never submitted).
   var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
+  // Bound to a confirmed hire: lead with their name; otherwise fall back to the role/recipient.
+  var subject = l.hire ? esc(l.hire.name) : esc(l.job_title||'New hire');
+  var line2 = l.hire
+    ? esc(l.job_title||'')+(l.recipient_name?(' · manager '+esc(l.recipient_name)):'')+(l.recipient_email?(' · '+esc(l.recipient_email)):'')
+    : 'For <b>'+esc(l.recipient_name||'a hiring manager')+'</b>'+(l.recipient_email?' · '+esc(l.recipient_email):'');
   return '<div class="ilink'+(gone?' archived':'')+'">'+
     '<div class="il-main">'+
-      '<div class="il-role">'+esc(l.job_title||'New hire')+' '+(l.office?OS.officeTag(esc(l.office)):'')+'</div>'+
-      '<div class="il-to">For <b>'+esc(l.recipient_name||'a hiring manager')+'</b>'+(l.recipient_email?' · '+esc(l.recipient_email):'')+'</div>'+
+      '<div class="il-role">'+subject+' '+(l.office?OS.officeTag(esc(l.office)):'')+'</div>'+
+      '<div class="il-to">'+line2+'</div>'+
       '<div class="il-life">'+lifecycle(l)+'</div>'+
     '</div>'+
     '<div class="il-side">'+
@@ -360,33 +362,39 @@ document.getElementById('links').addEventListener('click',function(e){
 });
 
 /* ─────────────── create-link modal ─────────────── */
-var mk=document.getElementById('mk');
-// Populate the create-link modal with the real offices (9) and role templates, not a hardcoded few.
+var mk=document.getElementById('mk'), MK_HIRES=[];
+// Populate the create-link modal with confirmed hires (from BambooHR, via the roster). HR picks the
+// person; their role/office/manager are snapshotted server-side, so the manager form is pre-filled.
 function loadMkOptions(){
-  fetch('/api/offices').then(function(r){return r.json();}).then(function(d){
-    var sel=document.getElementById('mk-office'); if(!sel) return;
-    sel.innerHTML=((d&&d.offices)||[]).map(function(o){return '<option value="'+esc(o.label)+'">'+esc(o.label)+'</option>';}).join('');
-  }).catch(function(){});
-  fetch('/api/people/positions').then(function(r){return r.json();}).then(function(d){
-    var sel=document.getElementById('mk-role'); if(!sel) return;
-    var names=((d&&d.positions)||[]).filter(function(p){return p.active!==0;}).map(function(p){return p.name;}).filter(Boolean);
-    if(!names.length) names=['Service Technician','Inspector','Estimator','Dispatcher'];
-    sel.innerHTML=names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
-  }).catch(function(){});
+  fetch('/api/people/employees?status=all').then(function(r){return r.json();}).then(function(d){
+    var list=((d&&d.employees)||[]).filter(function(e){return e.employment_status==='onboarding'||e.employment_status==='active';});
+    list.sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
+    MK_HIRES=list;
+    var sel=document.getElementById('mk-hire'); if(!sel) return;
+    if(!list.length){ sel.innerHTML='<option value="">No hires on the roster: import from BambooHR first</option>'; return; }
+    sel.innerHTML='<option value="">Select the new hire…</option>'+list.map(function(e){
+      return '<option value="'+e.id+'">'+esc(e.name||'')+' · '+esc(e.job_position||'no role')+' · '+esc(e.office||'no office')+'</option>'; }).join('');
+  }).catch(function(){ var sel=document.getElementById('mk-hire'); if(sel) sel.innerHTML='<option value="">Could not load the roster</option>'; });
 }
-function openMk(){ mk.classList.add('on'); mk.setAttribute('aria-hidden','false'); var n=document.getElementById('mk-name'); if(n) setTimeout(function(){n.focus();},50); }
+function mkSelectedHire(){ var id=document.getElementById('mk-hire').value; return MK_HIRES.filter(function(e){return String(e.id)===String(id);})[0]||null; }
+function openMk(){ mk.classList.add('on'); mk.setAttribute('aria-hidden','false'); var n=document.getElementById('mk-hire'); if(n) setTimeout(function(){n.focus();},50); }
 function closeMk(){ mk.classList.remove('on'); mk.setAttribute('aria-hidden','true'); }
 document.getElementById('newLink').addEventListener('click',openMk);
 mk.addEventListener('click',function(e){ if(e.target.closest('[data-mkclose]')) closeMk(); });
+document.getElementById('mk-hire').addEventListener('change',function(){
+  var h=mkSelectedHire(); var s=document.getElementById('mk-hire-sum');
+  s.textContent=h?('Role and office come from BambooHR: '+(h.job_position||'no role')+' · '+(h.office||'no office')+(h.manager?(' · manager '+h.manager):'')):'';
+});
 document.getElementById('mk-create').addEventListener('click',function(){
-  var body={ job_title:document.getElementById('mk-role').value, office:document.getElementById('mk-office').value,
-    recipient_name:document.getElementById('mk-name').value.trim(), recipient_email:document.getElementById('mk-email').value.trim() };
+  var h=mkSelectedHire();
+  if(!h){ OS.toast('Pick the new hire first.','bad'); return; }
+  var body={ employee_id:h.id, recipient_email:document.getElementById('mk-email').value.trim() };
   fetch('/api/onboarding/intake-links',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok){ OS.toast('Could not create the link.','bad'); return; }
       if(d.url){ try{ navigator.clipboard.writeText(d.url); }catch(_){} }
       closeMk(); loadLinks(); renderStrip();
-      OS.toast('Intake link created for '+(body.recipient_name||'the hiring manager')+' and copied. It expires in 7 days; nothing sends on its own.');
+      OS.toast('Intake link created for '+(h.name||'the new hire')+' and copied. Send it to the hiring manager; it expires in 7 days.');
     }).catch(function(){ OS.toast('Could not create the link.','bad'); });
 });
 

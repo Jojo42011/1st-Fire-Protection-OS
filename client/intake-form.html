@@ -73,6 +73,7 @@
   </div>
 
   <div id="form">
+    <div id="hireHead"></div>
     <div class="dots" id="dots"></div>
     <div class="body">
       <h2 id="title"></h2>
@@ -180,6 +181,24 @@
 
   var step = 0, vals = defaults();
   var el = function (id) { return document.getElementById(id); };
+  var HIRE = null;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  // Bind the form to a confirmed hire: prefill their known facts, drop the identity/role steps, and
+  // show them as a read-only header. Only the operational steps remain.
+  function applyHire(h) {
+    HIRE = h;
+    vals.legal = h.name; vals.title = h.job_position || ''; vals.office = h.office || '';
+    vals.start = h.start_date || ''; vals.manager = h.manager || '';
+    STEPS = STEPS.filter(function (s) { return s.label !== 'the role' && s.label !== 'the person'; });
+    step = 0;
+    var hs = el('hsub'); if (hs) hs.textContent = 'Setting up a confirmed hire';
+    var sub = [h.job_position, h.office].filter(Boolean).join(' · ') + (h.start_date ? (' · starts ' + h.start_date) : '') + (h.manager ? (' · manager ' + h.manager) : '');
+    var hb = el('hireHead');
+    if (hb) hb.innerHTML = '<div style="border:1px solid var(--line,#e5e2da);border-radius:12px;padding:12px 14px;margin:0 0 4px;background:rgba(0,0,0,0.02)">'+
+      '<div style="font-weight:800;font-size:15px">' + esc(h.name) + '</div>'+
+      '<div style="color:#6b6b6b;font-size:12.5px;margin-top:2px">' + esc(sub) + '</div>'+
+      '<div style="color:#8a8a8a;font-size:11.5px;margin-top:6px">From your HR record. You are only setting up their equipment and access below.</div></div>';
+  }
   var post = function (type) {
     try { parent.postMessage({ source: 'intake-form', type: type, vals: vals }, '*'); } catch (e) {}
   };
@@ -214,7 +233,10 @@
         applyCatalog(res.d.catalog);
         if (res.d.job_title) vals.title = res.d.job_title;
         if (res.d.office) vals.office = res.d.office;
-        if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
+        // Bound to a confirmed BambooHR hire: their identity/role is known, so drop those steps and
+        // show the person read-only. The manager only fills the operational setup.
+        if (res.d.hire) applyHire(res.d.hire);
+        else if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
         render();
       }).catch(function () { /* offline: let them fill; submit will re-check */ });
   } else {

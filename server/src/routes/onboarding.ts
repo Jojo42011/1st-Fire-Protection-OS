@@ -38,7 +38,12 @@ router.get('/api/onboarding/form-options', (_req, res) => {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    computers: catalogByKind('computer').map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
+    // Computers by purchase tier, matching the asset-library cost model and the live intake form.
+    computers: [
+      { key: 'standard', label: 'Standard laptop', spec: 'General office use (~16 GB)' },
+      { key: 'business', label: 'Business laptop', spec: 'Heavier multitasking (~32 GB)' },
+      { key: 'cad', label: 'CAD workstation', spec: 'HydraCAD / AutoCAD (~64 GB)' },
+    ],
   };
   res.json({ offices: operatingOffices().map((o) => o.label), positions, catalog });
 });
@@ -106,6 +111,7 @@ router.get('/api/onboarding/intake-links', (req, res) => {
 router.post('/api/onboarding/intake-links', (req, res) => {
   const b = req.body || {};
   const { link, token } = createIntakeLink({
+    employee_id: b.employee_id ? Number(b.employee_id) : undefined,
     job_title: b.job_title,
     office: b.office,
     recipient_name: b.recipient_name,

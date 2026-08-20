@@ -67,6 +67,7 @@ const PAY_EXCEPTIONS: { field: string; label: string }[] = [
 /* ─────────────────────────── types ─────────────────────────── */
 export interface OnboardingPayload {
   name: string;
+  employee_id?: number; // set when the intake is bound to a confirmed BambooHR hire
   personal_email?: string;
   start_date?: string;
   cell_phone?: string;
@@ -245,18 +246,19 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
   const info = db
     .prepare(
       `INSERT INTO onboarding_requests
-        (name, personal_email, start_date, cell_phone, job_position, salary, manager_name,
+        (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
          vehicle_details, vehicle_transfer, wex_card, computer_type, software_json, sharepoint_json, printers_json)
        VALUES
-        (@name, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
+        (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
          @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @software_json, @sharepoint_json, @printers_json)`
     )
     .run({
       name: String(payload.name).trim(),
+      employee_id: payload.employee_id || null,
       personal_email: payload.personal_email || null,
       start_date: payload.start_date || null,
       cell_phone: payload.cell_phone || null,

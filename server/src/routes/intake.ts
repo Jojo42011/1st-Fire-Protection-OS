@@ -5,7 +5,7 @@
  */
 import { Router } from 'express';
 import path from 'path';
-import { resolveToken, markOpened, submitIntake } from '../services/intakeLinks';
+import { resolveToken, markOpened, submitIntake, boundHire } from '../services/intakeLinks';
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
@@ -22,11 +22,18 @@ function intakeOptions(): {
   try {
     positions = (getDb().prepare(`SELECT name FROM job_positions WHERE active = 1 ORDER BY name`).all() as { name: string }[]).map((r) => r.name).filter(Boolean);
   } catch { positions = []; }
+  // Computers are chosen by purchase tier, matching the asset library's cost model (Standard $1,000 /
+  // Business $1,400 / CAD $2,000). The tier flows into provisioning and the expected device value.
+  const computers = [
+    { key: 'standard', label: 'Standard laptop', spec: 'General office use (~16 GB)' },
+    { key: 'business', label: 'Business laptop', spec: 'Heavier multitasking (~32 GB)' },
+    { key: 'cad', label: 'CAD workstation', spec: 'HydraCAD / AutoCAD (~64 GB)' },
+  ];
   const catalog = {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    computers: catalogByKind('computer').map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
+    computers,
   };
   return { offices, positions, catalog };
 }
@@ -45,7 +52,8 @@ router.get('/api/intake/:token', (req, res) => {
   if (!check.ok) return res.status(410).json({ ok: false, reason: check.reason });
   markOpened(req.params.token);
   const l = check.link;
-  res.json({ ok: true, job_title: l.job_title, office: l.office, recipient_name: l.recipient_name, expires_at: l.expires_at, ...intakeOptions() });
+  const hire = boundHire(l); // the confirmed BambooHR hire this link is for (null for a freehand link)
+  res.json({ ok: true, hire, job_title: l.job_title || (hire ? hire.job_position : null), office: l.office || (hire ? hire.office : null), recipient_name: l.recipient_name, expires_at: l.expires_at, ...intakeOptions() });
 });
 
 /** Submit the form for a token. Single-use: creates the onboarding request and closes the link. */
