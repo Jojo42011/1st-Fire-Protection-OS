@@ -110,6 +110,7 @@
   .cat-row.cat-c{grid-template-columns:1fr 2fr auto}
   .cat-row.cat-s{grid-template-columns:1.6fr auto auto auto}
   .cat-row.cat-p{grid-template-columns:1fr auto}
+  .cat-row.cat-pg{grid-template-columns:1fr 1fr 1.2fr auto}
   .cat-in,.cat-new{font-family:var(--sans);font-weight:500;font-size:13px;color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--panel);min-width:0}
   .cat-in:focus,.cat-new:focus{outline:none;border-color:var(--brand)}
   .cat-ap{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
@@ -527,14 +528,16 @@ function ownerSelect(id,val){ return '<select class="cat-in" data-f="owner" data
 function catItemRow(kind,it){
   var rm='<button class="cat-x" data-cat-del="'+it.id+'" title="Remove">×</button>';
   if(kind==='computer') return '<div class="cat-row cat-c"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Name"><input class="cat-in" data-f="spec" data-id="'+it.id+'" value="'+esc(it.spec||'')+'" placeholder="Description (optional)">'+rm+'</div>';
-  if(kind==='printer') return '<div class="cat-row cat-p"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Printer name">'+rm+'</div>';
+  if(kind==='printer') return '<div class="cat-row cat-pg"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Office / printer">'+
+    '<input class="cat-in" data-f="group_name" data-id="'+it.id+'" value="'+esc(it.group_name||'')+'" placeholder="Security group (SG-PR-...)">'+
+    '<input class="cat-in" data-f="group_id" data-id="'+it.id+'" value="'+esc(it.group_id||'')+'" placeholder="Group object id (optional)">'+rm+'</div>';
   // software + sharepoint: name, owner, approval
   return '<div class="cat-row cat-s"><input class="cat-in" data-f="name" data-id="'+it.id+'" value="'+esc(it.name)+'" placeholder="Name">'+ownerSelect(it.id,it.owner)+
     '<label class="cat-ap"><input type="checkbox" data-f="approval" data-id="'+it.id+'"'+(it.approval?' checked':'')+'> needs approval</label>'+rm+'</div>';
 }
 function catAddRow(kind){
   if(kind==='computer') return '<div class="cat-row cat-c"><input class="cat-new" data-nf="name" placeholder="New computer name"><input class="cat-new" data-nf="spec" placeholder="Description (optional)"><button class="cat-add" data-cat-add="computer">Add</button></div>';
-  if(kind==='printer') return '<div class="cat-row cat-p"><input class="cat-new" data-nf="name" placeholder="New printer name"><button class="cat-add" data-cat-add="printer">Add</button></div>';
+  if(kind==='printer') return '<div class="cat-row cat-pg"><input class="cat-new" data-nf="name" placeholder="Office / printer"><input class="cat-new" data-nf="group_name" placeholder="Security group (SG-PR-...)"><input class="cat-new" data-nf="group_id" placeholder="Group object id (optional)"><button class="cat-add" data-cat-add="printer">Add</button></div>';
   return '<div class="cat-row cat-s"><input class="cat-new" data-nf="name" placeholder="New '+kind+' name">'+
     '<select class="cat-new" data-nf="owner">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join('')+'</select>'+
     '<label class="cat-ap"><input type="checkbox" data-nf="approval"> needs approval</label><button class="cat-add" data-cat-add="'+kind+'">Add</button></div>';
@@ -542,7 +545,7 @@ function catAddRow(kind){
 var CAT_SECTIONS=[['computer','Computers','Described by role, not a specific model. Every choice routes to an owner approval.'],
   ['software','Software','Routes to IT unless it needs an owner license approval.'],
   ['sharepoint','SharePoint groups','One per office plus function groups. Approval-gated where marked.'],
-  ['printer','Printers','Every printer routes to IT.']];
+  ['printer','Printers','Each office maps to an Entra security group (SG-PR-...). Picking it on the form adds the hire to that group, auto-provisioned through Graph when Microsoft is connected.']];
 function renderCatalog(cat){
   var html=CAT_SECTIONS.map(function(s){
     var kind=s[0], items=(cat[kind]||[]);

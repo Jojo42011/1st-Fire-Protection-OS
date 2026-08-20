@@ -173,9 +173,23 @@ function routeItems(req: any): DraftItem[] {
     else items.push({ owner: g.owner, kind: 'task', label: `Add to SharePoint group: ${name}` });
   }
 
-  // ── printers (all IT) ──
+  // ── printers -> per-office Entra security group (IT). Selecting an office's printers adds the hire
+  //    to its SG-PR-<office> group; the item carries the group so IT (or auto-provisioning) can act. ──
   const printers: string[] = safeArray(req.printers_json);
-  for (const name of printers) items.push({ owner: 'it', kind: 'task', label: `Connect printer: ${name}` });
+  const printerCatalog = catalogByKind('printer');
+  for (const name of printers) {
+    const p = printerCatalog.find((c) => c.name === name);
+    if (p && p.group_name) {
+      items.push({
+        owner: 'it',
+        kind: 'task',
+        label: `Add to security group: ${p.group_name}`,
+        detail: `${name} printers. Entra group ${p.group_name}${p.group_id ? ` (${p.group_id})` : ''}.`,
+      });
+    } else {
+      items.push({ owner: 'it', kind: 'task', label: `Connect printer: ${name}`, detail: p && !p.group_name ? `No Entra group set for ${name} yet.` : undefined });
+    }
+  }
 
   // ── Mario: new computer (approval, carrying the label + spec) ──
   const ct = (req.computer_type || 'none') as string;

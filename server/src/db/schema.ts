@@ -1230,6 +1230,11 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_onboarding_catalog_kind ON onboarding_catalog(kind, active, sort);
   `);
+  // Access items (printers, and later SharePoint) map to an Entra security group: selecting one adds
+  // the hire to that group, auto-provisioned through Microsoft Graph when connected. Added by
+  // ALTER so existing databases pick them up.
+  addColumn('onboarding_catalog', 'group_name', 'TEXT'); // e.g. SG-PR-MCA
+  addColumn('onboarding_catalog', 'group_id', 'TEXT');   // the Entra group object id (GUID)
 
   // Per-integration sync cadence. One row per syncing integration (servicetrade|bamboo|microsoft|
   // calls). interval_minutes is how often it auto-syncs (0 or enabled=0 means paused). The scheduler

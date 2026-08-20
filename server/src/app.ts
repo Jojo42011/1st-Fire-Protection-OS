@@ -62,7 +62,7 @@ import work from './routes/work';
 import operations from './routes/operations';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
-import { seedOnboardingCatalog } from './services/onboardingCatalog';
+import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
 import { ensureBootstrapAdmin } from './people/authz';
 import { cleanupDemoData } from './seed/cleanupDemo';
 
@@ -78,6 +78,8 @@ cleanupDemoData();
 seedPeopleCatalog();
 // Seed the editable onboarding form catalog (computers, software, SharePoint, printers). Idempotent.
 seedOnboardingCatalog();
+// Seed the per-office printer Entra security groups (SG-PR-<office>). Idempotent.
+seedPrinterGroups();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the
 // moment they complete Microsoft sign-in, and they appear in Access & roles.
 ensureBootstrapAdmin();

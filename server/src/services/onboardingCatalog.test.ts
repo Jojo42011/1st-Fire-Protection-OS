@@ -8,8 +8,8 @@ process.env.OS_REQUIRE_IDENTITY = '0';
 
 import { getDb } from '../db/index';
 import { initDb } from '../db/schema';
-import { seedOnboardingCatalog, catalogByKind, addCatalogItem, updateCatalogItem, removeCatalogItem } from './onboardingCatalog';
-import { getFormOptions } from './onboardingAgent';
+import { seedOnboardingCatalog, seedPrinterGroups, catalogByKind, addCatalogItem, updateCatalogItem, removeCatalogItem } from './onboardingCatalog';
+import { getFormOptions, createRequest } from './onboardingAgent';
 
 initDb();
 getDb().exec(`DELETE FROM onboarding_catalog;`);
@@ -47,4 +47,25 @@ test('add, edit, and remove flow', () => {
 test('addCatalogItem rejects an unknown kind or empty name', () => {
   assert.equal(addCatalogItem({ kind: 'nonsense', name: 'x' }), null);
   assert.equal(addCatalogItem({ kind: 'software', name: '   ' }), null);
+});
+
+test('printer groups seed maps offices to SG-PR-* security groups', () => {
+  seedPrinterGroups();
+  const printers = catalogByKind('printer');
+  const mca = printers.find((p) => p.group_name === 'SG-PR-MCA');
+  assert.ok(mca, 'McAllen printer group seeded');
+  assert.equal(mca!.name, 'McAllen');
+  assert.ok(mca!.group_id && mca!.group_id.length > 10, 'carries the group object id');
+  const sat = printers.find((p) => p.name === 'Services (San Antonio)');
+  assert.equal(sat!.group_name, 'SG-PR-SAT', 'San Antonio maps to SAT');
+});
+
+test('selecting an office printer routes an add-to-security-group task carrying the group', () => {
+  const out = createRequest({ name: 'Test Hire', printers: ['McAllen'] } as any);
+  const items = out.items || [];
+  const grp = items.find((i: any) => /Add to security group/.test(i.label));
+  assert.ok(grp, 'routed an add-to-security-group task');
+  assert.equal(grp!.owner, 'it');
+  assert.ok(/SG-PR-MCA/.test(grp!.label), 'names the SG-PR-MCA group');
+  assert.ok(grp!.detail && /SG-PR-MCA/.test(grp!.detail), 'detail carries the group');
 });

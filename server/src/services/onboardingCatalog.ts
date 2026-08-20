@@ -16,6 +16,8 @@ export interface CatalogItem {
   spec: string | null;
   owner: string;
   approval: boolean;
+  group_name: string | null; // Entra security group name (SG-PR-MCA), for access items
+  group_id: string | null; // Entra group object id (GUID)
   sort: number;
   active: boolean;
 }
@@ -74,6 +76,8 @@ function toItem(r: any): CatalogItem {
     spec: r.spec ?? null,
     owner: r.owner || 'it',
     approval: r.approval === 1,
+    group_name: r.group_name ?? null,
+    group_id: r.group_id ?? null,
     sort: r.sort ?? 0,
     active: r.active === 1,
   };
@@ -82,6 +86,42 @@ function toItem(r: any): CatalogItem {
 /** All active items of one kind, in sort order. */
 export function catalogByKind(kind: CatalogKind): CatalogItem[] {
   return (getDb().prepare(`SELECT * FROM onboarding_catalog WHERE kind = ? AND active = 1 ORDER BY sort, id`).all(kind) as any[]).map(toItem);
+}
+
+// The printer access maps to per-office Entra security groups (SG-PR-<office>). Selecting an office's
+// printers on the onboarding form adds the hire to that group. Object ids provided from the tenant;
+// Laredo and Extinguishers have no group yet (fill them in the catalog editor). Seeded once.
+const PRINTER_GROUPS: { office: string; group: string; id: string | null }[] = [
+  { office: 'Austin', group: 'SG-PR-AUS', id: '93d55e89-ccb8-420c-918f-83d967793886' },
+  { office: 'Houston', group: 'SG-PR-HOU', id: 'd78fdb5f-d95a-4399-9d96-42a9902b844c' },
+  { office: 'McAllen', group: 'SG-PR-MCA', id: '0a1ef322-d4c3-4801-b3e8-771dffd3c5b7' },
+  { office: 'Waco', group: 'SG-PR-WAC', id: '8ef7eebe-6e60-4041-a19f-28dccfb6f5e1' },
+  { office: 'Lubbock', group: 'SG-PR-LUB', id: '9d8131cf-045b-40f4-a8ef-d815ab3b4c21' },
+  { office: 'College Station', group: 'SG-PR-CST', id: 'bc5c193e-48e5-4ca8-a1df-40a3a418653e' },
+  { office: 'Services (San Antonio)', group: 'SG-PR-SAT', id: '3cd4a9c5-9126-4fba-bbb6-30b78d41b9dc' },
+  { office: 'OSC', group: 'SG-PR-OSC', id: 'b33cdea5-2c36-4904-b32e-de4dd8742f7e' },
+  { office: 'Laredo', group: '', id: null },
+  { office: 'Extinguishers', group: '', id: null },
+];
+
+/** Seed the per-office printer security groups. Idempotent: skips any printer already present by
+ *  group name or office label, and only runs once via a state flag. */
+export function seedPrinterGroups(): void {
+  if (getState('seeded_printer_groups_v1') === '1') return;
+  const db = getDb();
+  const exists = db.prepare(`SELECT 1 FROM onboarding_catalog WHERE kind = 'printer' AND (group_name = ? OR name = ?) LIMIT 1`);
+  let sort = (db.prepare(`SELECT COALESCE(MAX(sort), -1) AS m FROM onboarding_catalog WHERE kind = 'printer'`).get() as { m: number }).m;
+  const ins = db.prepare(
+    `INSERT INTO onboarding_catalog (kind, name, owner, approval, group_name, group_id, sort) VALUES ('printer', ?, 'it', 0, ?, ?, ?)`
+  );
+  const tx = db.transaction(() => {
+    for (const p of PRINTER_GROUPS) {
+      if (exists.get(p.group || '__none__', p.office)) continue;
+      ins.run(p.office, p.group || null, p.id, ++sort);
+    }
+  });
+  tx();
+  setState('seeded_printer_groups_v1', '1');
 }
 
 /** Every active item, grouped by kind (for the editor and the form option catalogs). */
@@ -97,20 +137,20 @@ export function catalogAll(): Record<CatalogKind, CatalogItem[]> {
 const KINDS: CatalogKind[] = ['computer', 'software', 'sharepoint', 'printer'];
 
 /** Add an item. Returns the created row, or null if the kind/name is invalid. */
-export function addCatalogItem(input: { kind: string; name: string; spec?: string; owner?: string; approval?: boolean }): CatalogItem | null {
+export function addCatalogItem(input: { kind: string; name: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string }): CatalogItem | null {
   const kind = input.kind as CatalogKind;
   const name = (input.name || '').trim();
   if (!KINDS.includes(kind) || !name) return null;
   const db = getDb();
   const maxSort = (db.prepare(`SELECT COALESCE(MAX(sort), -1) AS m FROM onboarding_catalog WHERE kind = ?`).get(kind) as { m: number }).m;
   const info = db
-    .prepare(`INSERT INTO onboarding_catalog (kind, name, spec, owner, approval, sort) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(kind, name, input.spec ?? null, input.owner || 'it', input.approval ? 1 : 0, maxSort + 1);
+    .prepare(`INSERT INTO onboarding_catalog (kind, name, spec, owner, approval, group_name, group_id, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(kind, name, input.spec ?? null, input.owner || 'it', input.approval ? 1 : 0, input.group_name?.trim() || null, input.group_id?.trim() || null, maxSort + 1);
   return toItem(db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(Number(info.lastInsertRowid)));
 }
 
 /** Edit an item's fields. Returns the updated row, or null if it does not exist. */
-export function updateCatalogItem(id: number, patch: { name?: string; spec?: string; owner?: string; approval?: boolean }): CatalogItem | null {
+export function updateCatalogItem(id: number, patch: { name?: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string }): CatalogItem | null {
   const db = getDb();
   const cur = db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(id) as any;
   if (!cur) return null;
@@ -118,7 +158,9 @@ export function updateCatalogItem(id: number, patch: { name?: string; spec?: str
   const spec = patch.spec !== undefined ? (patch.spec || null) : cur.spec;
   const owner = patch.owner != null ? patch.owner : cur.owner;
   const approval = patch.approval != null ? (patch.approval ? 1 : 0) : cur.approval;
-  db.prepare(`UPDATE onboarding_catalog SET name = ?, spec = ?, owner = ?, approval = ? WHERE id = ?`).run(name, spec, owner, approval, id);
+  const groupName = patch.group_name !== undefined ? (patch.group_name.trim() || null) : cur.group_name;
+  const groupId = patch.group_id !== undefined ? (patch.group_id.trim() || null) : cur.group_id;
+  db.prepare(`UPDATE onboarding_catalog SET name = ?, spec = ?, owner = ?, approval = ?, group_name = ?, group_id = ? WHERE id = ?`).run(name, spec, owner, approval, groupName, groupId, id);
   return toItem(db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(id));
 }
 

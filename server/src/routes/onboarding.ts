@@ -19,6 +19,7 @@ import {
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
+import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
 
 const router = Router();
 
@@ -134,6 +135,19 @@ router.post('/api/onboarding/intake-links/:id/void', (req, res) => {
   const out = voidIntakeLink(Number(req.params.id));
   if (!out.ok) return res.status(out.reason === 'not_found' ? 404 : 409).json(out);
   res.json({ ok: true });
+});
+
+/** Add a hire to an Entra security group (printer / access provisioning) via Microsoft Graph. */
+router.post('/api/onboarding/add-to-group', async (req, res) => {
+  const b = req.body || {};
+  const upn = String(b.upn || '').trim();
+  const out = await addUserToGroup(upn, { groupId: b.group_id, groupName: b.group_name });
+  res.json(out);
+});
+
+/** Whether Graph is connected, so the UI can show auto-provisioning as available. */
+router.get('/api/onboarding/graph-status', (_req, res) => {
+  res.json({ ok: true, graphConfigured: graphConfigured() });
 });
 
 /** The submitted values behind one link (View submission). */

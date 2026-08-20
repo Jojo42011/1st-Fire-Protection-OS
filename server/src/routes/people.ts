@@ -74,7 +74,7 @@ router.get('/api/onboarding-catalog', requirePeople(), (_req, res) => {
   res.json({ ok: true, catalog: catalogAll() });
 });
 router.post('/api/onboarding-catalog', requirePeople('people_admin', 'it', 'hr'), (req, res) => {
-  const item = addCatalogItem(req.body || {});
+  const item = addCatalogItem(req.body || {}); // accepts group_name/group_id for access items
   if (!item) return res.status(400).json({ ok: false, error: 'invalid_item' });
   svc.audit('catalog_changed', `Onboarding catalog: added ${item.kind} "${item.name}"`, { actor: actor(req) });
   res.json({ ok: true, item });
