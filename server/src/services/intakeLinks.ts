@@ -123,6 +123,17 @@ export function listIntakeLinks(base?: string) {
   });
 }
 
+/** Everything the invite email needs for one link: the shareable URL (only while usable), the
+ *  recipient, and the bound hire. Null when the link does not exist. */
+export function linkForEmail(id: number, base: string): { url: string; recipient_name: string | null; recipient_email: string | null; hire: ReturnType<typeof boundHire>; job_title: string | null; office: string | null; status: IntakeLink['status'] } | null {
+  const row = getDb().prepare(`SELECT * FROM intake_links WHERE id = ?`).get(id) as IntakeLink | undefined;
+  if (!row) return null;
+  const status = liveStatus(row);
+  const usable = status === 'sent' || status === 'opened';
+  const hire = boundHire(row);
+  return { url: usable ? `${base}/intake/${row.token}` : '', recipient_name: row.recipient_name, recipient_email: row.recipient_email, hire, job_title: row.job_title || (hire ? hire.job_position : null), office: row.office || (hire ? hire.office : null), status };
+}
+
 /** Resolve a token for the public form. Returns null when it cannot be used (with a reason). */
 export function resolveToken(token: string): { ok: true; link: IntakeLink } | { ok: false; reason: string } {
   const row = getDb().prepare(`SELECT * FROM intake_links WHERE token = ?`).get(token) as IntakeLink | undefined;

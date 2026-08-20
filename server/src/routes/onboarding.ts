@@ -17,7 +17,10 @@ import {
   nudgeIntakeLink,
   voidIntakeLink,
   getSubmission,
+  linkForEmail,
 } from '../services/intakeLinks';
+import { sendMail, mailConfigured, mailFrom } from '../services/msGraphMail';
+import { intakeInviteHtml } from '../services/onboardingEmail';
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
@@ -106,8 +109,26 @@ router.get('/api/onboarding/intake-links', (req, res) => {
   res.json({ ok: true, links: listIntakeLinks(base) });
 });
 
-/** Create a new single-use link; returns the shareable URL (nothing is emailed on its own). */
-router.post('/api/onboarding/intake-links', (req, res) => {
+/** Whether invites can be emailed via Microsoft 365 (Mail.Send + a from mailbox), for the UI. */
+router.get('/api/onboarding/mail-status', (_req, res) => {
+  res.json({ ok: true, configured: mailConfigured(), from: mailFrom() });
+});
+
+/** Email the current invite for a link to its manager, via Microsoft 365. Keyless-safe. */
+async function emailInvite(id: number, base: string): Promise<{ ok: boolean; error?: string; to?: string }> {
+  if (!mailConfigured()) return { ok: false, error: 'Microsoft 365 mail is not set up yet (needs the Mail.Send permission and a from mailbox).' };
+  const ctx = linkForEmail(id, base);
+  if (!ctx) return { ok: false, error: 'link not found' };
+  if (!ctx.recipient_email) return { ok: false, error: 'This link has no manager email to send to.' };
+  if (!ctx.url) return { ok: false, error: 'This link can no longer be sent (submitted, expired, or discarded).' };
+  const hireName = ctx.hire ? ctx.hire.name : null;
+  const html = intakeInviteHtml({ managerName: ctx.recipient_name, hireName, role: ctx.job_title, office: ctx.office, start: ctx.hire ? ctx.hire.start_date : null, url: ctx.url });
+  const out = await sendMail(ctx.recipient_email, `Set up ${hireName || 'a new hire'} at 1st Fire Protection`, html, '1st Fire Protection');
+  return out.ok ? { ok: true, to: ctx.recipient_email } : { ok: false, error: out.error };
+}
+
+/** Create a new single-use link; returns the shareable URL. Emails it to the manager when send=true. */
+router.post('/api/onboarding/intake-links', async (req, res) => {
   const b = req.body || {};
   const { link, token } = createIntakeLink({
     employee_id: b.employee_id ? Number(b.employee_id) : undefined,
@@ -118,7 +139,16 @@ router.post('/api/onboarding/intake-links', (req, res) => {
     created_by: actor(req),
   });
   const base = `${req.protocol}://${req.get('host')}`;
-  res.json({ ok: true, link, url: `${base}/intake/${token}` });
+  let emailed: { ok: boolean; error?: string; to?: string } | undefined;
+  if (b.send) emailed = await emailInvite(link.id, base);
+  res.json({ ok: true, link, url: `${base}/intake/${token}`, emailed });
+});
+
+/** Send (or re-send) the invite email for an existing link. */
+router.post('/api/onboarding/intake-links/:id/send', async (req, res) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  const out = await emailInvite(Number(req.params.id), base);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Resend: void the old token, issue a fresh one for the same recipient. */

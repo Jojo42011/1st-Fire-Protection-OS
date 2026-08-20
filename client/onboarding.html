@@ -186,6 +186,7 @@
         <div id="mk-hire-sum" class="muted" style="font-size:12px;margin:6px 0 2px"></div>
         <label class="mkl">Send to hiring manager (email, optional)</label>
         <input id="mk-email" class="mki" placeholder="manager@1stfp.com" />
+        <label class="fchk" id="mk-send-wrap" style="margin-top:10px;display:none"><input type="checkbox" id="mk-send"> <span>Email the link to the manager now <span class="muted" id="mk-send-from"></span></span></label>
         <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:18px">
           <button class="os-btn" data-mkclose>Cancel</button>
           <button class="os-btn primary" id="mk-create">Create link</button>
@@ -286,6 +287,8 @@ function linkCardHTML(l){
   var expCls=l.status==='expired'?'gone':(!gone&&d<=2?'soon':'');
   var expTxt=l.status==='submitted'?'Submitted '+OS.date(l.submitted_at):l.status==='voided'?'Discarded':l.status==='expired'?'Expired '+OS.date(l.expires_at):(d<=0?'Expires today':'Expires '+OS.date(l.expires_at));
   var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
+  // Email the invite via Microsoft 365, when mail is set up and the link is still live and addressed.
+  var sendBtn=(!gone && MAIL_CONFIGURED && l.recipient_email)?'<button class="il-btn" data-link-send="'+l.id+'">Email manager</button>':'';
   // Discard is offered only while a link is still live (sent or opened, never submitted).
   var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
   // Bound to a confirmed hire: lead with their name; otherwise fall back to the role/recipient.
@@ -301,7 +304,7 @@ function linkCardHTML(l){
     '</div>'+
     '<div class="il-side">'+
       '<div class="il-exp '+expCls+'">'+expTxt+'</div>'+
-      '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+copyBtn+discardBtn+'</div>'+
+      '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+sendBtn+copyBtn+discardBtn+'</div>'+
     '</div>'+
   '</div>';
 }
@@ -350,7 +353,15 @@ document.getElementById('links').addEventListener('click',function(e){
   var c=e.target.closest('[data-link-copy]');
   if(c){ var l2=LINKS.filter(function(x){return String(x.id)===c.getAttribute('data-link-copy');})[0]; if(!l2||!l2.url) return;
     try{ navigator.clipboard.writeText(l2.url); }catch(_){}
-    OS.toast('Intake link copied. It opens the 5-step form; no pay, SSN or bank details are collected.');
+    OS.toast('Intake link copied. It opens the setup form; no pay, SSN or bank details are collected.');
+    return;
+  }
+  var s=e.target.closest('[data-link-send]');
+  if(s){ var id=s.getAttribute('data-link-send'); s.disabled=true; s.textContent='Sending…';
+    fetch('/api/onboarding/intake-links/'+id+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      s.disabled=false; s.textContent='Email manager';
+      if(d&&d.ok){ OS.toast('Invite emailed to '+d.to+'.'); } else { OS.toast('Could not send: '+((d&&d.error)||'unknown error'),'bad'); }
+    }).catch(function(){ s.disabled=false; s.textContent='Email manager'; OS.toast('Could not send the email.','bad'); });
     return;
   }
   var v=e.target.closest('[data-link-void]');
@@ -366,7 +377,15 @@ document.getElementById('links').addEventListener('click',function(e){
 });
 
 /* ─────────────── create-link modal ─────────────── */
-var mk=document.getElementById('mk'), MK_HIRES=[];
+var mk=document.getElementById('mk'), MK_HIRES=[], MAIL_CONFIGURED=false;
+function loadMailStatus(){
+  fetch('/api/onboarding/mail-status').then(function(r){return r.json();}).then(function(d){
+    MAIL_CONFIGURED=!!(d&&d.configured);
+    var wrap=document.getElementById('mk-send-wrap'); if(wrap) wrap.style.display=MAIL_CONFIGURED?'inline-flex':'none';
+    var from=document.getElementById('mk-send-from'); if(from&&d&&d.from) from.textContent='· from '+d.from;
+    loadLinks(); // re-render link cards now that we know whether "Send email" can show
+  }).catch(function(){});
+}
 // Populate the create-link modal with confirmed hires (from BambooHR, via the roster). HR picks the
 // person; their role/office/manager are snapshotted server-side, so the manager form is pre-filled.
 function loadMkOptions(){
@@ -392,13 +411,17 @@ document.getElementById('mk-hire').addEventListener('change',function(){
 document.getElementById('mk-create').addEventListener('click',function(){
   var h=mkSelectedHire();
   if(!h){ OS.toast('Pick the new hire first.','bad'); return; }
-  var body={ employee_id:h.id, recipient_email:document.getElementById('mk-email').value.trim() };
+  var email=document.getElementById('mk-email').value.trim();
+  var send=MAIL_CONFIGURED && document.getElementById('mk-send').checked && !!email;
+  var body={ employee_id:h.id, recipient_email:email, send:send };
   fetch('/api/onboarding/intake-links',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok){ OS.toast('Could not create the link.','bad'); return; }
       if(d.url){ try{ navigator.clipboard.writeText(d.url); }catch(_){} }
       closeMk(); loadLinks(); renderStrip();
-      OS.toast('Intake link created for '+(h.name||'the new hire')+' and copied. Send it to the hiring manager; it expires in 7 days.');
+      if(d.emailed && d.emailed.ok){ OS.toast('Intake link created and emailed to '+d.emailed.to+'. It expires in 7 days.'); }
+      else if(send && d.emailed && !d.emailed.ok){ OS.toast('Link created and copied, but the email did not send: '+(d.emailed.error||'unknown error'),'bad'); }
+      else { OS.toast('Intake link created for '+(h.name||'the new hire')+' and copied. Send it to the hiring manager; it expires in 7 days.'); }
     }).catch(function(){ OS.toast('Could not create the link.','bad'); });
 });
 
@@ -629,7 +652,7 @@ document.getElementById('catalogCard').addEventListener('click',function(e){
 function reloadForm(){ fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){ if(d&&d.options){ OPTIONS=d.options; renderForm(); } }).catch(function(){}); }
 
 /* ─────────────── boot ─────────────── */
-OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); loadMkOptions(); loadCatalog(); });
+OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); loadMkOptions(); loadCatalog(); loadMailStatus(); });
 OS.onChange(function(){ loadBoard(); });
 </script>
 </body>
