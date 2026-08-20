@@ -275,8 +275,13 @@ function rmmSummary(d){
   var bits='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">'+
     OS.pill(d.total+' machines','neutral')+' '+OS.pill(d.matched+' matched to employees',d.matched?'good':'neutral')+' '+
     (d.unmatched?OS.pill(d.unmatched+' unmatched','warn'):'')+
-    (d.committed?(' '+OS.pill(d.created+' added · '+d.updated+' updated','good')):'')+'</div>'+
-    '<div class="os-filter-note" style="margin-bottom:8px">Columns recognized: '+OS.esc(recog)+'.</div>';
+    (d.committed?(' '+OS.pill(d.created+' added · '+d.updated+' updated','good')):'')+'</div>';
+  if(d.employeeCount===0){
+    bits+='<div class="os-card" style="padding:10px 12px;margin-bottom:8px;border-color:var(--os-warn,#a86)"><b>No employees are imported yet</b>, so nothing can be matched. Import the roster in <b>People &gt; Employees &gt; Import from BambooHR</b> first, then re-run this. The computers below will still import (unassigned) if you continue.</div>';
+  } else if(d.unmatched){
+    bits+='<div class="os-filter-note" style="margin-bottom:8px">Unmatched rows are usually service/admin logins (domain admin, guest) or people not on the roster. They still import, just unassigned, and you can assign them by hand on an employee’s Assets tab.</div>';
+  }
+  bits+='<div class="os-filter-note" style="margin-bottom:8px">Columns recognized: '+OS.esc(recog)+'.</div>';
   var rows=(d.rows||[]).slice(0,150).map(function(r){
     var who=r.matched_to?OS.esc(r.matched_to):'<span style="color:var(--os-warn,#a86)">unmatched</span>';
     var act=r.action==='update'?OS.pill('update','neutral'):OS.pill('new','good');

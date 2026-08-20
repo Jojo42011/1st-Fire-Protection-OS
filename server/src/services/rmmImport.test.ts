@@ -71,6 +71,24 @@ test('commit writes assets and is idempotent on re-import', () => {
   assert.equal((getDb().prepare(`SELECT COUNT(*) c FROM employee_assets WHERE serial IN ('SN123','SN000')`).get() as any).c, 2);
 });
 
+test('matches "DOMAIN\\first.last" logins to employees by name alone (no email column)', () => {
+  getDb().exec(`DELETE FROM employees; DELETE FROM employee_assets;`);
+  getDb().prepare(`INSERT INTO employees (legal_first_name, legal_last_name, office, employment_status) VALUES ('Donnie','Vanicek','SAT','active')`).run();
+  getDb().prepare(`INSERT INTO employees (legal_first_name, legal_last_name, office, employment_status) VALUES ('Devon','Booker','SAT','active')`).run();
+  const csv = [
+    'Computer Name,OS,Last Logged in User,Last Contact',
+    '1FP-MARYALICE-2,Windows 10,AD\\donnie.vanicek,2026-08-20T11:11:18',
+    '1FPITSUPPORT01,Windows 10,AD\\devon.booker,2026-08-20T11:10:51',
+    '1FPCOLODC01,Windows Server,AD\\ltl-domainadmin,2026-08-20T09:27:58',   // service acct, no match
+    'SHOP-PC\\LOCAL,Windows 10,SHOP-PC\\Devon.Booker,2026-08-20',           // local-account prefix stripped
+  ].join('\n');
+  const out = importComputers(csv, 'tester', false);
+  assert.equal(out.employeeCount, 2);
+  assert.equal(out.matched, 3, 'both AD logins + the local-account form match; the admin account does not');
+  assert.equal(out.unmatched, 1);
+  assert.ok(out.rows.find((r) => r.rmm_user === 'AD\\donnie.vanicek')!.matched_to === 'Donnie Vanicek');
+});
+
 test('rejects a file with no device or serial column', () => {
   const out = importComputers('Foo,Bar\n1,2', 'tester', false);
   assert.equal(out.ok, false);

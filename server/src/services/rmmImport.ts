@@ -96,7 +96,9 @@ interface EmpIndex {
   byEmail: Map<string, { id: number; name: string }>;
   byUsername: Map<string, { id: number; name: string }>;
   byName: Map<string, { id: number; name: string }>;
+  size: number;
 }
+const localPart = (s: string) => String(s || '').split('@')[0].trim().toLowerCase();
 function buildEmployeeIndex(): EmpIndex {
   const rows = getDb()
     .prepare(`SELECT id, legal_first_name, legal_last_name, preferred_name, work_email, personal_email, upn, ad_username FROM employees`)
@@ -104,35 +106,49 @@ function buildEmployeeIndex(): EmpIndex {
   const byEmail = new Map<string, { id: number; name: string }>();
   const byUsername = new Map<string, { id: number; name: string }>();
   const byName = new Map<string, { id: number; name: string }>();
+  const put = (map: Map<string, any>, key: string, rec: any) => { const k = (key || '').trim().toLowerCase(); if (k && !map.has(k)) map.set(k, rec); };
   for (const e of rows) {
     const name = `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim();
     const rec = { id: e.id as number, name };
-    for (const em of [e.work_email, e.personal_email, e.upn]) if (em) byEmail.set(normEmail(em), rec);
-    if (e.ad_username) byUsername.set(String(e.ad_username).trim().toLowerCase(), rec);
-    if (e.upn) byUsername.set(String(e.upn).split('@')[0].trim().toLowerCase(), rec);
+    for (const em of [e.work_email, e.personal_email, e.upn]) if (em) put(byEmail, normEmail(em), rec);
+    // Handles the RMM might carry as "Last Logged in User": AD username, or the email/UPN local part.
+    for (const handle of [e.ad_username, localPart(e.upn), localPart(e.work_email), localPart(e.personal_email)]) if (handle) put(byUsername, handle, rec);
+    // Synthetic first.last / flast / firstlast from the name, since AD usernames usually follow the
+    // name and many rows have no email column at all.
+    const first = String(e.preferred_name || e.legal_first_name || '').trim().toLowerCase().split(/\s+/)[0];
+    const last = String(e.legal_last_name || '').trim().toLowerCase().split(/\s+/).pop() || '';
+    if (first && last) { put(byUsername, `${first}.${last}`, rec); put(byUsername, `${first}${last}`, rec); put(byUsername, `${first[0]}${last}`, rec); }
     const nk = normName(name);
-    if (nk) byName.set(nk, rec);
+    if (nk) put(byName, nk, rec);
   }
-  return { byEmail, byUsername, byName };
+  return { byEmail, byUsername, byName, size: rows.length };
 }
 
-/** Best-effort match of one computer row to an employee: email, then username (from email/user),
- *  then a normalized full name. Returns null when nothing matches confidently. */
+/** Best-effort match of one computer row to an employee. Handles the common RMM shapes: an email
+ *  column, or a "DOMAIN\\first.last" / "COMPUTER\\first.last" logged-in-user string. A dotted
+ *  username is also tried as a full name ("devon.booker" -> "devon booker"). Null when unsure. */
 function matchEmployee(row: ComputerRow, idx: EmpIndex): { id: number; name: string } | null {
   if (row.email) {
     const e = idx.byEmail.get(normEmail(row.email));
     if (e) return e;
-    const local = normEmail(row.email).split('@')[0];
+    const local = localPart(row.email);
     if (local) { const u = idx.byUsername.get(local); if (u) return u; }
   }
   if (row.user) {
-    const raw = row.user.trim();
-    // A "DOMAIN\\jsmith" or "jsmith" style username
-    const uname = raw.replace(/^.*\\/, '').toLowerCase();
-    const u = idx.byUsername.get(uname);
-    if (u) return u;
-    const n = idx.byName.get(normName(raw));
-    if (n) return n;
+    // Strip any "DOMAIN\\" or "COMPUTERNAME\\" prefix, keep just the account name.
+    const uname = row.user.trim().replace(/^.*\\/, '').trim().toLowerCase();
+    if (uname) {
+      const u = idx.byUsername.get(uname);
+      if (u) return u;
+      // "first.last" (or "first_last") -> treat as a display name too.
+      if (/[._]/.test(uname)) {
+        const asName = normName(uname.replace(/[._]+/g, ' '));
+        const n = idx.byName.get(asName);
+        if (n) return n;
+      }
+      const n2 = idx.byName.get(normName(row.user));
+      if (n2) return n2;
+    }
   }
   return null;
 }
@@ -158,11 +174,12 @@ export interface ImportResult {
   unmatched: number;
   created: number;
   updated: number;
+  employeeCount: number; // employees available to match against (0 => import the roster first)
   rows: ImportPreviewRow[];
 }
 
 function assetNote(row: ComputerRow): string {
-  return [row.model && `Model: ${row.model}`, row.os && `OS: ${row.os}`, row.last_seen && `Last seen: ${row.last_seen}`, 'Source: RMM']
+  return [row.user && `RMM user: ${row.user}`, row.model && `Model: ${row.model}`, row.os && `OS: ${row.os}`, row.last_seen && `Last seen: ${row.last_seen}`, 'Source: RMM']
     .filter(Boolean)
     .join(' · ');
 }
@@ -175,9 +192,9 @@ function assetNote(row: ComputerRow): string {
 export function importComputers(csv: string, actor: string, commit: boolean): ImportResult {
   const { rows, mapping, headers } = rowsFromCsv(csv || '');
   const recognized = (Object.keys(mapping) as (keyof ComputerRow)[]).filter((k) => mapping[k] >= 0);
-  if (!rows.length) return { ok: false, error: 'No data rows found in the file.', committed: false, headers, recognized, total: 0, matched: 0, unmatched: 0, created: 0, updated: 0, rows: [] };
+  if (!rows.length) return { ok: false, error: 'No data rows found in the file.', committed: false, headers, recognized, total: 0, matched: 0, unmatched: 0, created: 0, updated: 0, employeeCount: 0, rows: [] };
   if (mapping.device_name < 0 && mapping.serial < 0) {
-    return { ok: false, error: 'Could not find a device-name or serial-number column. Check the header row.', committed: false, headers, recognized, total: rows.length, matched: 0, unmatched: 0, created: 0, updated: 0, rows: [] };
+    return { ok: false, error: 'Could not find a device-name or serial-number column. Check the header row.', committed: false, headers, recognized, total: rows.length, matched: 0, unmatched: 0, created: 0, updated: 0, employeeCount: 0, rows: [] };
   }
   const db = getDb();
   const idx = buildEmployeeIndex();
@@ -218,5 +235,5 @@ export function importComputers(csv: string, actor: string, commit: boolean): Im
     }
   }
 
-  return { ok: true, committed: commit, headers, recognized, total: rows.length, matched, unmatched, created, updated, rows: preview.slice(0, 300) };
+  return { ok: true, committed: commit, headers, recognized, total: rows.length, matched, unmatched, created, updated, employeeCount: idx.size, rows: preview.slice(0, 300) };
 }
