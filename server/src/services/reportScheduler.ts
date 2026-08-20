@@ -13,6 +13,7 @@ import { resolvePeriod } from '../os/period';
 import { contextForUser } from '../os/scope';
 import { resolveAppUser } from '../people/authz';
 import { mailConfigured, sendMail } from './msGraphMail';
+import { senderFor } from './mailSenders';
 
 const WEEK_MS = 7 * 86400000;
 
@@ -101,7 +102,7 @@ export async function runDueReports(nowIso?: string): Promise<{ due: number; sen
     const cfg = (() => { try { return JSON.parse(r.config_json); } catch { return {}; } })();
     const rendered = renderReport(r.name, cfg, r.owner_email);
     if ('error' in rendered) continue; // no data / bad metric: try again next cycle
-    const out = await sendMail(r.recipient, rendered.subject, rendered.html, '1st Fire Protection');
+    const out = await sendMail(r.recipient, rendered.subject, rendered.html, { from: (senderFor('reports')||{}).address, fromName: '1st Fire Protection' });
     if (out.ok) {
       db.prepare(`UPDATE saved_reports SET last_sent_at = ?, next_run_at = ? WHERE id = ?`).run(now, nextWeeklyRun(now), r.id);
       sent++;

@@ -1103,6 +1103,17 @@ export function initDb(): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_emp_software_uniq ON employee_software(employee_id, app_id);
     CREATE INDEX IF NOT EXISTS idx_emp_software_app ON employee_software(app_id);
 
+    -- Per-purpose outbound mail senders, so different flows send AS different mailboxes
+    -- (onboarding@, reviews@, accountspayable@, ...). Address blank = use the MS_MAIL_FROM default.
+    CREATE TABLE IF NOT EXISTS mail_senders (
+      key           TEXT PRIMARY KEY,
+      label         TEXT,
+      address       TEXT,
+      display_name  TEXT,
+      updated_by    TEXT,
+      updated_at    TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS employee_credentials (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_id    INTEGER NOT NULL,

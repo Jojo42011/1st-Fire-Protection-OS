@@ -9,6 +9,15 @@
   .ic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
   .ic{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:17px 18px;box-shadow:var(--sh-rest);display:flex;flex-direction:column;gap:12px}
   .ic.off{border-style:dashed;border-color:var(--border-strong,#c9ccd6);background:var(--fill)}
+  /* per-purpose mail sender editor */
+  .ms-list{display:flex;flex-direction:column;gap:8px}
+  .ms-row{display:flex;align-items:center;gap:8px}
+  .ms-lab{flex:none;width:132px;font-weight:650;font-size:12px;color:var(--ink-2)}
+  .ms-in{flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--ink);padding:7px 9px;font:inherit;font-size:12.5px}
+  .ms-in:focus{outline:none;border-color:var(--brand)}
+  .ms-save{flex:none;font-weight:700;font-size:11.5px;color:var(--ink-2);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 11px;cursor:pointer}
+  .ms-save:hover{border-color:var(--border-strong,var(--border))}
+  @media(max-width:520px){.ms-lab{width:96px}}
   .ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   .ic-nm{font-weight:800;font-size:16px;color:var(--ink)}
   .ic-role{font-weight:600;font-size:11.5px;color:var(--muted);margin-top:2px}
@@ -108,16 +117,22 @@ function connectorCard(s, records, sc){
 }
 
 function mailCard(m){
-  var on=!!(m&&m.configured);
-  return '<div class="ic'+(on?'':' off')+'">'+
-    '<div class="ic-top"><div><div class="ic-nm">Email (Microsoft 365)</div><div class="ic-role">Outbound mail · Microsoft Graph Mail.Send</div></div>'+OS.pill(on?'Connected':'Not set up',on?'good':'warn')+'</div>'+
+  var creds=!!(m&&m.credsPresent);
+  var senders=(m&&m.senders)||[];
+  var list=senders.map(function(s){
+    return '<div class="ms-row"><div class="ms-lab">'+OS.esc(s.label)+'</div>'+
+      '<input class="ms-in" data-mail-key="'+OS.esc(s.key)+'" value="'+OS.esc(s.address||'')+'" placeholder="mailbox@1stfp.com" spellcheck="false" />'+
+      '<button class="ms-save" data-mail-save="'+OS.esc(s.key)+'">Save</button></div>';
+  }).join('');
+  return '<div class="ic'+(creds?'':' off')+'">'+
+    '<div class="ic-top"><div><div class="ic-nm">Email (Microsoft 365)</div><div class="ic-role">Outbound mail · Microsoft Graph Mail.Send</div></div>'+OS.pill(creds?'Connected':'Not connected',creds?'good':'warn')+'</div>'+
     '<div class="ic-rows">'+
-      row('Sending', on?'Ready':'Not sending', on?'good':'warn')+
-      row('Sends as', (on&&m.from)?('<b>'+OS.esc(m.from)+'</b>'):'<span class="muted">no from mailbox set</span>')+
       row('Permission', 'Mail.Send', 'good')+
-      row('Used by', 'Onboarding invites'+(on?', and any future notifications':''))+
+      row('Senders', 'one mailbox per purpose (below)')+
     '</div>'+
-    (on?'':'<div class="muted" style="font-size:12px;line-height:1.5">Grant the <b>Mail.Send</b> application permission on the Entra app and set <b>MS_MAIL_FROM</b> to the sending mailbox to enable invite emails.</div>')+
+    (senders.length?('<div class="ms-list">'+list+'</div>'):'')+
+    (creds?'<div class="muted" style="font-size:11.5px;line-height:1.5;margin-top:2px">A blank address falls back to the default (MS_MAIL_FROM). Each mailbox must exist in your tenant.</div>'
+          :'<div class="muted" style="font-size:12px;line-height:1.5">Connect Microsoft Graph (and grant <b>Mail.Send</b>) to enable outbound email.</div>')+
   '</div>';
 }
 function intacctCard(s){
@@ -191,6 +206,17 @@ document.addEventListener('change',function(e){
 function by(key){ return {servicetrade:'ServiceTrade',bamboo:'BambooHR',microsoft:'Microsoft 365'}[key]||key; }
 document.addEventListener('click',function(e){
   if(e.target.closest('#ic-connect')){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} return; }
+  var ms=e.target.closest('[data-mail-save]');
+  if(ms){ var mkey=ms.getAttribute('data-mail-save');
+    var input=document.querySelector('[data-mail-key="'+mkey+'"]'); var addr=input?input.value.trim():'';
+    ms.disabled=true; var mt=ms.textContent; ms.textContent='Saving…';
+    fetch('/api/mail/senders/'+encodeURIComponent(mkey),{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({address:addr})})
+      .then(function(r){return r.json();}).then(function(d){ ms.disabled=false; ms.textContent=mt;
+        if(d&&d.ok){ OS.toast('Sender updated'+(addr?(' → '+addr):' (using the default mailbox)')+'.'); }
+        else { OS.toast('Could not save that sender.','bad'); }
+      }).catch(function(){ ms.disabled=false; ms.textContent=mt; OS.toast('Could not save.','bad'); });
+    return;
+  }
   var b=e.target.closest('[data-syncnow]'); if(!b) return;
   var key=b.getAttribute('data-syncnow'); b.disabled=true; var was=b.textContent; b.textContent='Syncing…';
   fetch('/api/sync-schedules/'+key+'/run',{method:'POST'}).then(function(r){return r.json();}).then(function(d){

@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { COMPANY } from '../config/constants';
 import { getState, setState } from '../db/schema';
 import { mailConfigured, sendMail } from './msGraphMail';
+import { senderFor } from './mailSenders';
 
 /**
  * Google review requests, routed per office.
@@ -266,7 +267,7 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
   for (const r of rows) {
     const office = officeDisplay(r.office_name);
     const html = r.html || (r.body || '').replace(/\n/g, '<br>');
-    const res = await sendMail(r.recipient_email, r.subject || `How was your recent service with ${office}?`, html, office);
+    const res = await sendMail(r.recipient_email, r.subject || `How was your recent service with ${office}?`, html, { from: (senderFor('reviews')||{}).address, fromName: office });
     if (res.ok) { db.prepare(`UPDATE review_requests SET status='sent', sent_at=?, error=NULL WHERE id=?`).run(new Date().toISOString(), r.id); sent++; }
     else { db.prepare(`UPDATE review_requests SET error=? WHERE id=?`).run(res.error || 'send failed', r.id); }
   }
@@ -304,7 +305,7 @@ export async function sendReviewRequest(id: number): Promise<{ ok: boolean; stat
   const office = officeDisplay(r.office_name);
   const subject = r.subject || `How was your recent service with ${office}?`;
   const html = r.html || (r.body || '').replace(/\n/g, '<br>');
-  const res = await sendMail(r.recipient_email, subject, html, office);
+  const res = await sendMail(r.recipient_email, subject, html, { from: (senderFor('reviews')||{}).address, fromName: office });
   if (res.ok) {
     db.prepare(`UPDATE review_requests SET status='sent', sent_at=?, error=NULL WHERE id=?`).run(new Date().toISOString(), id);
     return { ok: true, status: 'sent' };

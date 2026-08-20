@@ -6,6 +6,7 @@ import { resolvePeriod, PERIODS } from '../os/period';
 import { officeLabel } from '../os/office';
 import { nextWeeklyRun, renderReport } from '../services/reportScheduler';
 import { mailConfigured, sendMail } from '../services/msGraphMail';
+import { senderFor } from '../services/mailSenders';
 
 /**
  * Reporting API (Phase 2). Everything is office- and date-scoped and enforced server-side:
@@ -165,7 +166,7 @@ router.post('/api/reports/saved/:id/send-now', async (req, res) => {
   if (!mailConfigured()) return res.status(409).json({ ok: false, error: 'mail_not_configured' });
   const rendered = renderReport(row.name, safeJson(row.config_json) || {}, row.owner_email);
   if ('error' in rendered) return res.status(400).json({ ok: false, error: rendered.error });
-  const out = await sendMail(row.recipient, rendered.subject, rendered.html, '1st Fire Protection');
+  const out = await sendMail(row.recipient, rendered.subject, rendered.html, { from: (senderFor('reports')||{}).address, fromName: '1st Fire Protection' });
   if (!out.ok) return res.status(502).json({ ok: false, error: out.error });
   getDb().prepare(`UPDATE saved_reports SET last_sent_at = datetime('now') WHERE id = ?`).run(row.id);
   res.json({ ok: true, sent_to: row.recipient });

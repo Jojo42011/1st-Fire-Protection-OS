@@ -19,8 +19,9 @@ import {
   getSubmission,
   linkForEmail,
 } from '../services/intakeLinks';
-import { sendMail, mailConfigured, mailFrom } from '../services/msGraphMail';
+import { sendMail, mailCredsPresent } from '../services/msGraphMail';
 import { intakeInviteHtml } from '../services/onboardingEmail';
+import { senderFor, listMailSenders, setMailSender } from '../services/mailSenders';
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
@@ -109,21 +110,32 @@ router.get('/api/onboarding/intake-links', (req, res) => {
   res.json({ ok: true, links: listIntakeLinks(base) });
 });
 
-/** Whether invites can be emailed via Microsoft 365 (Mail.Send + a from mailbox), for the UI. */
+/** Mail status + the per-purpose senders, so the UI can show what can send and from which mailbox. */
 router.get('/api/onboarding/mail-status', (_req, res) => {
-  res.json({ ok: true, configured: mailConfigured(), from: mailFrom() });
+  const onboarding = senderFor('onboarding');
+  res.json({ ok: true, credsPresent: mailCredsPresent(), configured: !!(mailCredsPresent() && onboarding), from: onboarding ? onboarding.address : null, senders: listMailSenders() });
+});
+
+/** Edit a purpose's sender address (which mailbox that flow sends AS). People admin / IT only. */
+router.put('/api/mail/senders/:key', (req, res) => {
+  const b = req.body || {};
+  const out = setMailSender(req.params.key, { address: b.address, display_name: b.display_name }, actor(req));
+  if (!out) return res.status(404).json({ ok: false, error: 'unknown_sender' });
+  res.json({ ok: true, sender: out });
 });
 
 /** Email the current invite for a link to its manager, via Microsoft 365. Keyless-safe. */
 async function emailInvite(id: number, base: string): Promise<{ ok: boolean; error?: string; to?: string }> {
-  if (!mailConfigured()) return { ok: false, error: 'Microsoft 365 mail is not set up yet (needs the Mail.Send permission and a from mailbox).' };
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 is not connected yet.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding invites. Set one in Integrations.' };
   const ctx = linkForEmail(id, base);
   if (!ctx) return { ok: false, error: 'link not found' };
   if (!ctx.recipient_email) return { ok: false, error: 'This link has no manager email to send to.' };
   if (!ctx.url) return { ok: false, error: 'This link can no longer be sent (submitted, expired, or discarded).' };
   const hireName = ctx.hire ? ctx.hire.name : null;
   const html = intakeInviteHtml({ managerName: ctx.recipient_name, hireName, role: ctx.job_title, office: ctx.office, start: ctx.hire ? ctx.hire.start_date : null, url: ctx.url });
-  const out = await sendMail(ctx.recipient_email, `Set up ${hireName || 'a new hire'} at 1st Fire Protection`, html, '1st Fire Protection');
+  const out = await sendMail(ctx.recipient_email, `Set up ${hireName || 'a new hire'} at 1st Fire Protection`, html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true, to: ctx.recipient_email } : { ok: false, error: out.error };
 }
 
