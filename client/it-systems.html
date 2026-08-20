@@ -37,6 +37,18 @@
       <div id="spOut" style="margin-top:12px"></div>
     </div>
 
+    <div class="os-sec os-block" style="margin-top:28px">Import computers from RMM</div>
+    <div class="os-card" style="padding:14px 16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="rmmFile" type="file" accept=".csv,text/csv,text/plain"
+          style="flex:1;min-width:240px;font:inherit;color:inherit" />
+        <button class="os-btn" id="rmmPreview" disabled>Preview</button>
+        <button class="os-btn primary" id="rmmImport" disabled>Import</button>
+      </div>
+      <div class="os-filter-note" id="rmmNote" style="margin-top:8px">Export every machine from your RMM as CSV and drop it here. Each computer is matched to an employee by email, username, or name, and lands on their Assets tab. Preview first: nothing is written until you click Import.</div>
+      <div id="rmmOut" style="margin-top:12px"></div>
+    </div>
+
     <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
@@ -255,6 +267,47 @@ fetch('/api/sharepoint/status').then(function(r){return r.json();}).then(functio
   if(d&&d.defaultSite){ var el=document.getElementById('spUrl'); if(!el.value) el.value=d.defaultSite; }
   if(d&&d.graphConfigured===false){ document.getElementById('spNote').innerHTML='Microsoft Graph is not connected yet, so the audit cannot run. Connect it under Integrations.'; }
 }).catch(function(){});
+
+/* ---- Import computers from RMM ---- */
+var RMM_CSV='';
+function rmmSummary(d){
+  var recog=(d.recognized||[]).map(function(k){return k.replace(/_/g,' ');}).join(', ')||'none';
+  var bits='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">'+
+    OS.pill(d.total+' machines','neutral')+' '+OS.pill(d.matched+' matched to employees',d.matched?'good':'neutral')+' '+
+    (d.unmatched?OS.pill(d.unmatched+' unmatched','warn'):'')+
+    (d.committed?(' '+OS.pill(d.created+' added · '+d.updated+' updated','good')):'')+'</div>'+
+    '<div class="os-filter-note" style="margin-bottom:8px">Columns recognized: '+OS.esc(recog)+'.</div>';
+  var rows=(d.rows||[]).slice(0,150).map(function(r){
+    var who=r.matched_to?OS.esc(r.matched_to):'<span style="color:var(--os-warn,#a86)">unmatched</span>';
+    var act=r.action==='update'?OS.pill('update','neutral'):OS.pill('new','good');
+    return '<tr><td>'+OS.esc(r.device_name)+'</td><td>'+OS.esc(r.serial||'')+'</td><td>'+OS.esc(r.model||'')+'</td><td>'+OS.esc(r.rmm_user||'')+'</td><td>'+who+'</td><td>'+act+'</td></tr>';
+  }).join('');
+  return bits+'<table class="os-table"><thead><tr><th>Device</th><th>Serial</th><th>Model</th><th>RMM user</th><th>Employee</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function rmmRun(commit){
+  if(!RMM_CSV){ OS.toast('Choose a CSV file first.','bad'); return; }
+  var pv=document.getElementById('rmmPreview'), im=document.getElementById('rmmImport');
+  pv.disabled=true; im.disabled=true;
+  document.getElementById('rmmOut').innerHTML='<div class="os-filter-note">'+(commit?'Importing…':'Reading the file…')+'</div>';
+  fetch('/api/people/assets/import-rmm',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({csv:RMM_CSV,commit:commit})})
+    .then(function(r){return r.json();}).then(function(d){
+      pv.disabled=false; im.disabled=!(d&&d.ok);
+      if(!d||!d.ok){ document.getElementById('rmmOut').innerHTML='<div class="os-card" style="padding:12px 14px;border-color:var(--os-warn,#a86)">'+OS.esc((d&&d.error)||'Import failed.')+'</div>'; return; }
+      document.getElementById('rmmOut').innerHTML=rmmSummary(d);
+      if(commit){ OS.toast(d.created+' computers added, '+d.updated+' updated. They now show on each employee’s Assets tab.'); }
+    }).catch(function(){ pv.disabled=false; document.getElementById('rmmOut').innerHTML='<div class="os-card" style="padding:12px 14px;border-color:var(--os-warn,#a86)">The import request failed.</div>'; });
+}
+document.getElementById('rmmFile').addEventListener('change',function(e){
+  var f=e.target.files&&e.target.files[0]; RMM_CSV='';
+  document.getElementById('rmmPreview').disabled=true; document.getElementById('rmmImport').disabled=true;
+  if(!f) return;
+  var rd=new FileReader();
+  rd.onload=function(){ RMM_CSV=String(rd.result||''); document.getElementById('rmmPreview').disabled=!RMM_CSV; document.getElementById('rmmImport').disabled=true;
+    document.getElementById('rmmOut').innerHTML='<div class="os-filter-note">Loaded '+OS.esc(f.name)+'. Click Preview to see the match before importing.</div>'; };
+  rd.readAsText(f);
+});
+document.getElementById('rmmPreview').addEventListener('click',function(){ rmmRun(false); });
+document.getElementById('rmmImport').addEventListener('click',function(){ rmmRun(true); });
 
 OS.ready(load); OS.onChange(load);
 </script></body></html>

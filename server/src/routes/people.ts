@@ -13,6 +13,7 @@ import * as svc from '../people/service';
 import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
 import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
+import { importComputers } from '../services/rmmImport';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -100,6 +101,20 @@ router.get('/api/people/employees/:id', requirePeople(), (req, res) => {
   const detail = svc.getEmployeeDetail(Number(req.params.id), { includeComp: canViewCompensation((req as any).user) });
   if (!detail) return res.status(404).json({ ok: false, error: 'not found' });
   res.json(detail);
+});
+
+/* Import a computer export from the RMM into employee_assets, matched to employees. IT / admin only.
+ * Preview by default; pass commit:true to write. Tolerant of most RMM column layouts. */
+router.post('/api/people/assets/import-rmm', requirePeople('people_admin', 'it'), (req, res) => {
+  const b = req.body || {};
+  const csv = String(b.csv || '');
+  if (!csv.trim()) return res.status(400).json({ ok: false, error: 'no CSV provided' });
+  try {
+    const out = importComputers(csv, actor(req), !!b.commit);
+    res.status(out.ok ? 200 : 400).json(out);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: (err as Error).message });
+  }
 });
 
 /* Import the real BambooHR roster (idempotent upsert by bamboo_id). HR / admin only. */
