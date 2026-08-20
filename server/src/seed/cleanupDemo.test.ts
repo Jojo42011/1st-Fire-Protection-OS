@@ -14,7 +14,18 @@ import { cleanupDemoData } from './cleanupDemo';
 
 initDb();
 const db = getDb();
-db.exec(`DELETE FROM onboarding_requests; DELETE FROM onboarding_items; DELETE FROM approvals;`);
+db.exec(`DELETE FROM onboarding_requests; DELETE FROM onboarding_items; DELETE FROM approvals; DELETE FROM license_seats;`);
+
+// Two license seats: a demo one (source 'seed') and a real imported one (source 'graph').
+const seedSeat = db
+  .prepare(`INSERT INTO license_seats (vendor, product, assignee_name, assignee_email, source) VALUES ('bluebeam','Bluebeam','Jordan Pratt','jordan.pratt@1stfp.example','seed')`)
+  .run().lastInsertRowid as number;
+const realSeat = db
+  .prepare(`INSERT INTO license_seats (vendor, product, assignee_name, assignee_email, source) VALUES ('adobe','Acrobat','Real Person','real@1stfp.com','graph')`)
+  .run().lastInsertRowid as number;
+// A cancel_seat approval about each seat.
+db.prepare(`INSERT INTO approvals (agent_key, kind, risk, title, stake, body, trail, subject_type, subject_id, status) VALUES ('licenses','cancel_seat','sensitive','Cancel the Bluebeam seat for Jordan Pratt','saves $1,752/yr','x','y','seat',?, 'pending')`).run(seedSeat);
+db.prepare(`INSERT INTO approvals (agent_key, kind, risk, title, stake, body, trail, subject_type, subject_id, status) VALUES ('licenses','cancel_seat','sensitive','Cancel the Acrobat seat for Real Person','saves $600/yr','x','y','seat',?, 'pending')`).run(realSeat);
 
 // Two onboarding requests: a fixture (reserved .example email) and a real hire (@gmail.com).
 const fixtureReq = db
@@ -44,13 +55,15 @@ test('cleanup removes only fixture onboarding requests, keeping real hires', () 
   assert.equal(realItems.c, 1, 'real items kept');
 });
 
-test('cleanup removes only fixture approvals, keeping real ones', () => {
+test('cleanup removes fixture approvals and demo license seats, keeping real ones', () => {
   const titles = (db.prepare(`SELECT title FROM approvals ORDER BY title`).all() as { title: string }[]).map((r) => r.title);
-  assert.deepEqual(titles, ['Real notice to Acme Corp'], 'only the real approval remains');
+  assert.deepEqual(titles, ['Cancel the Acrobat seat for Real Person', 'Real notice to Acme Corp'], 'only real approvals remain');
+  const seatNames = (db.prepare(`SELECT assignee_name FROM license_seats ORDER BY assignee_name`).all() as { assignee_name: string }[]).map((r) => r.assignee_name);
+  assert.deepEqual(seatNames, ['Real Person'], 'only the real imported seat remains');
 });
 
 test('cleanup is idempotent: a second run changes nothing and the flag is set', () => {
-  assert.equal(getState('cleaned_demo_prod_v1'), '1', 'flag recorded');
+  assert.equal(getState('cleaned_demo_prod_v2'), '1', 'flag recorded');
   // Re-insert a fixture; because the flag is set, a second run must not touch it.
   db.prepare(`INSERT INTO onboarding_requests (name, personal_email) VALUES ('Late Fixture', 'x@y.example')`).run();
   cleanupDemoData();

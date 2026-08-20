@@ -29,10 +29,11 @@ export function seed(): void {
   seedHarness();
   seedAssociations();
   seedCalibration();
-  seedLicenses();
-  // Demo People records (onboarding requests + their approvals) are illustrative only. In a live
-  // deployment they would clash with real employees, so they seed only in demo mode.
+  // Demo business content (sample license seats, onboarding requests, and the approvals inbox) is
+  // illustrative only. In a live deployment it clashes with real employees and real license imports,
+  // so it seeds only in demo mode. Real license seats arrive through the vendor imports instead.
   if (DEMO_MODE) {
+    seedLicenses();
     seedOnboarding();
     seedApprovals();
   }

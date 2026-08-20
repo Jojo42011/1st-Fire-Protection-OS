@@ -203,6 +203,14 @@
         if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
         render();
       }).catch(function () { /* offline: let them fill; submit will re-check */ });
+  } else {
+    // Preview (no token): still show the real offices and job titles, so the preview matches what a
+    // manager sees on a live link. Served same-origin inside the authed app, so this fetch is fine.
+    fetch('/api/onboarding/form-options').then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.offices && d.offices.length) setFieldOpts('office', d.offices, vals.office);
+      if (d && d.positions && d.positions.length) setFieldOpts('title', d.positions, vals.title, true);
+      render();
+    }).catch(function () { /* keep the built-in defaults if the catalog is unavailable */ });
   }
 
   // the host sizes the frame to the card, so nothing is ever clipped and only the overlay scrolls

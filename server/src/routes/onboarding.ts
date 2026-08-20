@@ -15,8 +15,24 @@ import {
   nudgeIntakeLink,
   getSubmission,
 } from '../services/intakeLinks';
+import { operatingOffices } from '../os/office';
+import { getDb } from '../db/index';
 
 const router = Router();
+
+/** The real offices + active job titles the manager-facing intake form offers. App-gated only (no
+ * People identity needed), so the preview overlay and the public token form show the same true set. */
+router.get('/api/onboarding/form-options', (_req, res) => {
+  let positions: string[] = [];
+  try {
+    positions = (getDb().prepare(`SELECT name FROM job_positions WHERE active = 1 ORDER BY name`).all() as { name: string }[])
+      .map((r) => r.name)
+      .filter(Boolean);
+  } catch {
+    positions = [];
+  }
+  res.json({ offices: operatingOffices().map((o) => o.label), positions });
+});
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
 
 /** The board: every onboarding request with its progress rollup, plus the form option catalogs. */

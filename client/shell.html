@@ -44,12 +44,15 @@
   .nav-item .avstack i+i{margin-left:-7px}
   /* grouped business nav - always visible (no accordion), red active rail */
   .nav .nav-sect.lead{margin-bottom:2px}
-  .nav-group{display:flex;align-items:center;width:100%;gap:8px;background:none;border:0;
+  .nav-group{display:flex;align-items:center;width:100%;gap:8px;background:none;border:0;cursor:pointer;
     font-family:var(--sans);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-    color:var(--muted);padding:14px 10px 6px;text-align:left;pointer-events:none}
+    color:var(--muted);padding:14px 10px 6px;text-align:left;border-radius:8px;transition:color .16s var(--ease)}
+  .nav-group:hover{color:var(--ink-2)}
   .nav-group .grow{flex:1}
-  .nav-group .chev{display:none}
-  .nav-sect{display:flex;flex-direction:column;gap:1px}
+  .nav-group .chev{display:block;font-size:12px;line-height:1;color:var(--muted);transition:transform .18s var(--ease);transform:rotate(90deg)}
+  .nav-block.collapsed .nav-group .chev{transform:rotate(0deg)}
+  .nav-sect{display:flex;flex-direction:column;gap:1px;overflow:hidden}
+  .nav-block.collapsed .nav-sect{display:none}
   .nav-item{position:relative;border-radius:8px;padding:8px 10px 8px 12px;font-weight:500;font-size:13px;color:var(--ink-2);transition:background .18s var(--ease),color .18s var(--ease)}
   .nav-item:hover{background:var(--panel-alt)}
   .nav-item.on{background:var(--fill);color:var(--ink);font-weight:650}
@@ -418,14 +421,33 @@ function navItemHTML(k){
   var badge = COUNTS[k] ? '<span class="count'+(PROBLEM_COUNT[k]?' problem':'')+'" id="'+COUNTS[k]+'"></span>' : '';
   return '<button class="nav-item" data-key="'+k+'"><span class="grow">'+s.title+'</span>'+badge+'</button>';
 }
+// Which nav sections the user has collapsed, remembered across visits so a long sidebar can be
+// trimmed to just the areas someone works in.
+var NAV_COLLAPSED = {};
+try { NAV_COLLAPSED = JSON.parse(localStorage.getItem('fpos_nav_collapsed') || '{}') || {}; } catch(_){ NAV_COLLAPSED = {}; }
+function saveNavCollapsed(){ try { localStorage.setItem('fpos_nav_collapsed', JSON.stringify(NAV_COLLAPSED)); } catch(_){} }
 function renderNav(){
   nav.innerHTML = NAV.map(function(g){
     var items = g.items.map(navItemHTML).join('');
     if(!g.group) return '<div class="nav-sect lead">'+items+'</div>';
-    return '<div class="nav-group">'+g.group+'</div><div class="nav-sect">'+items+'</div>';
+    var collapsed = NAV_COLLAPSED[g.group] ? ' collapsed' : '';
+    return '<div class="nav-block'+collapsed+'" data-group="'+g.group+'">'+
+      '<button class="nav-group" data-group-toggle="'+g.group+'" aria-expanded="'+(collapsed?'false':'true')+'"><span class="grow">'+g.group+'</span><span class="chev">›</span></button>'+
+      '<div class="nav-sect">'+items+'</div></div>';
   }).join('');
 }
 renderNav();
+// Collapse or expand a section on header click, and remember the choice.
+nav.addEventListener('click', function(e){
+  var h=e.target.closest('[data-group-toggle]'); if(!h) return;
+  var g=h.getAttribute('data-group-toggle');
+  var block=nav.querySelector('.nav-block[data-group="'+g+'"]'); if(!block) return;
+  var nowCollapsed=!block.classList.contains('collapsed');
+  block.classList.toggle('collapsed', nowCollapsed);
+  h.setAttribute('aria-expanded', nowCollapsed?'false':'true');
+  if(nowCollapsed) NAV_COLLAPSED[g]=1; else delete NAV_COLLAPSED[g];
+  saveNavCollapsed();
+});
 
 /* ---- mobile: size each iframe to its content so the outer document scrolls ---- */
 function fitFrame(f){
@@ -460,6 +482,11 @@ function activate(key,announce){
   });
   current=key;
   var grp=GROUP_LABEL[key]||'';
+  // Never leave the active screen hidden inside a collapsed section: open its section (and remember).
+  if(grp){ var blk=nav.querySelector('.nav-block[data-group="'+grp+'"]');
+    if(blk&&blk.classList.contains('collapsed')){ blk.classList.remove('collapsed');
+      var hh=blk.querySelector('[data-group-toggle]'); if(hh)hh.setAttribute('aria-expanded','true');
+      delete NAV_COLLAPSED[grp]; saveNavCollapsed(); } }
   if(crumbGroupEl){ crumbGroupEl.textContent=grp; crumbGroupEl.style.display=grp?'':'none'; }
   var sep=document.querySelector('.crumb .cs'); if(sep) sep.style.display=grp?'':'none';
   if(crumbPageEl) crumbPageEl.textContent=SCREENS[key].title;

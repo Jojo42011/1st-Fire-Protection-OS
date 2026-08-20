@@ -14,7 +14,17 @@ import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { DEMO_MODE } from '../config/demo';
 
-const FLAG = 'cleaned_demo_prod_v1';
+const FLAG = 'cleaned_demo_prod_v2';
+
+// The exact titles the demo approvals inbox seeded. Matching them is safe: they are fixed fixture
+// strings a real agent never produces (real approvals name real jobs, invoices, and reviews).
+const DEMO_APPROVAL_TITLES = [
+  'Final notice to Maplewood Medical Plaza',
+  'Reply to Marcy Delgado ★★★★★',
+  'Cancel the Bluebeam seat for T. Nguyen',
+  'Friendly reminder to Stone Oak Retail Partners',
+  'Review request to Live Oak Distribution Center',
+];
 
 export function cleanupDemoData(): void {
   // In demo mode the fixtures are supposed to be there, so leave them. Only production is cleaned.
@@ -24,6 +34,7 @@ export function cleanupDemoData(): void {
   const db = getDb();
   let onboarding = 0;
   let approvals = 0;
+  let seats = 0;
 
   try {
     // Fixture onboarding requests used reserved `.example` personal emails; a real hire never does.
@@ -42,22 +53,35 @@ export function cleanupDemoData(): void {
   }
 
   try {
-    // Fixture approvals carry `.example` addresses in the body/trail or the retired brand signature.
-    approvals = (
+    // Demo license seats are tagged source = 'seed' (real ones are 'graph'/'umapi'/'manual'/etc.).
+    // Remove the approvals that reference them first, then the seats (reclaims cascade). This clears
+    // the "Cancel the ... seat for [former employee]" approvals about people who never worked here.
+    const seatIds = (db.prepare(`SELECT id FROM license_seats WHERE source = 'seed'`).all() as { id: number }[]).map((r) => r.id);
+    if (seatIds.length) {
+      const marks = seatIds.map(() => '?').join(',');
+      approvals += (db.prepare(`DELETE FROM approvals WHERE subject_type = 'seat' AND subject_id IN (${marks})`).run(...seatIds)).changes;
+      seats = (db.prepare(`DELETE FROM license_seats WHERE source = 'seed'`).run()).changes;
+    }
+
+    // The seeded approvals inbox: match the exact fixture titles (catches the ones with no subject),
+    // plus any leftover carrying `.example` addresses or the retired brand signature.
+    const titleMarks = DEMO_APPROVAL_TITLES.map(() => '?').join(',');
+    approvals += (
       db
         .prepare(
           `DELETE FROM approvals
            WHERE status = 'pending'
-             AND (body LIKE '%.example%' OR trail LIKE '%.example%' OR body LIKE '%Northstar Fire & Safety%')`
+             AND (title IN (${titleMarks})
+                  OR body LIKE '%.example%' OR trail LIKE '%.example%' OR body LIKE '%Northstar Fire & Safety%')`
         )
-        .run()
+        .run(...DEMO_APPROVAL_TITLES)
     ).changes;
   } catch (e) {
-    console.warn('[cleanup] approvals fixture removal skipped:', (e as Error).message);
+    console.warn('[cleanup] approvals/seats fixture removal skipped:', (e as Error).message);
   }
 
   setState(FLAG, '1');
-  if (onboarding || approvals) {
-    console.log(`[cleanup] removed ${onboarding} demo onboarding request(s) and ${approvals} demo approval(s) from production.`);
+  if (onboarding || approvals || seats) {
+    console.log(`[cleanup] removed ${onboarding} demo onboarding request(s), ${approvals} demo approval(s), ${seats} demo license seat(s) from production.`);
   }
 }

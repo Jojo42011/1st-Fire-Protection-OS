@@ -204,7 +204,17 @@ app.get('/company-integrations', page('company-integrations.html'));
 app.get('/people', page('people.html'));
 
 // static assets (theme.css etc.)
-app.use(express.static(CLIENT_DIR));
+// Serve assets with revalidation, not long-lived caching. os.css/os.js and the other shared assets
+// change on every deploy; without this a browser keeps an old copy and the UI looks stale (a fixed
+// layout still renders with last week's stylesheet). no-cache = use the cache only after the server
+// confirms it is unchanged (a cheap 304), so updates always land on the next load.
+app.use(
+  express.static(CLIENT_DIR, {
+    setHeaders: (res, filePath) => {
+      if (/\.(css|js|mjs|html)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    },
+  })
+);
 
 // ---- server + WS (STT proxy placeholder) ----
 const server = http.createServer(app);
