@@ -12,7 +12,7 @@ import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
 import { addUserToGroup, removeUserFromGroup, graphConfigured, listUserGroups } from '../services/msGraphGroups';
-import { listAllUsers, graphUsersConfigured } from '../services/msGraphUsers';
+import { listAllUsers, graphUsersConfigured, listSubscribedSkus } from '../services/msGraphUsers';
 
 /* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
 export function seedPeopleCatalog(): void {
@@ -320,7 +320,9 @@ function displayName(h: NewHire): string {
   return h.preferred_name || [h.legal_first_name, h.legal_last_name].filter(Boolean).join(' ') || 'New hire';
 }
 
-const empName = (e: any): string => e.preferred_name || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || `Employee ${e.id}`;
+// The Microsoft 365 display name is authoritative once matched; fall back to the legal name, and only
+// then to the BambooHR nickname. This keeps real names (not nicknames) on assets, access, and lists.
+const empName = (e: any): string => e.entra_display_name || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || e.preferred_name || `Employee ${e.id}`;
 
 /** People "needs attention" counts — current employee risk, prioritized over configuration. */
 export function peopleAttention(): any {
@@ -816,10 +818,10 @@ function normPersonName(s: string): string {
   return String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boolean; error?: string; directory: number; matched: number; updated: number; unmatchedEmployees: number }> {
-  if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0 };
+export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boolean; error?: string; directory: number; matched: number; updated: number; unmatchedEmployees: number; unmatched: string[] }> {
+  if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0, unmatched: [] };
   const dir = await listAllUsers();
-  if (!dir.ok) return { ok: false, error: dir.error, directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0 };
+  if (!dir.ok) return { ok: false, error: dir.error, directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0, unmatched: [] };
   const db = getDb();
   const emps = db.prepare(`SELECT id, legal_first_name, legal_last_name, preferred_name, work_email, personal_email, upn FROM employees WHERE employment_status IN ('active','onboarding')`).all() as any[];
 
@@ -837,7 +839,8 @@ export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boole
   const empById = new Map<number, any>(emps.map((e) => [e.id, e]));
   const touched = new Set<number>();
   let matched = 0, updated = 0;
-  const setUpn = db.prepare(`UPDATE employees SET upn = ?, work_email = COALESCE(NULLIF(work_email, ''), ?) WHERE id = ?`);
+  // Set the UPN, fill work_email when blank, and always stamp the authoritative Entra display name.
+  const setId = db.prepare(`UPDATE employees SET upn = ?, work_email = COALESCE(NULLIF(work_email, ''), ?), entra_display_name = ? WHERE id = ?`);
   const tx = db.transaction(() => {
     for (const u of dir.users) {
       // Match an Entra user to an employee: email first (authoritative), then a unique name.
@@ -852,10 +855,98 @@ export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boole
       matched++;
       const e = empById.get(empId);
       const newUpn = u.upn || u.mail;
-      if (newUpn && e.upn !== newUpn) { setUpn.run(newUpn, u.mail || u.upn || null, empId); updated++; }
+      if ((newUpn && e.upn !== newUpn) || (u.displayName && e.entra_display_name !== u.displayName)) {
+        setId.run(newUpn || e.upn || null, u.mail || u.upn || null, u.displayName || e.entra_display_name || null, empId);
+        updated++;
+      }
     }
   });
   tx();
-  audit('identities_synced', `Matched ${matched} employees to Microsoft 365; ${updated} UPNs set`, { actor });
-  return { ok: true, directory: dir.users.length, matched, updated, unmatchedEmployees: emps.length - touched.size };
+  const unmatched = emps.filter((e) => !touched.has(e.id)).map((e) => empName(e)).sort();
+  audit('identities_synced', `Matched ${matched} employees to Microsoft 365; ${updated} identities set; ${unmatched.length} unmatched`, { actor });
+  return { ok: true, directory: dir.users.length, matched, updated, unmatchedEmployees: unmatched.length, unmatched };
+}
+
+/* ───────────────────────────── asset library (company-wide inventory) ─────────────────────────────
+ * Every asset of a kind (end-user computers today; iPads and phones later), with the assigned person
+ * shown by their real Microsoft 365 name, not a BambooHR nickname. Searchable in the UI. */
+
+function noteField(notes: string | null, key: string): string | null {
+  if (!notes) return null;
+  const m = new RegExp(`${key}:\\s*([^·]+)`, 'i').exec(notes);
+  return m ? m[1].trim() : null;
+}
+
+export function assetLibrary(assetType = 'computer'): { type: string; total: number; assigned: number; unassigned: number; assets: any[] } {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT a.id, a.asset_type, a.identifier, a.serial, a.device_name, a.status, a.owner, a.notes, a.assigned_at,
+            e.id AS employee_id, e.entra_display_name, e.legal_first_name, e.legal_last_name, e.preferred_name, e.office AS emp_office
+       FROM employee_assets a LEFT JOIN employees e ON e.id = a.employee_id
+      WHERE a.asset_type = ? ORDER BY a.device_name, a.id LIMIT 2000`
+  ).all(assetType) as any[];
+  const assets = rows.map((a) => ({
+    id: a.id,
+    device_name: a.device_name || a.identifier || '(unnamed)',
+    serial: a.serial || '',
+    status: a.status,
+    owner: a.owner,
+    employee: a.employee_id ? empName(a) : null,
+    office: a.emp_office || null,
+    rmm_user: noteField(a.notes, 'RMM user'),
+    os: noteField(a.notes, 'OS'),
+    last_seen: noteField(a.notes, 'Last seen'),
+    model: noteField(a.notes, 'Model'),
+  }));
+  return { type: assetType, total: assets.length, assigned: assets.filter((x) => x.employee).length, unassigned: assets.filter((x) => !x.employee).length, assets };
+}
+
+/* ────────────── offboarding gap finder: terminated people still live in Microsoft 365 ──────────────
+ * "Which terminated users still have an enabled, licensed regular mailbox that should be converted to
+ * a shared mailbox?" Matches terminated employees to Entra and flags any that are still sign-in
+ * enabled or still hold a paid license: every one is a security and cost gap. Keyless-safe. */
+
+export async function terminatedM365Gaps(): Promise<{ ok: boolean; error?: string; checked: number; gaps: any[] }> {
+  if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', checked: 0, gaps: [] };
+  const dir = await listAllUsers();
+  if (!dir.ok) return { ok: false, error: dir.error, checked: 0, gaps: [] };
+  const skuMap = await listSubscribedSkus();
+  const db = getDb();
+  const termed = db.prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, work_email, personal_email, upn, employment_status, actual_start_date
+       FROM employees WHERE employment_status IN ('terminated','offboarding','offboarded','notice')`
+  ).all() as any[];
+
+  // Index the directory by email and (unique) name so we can find a terminated person's Entra account.
+  const byEmail = new Map<string, any>();
+  const byName = new Map<string, any | null>();
+  for (const u of dir.users) {
+    for (const em of [u.mail, u.upn]) if (em) byEmail.set(String(em).toLowerCase(), u);
+    for (const nk of [u.displayName || '', `${u.first || ''} ${u.last || ''}`].map((x) => normPersonName(x)).filter(Boolean)) {
+      byName.set(nk, byName.has(nk) && byName.get(nk) !== u ? null : u);
+    }
+  }
+
+  const gaps: any[] = [];
+  for (const e of termed) {
+    let u: any = null;
+    for (const key of [e.work_email, e.personal_email, e.upn]) if (key && byEmail.has(String(key).toLowerCase())) { u = byEmail.get(String(key).toLowerCase()); break; }
+    if (!u) { for (const nk of [e.entra_display_name || '', `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`, `${e.legal_first_name || ''} ${e.legal_last_name || ''}`].map((x) => normPersonName(x)).filter(Boolean)) { const hit = byName.get(nk); if (hit) { u = hit; break; } } }
+    if (!u) continue; // not in the directory: nothing to clean up there
+    const licensed = (u.licenseSkuIds || []).length > 0;
+    if (!u.enabled && !licensed) continue; // already a disabled, unlicensed (likely shared) mailbox: no gap
+    const licenses = (u.licenseSkuIds || []).map((id: string) => skuMap[id] || 'License').filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+    gaps.push({
+      name: empName(e),
+      upn: u.upn || u.mail,
+      status: e.employment_status,
+      enabled: u.enabled,
+      licenses,
+      recommendation: u.enabled && licensed ? 'Block sign-in, remove licenses, convert to a shared mailbox'
+        : u.enabled ? 'Block sign-in and convert to a shared mailbox'
+        : 'Remove the paid license (or convert to a shared mailbox)',
+    });
+  }
+  gaps.sort((a, b) => Number(b.enabled) - Number(a.enabled) || b.licenses.length - a.licenses.length);
+  return { ok: true, checked: termed.length, gaps };
 }

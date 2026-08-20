@@ -163,6 +163,17 @@ router.post('/api/people/access/sync-all', requirePeople('people_admin', 'it'), 
 router.get('/api/people/access/sync-all/status', requirePeople('people_admin', 'it'), (_req, res) => {
   res.json({ ok: true, status: svc.bulkAccessSyncStatus() });
 });
+
+/* Company-wide asset library (computers today; iPads/phones later). Any People user can view. */
+router.get('/api/people/assets/library', requirePeople(), (req, res) => {
+  res.json({ ok: true, ...svc.assetLibrary(String(req.query.type || 'computer')) });
+});
+
+/* Offboarding gaps: terminated people still enabled/licensed in Microsoft 365. IT / admin only. */
+router.get('/api/people/offboarding/m365-gaps', requirePeople('people_admin', 'it'), async (_req, res) => {
+  try { res.json(await svc.terminatedM365Gaps()); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
 // Stamp each employee's authoritative UPN/email from Entra so identity comes from Microsoft 365, not
 // BambooHR. Read-only against the directory (needs User.Read.All).
 router.post('/api/people/identities/sync', requirePeople('people_admin', 'it', 'hr'), async (req, res) => {

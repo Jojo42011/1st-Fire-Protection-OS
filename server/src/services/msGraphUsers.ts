@@ -19,6 +19,7 @@ export interface DirUser {
   first: string | null;
   last: string | null;
   enabled: boolean;
+  licenseSkuIds: string[];
 }
 
 /** Every user in the directory (enabled and not), normalized. Paginated and bounded. Keyless-safe. */
@@ -28,7 +29,7 @@ export async function listAllUsers(): Promise<{ ok: boolean; error?: string; use
     const token = await graphToken();
     if (!token) return { ok: false, error: 'could not acquire a Graph token', users: [] };
     const users: DirUser[] = [];
-    let next: string | null = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,mail,givenName,surname,accountEnabled&$top=999`;
+    let next: string | null = `https://graph.microsoft.com/v1.0/users?$select=id,displayName,userPrincipalName,mail,givenName,surname,accountEnabled,assignedLicenses&$top=999`;
     let guard = 0;
     while (next && users.length < 8000 && guard < 40) {
       const res: Response = await fetch(next, { headers: { authorization: `Bearer ${token}` } });
@@ -47,6 +48,7 @@ export async function listAllUsers(): Promise<{ ok: boolean; error?: string; use
           first: u.givenName || null,
           last: u.surname || null,
           enabled: u.accountEnabled !== false,
+          licenseSkuIds: Array.isArray(u.assignedLicenses) ? u.assignedLicenses.map((l: any) => l.skuId).filter(Boolean) : [],
         });
       }
       next = j['@odata.nextLink'] || null;
@@ -56,4 +58,40 @@ export async function listAllUsers(): Promise<{ ok: boolean; error?: string; use
   } catch (err) {
     return { ok: false, error: (err as Error).message, users: [] };
   }
+}
+
+/** Map of license skuId -> friendly SKU part number (e.g. SPB -> "Microsoft 365 Business Premium").
+ *  Needs Organization.Read.All or Directory.Read.All; if absent, returns an empty map (counts still
+ *  work, names just show as the raw part number or a count). Keyless-safe. */
+export async function listSubscribedSkus(): Promise<Record<string, string>> {
+  if (!graphUsersConfigured()) return {};
+  try {
+    const token = await graphToken();
+    if (!token) return {};
+    const res = await fetch(`https://graph.microsoft.com/v1.0/subscribedSkus?$select=skuId,skuPartNumber`, { headers: { authorization: `Bearer ${token}` } });
+    if (!res.ok) return {};
+    const j: any = await res.json().catch(() => ({}));
+    const map: Record<string, string> = {};
+    for (const s of j.value || []) if (s.skuId) map[s.skuId] = prettySku(s.skuPartNumber || s.skuId);
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+// A few of the common SKU part numbers spelled out; anything unmapped shows its raw part number.
+const SKU_NAMES: Record<string, string> = {
+  SPB: 'Microsoft 365 Business Premium',
+  O365_BUSINESS_PREMIUM: 'Microsoft 365 Business Standard',
+  O365_BUSINESS_ESSENTIALS: 'Microsoft 365 Business Basic',
+  SPE_E3: 'Microsoft 365 E3',
+  SPE_E5: 'Microsoft 365 E5',
+  ENTERPRISEPACK: 'Office 365 E3',
+  EXCHANGESTANDARD: 'Exchange Online (Plan 1)',
+  EXCHANGEENTERPRISE: 'Exchange Online (Plan 2)',
+  FLOW_FREE: 'Power Automate Free',
+  POWER_BI_STANDARD: 'Power BI (free)',
+};
+function prettySku(part: string): string {
+  return SKU_NAMES[part] || part;
 }

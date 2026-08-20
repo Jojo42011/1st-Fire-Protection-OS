@@ -304,7 +304,13 @@ function syncIdentities(){
     if(btn){ btn.disabled=false; btn.textContent='Match identities from Microsoft 365'; }
     var o=r.body||{};
     if(!r.ok || !o.ok){ alert(o.error||'Identity match failed'); return; }
-    OS.toast(o.matched+' of the roster matched to Microsoft 365 · '+o.updated+' UPNs set'+(o.unmatchedEmployees?(' · '+o.unmatchedEmployees+' not found in the directory'):'')+'.');
+    OS.toast(o.matched+' matched to Microsoft 365 · '+o.updated+' identities set'+(o.unmatchedEmployees?(' · '+o.unmatchedEmployees+' not found'):'')+'.');
+    var msg=document.getElementById('bhMsg');
+    if(msg){
+      var un=(o.unmatched||[]);
+      msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p><b>Matched '+o.matched+' of '+(o.matched+o.unmatchedEmployees)+' active employees to Microsoft 365.</b> '+o.updated+' had their name/UPN set from Entra.</p>'+
+        (un.length?('<p class="muted" style="margin:6px 0 0"><b>'+un.length+' not found in the directory</b> (no M365 account, or the name in BambooHR differs from Entra). These usually are field staff without a mailbox:</p><p style="margin:6px 0 0;font-size:13px">'+un.map(function(n){return esc(n);}).join(' · ')+'</p>'):'')+'</div>';
+    }
   }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Match identities from Microsoft 365'; } alert('Request failed'); });
 }
 var _syncAllActive=false, _syncAllPolling=false;

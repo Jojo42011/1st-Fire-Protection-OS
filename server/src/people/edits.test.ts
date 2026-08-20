@@ -76,6 +76,24 @@ test('access group provisioning: records the grant even when M365 is not connect
   assert.equal((db.prepare(`SELECT status FROM employee_access WHERE system='SG-PR-MCA'`).get() as any).status, 'revoked');
 });
 
+test('asset library shows the Microsoft 365 name, not the BambooHR nickname', () => {
+  db.prepare(`UPDATE employees SET legal_first_name='Robert', legal_last_name='Smith', preferred_name='Bob', entra_display_name='Robert Smith' WHERE id=1`).run();
+  svc.addAsset(1, { asset_type: 'computer', device_name: '1STFP-BOB', serial: 'SN-1', status: 'assigned', notes: 'RMM user: AD\\bob.smith · Last seen: 2026-08-20 · Source: RMM' }, 'tester');
+  const lib = svc.assetLibrary('computer');
+  assert.ok(lib.total >= 1);
+  const row = lib.assets.find((a: any) => a.device_name === '1STFP-BOB')!;
+  assert.equal(row.employee, 'Robert Smith', 'uses the Entra display name, not "Bob"');
+  assert.equal(row.last_seen, '2026-08-20');
+  assert.equal(row.serial, 'SN-1');
+});
+
+test('terminated-in-M365 gap check is keyless-safe when Graph is not connected', async () => {
+  const out = await svc.terminatedM365Gaps();
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /not connected/i);
+  assert.deepEqual(out.gaps, []);
+});
+
 test('syncing access from M365 is keyless-safe when Graph is not connected', async () => {
   const out = await svc.syncAccessFromM365(1, 'tester');
   assert.equal(out.ok, false);

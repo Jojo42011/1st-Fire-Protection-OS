@@ -1179,6 +1179,9 @@ export function initDb(): void {
   `);
   // employees gains a source marker (manual|bamboo) and a unique Bamboo id for idempotent import.
   addColumn('employees', 'source', "TEXT DEFAULT 'manual'");
+  // The authoritative display name from Microsoft 365 (Entra), set by the identity match. Preferred
+  // over the BambooHR nickname wherever a person's name is shown.
+  addColumn('employees', 'entra_display_name', 'TEXT');
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical
