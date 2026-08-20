@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { operatingOffices } from '../os/office';
 
 /**
  * New-hire Onboarding engine.
@@ -45,21 +46,16 @@ export const SOFTWARE: { name: string; owner: Owner; kind: 'task' | 'approval' }
 ];
 const SOFTWARE_ROUTING = new Map(SOFTWARE.map((s) => [s.name, s]));
 
-/** SharePoint groups the form offers, and who each one routes to when selected. */
+/**
+ * SharePoint groups the form offers, and who each one routes to when selected. The location groups
+ * are derived from the real operating offices (not a hardcoded, out-of-date list), so they always
+ * match the company's actual footprint; the function groups are the standard approval-gated ones.
+ */
 export const SHAREPOINT: { name: string; owner: Owner; kind: 'task' | 'approval' }[] = [
-  // the IT-provisioned location/function groups
-  { name: 'Austin', owner: 'it', kind: 'task' },
-  { name: 'College Station', owner: 'it', kind: 'task' },
-  { name: 'Extinguisher (Not NFS)', owner: 'it', kind: 'task' },
-  { name: 'FIRCON', owner: 'it', kind: 'task' },
-  { name: 'Lubbock', owner: 'it', kind: 'task' },
-  { name: 'Fairview', owner: 'it', kind: 'task' },
-  { name: 'One Stop', owner: 'it', kind: 'task' },
+  // one IT-provisioned group per real office
+  ...operatingOffices().map((o) => ({ name: o.label, owner: 'it' as Owner, kind: 'task' as const })),
+  // the function groups (approval-gated where an owner must say yes)
   { name: 'SAFETY', owner: 'it', kind: 'task' },
-  { name: 'Riverton (FPS)', owner: 'it', kind: 'task' },
-  { name: 'SP Northstar Extinguishers', owner: 'it', kind: 'task' },
-  { name: 'MILLBROOK', owner: 'it', kind: 'task' },
-  // the approval-gated groups
   { name: 'MGMT', owner: 'mario', kind: 'approval' },
   { name: 'ACCT', owner: 'rebecca', kind: 'approval' },
   { name: 'Payroll', owner: 'rebecca', kind: 'approval' },
@@ -67,19 +63,12 @@ export const SHAREPOINT: { name: string; owner: Owner; kind: 'task' | 'approval'
 ];
 const SHAREPOINT_ROUTING = new Map(SHAREPOINT.map((g) => [g.name, g]));
 
-/** Printers the form offers - every printer routes to IT. */
-export const PRINTERS: string[] = [
-  'Riverton Regular',
-  'Riverton Plotter',
-  'Riverton Accounting',
-  'Riverton Safety',
-  'Buda Regular',
-  'Buda Plotter',
-  'Fairview Regular',
-  'Fairview Plotter',
-  'Millbrook Regular',
-  'Millbrook Plotter',
-];
+/**
+ * Printers the form offers - every printer routes to IT. Empty by default: the demo's fictional
+ * printer names were removed, and real printers get added once the company provides its list. The
+ * form hides this section while it is empty so a manager never picks a printer that does not exist.
+ */
+export const PRINTERS: string[] = [];
 
 /** The computer choices and the spec each carries (for the Mario approval detail). */
 export const COMPUTERS: { key: string; label: string; spec: string }[] = [

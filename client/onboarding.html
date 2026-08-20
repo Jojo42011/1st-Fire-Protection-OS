@@ -424,9 +424,9 @@ function renderForm(){
     '<details class="formwrap"><summary>Fill the full request manually <span class="hint">Every field routes to the team that owns it</span></summary>'+
     '<form id="onb-form" class="fbody">'+
       '<div class="fsec">New hire</div><div class="fgrid">'+
-        ffield('Full name','name','Jordan Rivera',true)+ffield('Personal email','personal_email','jordan@email.com')+ffieldDate('Start date','start_date')+
-        ffield('Cell phone','cell_phone','+1 512 555 0100')+ffield('Job position','job_position','Sprinkler Designer')+ffield('Salary','salary','$72,000 / yr')+
-        ffield('Manager','manager_name','Prisha Nadar')+
+        ffield('Full name','name','First and last name',true)+ffield('Personal email','personal_email','name@email.com')+ffieldDate('Start date','start_date')+
+        ffield('Cell phone','cell_phone','+1 555 555 0100')+ffield('Job position','job_position','e.g. Sprinkler Designer')+ffield('Salary','salary','$00,000 / yr')+
+        ffield('Manager','manager_name','Their manager')+
       '</div>'+
       '<div class="fsec">Pay and HR exceptions</div><div class="fchecks">'+
         fchk('cell_reimburse','','Cell-phone reimbursement')+fchk('pto_plan','','Different PTO plan')+fchk('hours_80_40','','80-vs-40 hours approved')+
@@ -434,7 +434,7 @@ function renderForm(){
       '</div><div class="ffield" style="margin-top:12px"><label>Misc pay/HR exceptions</label><textarea name="misc_exceptions" placeholder="Anything else HR should build into the record"></textarea></div>'+
       '<div class="fsec">IT and access</div><div class="fchecks">'+fchk('company_email','','Company email')+fchk('teams_number','','Teams number')+'</div>'+
       '<div class="fsec" style="font-size:10px">SharePoint groups</div><div class="fchecks">'+sp+'</div>'+
-      '<div class="fsec" style="font-size:10px">Printers</div><div class="fchecks">'+pr+'</div>'+
+      (pr?'<div class="fsec" style="font-size:10px">Printers</div><div class="fchecks">'+pr+'</div>':'')+
       '<div class="fsec">Equipment and software</div>'+
       '<div class="fsec" style="font-size:10px">Computer (owner approval)</div><div class="fradios">'+radios+'</div>'+
       '<div class="fsec" style="font-size:10px">Software</div><div class="fchecks">'+sw+'</div>'+
