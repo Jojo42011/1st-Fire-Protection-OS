@@ -38,6 +38,13 @@
   .il-btn{font-family:var(--sans);font-weight:650;font-size:12px;border-radius:9px;padding:7px 12px;cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--ink-2)}
   .il-btn:hover{border-color:var(--border-strong)}
   .il-btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  /* archived (discarded / expired / submitted) links: tucked under a toggle, quieter than live ones */
+  .il-archive{margin-top:6px}
+  .il-archtoggle{font-family:var(--sans);font-weight:650;font-size:12.5px;color:var(--muted);background:none;border:none;cursor:pointer;padding:8px 2px;display:flex;align-items:center;gap:8px}
+  .il-archtoggle:hover{color:var(--ink-2)}
+  .il-archtoggle .n{font-weight:600;color:var(--ink-3)}
+  .il-archlist{margin-top:6px}
+  .ilink.archived{opacity:.72;background:var(--panel-alt,var(--fill));box-shadow:none}
 
   /* board */
   .ob-bar{height:8px;background:var(--fill);border-radius:6px;overflow:hidden;min-width:90px}
@@ -267,33 +274,51 @@ function loadLinks(){
     LINKS=(d&&d.links)||[]; renderLinks();
   }).catch(function(){ document.getElementById('links').innerHTML=OS.errorBox('Could not load intake links.'); });
 }
+var SHOW_ARCHIVED=false;
+// A link is "archived" once it can no longer be worked as a live invite: discarded, expired, or
+// already submitted. Those move out of the main list into a collapsed section so the active links
+// stay clean and scannable.
+function isArchived(l){ return l.status==='voided'||l.status==='expired'||l.status==='submitted'; }
+function linkCardHTML(l){
+  var d=daysTo(l.expires_at);
+  var gone=isArchived(l);
+  var expCls=l.status==='expired'?'gone':(!gone&&d<=2?'soon':'');
+  var expTxt=l.status==='submitted'?'Submitted '+OS.date(l.submitted_at):l.status==='voided'?'Discarded':l.status==='expired'?'Expired '+OS.date(l.expires_at):(d<=0?'Expires today':'Expires '+OS.date(l.expires_at));
+  var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
+  // Discard is offered only while a link is still live (sent or opened, never submitted).
+  var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
+  return '<div class="ilink'+(gone?' archived':'')+'">'+
+    '<div class="il-main">'+
+      '<div class="il-role">'+esc(l.job_title||'New hire')+' '+(l.office?OS.officeTag(esc(l.office)):'')+'</div>'+
+      '<div class="il-to">For <b>'+esc(l.recipient_name||'a hiring manager')+'</b>'+(l.recipient_email?' · '+esc(l.recipient_email):'')+'</div>'+
+      '<div class="il-life">'+lifecycle(l)+'</div>'+
+    '</div>'+
+    '<div class="il-side">'+
+      '<div class="il-exp '+expCls+'">'+expTxt+'</div>'+
+      '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+copyBtn+discardBtn+'</div>'+
+    '</div>'+
+  '</div>';
+}
 function renderLinks(){
-  document.getElementById('linkn').textContent='· '+LINKS.length;
+  var active=LINKS.filter(function(l){return !isArchived(l);});
+  var archived=LINKS.filter(isArchived);
+  document.getElementById('linkn').textContent='· '+active.length;
   var note=document.getElementById('linkNote');
   if(note) note.textContent = LINKS.length ? 'Each link is a single-use token that expires in 7 days. The board below is live from submissions.' : '';
   if(!LINKS.length){ document.getElementById('links').innerHTML=OS.empty('No intake links yet. Create one to invite a hiring manager.'); return; }
-  document.getElementById('links').innerHTML=LINKS.map(function(l){
-    var d=daysTo(l.expires_at);
-    var gone=(l.status==='expired'||l.status==='voided'||l.status==='submitted');
-    var expCls=l.status==='expired'?'gone':(!gone&&d<=2?'soon':'');
-    var expTxt=l.status==='submitted'?'Submitted '+OS.date(l.submitted_at):l.status==='voided'?'Voided':l.status==='expired'?'Expired '+OS.date(l.expires_at):(d<=0?'Expires today':'Expires '+OS.date(l.expires_at));
-    var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
-    // Discard is offered only while a link is still live (sent or opened, never submitted).
-    var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
-    return '<div class="ilink">'+
-      '<div class="il-main">'+
-        '<div class="il-role">'+esc(l.job_title||'New hire')+' '+(l.office?OS.officeTag(esc(l.office)):'')+'</div>'+
-        '<div class="il-to">For <b>'+esc(l.recipient_name||'a hiring manager')+'</b>'+(l.recipient_email?' · '+esc(l.recipient_email):'')+'</div>'+
-        '<div class="il-life">'+lifecycle(l)+'</div>'+
-      '</div>'+
-      '<div class="il-side">'+
-        '<div class="il-exp '+expCls+'">'+expTxt+'</div>'+
-        '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+copyBtn+discardBtn+'</div>'+
-      '</div>'+
+  var activeHTML = active.length ? active.map(linkCardHTML).join('') : OS.empty('No live intake links. Every invite has been submitted, discarded, or expired.');
+  var archiveHTML='';
+  if(archived.length){
+    archiveHTML='<div class="il-archive">'+
+      '<button class="il-archtoggle" data-arch-toggle="1">'+(SHOW_ARCHIVED?'▾':'▸')+' Discarded, expired &amp; submitted <span class="n">· '+archived.length+'</span></button>'+
+      (SHOW_ARCHIVED?('<div class="il-archlist">'+archived.map(linkCardHTML).join('')+'</div>'):'')+
     '</div>';
-  }).join('');
+  }
+  document.getElementById('links').innerHTML=activeHTML+archiveHTML;
 }
 document.getElementById('links').addEventListener('click',function(e){
+  var arch=e.target.closest('[data-arch-toggle]');
+  if(arch){ SHOW_ARCHIVED=!SHOW_ARCHIVED; renderLinks(); return; }
   var a=e.target.closest('[data-link-act]');
   if(a){ var l=LINKS.filter(function(x){return String(x.id)===a.getAttribute('data-link-act');})[0]; if(!l) return;
     if(l.status==='submitted'){

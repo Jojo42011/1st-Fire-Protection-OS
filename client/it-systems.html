@@ -31,6 +31,7 @@
           style="flex:1;min-width:260px;padding:8px 10px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit"
           placeholder="https://1stfp.sharepoint.com/sites/Shared" />
         <button class="os-btn primary" id="spRun">Run audit</button>
+        <button class="os-btn" id="spExport" disabled>Export to Excel</button>
       </div>
       <div class="os-filter-note" id="spNote" style="margin-top:8px">Reads who can reach the site and each top-level folder. Read-only, straight from Microsoft 365 (no PowerShell).</div>
       <div id="spOut" style="margin-top:12px"></div>
@@ -165,6 +166,7 @@ document.getElementById('sync').addEventListener('click',function(){ var b=this;
 document.getElementById('integrations').addEventListener('click',function(){ OS.go('integrations'); });
 
 /* ---- SharePoint access audit ---- */
+var LAST_AUDIT=null;
 function accessRows(list){
   if(!list||!list.length) return '<div class="os-filter-note">No direct grants found (access is inherited from the site).</div>';
   return '<table class="os-table"><thead><tr><th>Who</th><th>Access</th><th>Source</th></tr></thead><tbody>'+
@@ -177,6 +179,9 @@ function accessRows(list){
 }
 function renderAudit(d){
   var out=document.getElementById('spOut');
+  var exp=document.getElementById('spExport');
+  LAST_AUDIT=(d&&d.ok)?d:null;
+  if(exp) exp.disabled=!LAST_AUDIT;
   if(!d||!d.ok){
     var msg=(d&&d.error)||'Audit could not run.';
     var hint=(d&&d.needsPermission)?'<div class="os-filter-note" style="margin-top:6px">Fix: in Entra, add the <b>Sites.Read.All</b> application permission to the app registration and click <b>Grant admin consent</b>. Then run the audit again.</div>':'';
@@ -209,6 +214,42 @@ function runAudit(){
     .catch(function(){ renderAudit({ok:false,error:'The audit request failed.'}); })
     .then(function(){ btn.disabled=false; btn.textContent=t; });
 }
+// Build a genuine Excel workbook (SpreadsheetML) from the audit, so IT gets a .xls they can filter
+// and share. No library: SpreadsheetML is a single XML file Excel opens as a formatted sheet.
+function xesc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function xlCell(v){ return '<Cell><Data ss:Type="String">'+xesc(v)+'</Data></Cell>'; }
+function xlHead(cells){ return '<Row>'+cells.map(function(c){return '<Cell ss:StyleID="hdr"><Data ss:Type="String">'+xesc(c)+'</Data></Cell>';}).join('')+'</Row>'; }
+function xlRow(cells){ return '<Row>'+cells.map(xlCell).join('')+'</Row>'; }
+function srcLabel(a){ return a.inherited?'inherited from site':'unique to folder'; }
+function auditToExcelXml(d){
+  var site=(d.site&&d.site.name)||'Site';
+  var s1='<Worksheet ss:Name="Site access"><Table>'+
+    xlHead(['Who','Roles','Grant type','Source'])+
+    (d.siteAccess||[]).map(function(a){return xlRow([a.principal,(a.roles||[]).join(', '),a.kind==='link'?'sharing link':a.type,srcLabel(a)]);}).join('')+
+    '</Table></Worksheet>';
+  var frows=[];
+  (d.folders||[]).forEach(function(f){
+    if(!f.access||!f.access.length){ frows.push(xlRow([f.name,f.unique?'unique':'inherited','(no direct grants)','','',''])); return; }
+    f.access.forEach(function(a){ frows.push(xlRow([f.name,f.unique?'unique':'inherited',a.principal,(a.roles||[]).join(', '),a.kind==='link'?'sharing link':a.type,srcLabel(a)])); });
+  });
+  var s2='<Worksheet ss:Name="Folders"><Table>'+
+    xlHead(['Folder','Folder access','Who','Roles','Grant type','Source'])+frows.join('')+
+    '</Table></Worksheet>';
+  return '<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n'+
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'+
+    '<Styles><Style ss:ID="hdr"><Font ss:Bold="1"/></Style></Styles>'+s1+s2+'</Workbook>';
+}
+function exportAudit(){
+  if(!LAST_AUDIT) return;
+  var xml=auditToExcelXml(LAST_AUDIT);
+  var name=((LAST_AUDIT.site&&LAST_AUDIT.site.name)||'site').replace(/[^A-Za-z0-9]+/g,'-').toLowerCase();
+  var blob=new Blob([xml],{type:'application/vnd.ms-excel'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='sharepoint-audit-'+name+'.xls';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+document.getElementById('spExport').addEventListener('click',exportAudit);
 document.getElementById('spRun').addEventListener('click',runAudit);
 fetch('/api/sharepoint/status').then(function(r){return r.json();}).then(function(d){
   if(d&&d.defaultSite){ var el=document.getElementById('spUrl'); if(!el.value) el.value=d.defaultSite; }
