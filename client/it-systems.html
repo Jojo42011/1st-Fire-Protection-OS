@@ -59,6 +59,19 @@
       <div id="alOut">Loading…</div>
     </div>
 
+    <div class="os-sec os-block" style="margin-top:28px">Software licenses <span class="n" id="swN"></span></div>
+    <div class="os-card" style="padding:14px 16px">
+      <div id="swApps">Loading…</div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="swNewName" type="text" placeholder="Add an app (e.g. Revit, DocuSign)" spellcheck="false"
+          style="min-width:200px;padding:8px 10px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit" />
+        <input id="swNewVendor" type="text" placeholder="Vendor (optional)" spellcheck="false"
+          style="min-width:150px;padding:8px 10px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit" />
+        <button class="os-btn" id="swAdd">Add app</button>
+      </div>
+      <div id="swImport" style="margin-top:12px"></div>
+    </div>
+
     <div class="os-sec os-block" style="margin-top:28px">Terminated but still active in Microsoft 365</div>
     <div class="os-card" style="padding:14px 16px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -380,5 +393,59 @@ document.getElementById('rmmFile').addEventListener('change',function(e){
 document.getElementById('rmmPreview').addEventListener('click',function(){ rmmRun(false); });
 document.getElementById('rmmImport').addEventListener('click',function(){ rmmRun(true); });
 
-OS.ready(function(){ load(); loadAssets(); }); OS.onChange(load);
+/* ---- Software licenses ---- */
+var SW_APPS=[], SW_CSV='', SW_ACTIVE=null;
+function renderSwApps(){
+  document.getElementById('swN').textContent='· '+SW_APPS.length+' apps';
+  if(!SW_APPS.length){ document.getElementById('swApps').innerHTML=OS.empty('No apps yet. Add one below, then upload its user export.'); return; }
+  document.getElementById('swApps').innerHTML='<div class="os-tablewrap"><table class="os-table"><thead><tr><th>App</th><th>Vendor</th><th>Licensed</th><th>Source</th><th></th></tr></thead><tbody>'+
+    SW_APPS.map(function(a){ return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(a.name)+'</td><td>'+OS.esc(a.vendor||'')+'</td>'+
+      '<td>'+OS.pill(a.licensed+' user'+(a.licensed===1?'':'s'),a.licensed?'good':'neutral')+'</td>'+
+      '<td>'+(a.has_api?OS.pill('API','neutral'):OS.pill('CSV upload','warn'))+'</td>'+
+      '<td style="text-align:right"><button class="os-btn" data-sw-app="'+a.id+'" data-sw-name="'+OS.esc(a.name)+'">Upload CSV</button></td></tr>'; }).join('')+'</tbody></table></div>';
+}
+function loadSoftware(){
+  fetch('/api/people/software').then(function(r){return r.json();}).then(function(d){
+    SW_APPS=(d&&d.apps)||[]; renderSwApps();
+  }).catch(function(){ document.getElementById('swApps').innerHTML=OS.errorBox('Could not load software.'); });
+}
+function renderSwImporter(){
+  if(!SW_ACTIVE){ document.getElementById('swImport').innerHTML=''; return; }
+  document.getElementById('swImport').innerHTML='<div class="os-card" style="padding:12px 14px">'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>'+OS.esc(SW_ACTIVE.name)+' user export:</b>'+
+    '<input id="swFile" type="file" accept=".csv,text/csv,text/plain" style="font:inherit;color:inherit" />'+
+    '<button class="os-btn" id="swPreview" disabled>Preview</button>'+
+    '<button class="os-btn primary" id="swDoImport" disabled>Import</button></div>'+
+    '<div class="os-filter-note" style="margin-top:6px">Upload the vendor’s list of users. Everyone matched gets the license; anyone previously listed but not in this file is marked removed. Preview first.</div>'+
+    '<div id="swOut" style="margin-top:10px"></div></div>';
+  document.getElementById('swFile').addEventListener('change',function(e){ var f=e.target.files&&e.target.files[0]; SW_CSV='';
+    document.getElementById('swPreview').disabled=true; document.getElementById('swDoImport').disabled=true; if(!f) return;
+    var rd=new FileReader(); rd.onload=function(){ SW_CSV=String(rd.result||''); document.getElementById('swPreview').disabled=!SW_CSV;
+      document.getElementById('swOut').innerHTML='<div class="os-filter-note">Loaded '+OS.esc(f.name)+'. Click Preview.</div>'; }; rd.readAsText(f); });
+  document.getElementById('swPreview').addEventListener('click',function(){ swRun(false); });
+  document.getElementById('swDoImport').addEventListener('click',function(){ swRun(true); });
+}
+function swRun(commit){
+  if(!SW_CSV){ OS.toast('Choose a CSV first.','bad'); return; }
+  document.getElementById('swOut').innerHTML='<div class="os-filter-note">'+(commit?'Importing…':'Reading…')+'</div>';
+  fetch('/api/people/software/import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({app_id:SW_ACTIVE.id,csv:SW_CSV,commit:commit})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ document.getElementById('swOut').innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">'+OS.esc((d&&d.error)||'Import failed.')+'</div>'; return; }
+      document.getElementById('swDoImport').disabled=false;
+      var head='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'+OS.pill(d.total+' rows','neutral')+' '+OS.pill(d.matched+' matched',d.matched?'good':'neutral')+' '+(d.unmatched?OS.pill(d.unmatched+' unmatched','warn'):'')+(d.committed?' '+OS.pill('removed '+d.removed,'neutral'):'')+'</div>'+
+        '<div class="os-filter-note">Columns recognized: '+OS.esc((d.recognized||[]).join(', ')||'none')+'.</div>';
+      var un=(d.rows||[]).filter(function(x){return !x.matched_to;}).slice(0,20);
+      var unHtml=un.length?('<div class="os-filter-note" style="margin-top:6px">Unmatched (still imported as none): '+un.map(function(x){return OS.esc(x.value);}).join(' · ')+'</div>'):'';
+      document.getElementById('swOut').innerHTML=head+unHtml;
+      if(commit){ OS.toast(d.matched+' users licensed for '+d.app+(d.removed?(', '+d.removed+' removed'):'')+'.'); loadSoftware(); }
+    }).catch(function(){ document.getElementById('swOut').innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">The import request failed.</div>'; });
+}
+document.getElementById('swApps').addEventListener('click',function(e){ var b=e.target.closest('[data-sw-app]'); if(!b) return;
+  SW_ACTIVE={id:Number(b.getAttribute('data-sw-app')),name:b.getAttribute('data-sw-name')}; SW_CSV=''; renderSwImporter(); document.getElementById('swImport').scrollIntoView({behavior:'smooth',block:'nearest'}); });
+document.getElementById('swAdd').addEventListener('click',function(){ var name=document.getElementById('swNewName').value.trim(); if(!name){ OS.toast('Enter an app name.','bad'); return; }
+  fetch('/api/people/software/apps',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,vendor:document.getElementById('swNewVendor').value.trim()})})
+    .then(function(r){return r.json();}).then(function(d){ if(!d||!d.ok){ OS.toast('Could not add app.','bad'); return; }
+      document.getElementById('swNewName').value=''; document.getElementById('swNewVendor').value=''; OS.toast('Added '+d.app.name+'.'); loadSoftware(); }); });
+
+OS.ready(function(){ load(); loadAssets(); loadSoftware(); }); OS.onChange(load);
 </script></body></html>

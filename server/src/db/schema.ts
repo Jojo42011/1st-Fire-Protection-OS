@@ -1075,6 +1075,34 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_emp_assets_emp ON employee_assets(employee_id);
     CREATE INDEX IF NOT EXISTS idx_emp_assets_status ON employee_assets(status);
 
+    -- Paid software the company assigns to people (Adobe, Bluebeam, HydraCAD, ...). Some vendors have
+    -- an API; many do not, so membership is kept current by uploading the vendor's user export (CSV).
+    CREATE TABLE IF NOT EXISTS software_apps (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT NOT NULL UNIQUE,
+      vendor        TEXT,
+      has_api       INTEGER DEFAULT 0,
+      seats_paid    INTEGER,
+      cost_per_seat REAL,
+      active        INTEGER DEFAULT 1,
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS employee_software (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id   INTEGER NOT NULL,
+      app_id        INTEGER NOT NULL,
+      status        TEXT DEFAULT 'active',        -- active|removed
+      source        TEXT DEFAULT 'csv',           -- csv|api|manual
+      external_ref  TEXT,                          -- the login/email seen in the vendor export
+      assigned_at   TEXT DEFAULT (datetime('now')),
+      removed_at    TEXT,
+      notes         TEXT,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+      FOREIGN KEY (app_id) REFERENCES software_apps(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_emp_software_uniq ON employee_software(employee_id, app_id);
+    CREATE INDEX IF NOT EXISTS idx_emp_software_app ON employee_software(app_id);
+
     CREATE TABLE IF NOT EXISTS employee_credentials (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_id    INTEGER NOT NULL,

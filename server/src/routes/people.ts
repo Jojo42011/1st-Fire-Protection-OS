@@ -14,6 +14,7 @@ import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
 import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
 import { importComputers } from '../services/rmmImport';
+import * as sw from '../services/softwareLicenses';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 
@@ -184,6 +185,19 @@ router.get('/api/people/assets/library', requirePeople(), (req, res) => {
 router.get('/api/people/offboarding/m365-gaps', requirePeople('people_admin', 'it'), async (_req, res) => {
   try { res.json(await svc.terminatedM365Gaps()); }
   catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+
+/* Paid-software licenses: the app catalog, plus CSV import that updates who holds each app. */
+router.get('/api/people/software', requirePeople(), (_req, res) => res.json({ ok: true, ...sw.softwareOverview() }));
+router.post('/api/people/software/apps', requirePeople('people_admin', 'it'), (req, res) => {
+  const b = req.body || {};
+  const app = sw.addSoftwareApp({ name: b.name, vendor: b.vendor, has_api: !!b.has_api, seats_paid: b.seats_paid, cost_per_seat: b.cost_per_seat });
+  if (!app) return res.status(400).json({ ok: false, error: 'name_required' });
+  res.json({ ok: true, app });
+});
+router.post('/api/people/software/import', requirePeople('people_admin', 'it'), (req, res) => {
+  const b = req.body || {};
+  res.json(sw.importSoftwareCsv(Number(b.app_id), String(b.csv || ''), !!b.commit));
 });
 // Stamp each employee's authoritative UPN/email from Entra so identity comes from Microsoft 365, not
 // BambooHR. Read-only against the directory (needs User.Read.All).

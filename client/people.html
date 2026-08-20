@@ -425,7 +425,7 @@ function renderEmp(){
   var activeAccess=(d.access||[]).filter(function(a){return a.status==='provisioned'||a.status==='approved';}).length;
   var critical = (e.employment_status==='terminated'||e.employment_status==='offboarding'||e.employment_status==='notice') && activeAccess>0;
   var name=((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim();
-  var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['credentials','Credentials'],['history','History']];
+  var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['software','Software'],['credentials','Credentials'],['history','History']];
   var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
     '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(name)+'</h2><p class="muted">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
     (critical?'<div class="card-pad" style="margin-top:10px;background:#fbeaea;border-radius:8px;padding:10px 12px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted">. This person is leaving or left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
@@ -478,6 +478,10 @@ function renderEmp(){
       return '<tr><td>'+esc(human(a.asset_type))+(a.identifier?' · '+esc(a.identifier):(a.serial?' · '+esc(a.serial):''))+(a.device_name?' <span class="muted">'+esc(a.device_name)+'</span>':'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td>'+
         (asEdit?rowActions((a.status==='assigned'?'<button class="btn btn-xs" onclick="empAsset('+a.id+',\'return\')">Return</button> ':'')+'<button class="btn btn-xs danger" onclick="empAsset('+a.id+',\'remove\')">Remove</button>'):'')+'</tr>';
     },'No assets assigned.',asForm);
+  } else if(_empTab==='software'){
+    body=editTable('Software licenses', ['App','Vendor','Source'], d.software||[], function(s){
+      return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(s.name)+'</td><td>'+esc(s.vendor||'')+'</td><td>'+esc(human(s.source||'csv'))+(s.external_ref?' <span class="muted">'+esc(s.external_ref)+'</span>':'')+'</td></tr>';
+    },'No paid software recorded. Import a vendor user list in IT & Systems > Software licenses.','');
   } else if(_empTab==='credentials'){
     var crEdit=canEditCreds();
     var crHeads=['Credential','Status','Expires'].concat(crEdit?['']:[]);

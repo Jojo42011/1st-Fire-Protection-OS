@@ -66,6 +66,7 @@ import sharepoint from './routes/sharepoint';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
+import { seedSoftwareApps } from './services/softwareLicenses';
 import { ensureBootstrapAdmin } from './people/authz';
 import { cleanupDemoData } from './seed/cleanupDemo';
 
@@ -83,6 +84,8 @@ seedPeopleCatalog();
 seedOnboardingCatalog();
 // Seed the per-office printer Entra security groups (SG-PR-<office>). Idempotent.
 seedPrinterGroups();
+// Seed the starter software-app catalog (Adobe, Bluebeam, HydraCAD, AutoCAD). Idempotent, editable.
+seedSoftwareApps();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the
 // moment they complete Microsoft sign-in, and they appear in Access & roles.
 ensureBootstrapAdmin();

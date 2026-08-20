@@ -256,8 +256,9 @@ export function getEmployeeDetail(id: number, opts: { includeComp: boolean }): a
   const history = db.prepare(`SELECT actor, action, detail, at FROM people_audit WHERE employee_id = ? ORDER BY id DESC LIMIT 100`).all(id);
   const openWf = db.prepare(`SELECT id FROM people_workflows WHERE employee_id = ? AND kind = 'onboarding' ORDER BY id DESC LIMIT 1`).get(id) as { id: number } | undefined;
   const readiness = openWf ? computeReadiness(openWf.id) : null;
+  const software = db.prepare(`SELECT es.id, a.name, a.vendor, es.source, es.external_ref, es.assigned_at FROM employee_software es JOIN software_apps a ON a.id = es.app_id WHERE es.employee_id = ? AND es.status = 'active' ORDER BY a.name`).all(id);
   if (!opts.includeComp) { delete emp.termination_type; } // comp/pay never lives on employees; intake holds it (HR-gated)
-  return { employee: emp, access, assets, credentials, workflows, history, readiness };
+  return { employee: emp, access, assets, credentials, software, workflows, history, readiness };
 }
 
 export function listTasks(filter: { team?: string; status?: string; employee_id?: number; kind?: string } = {}): any[] {
@@ -323,6 +324,9 @@ function displayName(h: NewHire): string {
 // The Microsoft 365 display name is authoritative once matched; fall back to the legal name, and only
 // then to the BambooHR nickname. This keeps real names (not nicknames) on assets, access, and lists.
 const empName = (e: any): string => e.entra_display_name || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || e.preferred_name || `Employee ${e.id}`;
+/** The canonical display name for an employee row (Entra name, then legal, then nickname). Exported
+ *  so other modules (software import, etc.) show the same real name. */
+export function empDisplayNameOf(e: any): string { return empName(e); }
 
 /** People "needs attention" counts — current employee risk, prioritized over configuration. */
 export function peopleAttention(): any {
