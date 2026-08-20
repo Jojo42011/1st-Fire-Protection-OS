@@ -14,6 +14,8 @@ import { runDueReports } from './services/reportScheduler';
 import { runDueSyncs } from './services/syncScheduler';
 
 import { gate, handleLogin, handleLogout, authRequired } from './auth';
+import { currentContext } from './os/scope';
+import { moduleLevel } from './people/permissions';
 import health from './routes/health';
 import brain from './routes/brain';
 import invoices from './routes/invoices';
@@ -145,10 +147,50 @@ app.use(work);
 app.use(operations);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
-const page = (name: string) => (_req: express.Request, res: express.Response) => {
+//
+// Which People module governs each screen. A People-authorized session that lacks view access
+// (level >= 1) on a screen's module is refused the page outright, so direct-URL navigation can't
+// bypass the hidden nav item. Screens not listed here (the shell container, personal pages like
+// My Tasks, /soon) are always served. Legacy shared-password sessions have no People identity and
+// keep the full shell: the wider OS is gated by APP_PASSWORD, People roles refine it.
+const PAGE_MODULE: Record<string, string> = {
+  'operator.html': 'overview', 'home.html': 'overview',
+  'approvals.html': 'overview', 'exceptions.html': 'overview',
+  'money.html': 'receivables', 'receivables.html': 'receivables', 'invoices.html': 'receivables', 'close.html': 'accounting',
+  'service.html': 'service', 'schedule.html': 'service', 'deficiencies.html': 'deficiencies',
+  'ops-jobs.html': 'service', 'jobs.html': 'service', 'agreements.html': 'service', 'costing.html': 'service',
+  'calls.html': 'service', 'reviews-hub.html': 'service', 'reviews.html': 'service',
+  'review-requests.html': 'service', 'oncall.html': 'service', 'plans.html': 'service',
+  'people.html': 'people', 'onboarding.html': 'people',
+  'accounts.html': 'service', 'sites.html': 'service', 'quotes.html': 'deficiencies',
+  'pipeline.html': 'deficiencies', 'closer.html': 'deficiencies', 'estimates.html': 'deficiencies',
+  'account.html': 'service',
+  'executive.html': 'overview', 'office-performance.html': 'overview', 'scoreboard.html': 'overview',
+  'reports-money.html': 'accounting', 'reports-ops.html': 'service', 'reports-people.html': 'people',
+  'reports-builder.html': 'overview',
+  'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access',
+  'company-integrations.html': 'access', 'integrations.html': 'access', 'sync.html': 'access',
+  'access.html': 'access', 'roster.html': 'access', 'harness.html': 'access',
+  'department.html': 'access', 'agent.html': 'access',
+};
+const NO_ACCESS_HTML = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>No access</title><style>html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;
+font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0d10;color:#e7ebf0}
+.c{max-width:360px;text-align:center;padding:28px}.c h1{font-size:16px;margin:0 0 8px}.c p{font-size:13px;color:#9aa4b2;line-height:1.5;margin:0}</style>
+<div class="c"><h1>You do not have access to this area</h1><p>Your role does not include this part of 1st Fire Protection OS. If you think this is a mistake, ask a People admin to adjust your access under Access &amp; Roles.</p></div>`;
+const page = (name: string) => (req: express.Request, res: express.Response) => {
   // App shells are auth-gated and data-driven - never let a browser (or an iframe) serve a stale
   // copy captured before the session was active. Static assets keep their own caching elsewhere.
   res.setHeader('Cache-Control', 'no-store');
+  const mod = PAGE_MODULE[name];
+  if (mod) {
+    const ctx = currentContext(req);
+    // Enforce only for real People sessions (a mapped identity with roles). Level 0 = refused.
+    if (ctx.user && ctx.user.roles.length > 0 && moduleLevel(ctx.user, mod) < 1) {
+      res.status(403).send(NO_ACCESS_HTML);
+      return;
+    }
+  }
   res.sendFile(path.join(CLIENT_DIR, name));
 };
 

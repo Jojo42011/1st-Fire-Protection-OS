@@ -392,6 +392,36 @@ var NAV = [
   { group:'Reports',    items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
   { group:'Company',    items:[ 'companyOffices','itSystems','integrations','sync','settings','team','hire' ] }
 ];
+/* Which People module governs each screen, so the nav can hide areas a role does not include.
+   Mirrors the server's PAGE_MODULE map (server/src/app.ts): the server refuses the page, this just
+   keeps it out of the sidebar and command palette. Screens mapped to null (personal queues) always
+   show. Gating applies only to People-authorized sessions; legacy shared-password users see all. */
+var SCREEN_MODULE = {
+  home:'overview', operator:'overview',
+  tasks:null, approve:'overview', exceptions:'overview',
+  moneyOverview:'receivables', receivables:'receivables', handoffs:'accounting', close:'accounting',
+  service:'service', schedule:'service', deficiencies:'deficiencies', jobs:'service', agreements:'service', costing:'service',
+  phones:'service', reviews:'service', oncall:'service',
+  people:'people',
+  accounts:'service', sites:'service', quotes:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
+  reportsExec:'overview', officePerf:'overview', reportsMoney:'accounting', reportsOps:'service', reportsPeople:'people', customReports:'overview',
+  companyOffices:'overview', itSystems:'access', spend:'access', integrations:'access', sync:'access', settings:'access', team:'access', hire:'access'
+};
+// Gate state, populated once /api/me resolves. GATE stays false (show everything) until we know the
+// session is a People identity with roles; ME_MODULES is that identity's module->level map.
+var GATE = false, ME_MODULES = {};
+function allowedScreen(k){
+  if(!GATE) return true;
+  var mod = SCREEN_MODULE[k];
+  if(mod === null || mod === undefined) return true; // personal / unmapped -> always visible
+  return (ME_MODULES[mod]||0) >= 1;
+}
+// The landing screen for a gated role: first navigable (non-detail) screen it is allowed to see.
+function firstAllowed(){
+  for(var i=0;i<NAV.length;i++){ var it=NAV[i].items;
+    for(var j=0;j<it.length;j++){ if(!SCREENS[it[j]].detail && allowedScreen(it[j])) return it[j]; } }
+  return null;
+}
 /* count badge element id per screen key (only where /api/nav-counts provides a number) */
 var COUNTS = { approve:'c-approve', receivables:'c-money', phones:'c-phones', reviews:'c-review-requests',
   deficiencies:'c-deficiencies', accounts:'c-accounts', sites:'c-sites', jobs:'c-jobs', quotes:'c-quotes',
@@ -492,7 +522,9 @@ if (navStored) {
 function saveNavCollapsed(){ try { localStorage.setItem('fpos_nav_collapsed', JSON.stringify(NAV_COLLAPSED)); } catch(_){} }
 function renderNav(){
   nav.innerHTML = NAV.map(function(g){
-    var items = g.items.map(navItemHTML).join('');
+    var keys = g.items.filter(allowedScreen);
+    if(!keys.length) return ''; // whole section hidden when the role includes none of its screens
+    var items = keys.map(navItemHTML).join('');
     if(!g.group) return '<div class="nav-sect lead">'+items+'</div>';
     var collapsed = NAV_COLLAPSED[g.group] ? ' collapsed' : '';
     return '<div class="nav-block'+collapsed+'" data-group="'+g.group+'">'+
@@ -538,6 +570,8 @@ KEYS.forEach(function(k){var f=frameEl(k);f.addEventListener('load',function(){w
 /* ---- navigation ---- */
 function activate(key,announce){
   if(!SCREENS[key])return;
+  // Never open an area this role does not include, even via ?tab= or the command palette.
+  if(!allowedScreen(key)){ key = firstAllowed(); if(!key) return; }
   var f=frameEl(key); if(f&&!f.src)f.src=f.getAttribute('data-src');
   KEYS.forEach(function(k){
     frameEl(k).classList.toggle('on',k===key);
@@ -651,6 +685,21 @@ function setMe(me){
   var init=name.replace(/[^A-Za-z ]/g,'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'··';
   if(aEl)aEl.textContent=init;
   if(hAv)hAv.textContent=init;
+  applyGate(me);
+}
+// Once we know who is signed in, hide the areas their People role does not include. Only real
+// People sessions (an identity with roles) are gated; legacy shared-password sessions see all.
+function applyGate(me){
+  GATE = !!(me && me.peopleAuthorized && me.modules);
+  ME_MODULES = (me && me.modules) || {};
+  renderNav();
+  // Rebuild the command-palette page corpus so hidden screens are unsearchable too.
+  if(typeof PAGES !== 'undefined'){
+    PAGES = KEYS.filter(function(k){return !SCREENS[k].detail && allowedScreen(k);})
+      .map(function(k){return {key:k,title:SCREENS[k].title,group:GROUP_LABEL[k]||'Home'};});
+  }
+  // If the screen we landed on is not allowed for this role, move to the first one that is.
+  if(!allowedScreen(current)){ var f=firstAllowed(); if(f) activate(f,true); }
 }
 (function initScope(){
   Promise.all([
