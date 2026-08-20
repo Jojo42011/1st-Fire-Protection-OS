@@ -80,9 +80,11 @@ test('syncing access from M365 is keyless-safe when Graph is not connected', asy
   const out = await svc.syncAccessFromM365(1, 'tester');
   assert.equal(out.ok, false);
   assert.match(String(out.error), /not connected/i);
-  const bulk = await svc.syncAllAccessFromM365('tester');
+  const bulk = svc.startBulkAccessSync('tester');
   assert.equal(bulk.ok, false);
+  assert.equal(bulk.started, false);
   assert.match(String(bulk.error), /not connected/i);
+  assert.equal(svc.bulkAccessSyncStatus().running, false);
 });
 
 test('listAccessGroups reads security groups from the onboarding catalog', () => {

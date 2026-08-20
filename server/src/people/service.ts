@@ -767,17 +767,40 @@ export async function syncAccessFromM365(employee_id: number, actor: string): Pr
   return { ok: true, added, updated, total: res.groups.length, mailboxes, message: `${res.groups.length} group(s) from Microsoft 365: ${added} added, ${updated} updated${mailboxes ? `, ${mailboxes} carry a shared mailbox` : ''}.` };
 }
 
-export async function syncAllAccessFromM365(actor: string): Promise<{ ok: boolean; error?: string; employees: number; withUpn: number; added: number; updated: number; failed: number }> {
-  if (!graphConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', employees: 0, withUpn: 0, added: 0, updated: 0, failed: 0 };
+/**
+ * Roster-wide reconcile. A whole roster is one Microsoft 365 call per person, which is too long for a
+ * single HTTP request, so it runs in the background and the UI polls progress. Only one run at a time.
+ */
+export interface BulkSyncJob {
+  running: boolean; total: number; processed: number; withUpn: number;
+  added: number; updated: number; failed: number; startedAt: string | null; finishedAt: string | null; error?: string;
+}
+let bulkSyncJob: BulkSyncJob = { running: false, total: 0, processed: 0, withUpn: 0, added: 0, updated: 0, failed: 0, startedAt: null, finishedAt: null };
+
+export function bulkAccessSyncStatus(): BulkSyncJob {
+  return bulkSyncJob;
+}
+
+export function startBulkAccessSync(actor: string): { ok: boolean; started: boolean; error?: string; status: BulkSyncJob } {
+  if (!graphConfigured()) return { ok: false, started: false, error: 'Microsoft 365 is not connected', status: bulkSyncJob };
+  if (bulkSyncJob.running) return { ok: true, started: false, status: bulkSyncJob }; // already in progress: just report it
   const rows = getDb().prepare(`SELECT id FROM employees WHERE employment_status IN ('active','onboarding')`).all() as { id: number }[];
-  let withUpn = 0, added = 0, updated = 0, failed = 0;
-  for (const r of rows) {
-    if (!employeeUpn(r.id)) continue;
-    withUpn++;
-    try {
-      const out = await syncAccessFromM365(r.id, actor);
-      if (out.ok) { added += out.added; updated += out.updated; } else failed++;
-    } catch { failed++; }
-  }
-  return { ok: true, employees: rows.length, withUpn, added, updated, failed };
+  bulkSyncJob = { running: true, total: rows.length, processed: 0, withUpn: 0, added: 0, updated: 0, failed: 0, startedAt: new Date().toISOString(), finishedAt: null };
+  // Fire and forget: each await yields to the event loop, so the server stays responsive while it runs.
+  (async () => {
+    for (const r of rows) {
+      try {
+        if (employeeUpn(r.id)) {
+          bulkSyncJob.withUpn++;
+          const out = await syncAccessFromM365(r.id, actor);
+          if (out.ok) { bulkSyncJob.added += out.added; bulkSyncJob.updated += out.updated; } else bulkSyncJob.failed++;
+        }
+      } catch { bulkSyncJob.failed++; }
+      bulkSyncJob.processed++;
+    }
+    bulkSyncJob.running = false;
+    bulkSyncJob.finishedAt = new Date().toISOString();
+    audit('access_synced_all', `Roster access reconciled from Microsoft 365: ${bulkSyncJob.withUpn} people, ${bulkSyncJob.added} added`, { actor });
+  })();
+  return { ok: true, started: true, status: bulkSyncJob };
 }

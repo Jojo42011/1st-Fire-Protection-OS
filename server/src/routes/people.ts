@@ -156,9 +156,12 @@ router.post('/api/people/employees/:id/access/sync', requirePeople('people_admin
   try { res.json(await svc.syncAccessFromM365(Number(req.params.id), actor(req))); }
   catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
 });
-router.post('/api/people/access/sync-all', requirePeople('people_admin', 'it'), async (req, res) => {
-  try { res.json(await svc.syncAllAccessFromM365(actor(req))); }
+router.post('/api/people/access/sync-all', requirePeople('people_admin', 'it'), (req, res) => {
+  try { res.json(svc.startBulkAccessSync(actor(req))); }
   catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+router.get('/api/people/access/sync-all/status', requirePeople('people_admin', 'it'), (_req, res) => {
+  res.json({ ok: true, status: svc.bulkAccessSyncStatus() });
 });
 router.post('/api/people/employees/:id/access/group', requirePeople('people_admin', 'it'), async (req, res) => {
   const b = req.body || {};
