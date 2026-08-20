@@ -163,6 +163,12 @@ router.post('/api/people/access/sync-all', requirePeople('people_admin', 'it'), 
 router.get('/api/people/access/sync-all/status', requirePeople('people_admin', 'it'), (_req, res) => {
   res.json({ ok: true, status: svc.bulkAccessSyncStatus() });
 });
+// Stamp each employee's authoritative UPN/email from Entra so identity comes from Microsoft 365, not
+// BambooHR. Read-only against the directory (needs User.Read.All).
+router.post('/api/people/identities/sync', requirePeople('people_admin', 'it', 'hr'), async (req, res) => {
+  try { res.json(await svc.syncIdentitiesFromM365(actor(req))); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
 router.post('/api/people/employees/:id/access/group', requirePeople('people_admin', 'it'), async (req, res) => {
   const b = req.body || {};
   try {

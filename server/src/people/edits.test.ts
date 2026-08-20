@@ -87,6 +87,12 @@ test('syncing access from M365 is keyless-safe when Graph is not connected', asy
   assert.equal(svc.bulkAccessSyncStatus().running, false);
 });
 
+test('syncing identities from M365 is keyless-safe when Graph is not connected', async () => {
+  const out = await svc.syncIdentitiesFromM365('tester');
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /not connected/i);
+});
+
 test('listAccessGroups reads security groups from the onboarding catalog', () => {
   db.exec(`DELETE FROM onboarding_catalog;`);
   db.prepare(`INSERT INTO onboarding_catalog (kind, name, group_name, group_id, active) VALUES ('printer','McAllen','SG-PR-MCA','g-mca',1)`).run();

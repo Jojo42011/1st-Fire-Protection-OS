@@ -12,6 +12,7 @@ import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
 import { addUserToGroup, removeUserFromGroup, graphConfigured, listUserGroups } from '../services/msGraphGroups';
+import { listAllUsers, graphUsersConfigured } from '../services/msGraphUsers';
 
 /* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
 export function seedPeopleCatalog(): void {
@@ -803,4 +804,58 @@ export function startBulkAccessSync(actor: string): { ok: boolean; started: bool
     audit('access_synced_all', `Roster access reconciled from Microsoft 365: ${bulkSyncJob.withUpn} people, ${bulkSyncJob.added} added`, { actor });
   })();
   return { ok: true, started: true, status: bulkSyncJob };
+}
+
+/* ───────────────────── identity FROM Microsoft 365 (Entra is the source of truth) ─────────────────────
+ * BambooHR owns employment facts; Entra owns identity. This reads the directory and stamps each
+ * employee's authoritative UPN (and fills work_email when blank) by matching an Entra user to the
+ * employee on email first, then on a unique name. Graph resolution (group sync, provisioning) then
+ * uses the real UPN regardless of what BambooHR had. Keyless-safe. */
+
+function normPersonName(s: string): string {
+  return String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boolean; error?: string; directory: number; matched: number; updated: number; unmatchedEmployees: number }> {
+  if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0 };
+  const dir = await listAllUsers();
+  if (!dir.ok) return { ok: false, error: dir.error, directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0 };
+  const db = getDb();
+  const emps = db.prepare(`SELECT id, legal_first_name, legal_last_name, preferred_name, work_email, personal_email, upn FROM employees WHERE employment_status IN ('active','onboarding')`).all() as any[];
+
+  // Index employees for matching. A name shared by two employees is marked ambiguous (null) so we
+  // never guess which one an Entra user belongs to.
+  const byEmail = new Map<string, number>();
+  const byName = new Map<string, number | null>();
+  const putName = (key: string, id: number) => { const k = normPersonName(key); if (!k) return; byName.set(k, byName.has(k) && byName.get(k) !== id ? null : id); };
+  for (const e of emps) {
+    for (const em of [e.work_email, e.personal_email, e.upn]) if (em) byEmail.set(String(em).toLowerCase(), e.id);
+    putName(`${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`, e.id);
+    putName(`${e.legal_first_name || ''} ${e.legal_last_name || ''}`, e.id);
+  }
+
+  const empById = new Map<number, any>(emps.map((e) => [e.id, e]));
+  const touched = new Set<number>();
+  let matched = 0, updated = 0;
+  const setUpn = db.prepare(`UPDATE employees SET upn = ?, work_email = COALESCE(NULLIF(work_email, ''), ?) WHERE id = ?`);
+  const tx = db.transaction(() => {
+    for (const u of dir.users) {
+      // Match an Entra user to an employee: email first (authoritative), then a unique name.
+      let empId: number | undefined;
+      for (const key of [u.mail, u.upn]) if (key && byEmail.has(String(key).toLowerCase())) { empId = byEmail.get(String(key).toLowerCase()); break; }
+      if (empId == null) {
+        const nameKeys = [u.displayName || '', `${u.first || ''} ${u.last || ''}`].map((x) => normPersonName(x)).filter(Boolean);
+        for (const nk of nameKeys) { const hit = byName.get(nk); if (hit) { empId = hit; break; } }
+      }
+      if (empId == null || touched.has(empId)) continue; // one Entra user per employee, first wins
+      touched.add(empId);
+      matched++;
+      const e = empById.get(empId);
+      const newUpn = u.upn || u.mail;
+      if (newUpn && e.upn !== newUpn) { setUpn.run(newUpn, u.mail || u.upn || null, empId); updated++; }
+    }
+  });
+  tx();
+  audit('identities_synced', `Matched ${matched} employees to Microsoft 365; ${updated} UPNs set`, { actor });
+  return { ok: true, directory: dir.users.length, matched, updated, unmatchedEmployees: emps.length - touched.size };
 }
