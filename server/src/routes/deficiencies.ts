@@ -20,6 +20,7 @@ const OPEN_CLAUSE = `lower(status) NOT IN (${CLOSED_STATUSES.map((s) => `'${s}'`
 interface DefRow {
   id: number;
   st_id: number | null;
+  job_st_id: number | null;
   company_name: string | null;
   location_name: string | null;
   description: string | null;
@@ -72,13 +73,13 @@ router.get('/api/deficiencies', (req, res) => {
            SUM(CASE WHEN julianday('now')-julianday(reported_at)>90 THEN 1 ELSE 0 END) b90
          FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}`
       ).get(...bind) as any;
-      return [{ key: '0-30', label: '0–30d', n: r.b0 || 0 }, { key: '31-60', label: '31–60d', n: r.b30 || 0 }, { key: '61-90', label: '61–90d', n: r.b60 || 0 }, { key: '90plus', label: '90+d', n: r.b90 || 0 }];
+      return [{ key: '0-30', label: '0-30d', n: r.b0 || 0 }, { key: '31-60', label: '31-60d', n: r.b30 || 0 }, { key: '61-90', label: '61-90d', n: r.b60 || 0 }, { key: '90plus', label: '90+d', n: r.b90 || 0 }];
     } catch { return []; }
   })();
 
   const rows = db
     .prepare(
-      `SELECT id, st_id, company_name, location_name, description, status, severity, proposed_usd, quoted, office,
+      `SELECT id, st_id, job_st_id, company_name, location_name, description, status, severity, proposed_usd, quoted, office,
               reported_at, disposition, disposition_note
          FROM deficiencies WHERE ${OPEN_CLAUSE}${oc}
         ORDER BY proposed_usd DESC, id DESC LIMIT 150`
@@ -102,7 +103,9 @@ router.get('/api/deficiencies', (req, res) => {
     byStatus,
     items: rows.map((r) => ({
       ...r,
-      stUrl: r.st_id ? `${ST_APP}/deficiencies/${r.st_id}` : null,
+      // ServiceTrade has no standalone deficiency page (that path 404s); a deficiency is viewed on
+      // its job. Link to the parent job, which is a real, working ServiceTrade URL.
+      stUrl: r.job_st_id ? `${ST_APP}/jobs/${r.job_st_id}` : null,
     })),
   });
 });

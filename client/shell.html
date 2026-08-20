@@ -424,7 +424,16 @@ function navItemHTML(k){
 // Which nav sections the user has collapsed, remembered across visits so a long sidebar can be
 // trimmed to just the areas someone works in.
 var NAV_COLLAPSED = {};
-try { NAV_COLLAPSED = JSON.parse(localStorage.getItem('fpos_nav_collapsed') || '{}') || {}; } catch(_){ NAV_COLLAPSED = {}; }
+var navStored = null;
+try { navStored = localStorage.getItem('fpos_nav_collapsed'); } catch(_){}
+if (navStored) {
+  try { NAV_COLLAPSED = JSON.parse(navStored) || {}; } catch(_){ NAV_COLLAPSED = {}; }
+} else {
+  // First visit: start every section collapsed so the pane is short and scannable. activate() opens
+  // the section holding the current screen; the user's own expand/collapse choices are remembered
+  // from then on. Home and Ask the Operator sit outside any section, so they always show.
+  NAV.forEach(function(g){ if(g.group) NAV_COLLAPSED[g.group]=1; });
+}
 function saveNavCollapsed(){ try { localStorage.setItem('fpos_nav_collapsed', JSON.stringify(NAV_COLLAPSED)); } catch(_){} }
 function renderNav(){
   nav.innerHTML = NAV.map(function(g){
