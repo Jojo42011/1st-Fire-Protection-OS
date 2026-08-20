@@ -64,6 +64,7 @@ import work from './routes/work';
 import operations from './routes/operations';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
+import { ensureBootstrapAdmin } from './people/authz';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -73,6 +74,9 @@ initDb();
 seed();
 // Seed the People config catalogs (real job positions + role templates). Idempotent, not demo data.
 seedPeopleCatalog();
+// Make the configured bootstrap admin a real, durable app_users row so People is authorized the
+// moment they complete Microsoft sign-in, and they appear in Access & roles.
+ensureBootstrapAdmin();
 // Backfill agents for any build order that shipped before the roster existed, so a shipped
 // card never claims "live in the roster" without a real agent behind it.
 const healed = healRoster();

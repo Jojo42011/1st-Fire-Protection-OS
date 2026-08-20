@@ -175,3 +175,25 @@ export function upsertAppUser(
 export function setAppUserActive(email: string, active: boolean): void {
   getDb().prepare(`UPDATE app_users SET active = ? WHERE lower(email) = ?`).run(active ? 1 : 0, email.toLowerCase());
 }
+
+/**
+ * Make the configured bootstrap admin a real, durable row (not just an env-based grant), so the
+ * first admin is concrete, appears in Access & roles, and survives even if the env var is later
+ * changed. Idempotent: only ensures the people_admin role and company-wide scope are present, and
+ * never downgrades or deactivates an existing row.
+ */
+export function ensureBootstrapAdmin(): void {
+  const email = (process.env.PEOPLE_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
+  if (!email) return;
+  const db = getDb();
+  const row = db.prepare(`SELECT roles, all_offices, active FROM app_users WHERE lower(email) = ?`).get(email) as
+    | { roles: string | null; all_offices: number; active: number }
+    | undefined;
+  const roles = new Set<Role>(parseRoles(row?.roles));
+  roles.add('people_admin');
+  db.prepare(
+    `INSERT INTO app_users (email, display_name, roles, active, source, offices, all_offices)
+       VALUES (?, ?, ?, 1, 'bootstrap', '', 1)
+     ON CONFLICT(email) DO UPDATE SET roles = excluded.roles, all_offices = 1, active = 1`
+  ).run(email, 'Bootstrap Admin', [...roles].join(','));
+}
