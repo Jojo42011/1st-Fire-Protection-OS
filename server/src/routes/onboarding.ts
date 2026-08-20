@@ -13,6 +13,7 @@ import {
   listIntakeLinks,
   resendIntakeLink,
   nudgeIntakeLink,
+  voidIntakeLink,
   getSubmission,
 } from '../services/intakeLinks';
 import { operatingOffices } from '../os/office';
@@ -119,6 +120,13 @@ router.post('/api/onboarding/intake-links/:id/resend', (req, res) => {
 router.post('/api/onboarding/intake-links/:id/nudge', (req, res) => {
   const ok = nudgeIntakeLink(Number(req.params.id));
   res.json({ ok, error: ok ? undefined : 'not_nudgeable' });
+});
+
+/** Discard: void an outstanding link so it can no longer be opened or submitted. */
+router.post('/api/onboarding/intake-links/:id/void', (req, res) => {
+  const out = voidIntakeLink(Number(req.params.id));
+  if (!out.ok) return res.status(out.reason === 'not_found' ? 404 : 409).json(out);
+  res.json({ ok: true });
 });
 
 /** The submitted values behind one link (View submission). */

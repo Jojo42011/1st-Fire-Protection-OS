@@ -244,6 +244,8 @@ function renderLinks(){
     var expCls=l.status==='expired'?'gone':(!gone&&d<=2?'soon':'');
     var expTxt=l.status==='submitted'?'Submitted '+OS.date(l.submitted_at):l.status==='voided'?'Voided':l.status==='expired'?'Expired '+OS.date(l.expires_at):(d<=0?'Expires today':'Expires '+OS.date(l.expires_at));
     var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
+    // Discard is offered only while a link is still live (sent or opened, never submitted).
+    var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
     return '<div class="ilink">'+
       '<div class="il-main">'+
         '<div class="il-role">'+esc(l.job_title||'New hire')+' '+(l.office?OS.officeTag(esc(l.office)):'')+'</div>'+
@@ -252,7 +254,7 @@ function renderLinks(){
       '</div>'+
       '<div class="il-side">'+
         '<div class="il-exp '+expCls+'">'+expTxt+'</div>'+
-        '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+copyBtn+'</div>'+
+        '<div class="il-acts"><button class="il-btn primary" data-link-act="'+l.id+'">'+linkPrimary(l)+'</button>'+copyBtn+discardBtn+'</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -284,6 +286,17 @@ document.getElementById('links').addEventListener('click',function(e){
   if(c){ var l2=LINKS.filter(function(x){return String(x.id)===c.getAttribute('data-link-copy');})[0]; if(!l2||!l2.url) return;
     try{ navigator.clipboard.writeText(l2.url); }catch(_){}
     OS.toast('Intake link copied. It opens the 5-step form; no pay, SSN or bank details are collected.');
+    return;
+  }
+  var v=e.target.closest('[data-link-void]');
+  if(v){ var l3=LINKS.filter(function(x){return String(x.id)===v.getAttribute('data-link-void');})[0]; if(!l3) return;
+    if(!confirm('Discard the intake link for '+(l3.recipient_name||'this manager')+'? The link will stop working immediately and cannot be reopened.')) return;
+    v.disabled=true;
+    fetch('/api/onboarding/intake-links/'+l3.id+'/void',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast(d&&d.reason==='already_submitted'?'That link was already submitted, so it cannot be discarded.':'Could not discard this link.','bad'); v.disabled=false; return; }
+      OS.toast('Intake link discarded. It can no longer be opened. Resend to issue a fresh one.');
+      loadLinks(); renderStrip();
+    }).catch(function(){ OS.toast('Could not reach the link service.','bad'); v.disabled=false; });
   }
 });
 

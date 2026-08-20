@@ -16,6 +16,7 @@ import {
   submitIntake,
   resendIntakeLink,
   nudgeIntakeLink,
+  voidIntakeLink,
   getSubmission,
 } from './intakeLinks';
 
@@ -101,4 +102,21 @@ test('nudge only timestamps a still-open link', () => {
   // a submitted link cannot be nudged
   submitIntake(token, { legal: 'Nudge Me' });
   assert.equal(nudgeIntakeLink(link.id), false);
+});
+
+test('discard voids a live link so it can no longer be opened or submitted', () => {
+  const { link, token } = createIntakeLink({ job_title: 'Dispatcher', office: 'Austin', recipient_name: 'Discard Me' });
+  assert.equal(resolveToken(token).ok, true);
+  const out = voidIntakeLink(link.id);
+  assert.equal(out.ok, true);
+  const r = resolveToken(token);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.reason, 'voided');
+  assert.equal(submitIntake(token, { legal: 'Discard Me' }).ok, false);
+  // idempotent, and a submitted link cannot be discarded
+  assert.equal(voidIntakeLink(link.id).ok, true);
+  const { link: l2, token: t2 } = createIntakeLink({ job_title: 'Inspector', office: 'Houston', recipient_name: 'Already In' });
+  submitIntake(t2, { legal: 'Already In' });
+  const blocked = voidIntakeLink(l2.id);
+  assert.equal(blocked.ok, false);
 });

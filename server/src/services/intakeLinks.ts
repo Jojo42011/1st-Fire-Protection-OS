@@ -187,6 +187,18 @@ export function resendIntakeLink(id: number, actor: string): { link: ReturnType<
   });
 }
 
+/** Discard: void an outstanding link so it can no longer be opened or submitted. A link that was
+ * already submitted is terminal and cannot be discarded; the call reports that instead. */
+export function voidIntakeLink(id: number): { ok: true } | { ok: false; reason: string } {
+  const db = getDb();
+  const row = db.prepare(`SELECT status FROM intake_links WHERE id = ?`).get(id) as { status: string } | undefined;
+  if (!row) return { ok: false, reason: 'not_found' };
+  if (row.status === 'submitted') return { ok: false, reason: 'already_submitted' };
+  if (row.status === 'voided') return { ok: true }; // idempotent
+  db.prepare(`UPDATE intake_links SET status = 'voided', voided_at = datetime('now') WHERE id = ?`).run(id);
+  return { ok: true };
+}
+
 /** Record that a reminder was due (no email backend yet, so this only timestamps the nudge). */
 export function nudgeIntakeLink(id: number): boolean {
   const info = getDb()

@@ -56,6 +56,9 @@
   .nav-item{position:relative;border-radius:8px;padding:8px 10px 8px 12px;font-weight:500;font-size:13px;color:var(--ink-2);transition:background .18s var(--ease),color .18s var(--ease)}
   .nav-item:hover{background:var(--panel-alt)}
   .nav-item.on{background:var(--fill);color:var(--ink);font-weight:650}
+  .nav-item .ic{flex:none}
+  .nav-item.on .ic{color:var(--brand)}
+  .nav-item:hover .ic{color:var(--ink-2)}
   .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--brand);animation:railIn .35s var(--ease)}
   @keyframes railIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
   .nav-item .dotk{display:none}
@@ -414,12 +417,64 @@ frames.innerHTML=KEYS.map(function(k){
 }).join('');
 function frameEl(k){return document.getElementById('frame-'+k);}
 
-/* ---- render the business navigation (grouped, always visible - no accordion) ---- */
+/* ---- render the business navigation (grouped, collapsible) ---- */
 var PROBLEM_COUNT={ approve:1, receivables:1, deficiencies:1 }; // counts that read as a problem → amber
+
+// A small inline-SVG icon per screen, so the pane is scannable by shape, not just text. Stroke-based
+// (currentColor) so each icon inherits the item's colour in light, dark, active and hover states.
+var ICON={
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+  chat:'<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.8 8.8 0 0 1-4-.9L3 20l1-4a8.4 8.4 0 0 1-1-4A8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  check:'<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>',
+  alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  dollar:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  invoice:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>',
+  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  wrench:'<path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/>',
+  clipboard:'<rect x="5" y="4" width="14" height="18" rx="2"/><rect x="8.5" y="2.5" width="7" height="4" rx="1"/>',
+  repeat:'<path d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>',
+  trend:'<path d="M3 17l6-6 4 4 7-7M17 8h4v4"/>',
+  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  star:'<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18.5 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  building:'<rect x="4" y="2" width="16" height="20" rx="1.5"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
+  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+  filter:'<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  bars:'<path d="M22 20h-20M6 20V10M12 20V4M18 20v-7"/>',
+  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  server:'<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  tag:'<path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01"/>',
+  plug:'<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/>',
+  sync:'<path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 21v-5h5"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  bot:'<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/>',
+  plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'
+};
+var KEY_ICON={
+  home:'home', operator:'chat',
+  tasks:'list', approve:'check', exceptions:'alert',
+  moneyOverview:'dollar', receivables:'invoice', handoffs:'repeat', close:'lock',
+  service:'wrench', schedule:'calendar', deficiencies:'alert', jobs:'clipboard', agreements:'repeat', costing:'trend',
+  phones:'phone', reviews:'star', oncall:'bell',
+  people:'users',
+  accounts:'briefcase', sites:'pin', quotes:'invoice', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
+  reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
+  companyOffices:'building', itSystems:'server', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'
+};
+function iconSvg(k){
+  var name=KEY_ICON[k]||'list';
+  return '<span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||ICON.list)+'</svg></span>';
+}
 function navItemHTML(k){
   var s=SCREENS[k]; if(!s) return '';
   var badge = COUNTS[k] ? '<span class="count'+(PROBLEM_COUNT[k]?' problem':'')+'" id="'+COUNTS[k]+'"></span>' : '';
-  return '<button class="nav-item" data-key="'+k+'"><span class="grow">'+s.title+'</span>'+badge+'</button>';
+  return '<button class="nav-item" data-key="'+k+'">'+iconSvg(k)+'<span class="grow">'+s.title+'</span>'+badge+'</button>';
 }
 // Which nav sections the user has collapsed, remembered across visits so a long sidebar can be
 // trimmed to just the areas someone works in.
