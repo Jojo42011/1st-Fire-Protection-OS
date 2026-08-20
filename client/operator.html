@@ -33,7 +33,10 @@
   /* Empty landing: center the hero in the available height so a wide screen does not read as a
      sparse, top-anchored column with a large void beneath it. Once a conversation starts the column
      switches back to top-aligned (the .empty class is dropped). */
-  .col.empty{justify-content:center;padding-bottom:60px}
+  /* Empty landing: anchor the hero in the upper third (a natural reading start) rather than dead
+     center, so a tall screen does not leave the content floating with large voids above and below.
+     The space beneath is the conversation area, with the composer docked at the bottom. */
+  .col.empty{justify-content:flex-start;padding-top:clamp(20px,12vh,120px)}
   .op-hero{display:flex;flex-direction:column}
   .op-hero h1{font-weight:800;font-size:28px;letter-spacing:-.02em;color:var(--ink);line-height:1.15}
   .op-hero .os-question{font-weight:500;font-size:14.5px;color:var(--muted);margin-top:7px;max-width:64ch}
