@@ -108,6 +108,70 @@ router.get('/api/home', (req, res) => {
   });
 });
 
+/**
+ * GET /api/home/activity - a real "what changed" feed, assembled from the timestamps that actually
+ * exist across the business: exceptions detected, cash collected, intake forms submitted, and People
+ * activity. Office scope applies to records that carry an office (exceptions); company-wide events
+ * (AR, People) always show. Nothing here is invented: every row is a real record with a real time.
+ */
+router.get('/api/home/activity', (req, res) => {
+  const db = getDb();
+  const ctx = currentContext(req);
+  const requested = (req.query.office as string) || readCookie(req.headers.cookie, 'fpos_office') || 'all';
+  const resolved = resolveOffice(ctx, requested);
+  if ('error' in resolved) return res.status(resolved.status).json({ ok: false, error: resolved.error });
+  const office = resolved.office;
+
+  const events: { tone: string; text: string; meta: string; at: string }[] = [];
+  const rows = <T,>(sql: string, params: any[] = []): T[] => {
+    try { return db.prepare(sql).all(...params) as T[]; } catch { return []; }
+  };
+
+  // Exceptions detected (office-scoped where the exception carries an office).
+  const exScope = officeScopeClause('office', ctx, office);
+  rows<{ title: string; severity: string; detected_at: string; office: string | null; financial_impact: number }>(
+    `SELECT title, severity, detected_at, office, financial_impact FROM exceptions
+       WHERE status NOT IN ('resolved','dismissed','ignored') AND ${exScope.sql}
+       ORDER BY detected_at DESC LIMIT 5`,
+    exScope.params
+  ).forEach((r) => {
+    const tone = r.severity === 'critical' || r.severity === 'high' ? 'bad' : r.severity === 'medium' ? 'warn' : 'neutral';
+    const money = r.financial_impact > 0 ? ` (~$${fmt(r.financial_impact)})` : '';
+    events.push({ tone, text: r.title + money, meta: 'Exception detected', at: r.detected_at });
+  });
+
+  // Cash collected: invoices marked paid recently (company-wide until Intacct attributes it).
+  rows<{ customer: string; amount: number; paid_at: string }>(
+    `SELECT customer, amount, paid_at FROM invoices WHERE status = 'paid' AND paid_at IS NOT NULL
+       ORDER BY paid_at DESC LIMIT 4`
+  ).forEach((r) => {
+    events.push({ tone: 'good', text: `Collected $${fmt(r.amount)} from ${r.customer}`, meta: 'Receivables', at: r.paid_at });
+  });
+
+  // New hires submitted through a tokenised intake link.
+  rows<{ recipient_name: string | null; job_title: string | null; office: string | null; submitted_at: string }>(
+    `SELECT recipient_name, job_title, office, submitted_at FROM intake_links
+       WHERE status = 'submitted' AND submitted_at IS NOT NULL ORDER BY submitted_at DESC LIMIT 3`
+  ).forEach((r) => {
+    events.push({
+      tone: 'good',
+      text: `${r.recipient_name || 'A hiring manager'} submitted an intake form${r.job_title ? ` for a ${r.job_title}` : ''}`,
+      meta: r.office ? `Onboarding - ${r.office}` : 'Onboarding',
+      at: r.submitted_at,
+    });
+  });
+
+  // People activity (access grants, role changes, onboarding/offboarding steps).
+  rows<{ action: string; detail: string; at: string }>(
+    `SELECT action, detail, at FROM people_audit ORDER BY at DESC LIMIT 4`
+  ).forEach((r) => {
+    events.push({ tone: 'neutral', text: r.detail || r.action, meta: 'People', at: r.at });
+  });
+
+  events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  res.json({ ok: true, events: events.slice(0, 8) });
+});
+
 function fmt(n: number): string {
   return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(Math.round(n));
 }

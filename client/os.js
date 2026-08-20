@@ -234,6 +234,17 @@
 
   // Inline projected-value span (amber, dotted underline). Use for any estimate shown in prose.
   OS.projected = function(html){ return '<span class="os-proj">'+html+'</span>'; };
+
+  // Activity feed: a coloured dot + text + meta/time, one row per real event.
+  // event = {tone('good'|'warn'|'bad'|'neutral'), text, meta, at}
+  OS.feed = function(events, emptyMsg){
+    if(!events || !events.length) return '<div class="os-empty">'+OS.esc(emptyMsg||'Nothing has changed recently.')+'</div>';
+    return '<div class="os-feed">'+events.map(function(e){
+      return '<div class="os-feed-row"><span class="fd '+(e.tone||'neutral')+'"></span>'+
+        '<span class="ft">'+OS.esc(e.text)+'</span>'+
+        '<span class="fm">'+OS.esc(e.meta||'')+(e.at?' · '+OS.esc(OS.ago(e.at)):'')+'</span></div>';
+    }).join('')+'</div>';
+  };
   OS.skeletonKpis = function(n){ var s=''; for(var i=0;i<(n||4);i++) s+='<div class="os-skel os-skel-kpi"></div>'; return '<div class="os-kpis">'+s+'</div>'; };
   OS.errorBox = function(msg, onRetry){ return '<div class="os-err"><span>'+OS.esc(msg||'Could not load.')+'</span>'+(onRetry?'<button data-retry="1">Retry</button>':'')+'</div>'; };
 

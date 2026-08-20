@@ -229,6 +229,15 @@ table.os-table{width:100%;border-collapse:collapse;font-size:13px}
 /* inline projected value in prose */
 .os-proj{color:var(--amber-ink,#8A5106);border-bottom:1px dotted var(--amber,#B4690E)}
 
+/* activity feed (what changed) */
+.os-feed{display:flex;flex-direction:column}
+.os-feed-row{display:flex;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--divider)}
+.os-feed-row:first-child{border-top:0}
+.os-feed .fd{width:8px;height:8px;border-radius:50%;flex:none;position:relative;top:3px;background:var(--os-neutral)}
+.os-feed .fd.good{background:var(--os-good)}.os-feed .fd.warn{background:var(--amber,#B4690E)}.os-feed .fd.bad{background:var(--os-bad)}
+.os-feed .ft{flex:1;min-width:0;font-weight:550;font-size:13px;color:var(--ink-2);line-height:1.4}
+.os-feed .fm{flex:none;font-weight:500;font-size:11px;color:var(--faint);white-space:nowrap}
+
 /* footnote / provenance */
 .os-foot{font-weight:500;font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:16px;max-width:80ch}
 
