@@ -61,6 +61,19 @@
   .empadd input,.empadd select{box-sizing:border-box;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--ink);padding:8px 10px;font-size:13px}
   .st.available,.st.returned,.st.transferred,.st.retired,.st.waived,.st.revoked,.st.expired,.st.missing,.st.damaged{background:var(--fill);color:var(--muted)}
   .st.assigned,.st.verified,.st.uploaded{background:rgba(31,122,77,.12);color:var(--green)}
+  /* Premium identity treatment: an initials avatar, echoing the new-hire intake form. */
+  .avatar{border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:var(--green);background:rgba(31,122,77,.14);box-shadow:0 0 0 1px rgba(31,122,77,.30)}
+  :root[data-theme="dark"] .avatar{color:#5FD09A;background:rgba(95,208,154,.15);box-shadow:0 0 0 1px rgba(95,208,154,.32)}
+  @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .avatar{color:#5FD09A;background:rgba(95,208,154,.15);box-shadow:0 0 0 1px rgba(95,208,154,.32)}}
+  .avatar.lg{width:54px;height:54px;font-size:18px;letter-spacing:-.02em}
+  .avatar.sm{width:30px;height:30px;font-size:11px}
+  .emp-hero{display:flex;gap:16px;align-items:center;padding:18px 20px}
+  .emp-hero h2{margin:0;font-size:22px;letter-spacing:-.025em}
+  .emp-hero .sub{font-weight:500;font-size:13px;color:var(--muted);margin-top:3px}
+  .emp-hero .st{height:fit-content;font-size:11.5px;padding:4px 11px;border-radius:999px}
+  .namecell{display:flex;align-items:center;gap:10px}
+  /* Slightly softer, rounder cards on the People screens. */
+  .card{border-radius:16px}
 </style>
 </head>
 <body>
@@ -228,6 +241,8 @@ function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+
 
 var EMPLOYEES=[], empFO='all', empFS='active', empQ='';
 function empDisplayName(e){ return e.name || ((e.entra_display_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())||e.preferred_name||''); }
+function initialsOf(name){ return String(name||'').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'··'; }
+function avatarHTML(name,size){ return '<span class="avatar '+(size||'sm')+'">'+esc(initialsOf(name))+'</span>'; }
 function renderEmployeeTable(){
   var list=EMPLOYEES.filter(function(e){
     if(empFO!=='all' && (e.office||'')!==empFO) return false;
@@ -239,7 +254,7 @@ function renderEmployeeTable(){
   var host=document.getElementById('empTableHost'); if(!host) return;
   host.innerHTML = list.length
     ? '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
-        list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(empDisplayName(e))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+        list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)"><span class="namecell">'+avatarHTML(empDisplayName(e),'sm')+esc(empDisplayName(e))+'</span></td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
       '</tbody></table></div>'
     : '<div class="card card-pad"><p class="muted">No employees match these filters.</p></div>';
 }
@@ -424,11 +439,11 @@ function renderEmp(){
   var v=document.getElementById('view'); var d=_emp, e=d.employee, rd=d.readiness;
   var activeAccess=(d.access||[]).filter(function(a){return a.status==='provisioned'||a.status==='approved';}).length;
   var critical = (e.employment_status==='terminated'||e.employment_status==='offboarding'||e.employment_status==='notice') && activeAccess>0;
-  var name=((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim();
+  var name=empDisplayName(e);
   var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['software','Software'],['credentials','Credentials'],['history','History']];
   var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
-    '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(name)+'</h2><p class="muted">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
-    (critical?'<div class="card-pad" style="margin-top:10px;background:#fbeaea;border-radius:8px;padding:10px 12px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted">. This person is leaving or left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
+    '<div class="card"><div class="emp-hero">'+avatarHTML(name,'lg')+'<div style="flex:1;min-width:0"><h2>'+esc(name)+'</h2><div class="sub">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</div></div><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></div>'+
+    (critical?'<div style="margin:0 20px 18px;background:var(--os-bad-bg,#fbeaea);border-radius:10px;padding:11px 13px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted">. This person is leaving or left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
     '</div>'+
     '<div class="ptabs" style="margin-top:12px">'+tabs.map(function(t){return '<button class="ptab'+(t[0]===_empTab?' on':'')+'" onclick="empTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var body='';

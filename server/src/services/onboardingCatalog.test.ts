@@ -30,7 +30,9 @@ test('getFormOptions renders the catalog: computers keyed by id, approvals flagg
   assert.equal(bluebeam.kind, 'approval', 'Bluebeam needs an owner approval');
   const napco = opts.software.find((s: any) => s.name === 'Napco')!;
   assert.equal(napco.kind, 'task', 'Napco is a plain IT task');
-  assert.ok(opts.computers.every((c: any) => /^\d+$/.test(c.key)), 'computer keys are catalog ids');
+  // Computers are now offered by purchase tier (with a price), not catalog ids.
+  assert.deepEqual(opts.computers.map((c: any) => c.key), ['standard', 'business', 'cad']);
+  assert.equal(opts.computers.find((c: any) => c.key === 'cad')!.price, 2000);
 });
 
 test('add, edit, and remove flow', () => {

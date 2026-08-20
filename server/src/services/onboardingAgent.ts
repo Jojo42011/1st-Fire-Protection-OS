@@ -445,7 +445,8 @@ export function getFormOptions() {
     software: cat.software.map((s) => ({ name: s.name, owner: s.owner, kind: s.approval ? 'approval' : 'task' })),
     sharepoint: cat.sharepoint.map((g) => ({ name: g.name, owner: g.owner, kind: g.approval ? 'approval' : 'task' })),
     printers: cat.printer.map((p) => p.name),
-    // computers carry the catalog id as the stable key the form submits back as computer_type.
-    computers: cat.computer.map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
+    // Computers are chosen by purchase tier (with price), matching the asset-library cost model.
+    computers: computerTierList(),
+    dockPrice: DOCK_PRICE,
   };
 }

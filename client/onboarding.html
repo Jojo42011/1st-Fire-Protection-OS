@@ -92,8 +92,12 @@
   .fradio:hover{border-color:var(--border-strong,var(--border))}
   .fradio:has(input:checked){border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
   .fradio input{margin-top:2px;accent-color:var(--brand)}
+  .fradio{align-items:center}
+  .fradio .rc{flex:1;min-width:0;display:flex;flex-direction:column}
   .fradio .rt{font-weight:700;font-size:13px;color:var(--ink)}
   .fradio .rs{font-weight:500;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .fradio .rp{margin-left:auto;font-weight:800;font-size:13.5px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;flex:none}
+  .fradio:has(input:checked) .rp{color:var(--brand)}
   .fsub{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:4px;flex-wrap:wrap}
   .fsub .note{margin-right:auto;font-weight:500;font-size:12px;color:var(--muted);max-width:58ch;line-height:1.55}
 
@@ -498,8 +502,9 @@ function renderForm(){
   var sp=(o.sharepoint||[]).map(function(g){return fchk('sp',g.name,g.name+(g.kind==='approval'?' (approval)':''));}).join('');
   var pr=(o.printers||[]).map(function(p){return fchk('pr',p,p);}).join('');
   var sw=(o.software||[]).map(function(s){return fchk('sw',s.name,s.name+(s.kind==='approval'?' (owner approval)':''));}).join('');
-  var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
-    (o.computers||[]).map(function(c){return '<label class="fradio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span></label>';}).join('');
+  var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span class="rc"><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
+    (o.computers||[]).map(function(c){return '<label class="fradio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span class="rc"><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span>'+(c.price!=null?'<span class="rp">$'+Number(c.price).toLocaleString()+'</span>':'')+'</label>';}).join('');
+  var dockLabel='Docking station'+(o.dockPrice!=null?' · $'+Number(o.dockPrice).toLocaleString():'');
   document.getElementById('formCard').innerHTML=
     '<details class="formwrap"><summary>Fill the full request manually <span class="hint">Operational setup only. No pay or SSN: that lives in BambooHR.</span></summary>'+
     '<form id="onb-form" class="fbody">'+
@@ -514,6 +519,7 @@ function renderForm(){
         (pr?'<div class="fsub2">Printers</div><div class="fchecks">'+pr+'</div>':''))+
       formSection('Equipment and software','A new computer routes to an owner approval; software installs route to IT or its licence owner',
         '<div class="fsub2">Computer</div><div class="fradios">'+radios+'</div>'+
+        '<div class="fchecks" style="margin-top:9px">'+fchk('dock','',dockLabel)+'</div>'+
         '<div class="fsub2">Software</div><div class="fchecks">'+sw+'</div>'+
         '<div class="fsub2">Safety-issued equipment</div><div class="fchecks">'+
           fchk('company_cell','','Company cell phone')+fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
@@ -544,6 +550,7 @@ function submitForm(e){
     company_vehicle:checked('company_vehicle'), vehicle_details:f.vehicle_details.value.trim(),
     vehicle_transfer:checked('vehicle_transfer'), wex_card:checked('wex_card'),
     computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',
+    dock:checked('dock'),
     software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr')
   };
   if(!payload.name){ f.name.focus(); return; }
