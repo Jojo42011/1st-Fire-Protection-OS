@@ -1,5 +1,6 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
+import { DEMO_MODE } from '../config/demo';
 import {
   createRequest,
   completeItem,
@@ -29,8 +30,12 @@ export function seed(): void {
   seedAssociations();
   seedCalibration();
   seedLicenses();
-  seedOnboarding();
-  seedApprovals();
+  // Demo People records (onboarding requests + their approvals) are illustrative only. In a live
+  // deployment they would clash with real employees, so they seed only in demo mode.
+  if (DEMO_MODE) {
+    seedOnboarding();
+    seedApprovals();
+  }
   seedCrm();
   seedFiveAgents();
   seedEstimator();

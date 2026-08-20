@@ -228,7 +228,7 @@ VIEWS.employees=function(v){
     var body=(!list.length)
       ? '<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>'
       : '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
-          list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+          list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
         '</tbody></table></div>';
     v.innerHTML=head+'<div id="bhMsg"></div>'+body;
   });
@@ -263,7 +263,7 @@ function renderEmp(){
   var v=document.getElementById('view'); var d=_emp, e=d.employee, rd=d.readiness;
   var activeAccess=(d.access||[]).filter(function(a){return a.status==='provisioned'||a.status==='approved';}).length;
   var critical = (e.employment_status==='terminated'||e.employment_status==='offboarding'||e.employment_status==='notice') && activeAccess>0;
-  var name=e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||''));
+  var name=((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim();
   var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['credentials','Credentials'],['history','History']];
   var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
     '<div class="card card-pad"><div class="row" style="justify-content:space-between"><div><h2 style="margin:0">'+esc(name)+'</h2><p class="muted">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</p></div><span class="st '+esc(e.employment_status)+'" style="height:fit-content">'+esc(human(e.employment_status))+'</span></div>'+
@@ -310,7 +310,7 @@ function renderTaskList(v,url,title,empty,approvalsOnly,linkNote){
     if(!tasks.length){ v.innerHTML=note+'<div class="card card-pad"><p class="muted">'+esc(empty)+'</p></div>'; return; }
     v.innerHTML=note+'<div class="card card-clip"><div class="card-head"><h2>'+esc(title)+'</h2><span style="flex:1"></span><span class="muted">'+tasks.length+'</span></div><table><thead><tr><th>Task</th><th>For</th><th>Team</th><th>Status</th><th></th></tr></thead><tbody>'+
       tasks.map(function(t){
-        var name=(t.preferred_name||((t.legal_first_name||'')+' '+(t.legal_last_name||''))).trim();
+        var name=(((t.preferred_name||t.legal_first_name||'')+' '+(t.legal_last_name||'')).trim()).trim();
         var actions='';
         if(t.kind==='approval' && t.status==='awaiting_approval') actions='<button class="btn btn-sm" onclick="act('+t.id+',\'approve\')">Approve</button> <button class="btn btn-sm" onclick="act('+t.id+',\'reject\')">Reject</button>';
         else if(t.kind==='task' && (t.status==='pending'||t.status==='ready'||t.status==='in_progress')) actions='<button class="btn btn-sm" onclick="act('+t.id+',\'complete\')">Mark done</button>';
@@ -327,7 +327,7 @@ VIEWS.offboarding=function(v){
     var list=(r.body&&r.body.employees)||[];
     v.innerHTML='<div class="card card-pad"><div class="card-head" style="padding:0 0 8px"><h2>Start offboarding</h2></div>'+
       '<p class="muted">Offboarding reverses what the person <b>actually has</b> on record, not a template guess. Begin when notice is received.</p>'+
-      (list.length? '<div class="grid2" style="margin-top:12px"><div><label class="fld">Employee</label><select class="in" id="off-emp">'+list.map(function(e){return '<option value="'+e.id+'">'+esc((e.preferred_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')))+' · '+(e.job_position||''))+'</option>';}).join('')+'</select></div>'+
+      (list.length? '<div class="grid2" style="margin-top:12px"><div><label class="fld">Employee</label><select class="in" id="off-emp">'+list.map(function(e){return '<option value="'+e.id+'">'+esc((((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())+' · '+(e.job_position||''))+'</option>';}).join('')+'</select></div>'+
         '<div><label class="fld">Type</label><select class="in" id="off-type"><option value="voluntary">Voluntary</option><option value="involuntary">Involuntary</option><option value="immediate">Immediate termination</option></select></div>'+
         '<div><label class="fld">Notice date</label><input class="in" id="off-notice" type="date"></div>'+
         '<div><label class="fld">Last working date</label><input class="in" id="off-last" type="date"></div></div>'+

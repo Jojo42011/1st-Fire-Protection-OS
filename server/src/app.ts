@@ -66,6 +66,7 @@ import operations from './routes/operations';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { ensureBootstrapAdmin } from './people/authz';
+import { cleanupDemoData } from './seed/cleanupDemo';
 
 const PORT = Number(process.env.PORT || 3900);
 const CLIENT_DIR = path.resolve(__dirname, '../../client');
@@ -73,6 +74,8 @@ const CLIENT_DIR = path.resolve(__dirname, '../../client');
 // ---- boot the brain ----
 initDb();
 seed();
+// Remove fixture rows that early, ungated builds wrote to the live database (production only, once).
+cleanupDemoData();
 // Seed the People config catalogs (real job positions + role templates). Idempotent, not demo data.
 seedPeopleCatalog();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the

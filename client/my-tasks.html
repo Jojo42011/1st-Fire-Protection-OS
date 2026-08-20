@@ -42,7 +42,7 @@ var lane='mine', MINE=[], ALL=[], BYID={}, ME=null;
 var todayISO=new Date().toISOString().slice(0,10);
 
 function teamLabel(t){ return TEAM_LABEL[t]||(t?String(t):''); }
-function empName(t){ return t.preferred_name||[t.legal_first_name,t.legal_last_name].filter(Boolean).join(' ')||'a teammate'; }
+function empName(t){ return [t.preferred_name||t.legal_first_name, t.legal_last_name].filter(Boolean).join(' ')||'a teammate'; }
 function isOverdue(t){ return t.due_date && String(t.due_date).slice(0,10)<todayISO && !DONE[t.status]; }
 function isBlocked(t){ return t.status==='blocked'; }
 function actionable(t){ return t.status==='pending'||t.status==='ready'||t.status==='in_progress'||t.status==='awaiting_approval'; }

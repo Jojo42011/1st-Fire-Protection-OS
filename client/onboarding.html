@@ -137,9 +137,9 @@
         <h2 style="font-weight:800;font-size:18px;color:var(--ink);margin:0 0 4px">New intake link</h2>
         <p class="muted" style="font-size:12.5px;margin:0 0 16px">Creates a single-use link to send to the hiring manager. They fill it in; nothing sends on its own.</p>
         <label class="mkl">Role</label>
-        <select id="mk-role" class="mki"><option>Service Technician</option><option>Inspector</option><option>Estimator</option><option>Dispatcher</option></select>
+        <select id="mk-role" class="mki"></select>
         <label class="mkl">Office</label>
-        <select id="mk-office" class="mki"><option>Houston</option><option>San Antonio</option><option>Austin</option></select>
+        <select id="mk-office" class="mki"></select>
         <label class="mkl">Who is it for (name)</label>
         <input id="mk-name" class="mki" placeholder="Hiring manager or candidate" />
         <label class="mkl">Their email (optional)</label>
@@ -289,6 +289,19 @@ document.getElementById('links').addEventListener('click',function(e){
 
 /* ─────────────── create-link modal ─────────────── */
 var mk=document.getElementById('mk');
+// Populate the create-link modal with the real offices (9) and role templates, not a hardcoded few.
+function loadMkOptions(){
+  fetch('/api/offices').then(function(r){return r.json();}).then(function(d){
+    var sel=document.getElementById('mk-office'); if(!sel) return;
+    sel.innerHTML=((d&&d.offices)||[]).map(function(o){return '<option value="'+esc(o.label)+'">'+esc(o.label)+'</option>';}).join('');
+  }).catch(function(){});
+  fetch('/api/people/positions').then(function(r){return r.json();}).then(function(d){
+    var sel=document.getElementById('mk-role'); if(!sel) return;
+    var names=((d&&d.positions)||[]).filter(function(p){return p.active!==0;}).map(function(p){return p.name;}).filter(Boolean);
+    if(!names.length) names=['Service Technician','Inspector','Estimator','Dispatcher'];
+    sel.innerHTML=names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
+  }).catch(function(){});
+}
 function openMk(){ mk.classList.add('on'); mk.setAttribute('aria-hidden','false'); var n=document.getElementById('mk-name'); if(n) setTimeout(function(){n.focus();},50); }
 function closeMk(){ mk.classList.remove('on'); mk.setAttribute('aria-hidden','true'); }
 document.getElementById('newLink').addEventListener('click',openMk);
@@ -465,7 +478,7 @@ function submitForm(e){
 }
 
 /* ─────────────── boot ─────────────── */
-OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); });
+OS.ready(function(){ renderStrip(); loadLinks(); loadCounts(); loadBoard(); loadMkOptions(); });
 OS.onChange(function(){ loadBoard(); });
 </script>
 </body>

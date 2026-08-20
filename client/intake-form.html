@@ -33,6 +33,7 @@
   .textwrap{margin-top:9px;border:1px solid #D9DEE6;border-radius:9px;padding:11px 13px;transition:border-color .2s ease}
   .textwrap:focus-within{border-color:#0E1420}
   .textwrap input{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:#0E1420;background:none}
+  .textwrap select{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:#0E1420;background:none;-webkit-appearance:none;appearance:none;cursor:pointer}
   .note{margin:18px 24px 0;padding:13px 15px;background:#FBFBFC;border:1px solid #F1F3F6;border-radius:10px}
   .note b{display:block;font-weight:600;font-size:12px}
   .note p{font-weight:500;font-size:12px;line-height:1.55;color:#5E6779;margin:5px 0 0}
@@ -140,6 +141,20 @@
       ] }
   ];
 
+  // Replace a field's options with the real set from the server, keeping any prefilled value in the
+  // list so it still shows as selected. Long lists (many job titles) become a dropdown, not chips.
+  function setFieldOpts(key, opts, keep, preferSelect) {
+    STEPS.forEach(function (s) {
+      s.fields.forEach(function (f) {
+        if (f.key !== key) return;
+        var list = opts.slice();
+        if (keep && list.indexOf(keep) === -1) list.unshift(keep);
+        f.opts = list;
+        f.select = !!preferSelect || list.length > 8;
+      });
+    });
+  }
+
   function defaults() {
     var v = {};
     STEPS.forEach(function (s) {
@@ -179,6 +194,10 @@
             : 'This link is not valid. Ask for a new one.');
           return;
         }
+        // Offer the real set of offices and job titles, not a hardcoded few. Many positions do not
+        // fit as chips, so the title field switches to a dropdown when the list is long.
+        if (res.d.offices && res.d.offices.length) setFieldOpts('office', res.d.offices, vals.office || res.d.office);
+        if (res.d.positions && res.d.positions.length) setFieldOpts('title', res.d.positions, vals.title || res.d.job_title, true);
         if (res.d.job_title) vals.title = res.d.job_title;
         if (res.d.office) vals.office = res.d.office;
         if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
@@ -234,6 +253,21 @@
         inp.oninput = function () { vals[f.key] = inp.value; };
         tw.appendChild(inp);
         box.appendChild(tw);
+      } else if (f.select) {
+        var sw = document.createElement('div');
+        sw.className = 'textwrap';
+        var sel = document.createElement('select');
+        f.opts.forEach(function (o) {
+          var opt = document.createElement('option');
+          opt.value = o;
+          opt.textContent = o;
+          if (vals[f.key] === o) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        if (!vals[f.key] && f.opts.length) vals[f.key] = f.opts[0];
+        sel.onchange = function () { vals[f.key] = sel.value; };
+        sw.appendChild(sel);
+        box.appendChild(sw);
       } else {
         var row = document.createElement('div');
         row.className = 'chips';

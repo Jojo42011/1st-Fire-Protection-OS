@@ -6,6 +6,18 @@
 import { Router } from 'express';
 import path from 'path';
 import { resolveToken, markOpened, submitIntake } from '../services/intakeLinks';
+import { operatingOffices } from '../os/office';
+import { getDb } from '../db/index';
+
+// The real offices + role templates, so the public form offers the true set (not a hardcoded few).
+function intakeOptions(): { offices: string[]; positions: string[] } {
+  const offices = operatingOffices().map((o) => o.label);
+  let positions: string[] = [];
+  try {
+    positions = (getDb().prepare(`SELECT name FROM job_positions WHERE active = 1 ORDER BY name`).all() as { name: string }[]).map((r) => r.name).filter(Boolean);
+  } catch { positions = []; }
+  return { offices, positions };
+}
 
 const CLIENT_DIR = path.join(__dirname, '..', '..', '..', 'client');
 const router = Router();
@@ -21,7 +33,7 @@ router.get('/api/intake/:token', (req, res) => {
   if (!check.ok) return res.status(410).json({ ok: false, reason: check.reason });
   markOpened(req.params.token);
   const l = check.link;
-  res.json({ ok: true, job_title: l.job_title, office: l.office, recipient_name: l.recipient_name, expires_at: l.expires_at });
+  res.json({ ok: true, job_title: l.job_title, office: l.office, recipient_name: l.recipient_name, expires_at: l.expires_at, ...intakeOptions() });
 });
 
 /** Submit the form for a token. Single-use: creates the onboarding request and closes the link. */
