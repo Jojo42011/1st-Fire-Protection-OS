@@ -46,8 +46,21 @@ function catalogRoute(kind: 'software' | 'sharepoint', name: string): { owner: O
   return { owner: item.owner as Owner, kind: item.approval ? 'approval' : 'task' };
 }
 
-/** A chosen computer by its catalog id (the form submits the id as computer_type). */
+/** Computers are chosen by purchase tier (the form submits the tier key as computer_type). Prices
+ *  match the asset-library cost model. Exported so the intake routes offer the same set. */
+export const COMPUTER_TIERS: Record<string, { key: string; label: string; spec: string; price: number }> = {
+  standard: { key: 'standard', label: 'Standard laptop', spec: 'General office use · 16 GB', price: 1000 },
+  business: { key: 'business', label: 'Business laptop', spec: 'Heavier multitasking · 32 GB', price: 1400 },
+  cad: { key: 'cad', label: 'CAD workstation', spec: 'HydraCAD / AutoCAD · 32 GB · 8 GB GPU', price: 2000 },
+};
+export const DOCK_PRICE = 200;
+export function computerTierList(): { key: string; label: string; spec: string; price: number }[] {
+  return Object.keys(COMPUTER_TIERS).map((k) => COMPUTER_TIERS[k]);
+}
 function computerById(idLike: string): { label: string; spec: string | null } | undefined {
+  const t = COMPUTER_TIERS[String(idLike)];
+  if (t) return { label: t.label, spec: `${t.spec} · $${t.price.toLocaleString()}` };
+  // Back-compat: an older request may still carry a numeric catalog id.
   const id = Number(idLike);
   if (!Number.isFinite(id)) return undefined;
   const item = catalogByKind('computer').find((c) => c.id === id);
@@ -90,6 +103,7 @@ export interface OnboardingPayload {
   vehicle_transfer?: boolean;
   wex_card?: boolean;
   computer_type?: string; // none|standard|business|cad
+  dock?: boolean; // docking station accessory
   software?: string[];
   sharepoint?: string[];
   printers?: string[];
@@ -202,6 +216,9 @@ function routeItems(req: any): DraftItem[] {
     }
   }
 
+  // ── IT: docking station (a computer accessory) ──
+  if (bool(req.dock)) items.push({ owner: 'it', kind: 'task', label: 'Provide docking station', detail: `$${DOCK_PRICE}` });
+
   // ── IT: company devices (cell phone + iPad are provisioned by IT) ──
   if (bool(req.company_cell)) items.push({ owner: 'it', kind: 'task', label: 'Issue company cell phone' });
   if (bool(req.ipad)) items.push({ owner: 'it', kind: 'task', label: 'Issue company iPad' });
@@ -249,12 +266,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, software_json, sharepoint_json, printers_json)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @software_json, @sharepoint_json, @printers_json)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -281,6 +298,7 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       vehicle_transfer: bool(payload.vehicle_transfer) ? 1 : 0,
       wex_card: bool(payload.wex_card) ? 1 : 0,
       computer_type: payload.computer_type || 'none',
+      dock: bool(payload.dock) ? 1 : 0,
       software_json: JSON.stringify(Array.isArray(payload.software) ? payload.software : []),
       sharepoint_json: JSON.stringify(Array.isArray(payload.sharepoint) ? payload.sharepoint : []),
       printers_json: JSON.stringify(Array.isArray(payload.printers) ? payload.printers : []),

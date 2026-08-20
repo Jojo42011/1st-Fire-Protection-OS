@@ -160,6 +160,7 @@ function toPayload(vals: any): OnboardingPayload {
     company_email: accounts.includes('Company email'),
     teams_number: accounts.includes('Teams number'),
     computer_type: vals.computer_type && vals.computer_type !== 'none' ? String(vals.computer_type) : 'none',
+    dock: !!vals.dock,
     software: arr(vals.software),
     sharepoint: arr(vals.sharepoint),
     printers: arr(vals.printers),

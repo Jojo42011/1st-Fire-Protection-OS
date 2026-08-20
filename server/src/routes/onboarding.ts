@@ -7,6 +7,8 @@ import {
   approveItem,
   rejectItem,
   getFormOptions,
+  computerTierList,
+  DOCK_PRICE,
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
@@ -38,12 +40,9 @@ router.get('/api/onboarding/form-options', (_req, res) => {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    // Computers by purchase tier, matching the asset-library cost model and the live intake form.
-    computers: [
-      { key: 'standard', label: 'Standard laptop', spec: 'General office use (~16 GB)' },
-      { key: 'business', label: 'Business laptop', spec: 'Heavier multitasking (~32 GB)' },
-      { key: 'cad', label: 'CAD workstation', spec: 'HydraCAD / AutoCAD (~64 GB)' },
-    ],
+    // Computers by purchase tier (with price), matching the asset-library cost model and live form.
+    computers: computerTierList(),
+    dockPrice: DOCK_PRICE,
   };
   res.json({ offices: operatingOffices().map((o) => o.label), positions, catalog });
 });

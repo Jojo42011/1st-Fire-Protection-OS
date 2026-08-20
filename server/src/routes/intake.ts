@@ -9,31 +9,27 @@ import { resolveToken, markOpened, submitIntake, boundHire } from '../services/i
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
+import { computerTierList, DOCK_PRICE } from '../services/onboardingAgent';
 
 // The real offices, role templates, and the editable onboarding catalog, so the manager intake form
 // offers the exact same operational options as the internal full form (not a hardcoded few).
 function intakeOptions(): {
   offices: string[];
   positions: string[];
-  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string }[] };
+  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string; price: number }[]; dockPrice: number };
 } {
   const offices = operatingOffices().map((o) => o.label);
   let positions: string[] = [];
   try {
     positions = (getDb().prepare(`SELECT name FROM job_positions WHERE active = 1 ORDER BY name`).all() as { name: string }[]).map((r) => r.name).filter(Boolean);
   } catch { positions = []; }
-  // Computers are chosen by purchase tier, matching the asset library's cost model (Standard $1,000 /
-  // Business $1,400 / CAD $2,000). The tier flows into provisioning and the expected device value.
-  const computers = [
-    { key: 'standard', label: 'Standard laptop', spec: 'General office use (~16 GB)' },
-    { key: 'business', label: 'Business laptop', spec: 'Heavier multitasking (~32 GB)' },
-    { key: 'cad', label: 'CAD workstation', spec: 'HydraCAD / AutoCAD (~64 GB)' },
-  ];
   const catalog = {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    computers,
+    // Computers by purchase tier (with price), matching the asset library's cost model.
+    computers: computerTierList(),
+    dockPrice: DOCK_PRICE,
   };
   return { offices, positions, catalog };
 }

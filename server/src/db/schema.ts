@@ -1218,6 +1218,7 @@ export function initDb(): void {
   // hire the manager is setting up), so the manager form is pre-filled and no duplicate person is made.
   addColumn('intake_links', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
+  addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical
