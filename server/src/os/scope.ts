@@ -52,6 +52,16 @@ export function currentContext(req: express.Request): OsContext {
   return { user: null, email: null, roles: [], allOffices: legacyWide, offices: [], legacy: true };
 }
 
+/** Build a context for a headless job (e.g. a scheduled report) from a resolved user or an email.
+ *  A user maps to their real scope; a null user (owner unknown / shared bucket) keeps the same
+ *  company-wide posture a shared-password session would have. Never throws. */
+export function contextForUser(user: AppUser | null): OsContext {
+  if (user) {
+    return { user, email: user.email, roles: user.roles, allOffices: user.all_offices, offices: user.offices, legacy: false };
+  }
+  return { user: null, email: null, roles: [], allOffices: !requireIdentity(), offices: [], legacy: true };
+}
+
 /** True when the caller is authorized for the given canonical office key. */
 export function canSeeOffice(ctx: OsContext, officeKey: string): boolean {
   if (ctx.allOffices) return true;
@@ -142,7 +152,7 @@ export function discoverOffices(): Array<{ key: string; label: string }> {
     try {
       rows = db.prepare(sql).all() as { o: string }[];
     } catch {
-      rows = []; // table not present in this DB — skip this source
+      rows = []; // table not present in this DB - skip this source
     }
     for (const r of rows) {
       if (isNonOffice(r.o)) continue;

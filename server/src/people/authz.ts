@@ -57,7 +57,14 @@ export interface AppUser {
 export function currentUser(req: express.Request): AppUser | null {
   const id: Identity | null = currentIdentity(req);
   if (!id || !id.email) return null;
-  const email = id.email.toLowerCase();
+  return resolveAppUser(id.email, id.name);
+}
+
+/** Resolve an AppUser purely from an email (for headless jobs like scheduled reports). Same rules
+ *  as currentUser: app_users mapping plus the bootstrap grant, super-user scope, etc. */
+export function resolveAppUser(rawEmail: string, name?: string | null): AppUser | null {
+  const email = String(rawEmail || '').toLowerCase();
+  if (!email) return null;
   const row = getDb()
     .prepare(`SELECT email, display_name, roles, active, source, offices, all_offices FROM app_users WHERE lower(email) = ?`)
     .get(email) as
@@ -81,7 +88,7 @@ export function currentUser(req: express.Request): AppUser | null {
   const offices = parseOffices(row?.offices);
   return {
     email,
-    display_name: row?.display_name || id.name || null,
+    display_name: row?.display_name || name || null,
     roles: [...roles],
     active: true,
     source: row?.source || 'bootstrap',

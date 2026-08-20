@@ -101,7 +101,7 @@ function boot(){
     var pSel=document.getElementById('period');
     (d.periods||[]).forEach(function(p){ pSel.appendChild(opt(p[0]||p.key,(p[1]||p.label).toLowerCase())); });
     pSel.value='month';
-    document.getElementById('foot').innerHTML='Every number is computed live under your access. A saved report stores a question, never a snapshot: opening it re-runs under your current scope, so sharing one never widens access. Scheduling and CSV draft the output and wait: nothing is sent, granted, or emailed without approval.';
+    document.getElementById('foot').innerHTML='Every number is computed live under your access. A saved report stores a question, never a snapshot: opening it re-runs under your current scope, so sharing one never widens access. A scheduled report emails its recipient every week, computed under your authorization; use Send now to deliver one immediately. CSV downloads the current result locally, nothing is sent anywhere.';
     ['metric','scope','period','groupBy'].forEach(function(id){ document.getElementById(id).addEventListener('change',run); });
     run();
     loadSaved();
@@ -223,17 +223,24 @@ function definitionCard(m, cfg, f){
 }
 
 /* ── saved & scheduled reports ── */
+var MAIL_OK=true;
 function loadSaved(){
   fetch('/api/reports/saved').then(function(r){return r.json();}).then(function(d){
     var el=document.getElementById('saved'), nEl=document.getElementById('savedN');
+    MAIL_OK=d&&d.mailConfigured!==false;
     if(!d||!d.ok||!d.reports.length){ el.innerHTML='<div class="os-empty">No saved reports yet. Build a sentence above and Save it, or Schedule it weekly.</div>'; if(nEl) nEl.textContent=''; return; }
     if(nEl) nEl.textContent='· '+d.reports.length;
     el.innerHTML=d.reports.map(function(r){
-      var c=r.config||{}, sched=c.schedule==='weekly';
-      var meta=(metricDef(c.metric).label||c.metric)+' · '+scopeLabel(c.office||'all')+' · '+periodLabel(c.period||'month')+(c.groupBy==='office'?' · by office':'')+(sched?' · scheduled weekly':'');
-      return '<div class="sr" data-load=\''+OS.esc(JSON.stringify(c))+'\'><div><div class="nm">'+OS.esc(r.name)+'</div>'+
-        '<div class="meta">'+OS.esc(meta)+'</div></div>'+
-        '<div class="srx"><button data-open="'+r.id+'">Open</button><button data-del="'+r.id+'">Delete</button></div></div>';
+      var c=r.config||{}, sched=r.schedule==='weekly';
+      var meta=(metricDef(c.metric).label||c.metric)+' · '+scopeLabel(c.office||'all')+' · '+periodLabel(c.period||'month')+(c.groupBy==='office'?' · by office':'');
+      if(sched){ meta+=' · weekly to '+OS.esc(r.recipient||'a recipient')
+        +(r.next_run_at?', next '+OS.date(r.next_run_at):'')
+        +(r.last_sent_at?' · last sent '+OS.ago(r.last_sent_at):(MAIL_OK?'':' · email not configured'));
+      }
+      var sendBtn=(sched&&MAIL_OK)?'<button data-send="'+r.id+'">Send now</button>':'';
+      return '<div class="sr'+(sched?' sched':'')+'" data-load=\''+OS.esc(JSON.stringify(c))+'\'><div><div class="nm">'+OS.esc(r.name)+(sched?' <span class="os-pill neutral" style="font-size:9px">WEEKLY</span>':'')+'</div>'+
+        '<div class="meta">'+meta+'</div></div>'+
+        '<div class="srx">'+sendBtn+'<button data-open="'+r.id+'">Open</button><button data-del="'+r.id+'">Delete</button></div></div>';
     }).join('');
   });
 }
@@ -258,11 +265,19 @@ document.getElementById('save').addEventListener('click',function(){
     .then(function(r){return r.json();}).then(function(){ OS.toast('Report saved: "'+name+'". Open it any time to re-run under your current scope.'); loadSaved(); });
 });
 document.getElementById('schedule').addEventListener('click',function(){
-  var cfg=currentConfig(); cfg.schedule='weekly';
+  var cfg=currentConfig();
   var name=prompt('Name this weekly report:', metricDef(cfg.metric).label+' · weekly');
   if(!name) return;
-  fetch('/api/reports/saved',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,config:cfg})})
-    .then(function(r){return r.json();}).then(function(){ OS.toast('Weekly report drafted and saved: "'+name+'". It waits for approval before anything is emailed on its own.'); loadSaved(); });
+  var recipient=prompt('Email address to send it to every week:', '');
+  if(!recipient) return;
+  fetch('/api/reports/saved',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:name,config:cfg,schedule:'weekly',recipient:recipient.trim()})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast('Could not schedule the report.','bad'); return; }
+      OS.toast(d.mailConfigured===false
+        ? 'Scheduled weekly to '+recipient.trim()+'. Microsoft 365 email is not connected yet, so it will send once that is configured.'
+        : 'Scheduled: "'+name+'" emails '+recipient.trim()+' every week. Use Send now to deliver one immediately.');
+      loadSaved();
+    });
 });
 document.getElementById('csv').addEventListener('click',function(){
   if(!LAST){ OS.toast('Nothing to export yet. Build a sentence first.'); return; }
@@ -286,6 +301,12 @@ document.getElementById('csv').addEventListener('click',function(){
   OS.toast('CSV of the current result drafted. It is the live numbers you see now, nothing is sent anywhere.');
 });
 document.getElementById('saved').addEventListener('click',function(e){
+  var send=e.target.closest('[data-send]');
+  if(send){ e.stopPropagation(); var b=send; b.disabled=true; b.textContent='Sending…';
+    fetch('/api/reports/saved/'+send.getAttribute('data-send')+'/send-now',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ OS.toast('Report emailed to '+d.sent_to+' now.'); } else { OS.toast('Could not send: '+((d&&d.error)||'error')+'.','bad'); }
+      loadSaved();
+    }); return; }
   var del=e.target.closest('[data-del]');
   if(del){ e.stopPropagation(); fetch('/api/reports/saved/'+del.getAttribute('data-del'),{method:'DELETE'}).then(function(){ OS.toast('Report deleted.'); loadSaved(); }); return; }
   var open=e.target.closest('[data-open]');

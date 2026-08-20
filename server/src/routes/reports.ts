@@ -4,15 +4,17 @@ import { currentContext, allowedOffices, OsContext } from '../os/scope';
 import { runMetric, metricByOffice, metricCatalog, metricKeys, metricCard, metricTrend, metricDrill } from '../os/metrics';
 import { resolvePeriod, PERIODS } from '../os/period';
 import { officeLabel } from '../os/office';
+import { nextWeeklyRun, renderReport } from '../services/reportScheduler';
+import { mailConfigured, sendMail } from '../services/msGraphMail';
 
 /**
  * Reporting API (Phase 2). Everything is office- and date-scoped and enforced server-side:
- *   GET  /api/reports/catalog          — metrics, periods, and the caller's authorized offices
- *   GET  /api/metrics/:key             — one metric for a scope (office + period)
- *   GET  /api/metrics/:key/by-office   — the metric per authorized office (for comparison)
- *   GET  /api/reports/office           — an office dashboard bundle (KPIs + comparison + funnel)
- *   GET/POST/PUT/DELETE /api/reports/saved[/:id]  — saved report definitions
- *   POST /api/reports/saved/:id/run    — run a saved report UNDER THE VIEWING USER'S scope
+ *   GET  /api/reports/catalog          - metrics, periods, and the caller's authorized offices
+ *   GET  /api/metrics/:key             - one metric for a scope (office + period)
+ *   GET  /api/metrics/:key/by-office   - the metric per authorized office (for comparison)
+ *   GET  /api/reports/office           - an office dashboard bundle (KPIs + comparison + funnel)
+ *   GET/POST/PUT/DELETE /api/reports/saved[/:id]  - saved report definitions
+ *   POST /api/reports/saved/:id/run    - run a saved report UNDER THE VIEWING USER'S scope
  *
  * A saved report stores a definition, never a snapshot: when run, its office is re-resolved against
  * the current viewer's authorization, so sharing/opening a report never widens access.
@@ -39,7 +41,7 @@ router.get('/api/metrics/:key', (req, res) => {
   res.json({ ok: true, metric: r });
 });
 
-/** Real time series for a date-scoped metric (unsupported for point-in-time metrics — no fabrication). */
+/** Real time series for a date-scoped metric (unsupported for point-in-time metrics - no fabrication). */
 router.get('/api/metrics/:key/trend', (req, res) => {
   const ctx = currentContext(req);
   const t = metricTrend(req.params.key, ctx, { office: req.query.office as string, range: rangeFrom(req) });
@@ -80,7 +82,7 @@ router.get('/api/reports/office', (req, res) => {
     kpis.push(r);
   }
 
-  // Deficiency funnel — only the steps real data supports (found -> quoted -> quoted $).
+  // Deficiency funnel - only the steps real data supports (found -> quoted -> quoted $).
   const open = runMetric('open_deficiencies', ctx, { office, range });
   const quoted = runMetric('quoted_deficiencies', ctx, { office, range });
   const quotedVal = runMetric('quoted_repair_value', ctx, { office, range });
@@ -108,17 +110,37 @@ router.get('/api/reports/office', (req, res) => {
 /* ─────────────────────────── saved reports ─────────────────────────── */
 router.get('/api/reports/saved', (req, res) => {
   const ctx = currentContext(req);
-  const rows = getDb().prepare(`SELECT id, name, config_json, updated_at FROM saved_reports WHERE owner_email = ? ORDER BY name`).all(ownerKey(ctx)) as any[];
-  res.json({ ok: true, reports: rows.map((r) => ({ id: r.id, name: r.name, config: safeJson(r.config_json), updated_at: r.updated_at })) });
+  const rows = getDb()
+    .prepare(`SELECT id, name, config_json, updated_at, schedule, recipient, last_sent_at, next_run_at FROM saved_reports WHERE owner_email = ? ORDER BY name`)
+    .all(ownerKey(ctx)) as any[];
+  res.json({
+    ok: true,
+    mailConfigured: mailConfigured(),
+    reports: rows.map((r) => ({
+      id: r.id, name: r.name, config: safeJson(r.config_json), updated_at: r.updated_at,
+      schedule: r.schedule || 'none', recipient: r.recipient || null, last_sent_at: r.last_sent_at || null, next_run_at: r.next_run_at || null,
+    })),
+  });
 });
+
+// Normalize the schedule fields from a request body. weekly requires a recipient email.
+function scheduleFields(body: any): { schedule: string; recipient: string | null; next_run_at: string | null } {
+  const schedule = body?.schedule === 'weekly' ? 'weekly' : 'none';
+  const recipient = schedule === 'weekly' && body?.recipient ? String(body.recipient).trim() : null;
+  const on = schedule === 'weekly' && recipient;
+  return { schedule: on ? 'weekly' : 'none', recipient: on ? recipient : null, next_run_at: on ? nextWeeklyRun() : null };
+}
 
 router.post('/api/reports/saved', (req, res) => {
   const ctx = currentContext(req);
   const name = String(req.body?.name || '').trim();
   const config = req.body?.config;
   if (!name || !config || typeof config !== 'object') return res.status(400).json({ ok: false, error: 'name_and_config_required' });
-  const info = getDb().prepare(`INSERT INTO saved_reports (owner_email, name, config_json) VALUES (?, ?, ?)`).run(ownerKey(ctx), name, JSON.stringify(config));
-  res.json({ ok: true, id: Number(info.lastInsertRowid) });
+  const s = scheduleFields(req.body);
+  const info = getDb()
+    .prepare(`INSERT INTO saved_reports (owner_email, name, config_json, schedule, recipient, next_run_at) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(ownerKey(ctx), name, JSON.stringify(config), s.schedule, s.recipient, s.next_run_at);
+  res.json({ ok: true, id: Number(info.lastInsertRowid), schedule: s.schedule, recipient: s.recipient, mailConfigured: mailConfigured() });
 });
 
 router.put('/api/reports/saved/:id', (req, res) => {
@@ -127,8 +149,26 @@ router.put('/api/reports/saved/:id', (req, res) => {
   if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
   const name = req.body?.name != null ? String(req.body.name).trim() : row.name;
   const config = req.body?.config != null ? JSON.stringify(req.body.config) : row.config_json;
-  getDb().prepare(`UPDATE saved_reports SET name = ?, config_json = ?, updated_at = datetime('now') WHERE id = ?`).run(name, config, row.id);
-  res.json({ ok: true });
+  const s = req.body?.schedule !== undefined ? scheduleFields(req.body) : { schedule: row.schedule || 'none', recipient: row.recipient || null, next_run_at: row.next_run_at || null };
+  getDb()
+    .prepare(`UPDATE saved_reports SET name = ?, config_json = ?, schedule = ?, recipient = ?, next_run_at = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(name, config, s.schedule, s.recipient, s.next_run_at, row.id);
+  res.json({ ok: true, schedule: s.schedule, recipient: s.recipient, mailConfigured: mailConfigured() });
+});
+
+/** Deliver a saved report to its recipient right now (owner only). Useful to confirm delivery. */
+router.post('/api/reports/saved/:id/send-now', async (req, res) => {
+  const ctx = currentContext(req);
+  const row = ownedReport(ctx, req.params.id);
+  if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (!row.recipient) return res.status(400).json({ ok: false, error: 'no_recipient' });
+  if (!mailConfigured()) return res.status(409).json({ ok: false, error: 'mail_not_configured' });
+  const rendered = renderReport(row.name, safeJson(row.config_json) || {}, row.owner_email);
+  if ('error' in rendered) return res.status(400).json({ ok: false, error: rendered.error });
+  const out = await sendMail(row.recipient, rendered.subject, rendered.html, '1st Fire Protection');
+  if (!out.ok) return res.status(502).json({ ok: false, error: out.error });
+  getDb().prepare(`UPDATE saved_reports SET last_sent_at = datetime('now') WHERE id = ?`).run(row.id);
+  res.json({ ok: true, sent_to: row.recipient });
 });
 
 router.delete('/api/reports/saved/:id', (req, res) => {

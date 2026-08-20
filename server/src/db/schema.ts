@@ -1207,6 +1207,11 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_saved_reports_owner ON saved_reports(owner_email);
   `);
+  // saved-report scheduling: deliver a saved report by email on a cadence (weekly today).
+  addColumn('saved_reports', 'schedule', "TEXT DEFAULT 'none'");   // none | weekly
+  addColumn('saved_reports', 'recipient', 'TEXT');                 // email to deliver to
+  addColumn('saved_reports', 'last_sent_at', 'TEXT');
+  addColumn('saved_reports', 'next_run_at', 'TEXT');               // when the next delivery is due
 
   // Exceptions (Phase 3): the generic "reality does not match the intended process" object. One
   // table for every department (accounting/ops/people/it/fleet), deduped by a stable key so the

@@ -12,6 +12,7 @@ import { syncFromVapi } from './services/receptionist';
 import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
 import { runScheduledSync } from './services/servicetradeSync';
+import { runDueReports } from './services/reportScheduler';
 import { syncSchedule } from './services/scheduleSync';
 import { syncPlans } from './services/planSync';
 
@@ -294,6 +295,13 @@ setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
 setInterval(runStSync, ST_SYNC_MS).unref();
 // One detection pass at boot so the queue is populated before the first sync cycle.
 setTimeout(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] boot detect error:', (e as Error).message); } }, 1000 * 8).unref();
+
+// Scheduled-report delivery: check hourly for saved reports that are due and email them.
+const REPORTS_MS = 60 * 60 * 1000;
+const runReports = () => runDueReports()
+  .then((r) => { if (r.sent) console.log(`[reports] delivered ${r.sent} scheduled report(s)`); })
+  .catch((e) => console.warn('[reports] scheduler error:', (e as Error).message));
+setInterval(runReports, REPORTS_MS).unref();
 
 server.listen(PORT, () => {
   console.log(`\n  Northstar Operating System`);
