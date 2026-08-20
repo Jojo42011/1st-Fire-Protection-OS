@@ -107,6 +107,19 @@ function connectorCard(s, records, sc){
   '</div>';
 }
 
+function mailCard(m){
+  var on=!!(m&&m.configured);
+  return '<div class="ic'+(on?'':' off')+'">'+
+    '<div class="ic-top"><div><div class="ic-nm">Email (Microsoft 365)</div><div class="ic-role">Outbound mail · Microsoft Graph Mail.Send</div></div>'+OS.pill(on?'Connected':'Not set up',on?'good':'warn')+'</div>'+
+    '<div class="ic-rows">'+
+      row('Sending', on?'Ready':'Not sending', on?'good':'warn')+
+      row('Sends as', (on&&m.from)?('<b>'+OS.esc(m.from)+'</b>'):'<span class="muted">no from mailbox set</span>')+
+      row('Permission', 'Mail.Send', 'good')+
+      row('Used by', 'Onboarding invites'+(on?', and any future notifications':''))+
+    '</div>'+
+    (on?'':'<div class="muted" style="font-size:12px;line-height:1.5">Grant the <b>Mail.Send</b> application permission on the Entra app and set <b>MS_MAIL_FROM</b> to the sending mailbox to enable invite emails.</div>')+
+  '</div>';
+}
 function intacctCard(s){
   var unavailable=[
     'True accounts receivable and cash collected (only operational invoice data exists today)',
@@ -127,10 +140,12 @@ function load(){
   Promise.all([
     OS.sources(),
     fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/sync-schedules').then(function(r){return r.json();}).catch(function(){return {};})
+    fetch('/api/sync-schedules').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/onboarding/mail-status').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
     var src=(res[0].sources||[]);
     var lic=res[1]||{}; var sum=lic.summary||{};
+    var mail=res[3]||{};
     SCH={}; ((res[2]&&res[2].schedules)||[]).forEach(function(s){ SCH[s.integration_key]=s; });
     var by={}; src.forEach(function(s){by[s.key]=s;});
 
@@ -145,6 +160,7 @@ function load(){
       var records = k==='servicetrade'?stRecords : k==='bamboo'?bambooRecords : null;
       return connectorCard(s, records, SCH[k]);
     });
+    cards.push(mailCard(mail));
     var intacct=by.intacct;
     cards.push(intacct?intacctCard(intacct):'');
     document.getElementById('grid').innerHTML=cards.filter(Boolean).join('');
