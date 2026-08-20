@@ -226,21 +226,48 @@ function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:po
 function goGlobal(tab){try{parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(_){}}
 function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+'</div><div class="val">'+(val==null?'0':esc(val))+'</div></div>';}
 
+var EMPLOYEES=[], empFO='all', empFS='active', empQ='';
+function empDisplayName(e){ return e.name || ((e.entra_display_name||((e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())||e.preferred_name||''); }
+function renderEmployeeTable(){
+  var list=EMPLOYEES.filter(function(e){
+    if(empFO!=='all' && (e.office||'')!==empFO) return false;
+    if(empFS!=='all' && (e.employment_status||'')!==empFS) return false;
+    if(empQ){ var h=(empDisplayName(e)+' '+(e.job_position||'')+' '+(e.office||'')+' '+(e.manager||'')).toLowerCase(); if(h.indexOf(empQ)<0) return false; }
+    return true;
+  });
+  var cnt=document.getElementById('empCount'); if(cnt) cnt.textContent=list.length+' of '+EMPLOYEES.length;
+  var host=document.getElementById('empTableHost'); if(!host) return;
+  host.innerHTML = list.length
+    ? '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
+        list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(empDisplayName(e))+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+      '</tbody></table></div>'
+    : '<div class="card card-pad"><p class="muted">No employees match these filters.</p></div>';
+}
 VIEWS.employees=function(v){
-  j('/api/people/employees').then(function(r){
-    var list=(r.body&&r.body.employees)||[];
+  j('/api/people/employees?status=all').then(function(r){
+    EMPLOYEES=(r.body&&r.body.employees)||[];
     var connected=CAT&&CAT.bambooConnected;
     var importBtn=connected?'<button class="btn btn-sm" id="bhImport" onclick="importBamboo()">Import from BambooHR</button>':'<span class="muted" style="font-size:13px">BambooHR not connected</span>';
     var idBtn=canEditAccess()?'<button class="btn btn-sm" id="idSync" onclick="syncIdentities()">Match identities from Microsoft 365</button>':'';
     var syncAllBtn=canEditAccess()?'<button class="btn btn-sm" id="syncAll" onclick="syncAllAccess()">Sync all access from Microsoft 365</button>':'';
     var resolveBtn=canEditAccess()?'<button class="btn btn-sm" id="resolveUn" onclick="resolveUnmatched()">Resolve unmatched</button>':'';
     var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+importBtn+idBtn+resolveBtn+syncAllBtn+'</div></div>';
-    var body=(!list.length)
-      ? '<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>'
-      : '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
-          list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())+'</td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
-        '</tbody></table></div>';
-    v.innerHTML=head+'<div id="bhMsg"></div>'+body;
+    // Filter bar: office, status, and a free-text search. Offices come from the roster itself.
+    var offices=[]; EMPLOYEES.forEach(function(e){ if(e.office && offices.indexOf(e.office)<0) offices.push(e.office); }); offices.sort();
+    var statuses=[]; EMPLOYEES.forEach(function(e){ if(e.employment_status && statuses.indexOf(e.employment_status)<0) statuses.push(e.employment_status); });
+    var sel=function(id,cur,opts){ return '<select id="'+id+'" class="emp-filter" style="padding:7px 9px;border:1px solid var(--line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===cur?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; };
+    if(offices.indexOf(empFO)<0 && empFO!=='all') empFO='all';
+    if(statuses.indexOf(empFS)<0 && empFS!=='all') empFS='active';
+    var filterBar='<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+
+      '<input id="empSearch" type="text" placeholder="Search name, position, manager…" value="'+esc(empQ)+'" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit" />'+
+      sel('empOffice',empFO,[['all','All offices']].concat(offices.map(function(o){return [o,o];})))+
+      sel('empStatus',empFS,[['all','All statuses']].concat(statuses.map(function(s){return [s,human(s)];})))+
+      '<span class="muted" id="empCount" style="font-size:12.5px"></span></div>';
+    v.innerHTML=head+'<div id="bhMsg"></div>'+(EMPLOYEES.length?filterBar:'')+'<div id="empTableHost"></div>';
+    if(EMPLOYEES.length) renderEmployeeTable(); else document.getElementById('empTableHost').innerHTML='<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>';
+    var os=document.getElementById('empSearch'); if(os) os.addEventListener('input',function(){ empQ=this.value.toLowerCase().trim(); renderEmployeeTable(); });
+    var of=document.getElementById('empOffice'); if(of) of.addEventListener('change',function(){ empFO=this.value; renderEmployeeTable(); });
+    var sf=document.getElementById('empStatus'); if(sf) sf.addEventListener('change',function(){ empFS=this.value; renderEmployeeTable(); });
     resumeSyncAll();
   });
 };

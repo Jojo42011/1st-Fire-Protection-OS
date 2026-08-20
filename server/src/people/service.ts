@@ -237,12 +237,12 @@ export function startOffboarding(employee_id: number, opts: { notice_date?: stri
 /* ─────────────────────────── reads ─────────────────────────── */
 export function listEmployees(filter: { status?: string; office?: string; q?: string } = {}): any[] {
   const where: string[] = [], args: any[] = [];
-  if (filter.status) { where.push('employment_status = ?'); args.push(filter.status); }
-  if (filter.office) { where.push('office = ?'); args.push(filter.office); }
+  if (filter.status && filter.status !== 'all') { where.push('employment_status = ?'); args.push(filter.status); }
+  if (filter.office && filter.office !== 'all') { where.push('office = ?'); args.push(filter.office); }
   if (filter.q) { where.push('(lower(legal_first_name || " " || legal_last_name) LIKE ? OR lower(preferred_name) LIKE ?)'); args.push(`%${filter.q.toLowerCase()}%`, `%${filter.q.toLowerCase()}%`); }
-  const sql = `SELECT id, legal_first_name, legal_last_name, preferred_name, job_position, public_job_title, office, manager, employment_status, work_email, anticipated_start_date, actual_start_date
+  const sql = `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, job_position, public_job_title, office, manager, employment_status, work_email, anticipated_start_date, actual_start_date
                FROM employees ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY employment_status, legal_last_name`;
-  return getDb().prepare(sql).all(...args);
+  return (getDb().prepare(sql).all(...args) as any[]).map((e) => ({ ...e, name: empName(e) }));
 }
 
 export function getEmployeeDetail(id: number, opts: { includeComp: boolean }): any | null {
