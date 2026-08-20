@@ -76,6 +76,15 @@ test('access group provisioning: records the grant even when M365 is not connect
   assert.equal((db.prepare(`SELECT status FROM employee_access WHERE system='SG-PR-MCA'`).get() as any).status, 'revoked');
 });
 
+test('syncing access from M365 is keyless-safe when Graph is not connected', async () => {
+  const out = await svc.syncAccessFromM365(1, 'tester');
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /not connected/i);
+  const bulk = await svc.syncAllAccessFromM365('tester');
+  assert.equal(bulk.ok, false);
+  assert.match(String(bulk.error), /not connected/i);
+});
+
 test('listAccessGroups reads security groups from the onboarding catalog', () => {
   db.exec(`DELETE FROM onboarding_catalog;`);
   db.prepare(`INSERT INTO onboarding_catalog (kind, name, group_name, group_id, active) VALUES ('printer','McAllen','SG-PR-MCA','g-mca',1)`).run();

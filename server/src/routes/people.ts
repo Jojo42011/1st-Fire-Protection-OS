@@ -14,7 +14,7 @@ import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
 import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
 import { importComputers } from '../services/rmmImport';
-import { graphConfigured } from '../services/msGraphGroups';
+import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 
 const router = Router();
@@ -141,8 +141,24 @@ router.post('/api/people/access/:id/remove', requirePeople('people_admin', 'it')
 
 /* Access wired to Microsoft 365: the security groups the OS knows, plus add/remove that actually
  * change Entra group membership via Graph. IT / admin only. */
-router.get('/api/people/access/groups', requirePeople('people_admin', 'it'), (_req, res) => {
+router.get('/api/people/access/groups', requirePeople('people_admin', 'it'), async (req, res) => {
+  // Default: the curated groups from the onboarding catalog (fast, no Graph call). ?all=1 pulls every
+  // group straight from Entra so any group can be assigned.
+  if (String(req.query.all || '') === '1') {
+    const live = await listAllGroups();
+    if (live.ok) { res.json({ ok: true, graphConfigured: true, all: true, groups: live.groups.map((g) => ({ name: g.name, id: g.id, kind: g.kind, mailbox: g.mailbox })) }); return; }
+    res.json({ ok: true, graphConfigured: graphConfigured(), all: true, error: live.error, groups: svc.listAccessGroups() });
+    return;
+  }
   res.json({ ok: true, graphConfigured: graphConfigured(), groups: svc.listAccessGroups() });
+});
+router.post('/api/people/employees/:id/access/sync', requirePeople('people_admin', 'it'), async (req, res) => {
+  try { res.json(await svc.syncAccessFromM365(Number(req.params.id), actor(req))); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+router.post('/api/people/access/sync-all', requirePeople('people_admin', 'it'), async (req, res) => {
+  try { res.json(await svc.syncAllAccessFromM365(actor(req))); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
 });
 router.post('/api/people/employees/:id/access/group', requirePeople('people_admin', 'it'), async (req, res) => {
   const b = req.body || {};

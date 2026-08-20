@@ -231,7 +231,8 @@ VIEWS.employees=function(v){
     var list=(r.body&&r.body.employees)||[];
     var connected=CAT&&CAT.bambooConnected;
     var importBtn=connected?'<button class="btn btn-sm" id="bhImport" onclick="importBamboo()">Import from BambooHR</button>':'<span class="muted" style="font-size:13px">BambooHR not connected</span>';
-    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">Everyone on the roster. Import pulls the live BambooHR directory and reconciles by employee.</p></div>'+importBtn+'</div>';
+    var syncAllBtn=canEditAccess()?' <button class="btn btn-sm" id="syncAll" onclick="syncAllAccess()">Sync all access from Microsoft 365</button>':'';
+    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">Everyone on the roster. Import pulls the live BambooHR directory and reconciles by employee.</p></div><div class="row" style="gap:8px">'+importBtn+syncAllBtn+'</div></div>';
     var body=(!list.length)
       ? '<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>'
       : '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
@@ -280,12 +281,39 @@ function editTable(title,heads,rows,rowFn,empty,addForm){
 }
 function rowActions(inner){ return '<td style="white-space:nowrap;text-align:right">'+inner+'</td>'; }
 // Microsoft 365 security groups the OS knows (printer + SharePoint groups from the onboarding catalog).
-var _accessGroups=null, _graphConfigured=false;
+var _accessGroups=null, _graphConfigured=false, _allGroupsLoaded=false;
 function loadAccessGroups(cb){
   if(_accessGroups!==null){ cb&&cb(); return; }
   j('/api/people/access/groups').then(function(r){
     _accessGroups=(r.ok&&r.body.groups)||[]; _graphConfigured=!!(r.ok&&r.body.graphConfigured); cb&&cb();
   }).catch(function(){ _accessGroups=[]; cb&&cb(); });
+}
+function empLoadAllGroups(){
+  if(_allGroupsLoaded) return;
+  OS.toast('Loading every Microsoft 365 group…');
+  j('/api/people/access/groups?all=1').then(function(r){
+    if(r.ok && r.body.groups){ _accessGroups=r.body.groups; _allGroupsLoaded=true; _graphConfigured=true; if(_empTab==='access') renderEmp(); }
+    else OS.toast((r.body&&r.body.error)||'Could not load all groups','bad');
+  }).catch(function(){ OS.toast('Could not load all groups','bad'); });
+}
+function syncAllAccess(){
+  var btn=document.getElementById('syncAll'); if(btn){ btn.disabled=true; btn.textContent='Syncing everyone…'; }
+  OS.toast('Reading Microsoft 365 memberships for the whole roster. This can take a minute.');
+  j('/api/people/access/sync-all',{method:'POST',body:JSON.stringify({})}).then(function(r){
+    if(btn){ btn.disabled=false; btn.textContent='Sync all access from Microsoft 365'; }
+    var o=r.body||{};
+    if(!r.ok || !o.ok){ alert(o.error||'Sync failed'); return; }
+    OS.toast(o.withUpn+' of '+o.employees+' employees synced · '+o.added+' access rows added'+(o.failed?(' · '+o.failed+' failed'):'')+'.');
+  }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Sync all access from Microsoft 365'; } alert('Sync request failed'); });
+}
+function empSyncAccess(){
+  var id=_emp&&_emp.employee&&_emp.employee.id; if(!id) return;
+  OS.toast('Reading Microsoft 365 memberships…');
+  j('/api/people/employees/'+id+'/access/sync',{method:'POST',body:JSON.stringify({})}).then(function(r){
+    var d=r.body||{};
+    if(!r.ok || !d.ok){ alert(d.error||d.message||'Sync failed'); return; }
+    OS.toast(d.message||'Access synced from Microsoft 365.'); empReload();
+  }).catch(function(){ alert('Sync request failed'); });
 }
 function empDetail(id,keepTab){
   var v=document.getElementById('view'); if(!keepTab) v.innerHTML='<p class="muted">Loading…</p>';
@@ -314,6 +342,9 @@ function renderEmp(){
     var accEdit=canEditAccess();
     if(accEdit && _accessGroups===null){ loadAccessGroups(function(){ if(_empTab==='access') renderEmp(); }); }
     var accHeads=['System','Status','Owner'].concat(accEdit?['']:[]);
+    var syncBar=accEdit?('<div class="empadd" style="align-items:center">'+
+      '<button class="btn btn-sm" onclick="empSyncAccess()">Sync from Microsoft 365</button>'+
+      '<span class="muted">Pull this person’s real Entra groups (and the shared mailboxes those grant) into the list below.</span></div>'):'';
     var groupRow='';
     if(accEdit){
       if(_accessGroups===null){ groupRow='<div class="empadd"><span class="muted">Loading Microsoft 365 security groups…</span></div>'; }
@@ -322,6 +353,7 @@ function renderEmp(){
           '<b style="font-size:12px">Microsoft 365 group:</b>'+
           '<select id="ac-group">'+_accessGroups.map(function(g){return '<option value="'+esc(g.name)+'">'+esc(g.name)+(g.kind?' · '+esc(g.kind):'')+'</option>';}).join('')+'</select>'+
           '<button class="btn btn-sm" onclick="empAddGroup()">Add to group</button>'+
+          '<button class="btn btn-xs" onclick="empLoadAllGroups()">'+(_allGroupsLoaded?('All '+_accessGroups.length+' groups ✓'):'Show all M365 groups')+'</button>'+
           '<span class="muted">'+(_graphConfigured?'Adds them to the Entra group in Microsoft 365.':'Microsoft 365 not connected: this records the grant only.')+'</span></div>';
       }
     }
@@ -335,7 +367,7 @@ function renderEmp(){
       var revokeAct = isGroup?'group-revoke':'revoke';
       return '<tr><td>'+esc(a.label||a.system)+(isGroup?' <span class="muted" style="font-size:11px">M365</span>':'')+'</td><td><span class="st '+esc(a.status)+'">'+esc(human(a.status))+'</span></td><td>'+esc(human(a.owner||''))+'</td>'+
         (accEdit?rowActions((a.status!=='revoked'?'<button class="btn btn-xs" onclick="empAccess('+a.id+',\''+revokeAct+'\')">Revoke</button> ':'')+'<button class="btn btn-xs danger" onclick="empAccess('+a.id+',\'remove\')">Remove</button>'):'')+'</tr>';
-    },'No access recorded.',groupRow+manualRow);
+    },'No access recorded.',syncBar+groupRow+manualRow);
   } else if(_empTab==='assets'){
     var asEdit=canEditAssets();
     var asHeads=['Asset','Status','Owner'].concat(asEdit?['']:[]);

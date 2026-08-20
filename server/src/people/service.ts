@@ -11,7 +11,7 @@ import { getDb } from '../db/index';
 import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
-import { addUserToGroup, removeUserFromGroup, graphConfigured } from '../services/msGraphGroups';
+import { addUserToGroup, removeUserFromGroup, graphConfigured, listUserGroups } from '../services/msGraphGroups';
 
 /* ─────────────────────────── catalog seeding (real config, not demo data) ─────────────────────────── */
 export function seedPeopleCatalog(): void {
@@ -723,4 +723,61 @@ export async function deprovisionAccessGroup(access_id: number, actor: string): 
   db.prepare(`UPDATE employee_access SET status = 'revoked', revoked_at = datetime('now') WHERE id = ?`).run(access_id);
   audit(removed ? 'access_deprovisioned' : 'access_revoked', `${row.label || row.system}${removed ? ' (Entra)' : ''}`, { actor, employee_id: row.employee_id });
   return { ok: true, removed, message };
+}
+
+/* ───────────────────── reconcile access FROM Microsoft 365 (read the real memberships) ─────────────────────
+ * "Put their real groups into their access": read what each employee is actually a member of in Entra
+ * and record it on their Access tab. Idempotent (re-running updates in place). Mailbox-backed groups
+ * (Microsoft 365, distribution, mail-enabled security) are labelled so shared-inbox membership is
+ * visible; direct Exchange shared-mailbox delegation is not exposed by Graph app permissions and is
+ * out of scope here. */
+
+function groupAccessLabel(kind: string, name: string): string {
+  if (kind === 'Microsoft 365') return `Microsoft 365 group: ${name}`;
+  if (kind === 'Distribution') return `Distribution list: ${name}`;
+  if (kind === 'Mail-enabled security') return `Mail-enabled group: ${name}`;
+  return `Security group: ${name}`;
+}
+
+export async function syncAccessFromM365(employee_id: number, actor: string): Promise<{ ok: boolean; error?: string; added: number; updated: number; total: number; mailboxes: number; message?: string }> {
+  requireEmployee(employee_id);
+  const db = getDb();
+  const upn = employeeUpn(employee_id);
+  if (!graphConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', added: 0, updated: 0, total: 0, mailboxes: 0 };
+  if (!upn) return { ok: false, error: 'This employee has no work email / UPN on record, so their Microsoft 365 groups cannot be read.', added: 0, updated: 0, total: 0, mailboxes: 0 };
+  const res = await listUserGroups(upn);
+  if (!res.ok) return { ok: false, error: res.error, added: 0, updated: 0, total: 0, mailboxes: 0 };
+  const now = new Date().toISOString();
+  let added = 0, updated = 0, mailboxes = 0;
+  const findByRef = db.prepare(`SELECT id FROM employee_access WHERE employee_id = ? AND external_ref = ? LIMIT 1`);
+  const findByName = db.prepare(`SELECT id FROM employee_access WHERE employee_id = ? AND (external_ref IS NULL OR external_ref = '') AND system = ? LIMIT 1`);
+  const ins = db.prepare(`INSERT INTO employee_access (employee_id, system, label, access_level, status, owner, external_ref, approved_at, provisioned_at) VALUES (?, ?, ?, 'member', 'provisioned', 'it', ?, ?, ?)`);
+  const upd = db.prepare(`UPDATE employee_access SET label = ?, status = 'provisioned', external_ref = ?, provisioned_at = COALESCE(provisioned_at, ?) WHERE id = ?`);
+  const tx = db.transaction(() => {
+    for (const g of res.groups) {
+      if (g.mailbox) mailboxes++;
+      const label = groupAccessLabel(g.kind, g.name);
+      const hit = (findByRef.get(employee_id, g.id) as any) || (findByName.get(employee_id, g.name) as any);
+      if (hit) { upd.run(label, g.id, now, hit.id); updated++; }
+      else { ins.run(employee_id, g.name, label, g.id, now, now); added++; }
+    }
+  });
+  tx();
+  audit('access_synced', `${res.groups.length} Microsoft 365 group(s) reconciled (${added} new)`, { actor, employee_id });
+  return { ok: true, added, updated, total: res.groups.length, mailboxes, message: `${res.groups.length} group(s) from Microsoft 365: ${added} added, ${updated} updated${mailboxes ? `, ${mailboxes} carry a shared mailbox` : ''}.` };
+}
+
+export async function syncAllAccessFromM365(actor: string): Promise<{ ok: boolean; error?: string; employees: number; withUpn: number; added: number; updated: number; failed: number }> {
+  if (!graphConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', employees: 0, withUpn: 0, added: 0, updated: 0, failed: 0 };
+  const rows = getDb().prepare(`SELECT id FROM employees WHERE employment_status IN ('active','onboarding')`).all() as { id: number }[];
+  let withUpn = 0, added = 0, updated = 0, failed = 0;
+  for (const r of rows) {
+    if (!employeeUpn(r.id)) continue;
+    withUpn++;
+    try {
+      const out = await syncAccessFromM365(r.id, actor);
+      if (out.ok) { added += out.added; updated += out.updated; } else failed++;
+    } catch { failed++; }
+  }
+  return { ok: true, employees: rows.length, withUpn, added, updated, failed };
 }
