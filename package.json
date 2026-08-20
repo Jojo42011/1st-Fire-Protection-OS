@@ -10,7 +10,7 @@
     "dev": "tsc -p server/tsconfig.json && node server/dist/app.js",
     "reset": "npm run build && node server/dist/scripts/reset.js",
     "boot-check": "npm run build && DB_PATH=/tmp/1stfp.db PORT=3900 node server/dist/app.js",
-    "test": "npm run build && node --test server/dist/people/routing.test.js server/dist/people/authz.test.js server/dist/people/service.test.js server/dist/people/bambooImport.test.js server/dist/os/office.test.js server/dist/os/scope.test.js server/dist/os/period.test.js server/dist/os/metrics.test.js server/dist/os/exceptions.test.js server/dist/os/attribution.test.js server/dist/os/work.test.js server/dist/services/intakeLinks.test.js"
+    "test": "npm run build && node --test server/dist/people/routing.test.js server/dist/people/authz.test.js server/dist/people/service.test.js server/dist/people/bambooImport.test.js server/dist/os/office.test.js server/dist/os/scope.test.js server/dist/os/period.test.js server/dist/os/metrics.test.js server/dist/os/exceptions.test.js server/dist/os/attribution.test.js server/dist/os/work.test.js server/dist/services/intakeLinks.test.js server/dist/people/permissions.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",

@@ -104,16 +104,17 @@
           <div class="os-card-b">
             <div class="os-chips" id="roleChips"></div>
             <div class="a-note">
-              <b>This matrix documents intent, it is not enforced yet.</b> Today the server
-              enforces access by <b>role</b> (a user either holds a role or does not). The
-              per-module levels below describe what each role is meant to reach. Per-module
-              enforcement needs permission data stored on <code>app_users</code> first, so
-              changes here are saved in your browser and do not change what the server allows.
+              <b>Saved on the server, per role.</b> These levels persist and are returned to every
+              screen. Compensation is <b>enforced from this matrix today</b>: a role with no
+              "Compensation" access cannot see pay on any request. Broader per-module enforcement
+              rolls out as more of the app moves behind per-user identity; role and office scope are
+              already enforced on every request.
             </div>
             <div id="matrixWrap"></div>
             <div class="a-actions">
+              <span class="a-dirty" id="mDirty" style="display:none;font-weight:650;font-size:11.5px;color:var(--amber-ink);align-self:center;margin-right:auto">Unsaved changes</span>
               <button class="os-btn" id="mReset">Reset to preset</button>
-              <button class="os-btn primary" id="mSave">Save notes</button>
+              <button class="os-btn primary" id="mSave">Save</button>
             </div>
           </div>
         </div>
@@ -124,9 +125,9 @@
         Everything a person actually reaches is enforced on the server, on every request, by the
         <b>roles</b> assigned in "Assign a person". Hiding a control in the UI is a convenience,
         never the control. People Admin and Executive receive company-wide office scope
-        automatically so the first admin is never locked out. The role-to-module matrix on the
-        right is documentation of intent and is not enforced until per-module permissions live on
-        <code>app_users</code>.
+        automatically so the first admin is never locked out. The role-to-module matrix on the right
+        is saved on the server and drives real access: compensation is enforced from it today, and
+        the rest is applied as more of the app moves behind per-user identity.
       </div>
     </div>
   </div>
@@ -153,7 +154,8 @@ function boot(){
     document.getElementById('gate').style.display='none';
     document.getElementById('admin').style.display='';
     if(USERS.length){ select(0); } else { renderPeople(); renderEditor(); }
-    renderRoleChips(); renderMatrix();
+    renderRoleChips();
+    loadMatrix().then(function(){ renderMatrix(); });
   }).catch(function(){gate('Could not load access settings.');});
 }
 function gate(msg){var g=document.getElementById('gate');g.style.display='';g.textContent=msg;document.getElementById('admin').style.display='none';}
@@ -261,11 +263,26 @@ var PRESETS={
   manager:           {overview:1,receivables:0,deficiencies:1,service:1,people:1,comp:0,safety:0,accounting:0,access:0},
   viewer:            {overview:1,receivables:1,deficiencies:1,service:1,people:1,comp:0,safety:1,accounting:1,access:0}
 };
-var MATRIX={};       // role.key -> {module:level}, working copy (client-side only)
+var SERVER={};       // role.key -> {module:level} as saved on the server (source of truth)
+var WORKING={};      // role.key -> {module:level} working copy (dirty until saved)
+var CUSTOM={};       // role.key -> bool (has a saved override)
 var SELROLE=null;
 
-function preset(key){var p=PRESETS[key]||{};var o={};MODULES.forEach(function(m){o[m[0]]=p[m[0]]!=null?p[m[0]]:0;});return o;}
-function matrixFor(key){ if(!MATRIX[key]) MATRIX[key]=preset(key); return MATRIX[key]; }
+function clone2(o){return JSON.parse(JSON.stringify(o||{}));}
+function matrixFor(key){ if(!WORKING[key]) WORKING[key]=clone2(SERVER[key]||{}); return WORKING[key]; }
+function matrixDirty(key){ var w=WORKING[key], s=SERVER[key]||{}; if(!w) return false;
+  return MODULES.some(function(m){ return (w[m[0]]||0)!==(s[m[0]]||0); }); }
+
+function loadMatrix(){
+  return fetch('/api/people/roles/matrix').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok) return;
+    MODULES=(d.modules||[]).map(function(m){return [m.key,m.label];});
+    LEVELS=(d.levels||[]).map(function(l){return [l.value,l.label];});
+    SERVER={}; CUSTOM={};
+    Object.keys(d.roles||{}).forEach(function(k){ SERVER[k]=d.roles[k].levels; CUSTOM[k]=!!d.roles[k].customized; });
+    WORKING={};
+  }).catch(function(){});
+}
 
 function renderRoleChips(){
   var el=document.getElementById('roleChips');
@@ -287,6 +304,9 @@ function renderMatrix(){
     return '<tr><td class="a-mname">'+OS.esc(mod[1])+'</td><td><span class="lvl">'+seg+'</span></td></tr>';
   }).join('');
   el.innerHTML='<table class="a-matrix"><thead><tr><th>Module</th><th>Level</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  var dirty=matrixDirty(SELROLE);
+  var dEl=document.getElementById('mDirty'); if(dEl) dEl.style.display=dirty?'':'none';
+  var sEl=document.getElementById('mSave'); if(sEl) sEl.disabled=!dirty;
 }
 
 /* ---------------- events ---------------- */
@@ -320,9 +340,21 @@ document.addEventListener('click',function(e){
   // half 2: matrix level
   var lb=e.target.closest('.lvl button[data-mod]');
   if(lb && SELROLE){ matrixFor(SELROLE)[lb.getAttribute('data-mod')]=+lb.getAttribute('data-lvl'); renderMatrix(); return; }
-  // half 2: reset / save notes
-  if(e.target.closest('#mReset')){ if(SELROLE){ MATRIX[SELROLE]=preset(SELROLE); renderMatrix(); OS.toast(roleLabel(SELROLE)+' matrix reset to its preset. Documentation only, nothing on the server changed.'); } return; }
-  if(e.target.closest('#mSave')){ if(SELROLE){ OS.toast(roleLabel(SELROLE)+' access notes saved in this browser. Documentation only: the server still enforces by role.'); } return; }
+  // half 2: reset to preset (server)
+  if(e.target.closest('#mReset')){ if(!SELROLE) return;
+    fetch('/api/people/roles/'+encodeURIComponent(SELROLE)+'/matrix/reset',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ OS.toast('Could not reset the matrix.','bad'); return; }
+      SERVER[SELROLE]=d.levels; CUSTOM[SELROLE]=false; WORKING[SELROLE]=clone2(d.levels); renderMatrix();
+      OS.toast(roleLabel(SELROLE)+' reset to its preset and saved.');
+    }); return; }
+  // half 2: save (server)
+  if(e.target.closest('#mSave')){ if(!SELROLE||!matrixDirty(SELROLE)) return;
+    fetch('/api/people/roles/'+encodeURIComponent(SELROLE)+'/matrix',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({levels:WORKING[SELROLE]})})
+      .then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.ok){ OS.toast('Could not save the matrix.','bad'); return; }
+        SERVER[SELROLE]=d.levels; CUSTOM[SELROLE]=true; WORKING[SELROLE]=clone2(d.levels); renderMatrix();
+        OS.toast(roleLabel(SELROLE)+' access saved. Compensation access takes effect immediately; other modules are recorded.');
+      }); return; }
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Enter' && e.target && e.target.id==='newEmail'){ e.preventDefault(); document.getElementById('addBtn').click(); }

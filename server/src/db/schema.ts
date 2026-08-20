@@ -508,6 +508,21 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_intake_links_status ON intake_links(status, expires_at);
   `);
 
+  /* ---------- role module permissions (overrides over the coded presets) ----------
+   * The Access role matrix. Each row overrides one role's level for one module (0 none, 1 view,
+   * 2 view and edit). Absent rows fall back to the preset in people/permissions.ts, so the table
+   * only stores what an admin has changed. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS role_modules (
+      role       TEXT NOT NULL,
+      module     TEXT NOT NULL,
+      level      INTEGER NOT NULL DEFAULT 0,
+      updated_by TEXT,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (role, module)
+    );
+  `);
+
   /* ---------- open-deficiency backlog (ServiceTrade repairs waiting to be quoted) ----------
    * Deficiencies are the un-converted repair work techs already found. Mirrored from the
    * ServiceTrade /deficiency API so the backlog is office-filterable and fast; office is derived

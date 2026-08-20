@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { catalogSnapshot } from '../people/catalog';
 import { entraConfigured, devLoginEnabled, beginLogin, handleCallback, signOut, currentIdentity } from '../people/identity';
 import { currentUser, requirePeople, hasRole, canViewCompensation, canApprove, listAppUsers, upsertAppUser, setAppUserActive, ROLES, Role } from '../people/authz';
+import { getMatrix, saveRoleLevels, resetRoleLevels } from '../people/permissions';
 import * as svc from '../people/service';
 import { bambooConfigured } from '../services/bamboo';
 import { operatingOffices } from '../os/office';
@@ -165,6 +166,29 @@ router.post('/api/people/users', requirePeople('people_admin'), (req, res) => {
 router.post('/api/people/users/:email/active', requirePeople('people_admin'), (req, res) => {
   setAppUserActive(req.params.email, req.body?.active !== false);
   res.json({ ok: true });
+});
+
+/* ─────────────────────────── role x module matrix (admin) ─────────────────────────── */
+router.get('/api/people/roles/matrix', requirePeople('people_admin'), (_req, res) => {
+  res.json({ ok: true, ...getMatrix(), roleCatalog: ROLES });
+});
+router.put('/api/people/roles/:role/matrix', requirePeople('people_admin'), (req, res) => {
+  try {
+    const levels = saveRoleLevels(req.params.role, req.body?.levels || {}, actor(req));
+    svc.audit('role_changed', `Access matrix updated for role ${req.params.role}`, { actor: actor(req) });
+    res.json({ ok: true, role: req.params.role, levels });
+  } catch (e) {
+    res.status((e as Error).message === 'unknown_role' ? 404 : 400).json({ ok: false, error: (e as Error).message });
+  }
+});
+router.post('/api/people/roles/:role/matrix/reset', requirePeople('people_admin'), (req, res) => {
+  try {
+    const levels = resetRoleLevels(req.params.role);
+    svc.audit('role_changed', `Access matrix reset to preset for role ${req.params.role}`, { actor: actor(req) });
+    res.json({ ok: true, role: req.params.role, levels });
+  } catch (e) {
+    res.status((e as Error).message === 'unknown_role' ? 404 : 400).json({ ok: false, error: (e as Error).message });
+  }
 });
 
 export default router;

@@ -1,5 +1,5 @@
 /**
- * People / Employee Lifecycle — authorization (centralized, server-enforced).
+ * People / Employee Lifecycle - authorization (centralized, server-enforced).
  *
  * The shared APP_PASSWORD gate is NOT sufficient for HR/employee data: knowing the office
  * password must not grant access to People. Access here requires a real identity (see
@@ -65,7 +65,7 @@ export function currentUser(req: express.Request): AppUser | null {
     | undefined;
 
   // A configured bootstrap email is always a people_admin, so the very first admin can sign in
-  // and assign everyone else. Honest and explicit — set via PEOPLE_BOOTSTRAP_EMAIL.
+  // and assign everyone else. Honest and explicit - set via PEOPLE_BOOTSTRAP_EMAIL.
   const bootstrap = (process.env.PEOPLE_BOOTSTRAP_EMAIL || '').toLowerCase();
   const isBootstrap = bootstrap && bootstrap === email;
 
@@ -111,9 +111,15 @@ export function hasRole(user: AppUser | null, ...roles: Role[]): boolean {
 export function hasAnyPeopleRole(user: AppUser | null): boolean {
   return !!user && user.roles.length > 0;
 }
-/** Compensation/pay data is HR-only (plus people_admin). Managers/IT/etc. must not see salary. */
+/**
+ * Compensation/pay data visibility is driven by the Access matrix's "comp" module (view or higher):
+ * HR and people_admin by preset, and anything an admin grants there. Enforced on every request that
+ * returns pay, so the matrix is a real control, not documentation.
+ */
 export function canViewCompensation(user: AppUser | null): boolean {
-  return hasRole(user, 'hr');
+  // Lazy require avoids a load-time cycle (permissions type-imports authz).
+  const { moduleLevel } = require('./permissions') as typeof import('./permissions');
+  return moduleLevel(user, 'comp') >= 1;
 }
 /** Can this user satisfy an approval addressed to `approverRole`? The mapped role, or admin. */
 export function canApprove(user: AppUser | null, approverRole: string): boolean {
