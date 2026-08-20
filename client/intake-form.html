@@ -18,6 +18,9 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:transparent;font-family:'Figtree',system-ui,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color:var(--ink)}
+  /* Opened directly (not inside the app overlay): give the card room to breathe from the top. The
+     overlay host sizes the iframe to the card, so this padding is only added when standalone. */
+  body.standalone{padding:28px 16px 40px}
   .card{width:100%;max-width:564px;margin:0 auto;background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
   .head{padding:22px 26px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
   .emblem{width:34px;height:34px;border-radius:50%;object-fit:contain;flex:none;background:#fff;padding:2px;box-shadow:0 0 0 1px var(--line)}
@@ -135,6 +138,8 @@
 
 <script>
 (function () {
+  // Standalone (a real manager link), not embedded in the app overlay: add breathing room at the top.
+  try { if (window.self === window.top) document.body.classList.add('standalone'); } catch (e) { document.body.classList.add('standalone'); }
   // The manager intake captures the same operational fields as the internal full form, from the same
   // editable catalog. No pay, SSN, or bank details: comp lives in BambooHR from the signed offer.
   var STEPS = [

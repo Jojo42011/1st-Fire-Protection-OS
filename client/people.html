@@ -72,6 +72,12 @@
   .emp-hero .sub{font-weight:500;font-size:13px;color:var(--muted);margin-top:3px}
   .emp-hero .st{height:fit-content;font-size:11.5px;padding:4px 11px;border-radius:999px}
   .namecell{display:flex;align-items:center;gap:10px}
+  /* person row cards (offboarding "currently leaving", and similar people lists) */
+  .prow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:11px 13px;cursor:pointer;font-family:var(--sans);transition:border-color .15s}
+  .prow:hover{border-color:var(--border-strong,var(--border))}
+  .prow .prow-t{flex:1;min-width:0;display:flex;flex-direction:column}
+  .prow .prow-n{font-weight:700;font-size:13.5px;color:var(--ink)}
+  .prow .prow-s{font-weight:500;font-size:12px;color:var(--muted);margin-top:1px}
   /* Slightly softer, rounder cards on the People screens. */
   .card{border-radius:16px}
 </style>
@@ -606,12 +612,23 @@ function renderTaskList(v,url,title,empty,approvalsOnly,linkNote){
 }
 function act(id,kind){ j('/api/people/tasks/'+id+'/'+kind,{method:'POST',body:JSON.stringify({})}).then(function(r){ if(!r.ok){alert(r.body&&r.body.error||'failed');} go(cur); }); }
 
+function personRow(e){
+  return '<button class="prow" onclick="empDetail('+e.id+')">'+avatarHTML(empDisplayName(e),'sm')+
+    '<span class="prow-t"><span class="prow-n">'+esc(empDisplayName(e))+'</span><span class="prow-s">'+esc((e.job_position||'')+(e.office?' · '+e.office:''))+'</span></span>'+
+    '<span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></button>';
+}
 VIEWS.offboarding=function(v){
-  j('/api/people/employees?status=active').then(function(r){
-    var list=(r.body&&r.body.employees)||[];
-    v.innerHTML='<div class="card card-pad"><div class="card-head" style="padding:0 0 8px"><h2>Start offboarding</h2></div>'+
+  j('/api/people/employees?status=all').then(function(r){
+    var all=(r.body&&r.body.employees)||[];
+    var active=all.filter(function(e){return e.employment_status==='active';});
+    var leaving=all.filter(function(e){return e.employment_status==='offboarding'||e.employment_status==='notice'||e.employment_status==='terminated';});
+    var leavingHTML = leaving.length
+      ? '<div class="sec">Currently leaving <span class="muted">· '+leaving.length+'</span></div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">'+leaving.map(personRow).join('')+'</div>'
+      : '';
+    v.innerHTML=leavingHTML+
+      '<div class="card card-pad"><div class="card-head" style="padding:0 0 8px"><h2>Start offboarding</h2></div>'+
       '<p class="muted">Offboarding reverses what the person <b>actually has</b> on record, not a template guess. Begin when notice is received.</p>'+
-      (list.length? '<div class="grid2" style="margin-top:12px"><div><label class="fld">Employee</label><select class="in" id="off-emp">'+list.map(function(e){return '<option value="'+e.id+'">'+esc((((e.preferred_name||e.legal_first_name||'')+' '+(e.legal_last_name||'')).trim())+' · '+(e.job_position||''))+'</option>';}).join('')+'</select></div>'+
+      (active.length? '<div class="grid2" style="margin-top:12px"><div><label class="fld">Employee</label><select class="in" id="off-emp">'+active.map(function(e){return '<option value="'+e.id+'">'+esc(empDisplayName(e)+' · '+(e.job_position||''))+'</option>';}).join('')+'</select></div>'+
         '<div><label class="fld">Type</label><select class="in" id="off-type"><option value="voluntary">Voluntary</option><option value="involuntary">Involuntary</option><option value="immediate">Immediate termination</option></select></div>'+
         '<div><label class="fld">Notice date</label><input class="in" id="off-notice" type="date"></div>'+
         '<div><label class="fld">Last working date</label><input class="in" id="off-last" type="date"></div></div>'+

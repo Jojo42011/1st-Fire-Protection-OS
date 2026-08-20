@@ -20,10 +20,15 @@
   .a-add{display:flex;gap:7px;margin-bottom:12px}
   .a-add input{font-family:var(--sans);font-weight:600;font-size:12.5px;border:1px solid var(--border);border-radius:9px;padding:8px 11px;min-width:0;flex:1;background:var(--panel);color:var(--ink)}
   .a-people{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel)}
-  .a-row{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;padding:10px 12px;cursor:pointer;font-family:var(--sans)}
+  .a-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--border);background:transparent;padding:10px 12px;cursor:pointer;font-family:var(--sans)}
   .a-row:last-child{border-bottom:0}
   .a-row:hover{background:var(--panel-alt,var(--fill))}
   .a-row.on{background:var(--ink);color:#fff}
+  .a-row .rtext{min-width:0;display:flex;flex-direction:column}
+  .a-av{width:30px;height:30px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:var(--green);background:rgba(31,122,77,.14);box-shadow:0 0 0 1px rgba(31,122,77,.30)}
+  :root[data-theme="dark"] .a-av{color:#5FD09A;background:rgba(95,208,154,.15);box-shadow:0 0 0 1px rgba(95,208,154,.32)}
+  @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .a-av{color:#5FD09A;background:rgba(95,208,154,.15);box-shadow:0 0 0 1px rgba(95,208,154,.32)}}
+  .a-row.on .a-av{box-shadow:0 0 0 1px rgba(255,255,255,.3)}
   .a-row .rn{font-weight:700;font-size:12.5px;color:var(--ink);line-height:1.25;word-break:break-word}
   .a-row.on .rn{color:#fff}
   .a-row .rs{font-weight:550;font-size:11px;color:var(--muted);margin-top:2px}
@@ -167,14 +172,16 @@ function personSub(u){
   var offTxt=u.all_offices?'all offices':((u.offices||[]).length?(u.offices.length+' office'+(u.offices.length===1?'':'s')):'no offices');
   return roleTxt+' · '+offTxt;
 }
+function aInitials(name){ return String(name||'').replace(/[^A-Za-z ]/g,'').split(/\s+/).filter(Boolean).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'··'; }
 function renderPeople(){
   var el=document.getElementById('people');
   if(!USERS.length){ el.innerHTML='<div class="a-empty">No people yet. Add someone by email above.</div>'; return; }
   el.innerHTML=USERS.map(function(u,i){
     var name=u.display_name||u.email;
     return '<button class="a-row'+(i===SELECTED?' on':'')+'" data-person="'+i+'">'+
-      '<span class="rn">'+OS.esc(name)+(u.active===false?' <span style="opacity:.7">(inactive)</span>':'')+'</span>'+
-      '<span class="rs">'+OS.esc(personSub(u))+'</span></button>';
+      '<span class="a-av">'+OS.esc(aInitials(name))+'</span>'+
+      '<span class="rtext"><span class="rn">'+OS.esc(name)+(u.active===false?' <span style="opacity:.7">(inactive)</span>':'')+'</span>'+
+      '<span class="rs">'+OS.esc(personSub(u))+'</span></span></button>';
   }).join('');
 }
 function select(i){ SELECTED=i; DRAFT=clone(USERS[i]); renderPeople(); renderEditor(); }
