@@ -24,6 +24,18 @@
     <div id="list"></div>
     <div class="os-filter-note" id="filterNote"></div>
 
+    <div class="os-sec os-block" style="margin-top:28px">SharePoint access audit</div>
+    <div class="os-card" style="padding:14px 16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="spUrl" type="text" spellcheck="false"
+          style="flex:1;min-width:260px;padding:8px 10px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit"
+          placeholder="https://1stfp.sharepoint.com/sites/Shared" />
+        <button class="os-btn primary" id="spRun">Run audit</button>
+      </div>
+      <div class="os-filter-note" id="spNote" style="margin-top:8px">Reads who can reach the site and each top-level folder. Read-only, straight from Microsoft 365 (no PowerShell).</div>
+      <div id="spOut" style="margin-top:12px"></div>
+    </div>
+
     <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
@@ -151,6 +163,57 @@ document.addEventListener('click',function(e){
 document.getElementById('sync').addEventListener('click',function(){ var b=this; b.disabled=true; var t=b.textContent; b.textContent='Syncing…';
   fetch('/api/licenses/sync',{method:'POST'}).then(function(){ b.disabled=false; b.textContent=t; OS.toast('Roster and seats synced. License reconciliation re-ran.'); load(); }).catch(function(){ b.disabled=false; b.textContent=t; }); });
 document.getElementById('integrations').addEventListener('click',function(){ OS.go('integrations'); });
+
+/* ---- SharePoint access audit ---- */
+function accessRows(list){
+  if(!list||!list.length) return '<div class="os-filter-note">No direct grants found (access is inherited from the site).</div>';
+  return '<table class="os-table"><thead><tr><th>Who</th><th>Access</th><th>Source</th></tr></thead><tbody>'+
+    list.map(function(a){
+      var roles=(a.roles||[]).join(', ')||'read';
+      var src=a.inherited?OS.pill('inherited','neutral'):OS.pill('unique to folder','warn');
+      var kind=a.kind==='link'?OS.pill('sharing link','warn')+' ':'';
+      return '<tr><td>'+kind+OS.esc(a.principal)+'</td><td>'+OS.esc(roles)+'</td><td>'+src+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+function renderAudit(d){
+  var out=document.getElementById('spOut');
+  if(!d||!d.ok){
+    var msg=(d&&d.error)||'Audit could not run.';
+    var hint=(d&&d.needsPermission)?'<div class="os-filter-note" style="margin-top:6px">Fix: in Entra, add the <b>Sites.Read.All</b> application permission to the app registration and click <b>Grant admin consent</b>. Then run the audit again.</div>':'';
+    out.innerHTML='<div class="os-card" style="padding:12px 14px;border-color:var(--os-warn,#a86)">'+OS.esc(msg)+hint+'</div>';
+    return;
+  }
+  var s=d.site||{};
+  var head='<div style="margin-bottom:10px"><b>'+OS.esc(s.name||'Site')+'</b>'+
+    (s.webUrl?' · <a href="'+OS.esc(s.webUrl)+'" target="_blank" rel="noopener">open in SharePoint</a>':'')+'</div>';
+  var siteSec='<div class="os-sec os-block" style="margin-top:4px">Who can reach the site</div>'+accessRows(d.siteAccess);
+  var folders=d.folders||[];
+  var uniqueN=folders.filter(function(f){return f.unique;}).length;
+  var folderHead='<div class="os-sec os-block" style="margin-top:18px">Folders in "'+OS.esc(d.library||'Documents')+'" '+
+    '<span class="n">'+folders.length+(uniqueN?(' · '+uniqueN+' with unique access'):'')+'</span></div>';
+  var folderSec = folders.length ? folders.map(function(f){
+    return '<div class="os-card" style="padding:10px 12px;margin-top:8px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
+      '<b>'+OS.esc(f.name)+'</b>'+(f.unique?OS.pill('unique access','warn'):OS.pill('inherits site access','neutral'))+'</div>'+
+      '<div style="margin-top:8px">'+accessRows(f.access)+'</div></div>';
+  }).join('') : '<div class="os-filter-note">No top-level folders found.</div>';
+  var trunc=d.truncated?'<div class="os-filter-note" style="margin-top:8px">Showing the first folders only; the library has more.</div>':'';
+  out.innerHTML=head+siteSec+folderHead+folderSec+trunc;
+}
+function runAudit(){
+  var btn=document.getElementById('spRun'), url=document.getElementById('spUrl').value.trim();
+  btn.disabled=true; var t=btn.textContent; btn.textContent='Auditing…';
+  document.getElementById('spOut').innerHTML='<div class="os-filter-note">Reading permissions from Microsoft 365…</div>';
+  fetch('/api/sharepoint/audit'+(url?('?url='+encodeURIComponent(url)):''))
+    .then(function(r){return r.json();}).then(renderAudit)
+    .catch(function(){ renderAudit({ok:false,error:'The audit request failed.'}); })
+    .then(function(){ btn.disabled=false; btn.textContent=t; });
+}
+document.getElementById('spRun').addEventListener('click',runAudit);
+fetch('/api/sharepoint/status').then(function(r){return r.json();}).then(function(d){
+  if(d&&d.defaultSite){ var el=document.getElementById('spUrl'); if(!el.value) el.value=d.defaultSite; }
+  if(d&&d.graphConfigured===false){ document.getElementById('spNote').innerHTML='Microsoft Graph is not connected yet, so the audit cannot run. Connect it under Integrations.'; }
+}).catch(function(){});
 
 OS.ready(load); OS.onChange(load);
 </script></body></html>
