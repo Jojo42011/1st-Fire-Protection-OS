@@ -117,6 +117,37 @@ router.post('/api/people/assets/import-rmm', requirePeople('people_admin', 'it')
   }
 });
 
+/* Manual edits to an employee's record. Each change is written to the employee's history. Assets:
+ * IT/HR/admin; Access: IT/admin; Credentials: HR/admin; a history note: any authorized People user. */
+const edit = (fn: () => any, res: any) => {
+  try { res.json({ ok: true, result: fn() }); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+};
+
+router.post('/api/people/employees/:id/assets', requirePeople('people_admin', 'it', 'hr'), (req, res) =>
+  edit(() => svc.addAsset(Number(req.params.id), req.body || {}, actor(req)), res));
+router.post('/api/people/assets/:id/update', requirePeople('people_admin', 'it', 'hr'), (req, res) =>
+  edit(() => svc.updateAsset(Number(req.params.id), req.body || {}, actor(req)), res));
+router.post('/api/people/assets/:id/remove', requirePeople('people_admin', 'it', 'hr'), (req, res) =>
+  edit(() => svc.removeAsset(Number(req.params.id), actor(req)), res));
+
+router.post('/api/people/employees/:id/access', requirePeople('people_admin', 'it'), (req, res) =>
+  edit(() => svc.addAccess(Number(req.params.id), req.body || {}, actor(req)), res));
+router.post('/api/people/access/:id/update', requirePeople('people_admin', 'it'), (req, res) =>
+  edit(() => svc.updateAccessStatus(Number(req.params.id), String((req.body || {}).status || ''), actor(req)), res));
+router.post('/api/people/access/:id/remove', requirePeople('people_admin', 'it'), (req, res) =>
+  edit(() => svc.removeAccess(Number(req.params.id), actor(req)), res));
+
+router.post('/api/people/employees/:id/credentials', requirePeople('people_admin', 'hr'), (req, res) =>
+  edit(() => svc.addCredential(Number(req.params.id), req.body || {}, actor(req)), res));
+router.post('/api/people/credentials/:id/update', requirePeople('people_admin', 'hr'), (req, res) =>
+  edit(() => svc.updateCredential(Number(req.params.id), req.body || {}, actor(req)), res));
+router.post('/api/people/credentials/:id/remove', requirePeople('people_admin', 'hr'), (req, res) =>
+  edit(() => svc.removeCredential(Number(req.params.id), actor(req)), res));
+
+router.post('/api/people/employees/:id/notes', requirePeople(), (req, res) =>
+  edit(() => svc.addNote(Number(req.params.id), String((req.body || {}).text || ''), actor(req)), res));
+
 /* Import the real BambooHR roster (idempotent upsert by bamboo_id). HR / admin only. */
 router.post('/api/people/import/bamboo', requirePeople('people_admin', 'hr'), async (req, res) => {
   try {

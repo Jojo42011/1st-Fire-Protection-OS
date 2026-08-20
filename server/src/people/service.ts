@@ -506,3 +506,147 @@ export async function importFromBamboo(actor: string): Promise<ImportResult> {
   audit('bamboo_import', `Imported ${rows.length} Bamboo rows: ${created} new, ${updated} updated, ${skipped} skipped (${active} active, ${terminated} inactive)`, { actor });
   return { ok: true, total: rows.length, created, updated, skipped, active, terminated };
 }
+
+/* ─────────────────────────── manual record edits (assets / access / credentials / notes) ───────────────────────────
+ * Hand-entry alongside the automated onboarding routing and the RMM import. Every change is written
+ * to the employee's history so the timeline stays the single source of truth. Callers are gated to
+ * the right roles at the route; these functions assume authorization and just persist + audit. */
+
+function employeeName(id: number): string {
+  const e = getDb().prepare(`SELECT preferred_name, legal_first_name, legal_last_name FROM employees WHERE id = ?`).get(id) as any;
+  if (!e) return `#${id}`;
+  return `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim() || `#${id}`;
+}
+function requireEmployee(id: number): void {
+  const ok = getDb().prepare(`SELECT 1 FROM employees WHERE id = ?`).get(id);
+  if (!ok) throw new Error('employee_not_found');
+}
+
+/* ---- Assets ---- */
+export function addAsset(employee_id: number, input: { asset_type: string; identifier?: string; serial?: string; device_name?: string; owner?: string; status?: string; condition?: string; notes?: string }, actor: string) {
+  requireEmployee(employee_id);
+  const type = String(input.asset_type || '').trim();
+  if (!type) throw new Error('asset_type_required');
+  const status = input.status || 'assigned';
+  const info = getDb().prepare(
+    `INSERT INTO employee_assets (employee_id, asset_type, identifier, serial, device_name, status, owner, condition, notes, assigned_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(employee_id, type, input.identifier || null, input.serial || null, input.device_name || null, status, input.owner || 'it', input.condition || null, input.notes || null, status === 'assigned' ? new Date().toISOString() : null);
+  const label = `${type}${input.identifier ? ` (${input.identifier})` : input.serial ? ` (${input.serial})` : ''}`;
+  audit('asset_added', `Assigned ${label}`, { actor, employee_id });
+  return getDb().prepare(`SELECT * FROM employee_assets WHERE id = ?`).get(Number(info.lastInsertRowid));
+}
+export function updateAsset(id: number, patch: { status?: string; identifier?: string; serial?: string; device_name?: string; condition?: string; notes?: string; received_by?: string }, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT * FROM employee_assets WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('asset_not_found');
+  const status = patch.status || row.status;
+  const returnedAt = (status === 'returned' && row.status !== 'returned') ? new Date().toISOString() : row.returned_at;
+  db.prepare(
+    `UPDATE employee_assets SET status = ?, identifier = ?, serial = ?, device_name = ?, condition = ?, notes = ?, received_by = ?, returned_at = ? WHERE id = ?`
+  ).run(
+    status,
+    patch.identifier ?? row.identifier,
+    patch.serial ?? row.serial,
+    patch.device_name ?? row.device_name,
+    patch.condition ?? row.condition,
+    patch.notes ?? row.notes,
+    patch.received_by ?? row.received_by,
+    returnedAt,
+    id
+  );
+  if (patch.status && patch.status !== row.status) audit('asset_updated', `${row.asset_type} → ${status}`, { actor, employee_id: row.employee_id });
+  return db.prepare(`SELECT * FROM employee_assets WHERE id = ?`).get(id);
+}
+export function removeAsset(id: number, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT asset_type, employee_id FROM employee_assets WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('asset_not_found');
+  db.prepare(`DELETE FROM employee_assets WHERE id = ?`).run(id);
+  audit('asset_removed', `Removed ${row.asset_type}`, { actor, employee_id: row.employee_id });
+  return { ok: true };
+}
+
+/* ---- Access ---- */
+export function addAccess(employee_id: number, input: { system: string; label?: string; access_level?: string; owner?: string; status?: string }, actor: string) {
+  requireEmployee(employee_id);
+  const system = String(input.system || '').trim();
+  if (!system) throw new Error('system_required');
+  const status = input.status || 'provisioned';
+  const stamps: Record<string, string | null> = { approved_at: null, provisioned_at: null, revoked_at: null };
+  const now = new Date().toISOString();
+  if (status === 'approved') stamps.approved_at = now;
+  if (status === 'provisioned') { stamps.approved_at = now; stamps.provisioned_at = now; }
+  if (status === 'revoked') stamps.revoked_at = now;
+  const info = getDb().prepare(
+    `INSERT INTO employee_access (employee_id, system, label, access_level, status, owner, approved_at, provisioned_at, revoked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(employee_id, system, input.label || system, input.access_level || null, status, input.owner || 'it', stamps.approved_at, stamps.provisioned_at, stamps.revoked_at);
+  audit('access_added', `Granted ${input.label || system}`, { actor, employee_id });
+  return getDb().prepare(`SELECT * FROM employee_access WHERE id = ?`).get(Number(info.lastInsertRowid));
+}
+export function updateAccessStatus(id: number, status: string, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT * FROM employee_access WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('access_not_found');
+  const now = new Date().toISOString();
+  const set: Record<string, string | null> = {};
+  if (status === 'approved') set.approved_at = now;
+  if (status === 'provisioned') set.provisioned_at = now;
+  if (status === 'revoked') set.revoked_at = now;
+  db.prepare(`UPDATE employee_access SET status = ?, approved_at = COALESCE(?, approved_at), provisioned_at = COALESCE(?, provisioned_at), revoked_at = COALESCE(?, revoked_at) WHERE id = ?`)
+    .run(status, set.approved_at ?? null, set.provisioned_at ?? null, set.revoked_at ?? null, id);
+  audit('access_updated', `${row.label || row.system} → ${status}`, { actor, employee_id: row.employee_id });
+  return db.prepare(`SELECT * FROM employee_access WHERE id = ?`).get(id);
+}
+export function removeAccess(id: number, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT system, label, employee_id FROM employee_access WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('access_not_found');
+  db.prepare(`DELETE FROM employee_access WHERE id = ?`).run(id);
+  audit('access_removed', `Removed ${row.label || row.system}`, { actor, employee_id: row.employee_id });
+  return { ok: true };
+}
+
+/* ---- Credentials ---- */
+export function addCredential(employee_id: number, input: { credential_type: string; status?: string; expires_at?: string; notes?: string }, actor: string) {
+  requireEmployee(employee_id);
+  const type = String(input.credential_type || '').trim();
+  if (!type) throw new Error('credential_type_required');
+  const status = input.status || 'required';
+  const info = getDb().prepare(
+    `INSERT INTO employee_credentials (employee_id, credential_type, status, expires_at, notes, verified_at, verified_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(employee_id, type, status, input.expires_at || null, input.notes || null, status === 'verified' ? new Date().toISOString() : null, status === 'verified' ? actor : null);
+  audit('credential_added', `Added ${type}${input.expires_at ? ` (expires ${input.expires_at})` : ''}`, { actor, employee_id });
+  return getDb().prepare(`SELECT * FROM employee_credentials WHERE id = ?`).get(Number(info.lastInsertRowid));
+}
+export function updateCredential(id: number, patch: { status?: string; expires_at?: string; notes?: string }, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT * FROM employee_credentials WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('credential_not_found');
+  const status = patch.status || row.status;
+  const verifiedAt = status === 'verified' ? (row.verified_at || new Date().toISOString()) : row.verified_at;
+  const verifiedBy = status === 'verified' ? (row.verified_by || actor) : row.verified_by;
+  db.prepare(`UPDATE employee_credentials SET status = ?, expires_at = ?, notes = ?, verified_at = ?, verified_by = ? WHERE id = ?`)
+    .run(status, patch.expires_at ?? row.expires_at, patch.notes ?? row.notes, verifiedAt, verifiedBy, id);
+  if (patch.status && patch.status !== row.status) audit('credential_updated', `${row.credential_type} → ${status}`, { actor, employee_id: row.employee_id });
+  return db.prepare(`SELECT * FROM employee_credentials WHERE id = ?`).get(id);
+}
+export function removeCredential(id: number, actor: string) {
+  const db = getDb();
+  const row = db.prepare(`SELECT credential_type, employee_id FROM employee_credentials WHERE id = ?`).get(id) as any;
+  if (!row) throw new Error('credential_not_found');
+  db.prepare(`DELETE FROM employee_credentials WHERE id = ?`).run(id);
+  audit('credential_removed', `Removed ${row.credential_type}`, { actor, employee_id: row.employee_id });
+  return { ok: true };
+}
+
+/* ---- History note ---- */
+export function addNote(employee_id: number, text: string, actor: string) {
+  requireEmployee(employee_id);
+  const note = String(text || '').trim();
+  if (!note) throw new Error('note_required');
+  audit('note', note, { actor, employee_id });
+  return { ok: true };
+}
