@@ -817,6 +817,32 @@ export function startBulkAccessSync(actor: string): { ok: boolean; started: bool
 function normPersonName(s: string): string {
   return String(s || '').toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
+const NAME_SUFFIXES = new Set(['jr', 'jnr', 'sr', 'snr', 'ii', 'iii', 'iv', 'v', 'junior', 'senior']);
+function stripSuffix(norm: string): string {
+  return norm.split(' ').filter((t) => !NAME_SUFFIXES.has(t)).join(' ').trim();
+}
+/**
+ * The set of normalized name keys a person could match on, tolerant of a Jr./Sr./III suffix and a
+ * compound (two-part) surname. Used on BOTH sides so a BambooHR "Aurelio Arias Espinoza" lines up
+ * with an Entra "Aurelio Arias" or "Aurelio Espinoza", and "Angel Padilla JR" with "Angel Padilla".
+ * When two different people collapse to the same key the caller marks it ambiguous and skips it, so
+ * this only ever widens correct matches, never guesses between people.
+ */
+export function nameKeyVariants(parts: { first?: string | null; last?: string | null; display?: string | null; preferred?: string | null }): string[] {
+  const keys = new Set<string>();
+  const add = (s?: string | null) => { if (!s) return; const k = stripSuffix(normPersonName(s)); if (k) keys.add(k); };
+  add(parts.display);
+  add(`${parts.first || ''} ${parts.last || ''}`);
+  add(`${parts.preferred || ''} ${parts.last || ''}`);
+  const first = stripSuffix(normPersonName(parts.first || parts.preferred || '')).split(' ')[0];
+  const lastTokens = stripSuffix(normPersonName(parts.last || '')).split(' ').filter(Boolean);
+  if (first && lastTokens.length) {
+    keys.add(`${first} ${lastTokens.join(' ')}`);          // first + full (compound) surname
+    keys.add(`${first} ${lastTokens[lastTokens.length - 1]}`); // first + final surname token
+    keys.add(`${first} ${lastTokens[0]}`);                 // first + first surname token
+  }
+  return Array.from(keys).filter(Boolean);
+}
 
 export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boolean; error?: string; directory: number; matched: number; updated: number; unmatchedEmployees: number; unmatched: string[] }> {
   if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', directory: 0, matched: 0, updated: 0, unmatchedEmployees: 0, unmatched: [] };
@@ -829,11 +855,10 @@ export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boole
   // never guess which one an Entra user belongs to.
   const byEmail = new Map<string, number>();
   const byName = new Map<string, number | null>();
-  const putName = (key: string, id: number) => { const k = normPersonName(key); if (!k) return; byName.set(k, byName.has(k) && byName.get(k) !== id ? null : id); };
+  const putName = (key: string, id: number) => { if (!key) return; byName.set(key, byName.has(key) && byName.get(key) !== id ? null : id); };
   for (const e of emps) {
     for (const em of [e.work_email, e.personal_email, e.upn]) if (em) byEmail.set(String(em).toLowerCase(), e.id);
-    putName(`${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`, e.id);
-    putName(`${e.legal_first_name || ''} ${e.legal_last_name || ''}`, e.id);
+    for (const k of nameKeyVariants({ first: e.legal_first_name, last: e.legal_last_name, preferred: e.preferred_name })) putName(k, e.id);
   }
 
   const empById = new Map<number, any>(emps.map((e) => [e.id, e]));
@@ -847,8 +872,7 @@ export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boole
       let empId: number | undefined;
       for (const key of [u.mail, u.upn]) if (key && byEmail.has(String(key).toLowerCase())) { empId = byEmail.get(String(key).toLowerCase()); break; }
       if (empId == null) {
-        const nameKeys = [u.displayName || '', `${u.first || ''} ${u.last || ''}`].map((x) => normPersonName(x)).filter(Boolean);
-        for (const nk of nameKeys) { const hit = byName.get(nk); if (hit) { empId = hit; break; } }
+        for (const nk of nameKeyVariants({ first: u.first, last: u.last, display: u.displayName })) { const hit = byName.get(nk); if (hit) { empId = hit; break; } }
       }
       if (empId == null || touched.has(empId)) continue; // one Entra user per employee, first wins
       touched.add(empId);
@@ -922,7 +946,7 @@ export async function terminatedM365Gaps(): Promise<{ ok: boolean; error?: strin
   const byName = new Map<string, any | null>();
   for (const u of dir.users) {
     for (const em of [u.mail, u.upn]) if (em) byEmail.set(String(em).toLowerCase(), u);
-    for (const nk of [u.displayName || '', `${u.first || ''} ${u.last || ''}`].map((x) => normPersonName(x)).filter(Boolean)) {
+    for (const nk of nameKeyVariants({ first: u.first, last: u.last, display: u.displayName })) {
       byName.set(nk, byName.has(nk) && byName.get(nk) !== u ? null : u);
     }
   }
@@ -931,7 +955,7 @@ export async function terminatedM365Gaps(): Promise<{ ok: boolean; error?: strin
   for (const e of termed) {
     let u: any = null;
     for (const key of [e.work_email, e.personal_email, e.upn]) if (key && byEmail.has(String(key).toLowerCase())) { u = byEmail.get(String(key).toLowerCase()); break; }
-    if (!u) { for (const nk of [e.entra_display_name || '', `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`, `${e.legal_first_name || ''} ${e.legal_last_name || ''}`].map((x) => normPersonName(x)).filter(Boolean)) { const hit = byName.get(nk); if (hit) { u = hit; break; } } }
+    if (!u) { for (const nk of nameKeyVariants({ first: e.legal_first_name, last: e.legal_last_name, preferred: e.preferred_name, display: e.entra_display_name })) { const hit = byName.get(nk); if (hit) { u = hit; break; } } }
     if (!u) continue; // not in the directory: nothing to clean up there
     const licensed = (u.licenseSkuIds || []).length > 0;
     if (!u.enabled && !licensed) continue; // already a disabled, unlicensed (likely shared) mailbox: no gap

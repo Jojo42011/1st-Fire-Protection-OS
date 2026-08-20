@@ -76,6 +76,26 @@ test('access group provisioning: records the grant even when M365 is not connect
   assert.equal((db.prepare(`SELECT status FROM employee_access WHERE system='SG-PR-MCA'`).get() as any).status, 'revoked');
 });
 
+test('name matching tolerates suffixes and compound surnames', () => {
+  // A Jr. suffix must not block the match: "Angel Padilla JR" and Entra "Angel Padilla" share a key.
+  const emp = svc.nameKeyVariants({ first: 'Angel', last: 'Padilla, JR', preferred: 'Angel' });
+  const entra = svc.nameKeyVariants({ first: 'Angel', last: 'Padilla', display: 'Angel Padilla' });
+  assert.ok(emp.some((k) => entra.includes(k)), 'suffix-stripped keys overlap');
+  assert.ok(emp.includes('angel padilla'));
+
+  // A compound surname produces both single-surname variants.
+  const compound = svc.nameKeyVariants({ first: 'Aurelio', last: 'Arias Espinoza' });
+  assert.ok(compound.includes('aurelio arias'), 'first + first surname');
+  assert.ok(compound.includes('aurelio espinoza'), 'first + last surname');
+  assert.ok(compound.includes('aurelio arias espinoza'), 'full compound kept too');
+
+  // Jr and Sr of the same name collapse to the same key (so the caller marks it ambiguous, not wrong).
+  const jr = svc.nameKeyVariants({ first: 'Israel', last: 'Hernandez', preferred: 'Israel' });
+  const sr = svc.nameKeyVariants({ first: 'Israel', last: 'Hernandez', preferred: 'Israel' });
+  assert.deepEqual(jr, sr);
+  assert.ok(jr.includes('israel hernandez'));
+});
+
 test('asset library shows the Microsoft 365 name, not the BambooHR nickname', () => {
   db.prepare(`UPDATE employees SET legal_first_name='Robert', legal_last_name='Smith', preferred_name='Bob', entra_display_name='Robert Smith' WHERE id=1`).run();
   svc.addAsset(1, { asset_type: 'computer', device_name: '1STFP-BOB', serial: 'SN-1', status: 'assigned', notes: 'RMM user: AD\\bob.smith · Last seen: 2026-08-20 · Source: RMM' }, 'tester');
