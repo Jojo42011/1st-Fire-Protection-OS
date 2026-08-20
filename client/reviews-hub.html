@@ -39,6 +39,11 @@
     <div class="os-sec os-block">Replies awaiting approval <span class="n" id="qn"></span></div>
     <div id="queue"></div>
 
+    <div class="os-sec os-block">Review requests awaiting approval <span class="n" id="rqn"></span>
+      <button class="os-btn primary" id="sendAll" style="float:right;padding:6px 12px;font-size:12px;display:none">Send all held</button>
+    </div>
+    <div id="reqQueue"></div>
+
     <div class="os-foot" id="foot">Ratings and reviews are read from the connected review source. <b>Nothing publishes without your approval:</b> a reply is drafted, then it waits in this queue until you approve it. Requests are sent through Microsoft 365 and are also held for approval.</div>
   </div>
 
@@ -50,16 +55,20 @@ function esc(t){return OS.esc(t);}
 function starStr(n){n=Math.max(0,Math.min(5,Number(n)||0));return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
 function isDone(r){var s=String(r.reply_status||'');return s==='approved'||s==='published';}
 
+var REQUESTS=[];
 function load(){
   Promise.all([
     fetch('/api/reviews').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/reviews/targets').then(function(r){return r.json();}).catch(function(){return {};})
+    fetch('/api/reviews/targets').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/reviews/queue').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
-    var rev=res[0]||{}, tg=res[1]||{};
+    var rev=res[0]||{}, tg=res[1]||{}, q=res[2]||{};
     REVIEWS=rev.reviews||[]; SUMMARY=rev.summary||{}; LIVE=!!rev.live; REQ=(tg.summary)||{};
+    REQUESTS=(q.requests)||[];
     renderStrip();
     renderDist();
     renderQueue();
+    renderRequests();
     document.getElementById('foot').innerHTML=
       (LIVE?'Ratings and reviews are <b>live from Google</b>. ':'Ratings and reviews are <b>demo</b> until Google Business connects. ')+
       '<b>Nothing publishes without your approval:</b> a reply is drafted, then it waits in this queue until you approve it. Requests are sent through Microsoft 365 and are also held for approval.';
@@ -117,6 +126,41 @@ function renderQueue(){
   ];
   document.getElementById('queue').innerHTML=OS.table(cols, rows, {empty:'Nothing is waiting on a reply.'});
 }
+
+// The review requests ServiceTrade queued from completed jobs, held for your approval before any go
+// out. This is the count the "Reviews" nav badge shows, so surfacing it here keeps them in sync.
+function renderRequests(){
+  var held=REQUESTS.filter(function(r){return String(r.status||'')==='held';});
+  document.getElementById('rqn').textContent=held.length?('· '+held.length):'';
+  document.getElementById('sendAll').style.display=held.length?'':'none';
+  if(!held.length){
+    var any=REQUESTS.length;
+    document.getElementById('reqQueue').innerHTML=OS.empty(any?'No requests are held. Sent ones show under Review requests.':'No review requests yet. They are created from completed ServiceTrade jobs.','✓');
+    return;
+  }
+  var cols=[
+    {as:'customer',label:'Customer',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.customer||'Customer')+'</span>'+(r.office_name?'<br><span class="muted" style="font-size:11.5px">'+esc(r.office_name)+'</span>':'');}},
+    {as:'channel',label:'Channel',render:function(v,r){return esc((r.channel||'email')+(r.recipient_email?' · '+r.recipient_email:''));}},
+    {as:'status',label:'Status',render:function(){return OS.pill('Held for approval','warn');}},
+    {as:'act',label:'Action',render:function(v,r){return '<button class="os-btn primary" style="padding:6px 11px;font-size:12px" data-send="'+r.id+'">Approve &amp; send</button>';}}
+  ];
+  document.getElementById('reqQueue').innerHTML=OS.table(cols, held, {empty:'No requests held.'});
+}
+document.getElementById('reqQueue').addEventListener('click',function(e){
+  var s=e.target.closest('[data-send]'); if(!s) return;
+  s.disabled=true; s.textContent='Sending…';
+  fetch('/api/reviews/queue/'+s.getAttribute('data-send')+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    OS.toast(d&&d.ok?'Review request sent.':'Could not send this request.', d&&d.ok?undefined:'bad'); load();
+  }).catch(function(){ s.disabled=false; s.textContent='Approve & send'; OS.toast('Could not reach the review service.','bad'); });
+});
+document.getElementById('sendAll').addEventListener('click',function(){
+  var btn=this; if(!confirm('Approve and send all held review requests?')) return;
+  btn.disabled=true; btn.textContent='Sending…';
+  fetch('/api/reviews/send-batch',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    OS.toast(d&&d.ok?('Sent '+((d.sent!=null)?d.sent:'the held')+' review request(s).'):'Could not send the batch.', d&&d.ok?undefined:'bad');
+    btn.disabled=false; btn.textContent='Send all held'; load();
+  }).catch(function(){ btn.disabled=false; btn.textContent='Send all held'; OS.toast('Could not reach the review service.','bad'); });
+});
 
 document.getElementById('queue').addEventListener('click',function(e){
   var ap=e.target.closest('[data-approve]');
