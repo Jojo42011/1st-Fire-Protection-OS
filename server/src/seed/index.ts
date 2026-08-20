@@ -36,8 +36,8 @@ export function seed(): void {
     seedLicenses();
     seedOnboarding();
     seedApprovals();
+    seedCrm();
   }
-  seedCrm();
   seedFiveAgents();
   seedEstimator();
   seedCloser();
@@ -55,6 +55,10 @@ export function seed(): void {
   };
   const isoAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
 
+  // Illustrative business content (invoices, jobs, reviews, calls, leads) is demo-only: in production
+  // it clashes with the real ServiceTrade sync and real receptionist calls, so it seeds only in demo
+  // mode. The receptionist routing rules below are real logic and always seed.
+  if (DEMO_MODE) {
   /* ---------- invoices (16 across aging buckets, ~$3.5M outstanding) - real Texas customers + service lines ---------- */
   const invoices: [string, string, string, number, number, string][] = [
     // customer, email, phone, amount, dueOffsetDays(negative=overdue), status
@@ -154,6 +158,7 @@ export function seed(): void {
   for (const [name, phone, address, need, status] of leads) {
     insLead.run(name, phone, address, need, status);
   }
+  } // end DEMO_MODE sample content
 
   /* ---------- a few seed brain rules (the real SA routing logic) ---------- */
   const insRule = db.prepare(`INSERT INTO rules (rule, scope) VALUES (?, ?)`);

@@ -63,7 +63,7 @@ test('cleanup removes fixture approvals and demo license seats, keeping real one
 });
 
 test('cleanup is idempotent: a second run changes nothing and the flag is set', () => {
-  assert.equal(getState('cleaned_demo_prod_v2'), '1', 'flag recorded');
+  assert.equal(getState('cleaned_demo_prod_v3'), '1', 'flag recorded');
   // Re-insert a fixture; because the flag is set, a second run must not touch it.
   db.prepare(`INSERT INTO onboarding_requests (name, personal_email) VALUES ('Late Fixture', 'x@y.example')`).run();
   cleanupDemoData();
