@@ -233,7 +233,8 @@ VIEWS.employees=function(v){
     var importBtn=connected?'<button class="btn btn-sm" id="bhImport" onclick="importBamboo()">Import from BambooHR</button>':'<span class="muted" style="font-size:13px">BambooHR not connected</span>';
     var idBtn=canEditAccess()?'<button class="btn btn-sm" id="idSync" onclick="syncIdentities()">Match identities from Microsoft 365</button>':'';
     var syncAllBtn=canEditAccess()?'<button class="btn btn-sm" id="syncAll" onclick="syncAllAccess()">Sync all access from Microsoft 365</button>':'';
-    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+importBtn+idBtn+syncAllBtn+'</div></div>';
+    var resolveBtn=canEditAccess()?'<button class="btn btn-sm" id="resolveUn" onclick="resolveUnmatched()">Resolve unmatched</button>':'';
+    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+importBtn+idBtn+resolveBtn+syncAllBtn+'</div></div>';
     var body=(!list.length)
       ? '<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>'
       : '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
@@ -312,6 +313,39 @@ function syncIdentities(){
         (un.length?('<p class="muted" style="margin:6px 0 0"><b>'+un.length+' not found in the directory</b> (no M365 account, or the name in BambooHR differs from Entra). These usually are field staff without a mailbox:</p><p style="margin:6px 0 0;font-size:13px">'+un.map(function(n){return esc(n);}).join(' · ')+'</p>'):'')+'</div>';
     }
   }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Match identities from Microsoft 365'; } alert('Request failed'); });
+}
+function resolveUnmatched(){
+  var btn=document.getElementById('resolveUn'); if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  var msg=document.getElementById('bhMsg'); if(msg) msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p class="muted">Finding the closest Microsoft 365 accounts for unmatched employees…</p></div>';
+  j('/api/people/identities/unmatched').then(function(r){
+    if(btn){ btn.disabled=false; btn.textContent='Resolve unmatched'; }
+    var d=r.body||{};
+    if(!r.ok || !d.ok){ if(msg) msg.innerHTML=''; alert(d.error||'Could not load unmatched employees'); return; }
+    renderUnmatched(d.unmatched||[]);
+  }).catch(function(){ if(btn){ btn.disabled=false; btn.textContent='Resolve unmatched'; } alert('Request failed'); });
+}
+function renderUnmatched(list){
+  var msg=document.getElementById('bhMsg'); if(!msg) return;
+  if(!list.length){ msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p><b>Everyone is matched.</b> No active employees are missing a Microsoft 365 identity.</p></div>'; return; }
+  var withSug=list.filter(function(x){return x.suggestions&&x.suggestions.length;});
+  var none=list.filter(function(x){return !x.suggestions||!x.suggestions.length;});
+  var rows=list.map(function(x){
+    var sug=(x.suggestions||[]).map(function(s){
+      return '<button class="btn btn-xs" onclick="linkIdentity('+x.employee_id+',\''+encodeURIComponent(s.upn||'')+'\',\''+encodeURIComponent(s.name||'')+'\')">Link '+esc(s.name||s.upn||'account')+' &lt;'+esc(s.upn||s.mail||'')+'&gt;'+(s.enabled?'':' (disabled)')+'</button>';
+    }).join(' ');
+    return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(x.name)+'</td><td>'+(sug||'<span class="muted">No Microsoft 365 account found (field staff without a mailbox)</span>')+'</td></tr>';
+  }).join('');
+  msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px">'+
+    '<p style="margin:0 0 8px"><b>'+list.length+' unmatched employees.</b> '+withSug.length+' have a likely Microsoft 365 account to confirm; '+none.length+' appear to have no mailbox. Click a suggestion to link it (email always wins after that).</p>'+
+    '<div class="card-clip"><table><thead><tr><th>Employee</th><th>Suggested Microsoft 365 account</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function linkIdentity(id, upnEnc, nameEnc){
+  var upn=decodeURIComponent(upnEnc), name=decodeURIComponent(nameEnc||'');
+  j('/api/people/employees/'+id+'/identity/link',{method:'POST',body:JSON.stringify({upn:upn,display_name:name})}).then(function(r){
+    var d=r.body||{};
+    if(!r.ok || !d.ok){ alert(d.error||'Link failed'); return; }
+    OS.toast('Linked to '+(name||upn)+'.'); resolveUnmatched();
+  }).catch(function(){ alert('Link request failed'); });
 }
 var _syncAllActive=false, _syncAllPolling=false;
 function syncAllAccess(){

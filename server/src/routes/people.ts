@@ -164,6 +164,17 @@ router.get('/api/people/access/sync-all/status', requirePeople('people_admin', '
   res.json({ ok: true, status: svc.bulkAccessSyncStatus() });
 });
 
+/* The active employees still without an Entra UPN, each with suggested M365 accounts to confirm-link. */
+router.get('/api/people/identities/unmatched', requirePeople('people_admin', 'it', 'hr'), async (_req, res) => {
+  try { res.json(await svc.unmatchedIdentitySuggestions()); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+router.post('/api/people/employees/:id/identity/link', requirePeople('people_admin', 'it', 'hr'), (req, res) => {
+  const b = req.body || {};
+  try { res.json(svc.linkIdentity(Number(req.params.id), String(b.upn || ''), b.display_name || null, actor(req))); }
+  catch (err) { res.status(400).json({ ok: false, error: (err as Error).message }); }
+});
+
 /* Company-wide asset library (computers today; iPads/phones later). Any People user can view. */
 router.get('/api/people/assets/library', requirePeople(), (req, res) => {
   res.json({ ok: true, ...svc.assetLibrary(String(req.query.type || 'computer')) });

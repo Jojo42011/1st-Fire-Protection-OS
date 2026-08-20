@@ -974,3 +974,45 @@ export async function terminatedM365Gaps(): Promise<{ ok: boolean; error?: strin
   gaps.sort((a, b) => Number(b.enabled) - Number(a.enabled) || b.licenses.length - a.licenses.length);
   return { ok: true, checked: termed.length, gaps };
 }
+
+/* ─────────────────── resolve the last unmatched identities, with human confirmation ───────────────────
+ * For each active employee still without a UPN, suggest the closest Entra accounts (shared name
+ * tokens), so a person can confirm-link the ambiguous ones (Jr./Sr. pairs, oddly spelled names) in one
+ * click instead of the system guessing. An employee with no suggestions genuinely has no M365 account. */
+
+function nameTokens(s: string): Set<string> {
+  return new Set(stripSuffix(normPersonName(s)).split(' ').filter((t) => t.length > 1));
+}
+
+export async function unmatchedIdentitySuggestions(): Promise<{ ok: boolean; error?: string; unmatched: any[] }> {
+  if (!graphUsersConfigured()) return { ok: false, error: 'Microsoft 365 is not connected', unmatched: [] };
+  const dir = await listAllUsers();
+  if (!dir.ok) return { ok: false, error: dir.error, unmatched: [] };
+  const emps = getDb().prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name FROM employees
+      WHERE employment_status IN ('active','onboarding') AND (upn IS NULL OR upn = '') ORDER BY legal_last_name, legal_first_name`
+  ).all() as any[];
+  const users = dir.users.map((u) => ({ u, tokens: nameTokens(`${u.displayName || ''} ${u.first || ''} ${u.last || ''}`) }));
+  const unmatched = emps.map((e) => {
+    const et = nameTokens(`${e.preferred_name || ''} ${e.legal_first_name || ''} ${e.legal_last_name || ''}`);
+    const scored = users
+      .map(({ u, tokens }) => { let s = 0; for (const t of et) if (tokens.has(t)) s++; return { u, s }; })
+      .filter((x) => x.s >= 2)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 3)
+      .map((x) => ({ upn: x.u.upn || x.u.mail, name: x.u.displayName, mail: x.u.mail, enabled: x.u.enabled }));
+    return { employee_id: e.id, name: empName(e), suggestions: scored };
+  });
+  return { ok: true, unmatched };
+}
+
+export function linkIdentity(employee_id: number, upn: string, displayName: string | null, actor: string): { ok: boolean; error?: string } {
+  requireEmployee(employee_id);
+  const u = String(upn || '').trim();
+  if (!u) throw new Error('upn_required');
+  getDb().prepare(
+    `UPDATE employees SET upn = ?, entra_display_name = COALESCE(?, entra_display_name), work_email = COALESCE(NULLIF(work_email, ''), ?) WHERE id = ?`
+  ).run(u, displayName || null, u.includes('@') ? u : null, employee_id);
+  audit('identity_linked', `Linked to Microsoft 365 account ${u}`, { actor, employee_id });
+  return { ok: true };
+}

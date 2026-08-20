@@ -107,6 +107,22 @@ test('asset library shows the Microsoft 365 name, not the BambooHR nickname', ()
   assert.equal(row.serial, 'SN-1');
 });
 
+test('linkIdentity stamps the chosen M365 account onto the employee', () => {
+  db.prepare(`UPDATE employees SET upn=NULL, work_email='' WHERE id=1`).run();
+  const out = svc.linkIdentity(1, 'robert.smith@1stfp.com', 'Robert Smith', 'tester');
+  assert.equal(out.ok, true);
+  const e = db.prepare(`SELECT upn, work_email, entra_display_name FROM employees WHERE id=1`).get() as any;
+  assert.equal(e.upn, 'robert.smith@1stfp.com');
+  assert.equal(e.work_email, 'robert.smith@1stfp.com', 'blank work_email is filled from the UPN');
+  assert.equal(e.entra_display_name, 'Robert Smith');
+});
+
+test('unmatched suggestions are keyless-safe when Graph is not connected', async () => {
+  const out = await svc.unmatchedIdentitySuggestions();
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /not connected/i);
+});
+
 test('terminated-in-M365 gap check is keyless-safe when Graph is not connected', async () => {
   const out = await svc.terminatedM365Gaps();
   assert.equal(out.ok, false);
