@@ -22,6 +22,19 @@
   .ic-unavail li::before{content:"·";color:var(--os-warn);font-weight:800}
   .ic-connect{align-self:flex-start;font-family:var(--sans);font-weight:700;font-size:12.5px;color:#fff;background:var(--os-accent);border:none;border-radius:10px;padding:9px 15px;cursor:pointer}
   .ic-connect:hover{filter:brightness(1.08)}
+  /* sync-schedule controls, one block per connector */
+  .ic-sched{border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:9px}
+  .ic-sched .sc-lab{font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .ic-sched .sc-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ic-sched select{flex:1;min-width:130px;font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--ink);
+    border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--panel);cursor:pointer}
+  .ic-sched select:focus{outline:none;border-color:var(--os-accent)}
+  .sc-now{font-family:var(--sans);font-weight:700;font-size:12px;color:var(--ink);background:var(--panel);
+    border:1px solid var(--border-strong,var(--border));border-radius:9px;padding:8px 13px;cursor:pointer;white-space:nowrap;transition:background .15s}
+  .sc-now:hover{background:var(--fill)}
+  .sc-now:disabled{opacity:.5;cursor:default}
+  .sc-meta{font-weight:600;font-size:11.5px;color:var(--muted)}
+  .sc-meta .bad{color:var(--os-bad)}.sc-meta .good{color:var(--os-good)}
 </style>
 </head><body>
   <div class="os-wrap">
@@ -57,7 +70,30 @@ function lastSync(s){ return s.lastSyncedAt?('Last sync '+OS.ago(s.lastSyncedAt)
 
 function row(k,v,cls){ return '<div class="ic-row"><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>'; }
 
-function connectorCard(s, records){
+var CADENCE=[
+  {v:0,l:'Paused'},{v:5,l:'Every 5 minutes'},{v:15,l:'Every 15 minutes'},{v:30,l:'Every 30 minutes'},
+  {v:60,l:'Hourly'},{v:180,l:'Every 3 hours'},{v:720,l:'Every 12 hours'},{v:1440,l:'Once a day'}
+];
+function cadenceLabel(sc){ if(!sc||!sc.enabled||sc.interval_minutes<=0) return 'Paused'; var m=CADENCE.filter(function(c){return c.v===sc.interval_minutes;})[0]; return m?m.l:('Every '+sc.interval_minutes+' min'); }
+function schedBlock(key, sc){
+  if(!sc) return '';
+  // The select value is the interval in minutes; 0 means paused. It always includes the current
+  // stored interval as an option even if it is not one of the presets.
+  var cur=(!sc.enabled||sc.interval_minutes<=0)?0:sc.interval_minutes;
+  var opts=CADENCE.slice();
+  if(cur>0 && !opts.some(function(c){return c.v===cur;})) opts.push({v:cur,l:'Every '+cur+' min'});
+  var sel='<select data-sched="'+key+'">'+opts.map(function(c){
+    return '<option value="'+c.v+'"'+(c.v===cur?' selected':'')+'>'+c.l+'</option>';
+  }).join('')+'</select>';
+  var last=sc.last_run_at?('Last run '+OS.ago(sc.last_run_at)):'Not run yet';
+  var stat=sc.last_status==='error'?' · <span class="bad">last run failed</span>':(sc.last_status==='ok'&&sc.last_detail?' · '+OS.esc(sc.last_detail):'');
+  return '<div class="ic-sched">'+
+    '<div class="sc-lab">Auto-sync</div>'+
+    '<div class="sc-controls">'+sel+'<button class="sc-now" data-syncnow="'+key+'">Sync now</button></div>'+
+    '<div class="sc-meta">'+OS.esc(last)+stat+'</div>'+
+  '</div>';
+}
+function connectorCard(s, records, sc){
   var health=syncHealth(s);
   return '<div class="ic'+(s.connected?'':' off')+'">'+
     '<div class="ic-top"><div><div class="ic-nm">'+OS.esc(s.label)+'</div><div class="ic-role">'+(ROLE[s.key]||'')+'</div></div>'+statePill(s)+'</div>'+
@@ -66,7 +102,9 @@ function connectorCard(s, records){
       row('Last sync', OS.esc(lastSync(s)))+
       row('Records', records||'<span class="muted">not mirrored</span>')+
       row('Sync health', health.t, health.cls)+
-    '</div></div>';
+    '</div>'+
+    schedBlock(s.key, sc)+
+  '</div>';
 }
 
 function intacctCard(s){
@@ -83,14 +121,17 @@ function intacctCard(s){
     '<button class="ic-connect" id="ic-connect">Connect Sage Intacct</button></div>';
 }
 
+var SCH={};
 function load(){
   document.getElementById('grid').innerHTML=OS.skeletonKpis(4);
   Promise.all([
     OS.sources(),
-    fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};})
+    fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/sync-schedules').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
     var src=(res[0].sources||[]);
     var lic=res[1]||{}; var sum=lic.summary||{};
+    SCH={}; ((res[2]&&res[2].schedules)||[]).forEach(function(s){ SCH[s.integration_key]=s; });
     var by={}; src.forEach(function(s){by[s.key]=s;});
 
     // Real record counts where a source exposes them; honest blanks where it does not.
@@ -102,7 +143,7 @@ function load(){
     var cards=order.map(function(k){
       var s=by[k]; if(!s) return '';
       var records = k==='servicetrade'?stRecords : k==='bamboo'?bambooRecords : null;
-      return connectorCard(s, records);
+      return connectorCard(s, records, SCH[k]);
     });
     var intacct=by.intacct;
     cards.push(intacct?intacctCard(intacct):'');
@@ -116,8 +157,32 @@ function load(){
   }).catch(function(){document.getElementById('grid').innerHTML=OS.errorBox('Could not load integration health.');});
 }
 
+// Change a connector's auto-sync cadence. 0 = paused (enabled:false); any other value sets the
+// interval and re-enables it.
+document.addEventListener('change',function(e){
+  var sel=e.target.closest('[data-sched]'); if(!sel) return;
+  var key=sel.getAttribute('data-sched'); var v=Number(sel.value);
+  var body=v>0?{enabled:true,interval_minutes:v}:{enabled:false};
+  sel.disabled=true;
+  fetch('/api/sync-schedules/'+key,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      sel.disabled=false;
+      if(!d||!d.ok){ OS.toast('Could not update the sync schedule.','bad'); return; }
+      SCH[key]=d.schedule;
+      OS.toast((by(key)||key)+' auto-sync set to '+cadenceLabel(d.schedule).toLowerCase()+'.');
+    }).catch(function(){ sel.disabled=false; OS.toast('Could not reach the schedule service.','bad'); });
+});
+function by(key){ return {servicetrade:'ServiceTrade',bamboo:'BambooHR',microsoft:'Microsoft 365'}[key]||key; }
 document.addEventListener('click',function(e){
-  if(e.target.closest('#ic-connect')){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} }
+  if(e.target.closest('#ic-connect')){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} return; }
+  var b=e.target.closest('[data-syncnow]'); if(!b) return;
+  var key=b.getAttribute('data-syncnow'); b.disabled=true; var was=b.textContent; b.textContent='Syncing…';
+  fetch('/api/sync-schedules/'+key+'/run',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    b.disabled=false; b.textContent=was;
+    if(!d){ OS.toast('Could not sync.','bad'); return; }
+    OS.toast((by(key))+': '+(d.detail||(d.ok?'synced':'sync failed')), d.ok?undefined:'bad');
+    load();
+  }).catch(function(){ b.disabled=false; b.textContent=was; OS.toast('Could not reach the sync service.','bad'); });
 });
 OS.ready(load); OS.onChange(load);
 </script></body></html>

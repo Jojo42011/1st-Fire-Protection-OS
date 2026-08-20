@@ -8,13 +8,10 @@ import { initDb } from './db/schema';
 import { seed } from './seed/index';
 import { reflect } from './services/reflection';
 import { runDailyCollection } from './services/collectionWorkflow';
-import { syncFromVapi } from './services/receptionist';
 import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
-import { runScheduledSync } from './services/servicetradeSync';
 import { runDueReports } from './services/reportScheduler';
-import { syncSchedule } from './services/scheduleSync';
-import { syncPlans } from './services/planSync';
+import { runDueSyncs } from './services/syncScheduler';
 
 import { gate, handleLogin, handleLogout, authRequired } from './auth';
 import health from './routes/health';
@@ -269,44 +266,16 @@ const AIOS_REPORT_MS = 1000 * 60 * 60 * 24; // daily
 setTimeout(() => void sendAiosReport(), 1000 * 60).unref(); // first report ~1 min after boot
 setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 
-// ---- periodic Vapi backfill (tracking) - only runs when VAPI_API_KEY is present ----
-// Complements the real-time webhook + manual Sync button: keeps the dashboard current
-// even if a webhook delivery is missed. No-ops (and logs nothing) without the key.
-if (process.env.VAPI_API_KEY) {
-  const VAPI_SYNC_MS = 1000 * 60 * 5; // every 5 min
-  const runSync = () =>
-    void syncFromVapi().then((r) => {
-      if (r.synced) console.log(`[vapi] auto-sync: ${r.synced} calls`);
-      else if (r.error) console.warn(`[vapi] auto-sync error: ${r.error}`);
-    });
-  runSync(); // initial backfill on boot
-  setInterval(runSync, VAPI_SYNC_MS).unref();
-  console.log('[vapi] tracking enabled - auto-syncing calls every 5 min');
-}
-
-// ---- ServiceTrade incremental sync (v2) ----
-// When connected, refreshes accounts/sites incrementally (updatedAfter) + invoices in full on a
-// cadence, so the mirror stays fresh without anyone pressing a button. Read-only; never overlaps
-// a manual pull; no-op until a first full pull has set the cursors. Failures are swallowed.
-const ST_SYNC_MS = 1000 * 60 * 15; // every 15 minutes
-const runStSync = () =>
-  void runScheduledSync()
-    .then((r) => {
-      if (r && (r.accounts || r.sites || r.invoices)) console.log('[st-sync] incremental cycle complete');
-    })
-    .catch((err) => console.warn('[st-sync] cycle error:', (err as Error).message))
-    // Refresh the schedule mirror (appointments + techs) on the same cadence.
-    .then(() => syncSchedule())
-    .then((s) => { if (s && s.appointments) console.log(`[st-sync] schedule: ${s.appointments} appointments, ${s.techLinks} tech links`); })
-    .catch((err) => console.warn('[st-sync] schedule error:', (err as Error).message))
-    .then(() => syncPlans())
-    .then((p) => { if (p && p.recurrences) console.log(`[st-sync] plans: ${p.recurrences} recurrences, ${p.officesSet} offices set`); })
-    .catch((err) => console.warn('[st-sync] plans error:', (err as Error).message))
-    // Refresh the exceptions queue off the freshly-synced mirror (idempotent, self-healing).
-    .then(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] detect error:', (e as Error).message); } });
-setTimeout(runStSync, 1000 * 90).unref(); // first cycle ~90s after boot
-setInterval(runStSync, ST_SYNC_MS).unref();
-// One detection pass at boot so the queue is populated before the first sync cycle.
+// ---- configurable per-integration sync scheduler ----
+// One master tick a minute runs each integration (ServiceTrade, BambooHR, Microsoft/vendor seats,
+// phone receptionist) when it is due, at the cadence the operator sets on the Integrations screen.
+// Defaults match the previous hardcoded rates (ServiceTrade 15m, calls 5m). All sync calls are
+// keyless-safe and never throw, so a missing credential is a graceful no-op. ServiceTrade's cycle
+// also refreshes the exceptions queue.
+const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
+setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+setInterval(() => { void runDueSyncs(); }, SYNC_TICK_MS).unref();
+// One detection pass at boot so the exceptions queue is populated before the first sync cycle.
 setTimeout(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] boot detect error:', (e as Error).message); } }, 1000 * 8).unref();
 
 // Scheduled-report delivery: check hourly for saved reports that are due and email them.

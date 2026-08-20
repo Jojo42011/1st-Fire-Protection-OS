@@ -1213,6 +1213,22 @@ export function initDb(): void {
   addColumn('saved_reports', 'last_sent_at', 'TEXT');
   addColumn('saved_reports', 'next_run_at', 'TEXT');               // when the next delivery is due
 
+  // Per-integration sync cadence. One row per syncing integration (servicetrade|bamboo|microsoft|
+  // calls). interval_minutes is how often it auto-syncs (0 or enabled=0 means paused). The scheduler
+  // runs an integration when now - last_run_at >= its interval. Defaults are seeded in code, so an
+  // absent row falls back to the built-in cadence.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sync_schedules (
+      integration_key  TEXT PRIMARY KEY,
+      interval_minutes INTEGER NOT NULL,
+      enabled          INTEGER NOT NULL DEFAULT 1,
+      last_run_at      TEXT,
+      last_status      TEXT,                       -- ok | error | never
+      last_detail      TEXT,
+      updated_at       TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   // Exceptions (Phase 3): the generic "reality does not match the intended process" object. One
   // table for every department (accounting/ops/people/it/fleet), deduped by a stable key so the
   // detector is idempotent. office holds a canonical office key (or null for company-wide) so
