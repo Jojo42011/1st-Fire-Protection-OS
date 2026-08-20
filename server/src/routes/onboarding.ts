@@ -18,6 +18,7 @@ import {
 } from '../services/intakeLinks';
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
+import { catalogByKind } from '../services/onboardingCatalog';
 
 const router = Router();
 
@@ -32,7 +33,13 @@ router.get('/api/onboarding/form-options', (_req, res) => {
   } catch {
     positions = [];
   }
-  res.json({ offices: operatingOffices().map((o) => o.label), positions });
+  const catalog = {
+    software: catalogByKind('software').map((s) => s.name),
+    sharepoint: catalogByKind('sharepoint').map((s) => s.name),
+    printers: catalogByKind('printer').map((p) => p.name),
+    computers: catalogByKind('computer').map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
+  };
+  res.json({ offices: operatingOffices().map((o) => o.label), positions, catalog });
 });
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
 

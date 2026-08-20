@@ -8,15 +8,27 @@ import path from 'path';
 import { resolveToken, markOpened, submitIntake } from '../services/intakeLinks';
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
+import { catalogByKind } from '../services/onboardingCatalog';
 
-// The real offices + role templates, so the public form offers the true set (not a hardcoded few).
-function intakeOptions(): { offices: string[]; positions: string[] } {
+// The real offices, role templates, and the editable onboarding catalog, so the manager intake form
+// offers the exact same operational options as the internal full form (not a hardcoded few).
+function intakeOptions(): {
+  offices: string[];
+  positions: string[];
+  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string }[] };
+} {
   const offices = operatingOffices().map((o) => o.label);
   let positions: string[] = [];
   try {
     positions = (getDb().prepare(`SELECT name FROM job_positions WHERE active = 1 ORDER BY name`).all() as { name: string }[]).map((r) => r.name).filter(Boolean);
   } catch { positions = []; }
-  return { offices, positions };
+  const catalog = {
+    software: catalogByKind('software').map((s) => s.name),
+    sharepoint: catalogByKind('sharepoint').map((s) => s.name),
+    printers: catalogByKind('printer').map((p) => p.name),
+    computers: catalogByKind('computer').map((c) => ({ key: String(c.id), label: c.name, spec: c.spec || '' })),
+  };
+  return { offices, positions, catalog };
 }
 
 const CLIENT_DIR = path.join(__dirname, '..', '..', '..', 'client');

@@ -46,7 +46,7 @@ test('opening marks the link opened; list carries a shareable url only while usa
 
 test('submit is single-use: creates an onboarding request and closes the token', () => {
   const { token } = createIntakeLink({ job_title: 'Service Technician', office: 'Houston', recipient_name: 'Rex Poe' });
-  const out = submitIntake(token, { legal: 'Nadia Farr', office: 'Houston', title: 'Service Technician', systems: ['ServiceTrade'], vehicle: 'Assigned truck', mvr: 'Yes' });
+  const out = submitIntake(token, { legal: 'Nadia Farr', office: 'Houston', title: 'Service Technician', accounts: ['Company email'], safety_gear: ['WEX fuel card'], company_vehicle: true });
   assert.equal(out.ok, true);
   if (out.ok) {
     assert.ok(out.request_id > 0, 'onboarding request created');

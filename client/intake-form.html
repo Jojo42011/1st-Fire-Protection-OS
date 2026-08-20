@@ -30,6 +30,12 @@
   .chip{min-height:44px;font-family:inherit;font-weight:600;font-size:13px;color:#414B60;background:#fff;border:1px solid #D9DEE6;border-radius:9px;padding:10px 14px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease}
   .chip:hover{border-color:#98A0B0}
   .chip[aria-pressed="true"]{color:#fff;background:#0E1420;border-color:#0E1420}
+  .rcards{display:flex;flex-direction:column;gap:8px;margin-top:9px}
+  .rcard{text-align:left;font-family:inherit;background:#fff;border:1px solid #D9DEE6;border-radius:11px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:border-color .2s ease,box-shadow .2s ease}
+  .rcard:hover{border-color:#98A0B0}
+  .rcard[aria-pressed="true"]{border-color:#0E1420;box-shadow:0 0 0 1px #0E1420 inset}
+  .rcard .rc-t{font-weight:700;font-size:13.5px;color:#0E1420}
+  .rcard .rc-s{font-weight:500;font-size:12px;color:#5E6779}
   .textwrap{margin-top:9px;border:1px solid #D9DEE6;border-radius:9px;padding:11px 13px;transition:border-color .2s ease}
   .textwrap:focus-within{border-color:#0E1420}
   .textwrap input{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:#0E1420;background:none}
@@ -100,59 +106,66 @@
 
 <script>
 (function () {
+  // The manager intake captures the same operational fields as the internal full form, from the same
+  // editable catalog. No pay, SSN, or bank details: comp lives in BambooHR from the signed offer.
   var STEPS = [
     { label: 'the role', title: 'Who are you hiring, and when do they start?',
       blurb: 'This decides which tasks get created and who they route to.',
       fields: [
-        { key: 'title', label: 'Job title', help: 'The role template behind it sets the defaults.', opts: ['Service Technician', 'Inspector', 'Estimator', 'Dispatcher'], def: 'Service Technician' },
-        { key: 'office', label: 'Office', help: 'Scopes every task and report for this person.', opts: ['Houston', 'San Antonio', 'Austin'], def: 'Houston' },
+        { key: 'title', label: 'Job title', help: 'The role behind it sets the defaults.', opts: [], select: true },
+        { key: 'office', label: 'Office', help: 'Scopes every task and report for this person.', opts: [], select: true },
         { key: 'start', label: 'First day', help: 'IT needs five working days for a clean start.', text: true, placeholder: 'Monday, Aug 24' },
         { key: 'manager', label: 'Their manager', help: 'You, unless someone else runs their day to day.', text: true, placeholder: 'Ray Ellis' }
       ] },
     { label: 'the person', title: 'Who is it?',
-      blurb: 'Legal name has to match their ID for payroll and the MVR check.',
+      blurb: 'Legal name has to match their ID for the record.',
       fields: [
         { key: 'legal', label: 'Legal first and last name', help: 'As it appears on their licence.', text: true, placeholder: 'John Smith' },
-        { key: 'preferred', label: 'What they go by', help: 'Optional. Used everywhere except payroll.', text: true, placeholder: 'Johnny' },
+        { key: 'preferred', label: 'What they go by', help: 'Optional. Used everywhere except the legal record.', text: true, placeholder: 'Johnny' },
         { key: 'email', label: 'Personal email', help: 'Where we send their first-day instructions.', text: true, placeholder: 'name@email.com' },
         { key: 'mobile', label: 'Mobile', help: 'For the first-day text only.', text: true, placeholder: '(210) 555-0142' }
       ] },
+    { label: 'IT and access', title: 'What should they be able to get into?',
+      blurb: 'IT provisions these. Add only what they genuinely need.',
+      fields: [
+        { key: 'accounts', label: 'Accounts', help: 'Tap to add or remove.', opts: ['Company email', 'Teams number'], def: ['Company email'], multi: true },
+        { key: 'sharepoint', label: 'SharePoint groups', help: 'Tap the groups they need. Some need an owner to approve them.', opts: [], def: [], multi: true },
+        { key: 'printers', label: 'Printers', help: 'Tap any they should be connected to.', opts: [], def: [], multi: true, hideIfEmpty: true }
+      ] },
     { label: 'equipment', title: 'What will they need to do the job?',
-      blurb: 'Pick the defaults if you are not sure. IT confirms before anything is ordered.',
+      blurb: 'A new computer needs an owner approval. IT confirms before anything is ordered.',
       fields: [
-        { key: 'laptop', label: 'Laptop', help: 'Standard is a 14-inch, 16GB. Estimating work needs 32GB.', opts: ['Standard 16GB', 'Estimating 32GB', 'None needed'], def: 'Standard 16GB' },
-        { key: 'phone', label: 'Company phone', help: 'Field roles get one by default.', opts: ['Yes', 'No'], def: 'Yes' },
-        { key: 'vehicle', label: 'Vehicle', help: 'A truck assignment triggers an MVR check and a WEX fuel card.', opts: ['Assigned truck', 'Shared truck', 'Personal vehicle'], def: 'Assigned truck' },
-        { key: 'equipNotes', label: 'Anything unusual for this role?', help: 'Anything above the role default routes to a partner for approval.', text: true, placeholder: 'Optional, e.g. needs a second monitor' }
+        { key: 'computer_type', label: 'Computer', help: 'Pick the closest fit, or none.', radio: true, opts: [], def: 'none' },
+        { key: 'software', label: 'Software', help: 'Tap to add or remove. Some need a licence owner to approve.', opts: [], def: [], multi: true },
+        { key: 'safety_gear', label: 'Safety-issued equipment', help: 'Company phone, iPad, a vehicle transfer, or a fuel card.', opts: ['Company cell phone', 'Company iPad', 'Company vehicle transfer', 'WEX fuel card'], def: [], multi: true }
       ] },
-    { label: 'access', title: 'What should they be able to get into?',
-      blurb: 'The role template pre-picks these. Add only what they genuinely need.',
+    { label: 'vehicle', title: 'Last part: do they need a company vehicle?',
+      blurb: 'A company vehicle fans out to Safety, HR, and Ops (the MVR check, insurance, and the truck itself).',
       fields: [
-        { key: 'systems', label: 'Systems', help: 'Tap to add or remove.', opts: ['ServiceTrade', 'Microsoft 365', 'Payroll self-service', 'Bluebeam', 'Fleet / WEX'], def: ['ServiceTrade', 'Microsoft 365', 'Payroll self-service'], multi: true },
-        { key: 'building', label: 'Building access', help: 'A fob and an alarm code for their home office.', opts: ['Standard hours', '24/7', 'None'], def: 'Standard hours' },
-        { key: 'accessNotes', label: 'Anything restricted?', help: 'Management-level access always needs a partner to approve it.', text: true, placeholder: 'Optional' }
-      ] },
-    { label: 'safety', title: 'Last part: driving and credentials.',
-      blurb: 'Safety cannot clear their start without this, and it is the step that delays people most.',
-      fields: [
-        { key: 'mvr', label: 'Has the candidate agreed to an MVR check?', help: 'We cannot assign a truck without it.', opts: ['Yes', 'Not yet'], def: 'Yes' },
-        { key: 'certs', label: 'Certifications they already hold', help: 'Tap any that apply. We will ask for copies.', opts: ['NICET I', 'NICET II', 'Backflow tester', 'OSHA 10', 'None yet'], def: [], multi: true },
-        { key: 'license', label: "Driver's licence state and number", help: 'Required before the MVR check can run.', text: true, placeholder: 'TX · 1234567' }
+        { key: 'company_vehicle', label: 'Company vehicle needed', help: 'A truck assignment triggers an MVR check and a fuel card.', toggle: true, def: false },
+        { key: 'vehicle_details', label: 'Vehicle / new-vehicle details', help: 'Which truck, or the new-vehicle spec for Ops to confirm.', text: true, placeholder: 'Optional' }
       ] }
   ];
 
-  // Replace a field's options with the real set from the server, keeping any prefilled value in the
-  // list so it still shows as selected. Long lists (many job titles) become a dropdown, not chips.
+  function eachField(key, fn) { STEPS.forEach(function (s) { s.fields.forEach(function (f) { if (f.key === key) fn(f); }); }); }
+  // Replace a single-select field's options with the real set, keeping any prefilled value in the
+  // list. Long single-select lists (many job titles) become a dropdown; multi fields stay as chips.
   function setFieldOpts(key, opts, keep, preferSelect) {
-    STEPS.forEach(function (s) {
-      s.fields.forEach(function (f) {
-        if (f.key !== key) return;
-        var list = opts.slice();
-        if (keep && list.indexOf(keep) === -1) list.unshift(keep);
-        f.opts = list;
-        f.select = !!preferSelect || list.length > 8;
-      });
+    eachField(key, function (f) {
+      var list = opts.slice();
+      if (keep && list.indexOf(keep) === -1) list.unshift(keep);
+      f.opts = list;
+      f.select = (!!preferSelect || list.length > 8) && !f.multi && !f.radio;
     });
+  }
+  // Populate the operational fields from the editable onboarding catalog (same source as the internal
+  // full form), so the manager intake offers the exact company list.
+  function applyCatalog(cat) {
+    if (!cat) return;
+    if (cat.sharepoint) setFieldOpts('sharepoint', cat.sharepoint);
+    if (cat.software) setFieldOpts('software', cat.software);
+    if (cat.printers) setFieldOpts('printers', cat.printers);
+    if (cat.computers) eachField('computer_type', function (f) { f.opts = cat.computers.slice(); });
   }
 
   function defaults() {
@@ -198,17 +211,19 @@
         // fit as chips, so the title field switches to a dropdown when the list is long.
         if (res.d.offices && res.d.offices.length) setFieldOpts('office', res.d.offices, vals.office || res.d.office);
         if (res.d.positions && res.d.positions.length) setFieldOpts('title', res.d.positions, vals.title || res.d.job_title, true);
+        applyCatalog(res.d.catalog);
         if (res.d.job_title) vals.title = res.d.job_title;
         if (res.d.office) vals.office = res.d.office;
         if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
         render();
       }).catch(function () { /* offline: let them fill; submit will re-check */ });
   } else {
-    // Preview (no token): still show the real offices and job titles, so the preview matches what a
-    // manager sees on a live link. Served same-origin inside the authed app, so this fetch is fine.
+    // Preview (no token): show the same real offices, titles, and catalog a manager sees on a live
+    // link. Served same-origin inside the authed app, so this fetch is fine.
     fetch('/api/onboarding/form-options').then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.offices && d.offices.length) setFieldOpts('office', d.offices, vals.office);
       if (d && d.positions && d.positions.length) setFieldOpts('title', d.positions, vals.title, true);
+      applyCatalog(d && d.catalog);
       render();
     }).catch(function () { /* keep the built-in defaults if the catalog is unavailable */ });
   }
@@ -242,6 +257,8 @@
     var wrap = el('fields');
     wrap.innerHTML = '';
     STEPS[step].fields.forEach(function (f) {
+      // A field with nothing to offer (e.g. no printers configured) is skipped, not shown empty.
+      if (f.hideIfEmpty && (!f.opts || !f.opts.length)) return;
       var box = document.createElement('div');
       var lab = document.createElement('label');
       lab.textContent = f.label;
@@ -261,6 +278,33 @@
         inp.oninput = function () { vals[f.key] = inp.value; };
         tw.appendChild(inp);
         box.appendChild(tw);
+      } else if (f.toggle) {
+        var trow = document.createElement('div');
+        trow.className = 'chips';
+        var tb = document.createElement('button');
+        tb.type = 'button';
+        tb.className = 'chip';
+        tb.textContent = f.toggleLabel || 'Yes, they need one';
+        tb.setAttribute('aria-pressed', vals[f.key] ? 'true' : 'false');
+        tb.onclick = function () { vals[f.key] = !vals[f.key]; renderFields(); };
+        trow.appendChild(tb);
+        box.appendChild(trow);
+      } else if (f.radio) {
+        var opts = [{ key: 'none', label: 'No computer', spec: 'Nothing routed' }].concat(f.opts || []);
+        var rw = document.createElement('div');
+        rw.className = 'rcards';
+        opts.forEach(function (o) {
+          var rb = document.createElement('button');
+          rb.type = 'button';
+          rb.className = 'rcard';
+          rb.setAttribute('aria-pressed', (vals[f.key] || 'none') === o.key ? 'true' : 'false');
+          rb.innerHTML = '<span class="rc-t"></span><span class="rc-s"></span>';
+          rb.querySelector('.rc-t').textContent = o.label;
+          rb.querySelector('.rc-s').textContent = o.spec || '';
+          rb.onclick = function () { vals[f.key] = o.key; renderFields(); };
+          rw.appendChild(rb);
+        });
+        box.appendChild(rw);
       } else if (f.select) {
         var sw = document.createElement('div');
         sw.className = 'textwrap';
@@ -305,13 +349,23 @@
     });
   }
 
+  function computerLabel() {
+    if (!vals.computer_type || vals.computer_type === 'none') return 'No computer';
+    var f = null; eachField('computer_type', function (x) { f = x; });
+    var o = ((f && f.opts) || []).filter(function (c) { return String(c.key) === String(vals.computer_type); })[0];
+    return o ? o.label : 'A computer';
+  }
   function renderSummary() {
+    var accounts = vals.accounts || [], sp = vals.sharepoint || [], sw = vals.software || [], gear = vals.safety_gear || [];
+    var access = accounts.concat(sp);
     var rows = [
-      ['Person created', (vals.preferred || vals.legal || 'Unnamed hire') + ' · ' + (vals.title || 'Service Technician'), 'as a pending employee record'],
-      ['Office', vals.office || 'Houston', 'scopes everything downstream'],
-      ['Access requested', (vals.systems || []).length + ' systems', (vals.systems || []).join(', ') || 'none selected'],
-      ['Safety tasks', vals.mvr === 'Yes' ? '3 created' : '3 created, 1 blocked', vals.mvr === 'Yes' ? 'orientation, MVR, credential copies' : 'MVR consent still outstanding'],
-      ['Needs a partner', (vals.accessNotes || vals.equipNotes) ? '1 approval' : 'none', 'anything above the role default']
+      ['New hire', (vals.preferred || vals.legal || 'Unnamed hire') + ' · ' + (vals.title || 'a role'), 'created as a pending record'],
+      ['Office', vals.office || 'their office', 'scopes everything downstream'],
+      ['Accounts and SharePoint', access.length + ' item' + (access.length === 1 ? '' : 's'), access.join(', ') || 'none selected'],
+      ['Software', sw.length + ' app' + (sw.length === 1 ? '' : 's'), sw.join(', ') || 'none selected'],
+      ['Computer', computerLabel(), vals.computer_type && vals.computer_type !== 'none' ? 'routes to an owner approval' : 'nothing routed'],
+      ['Safety-issued equipment', gear.length + ' item' + (gear.length === 1 ? '' : 's'), gear.join(', ') || 'none'],
+      ['Company vehicle', vals.company_vehicle ? 'Yes' : 'No', vals.company_vehicle ? 'fans out to Safety, HR, and Ops' : 'not needed']
     ];
     var s = el('summary');
     s.innerHTML = '';

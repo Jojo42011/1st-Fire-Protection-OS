@@ -121,20 +121,14 @@ export function markOpened(token: string): void {
   db.prepare(`UPDATE intake_links SET opened_at = datetime('now'), status = 'opened' WHERE token = ? AND opened_at IS NULL`).run(token);
 }
 
-/** Map the intake form's values onto an onboarding request payload. */
+/** Map the intake form's values onto an onboarding request payload. The manager intake now captures
+ *  the same operational fields as the internal full form, so this is a straight pass-through: the
+ *  account and safety-gear multi-selects fan out to their booleans, everything else maps by name. No
+ *  pay, SSN, or bank details are ever collected here. */
 function toPayload(vals: any): OnboardingPayload {
-  const laptop = String(vals.laptop || '');
-  const computer_type = /none/i.test(laptop) ? 'none' : /estimat|32gb|cad/i.test(laptop) ? 'business' : 'standard';
-  const notes = [
-    vals.equipNotes && `Equipment: ${vals.equipNotes}`,
-    vals.accessNotes && `Access: ${vals.accessNotes}`,
-    vals.building && vals.building !== 'Standard hours' && `Building access: ${vals.building}`,
-    vals.mvr && vals.mvr !== 'Yes' && 'MVR consent still outstanding',
-    vals.license && `Licence: ${vals.license}`,
-    Array.isArray(vals.certs) && vals.certs.length ? `Certs: ${vals.certs.join(', ')}` : '',
-  ]
-    .filter(Boolean)
-    .join(' | ');
+  const arr = (x: unknown): string[] => (Array.isArray(x) ? (x as string[]) : []);
+  const accounts = arr(vals.accounts);
+  const gear = arr(vals.safety_gear);
   return {
     name: String(vals.legal || vals.preferred || '').trim(),
     personal_email: vals.email || undefined,
@@ -142,12 +136,18 @@ function toPayload(vals: any): OnboardingPayload {
     cell_phone: vals.mobile || undefined,
     job_position: vals.title || undefined,
     manager_name: vals.manager || undefined,
-    computer_type,
-    company_cell: String(vals.phone || '') === 'Yes',
-    company_vehicle: /truck/i.test(String(vals.vehicle || '')),
-    wex_card: String(vals.vehicle || '') === 'Assigned truck',
-    software: Array.isArray(vals.systems) ? vals.systems : [],
-    misc_exceptions: notes || undefined,
+    company_email: accounts.includes('Company email'),
+    teams_number: accounts.includes('Teams number'),
+    computer_type: vals.computer_type && vals.computer_type !== 'none' ? String(vals.computer_type) : 'none',
+    software: arr(vals.software),
+    sharepoint: arr(vals.sharepoint),
+    printers: arr(vals.printers),
+    company_cell: gear.includes('Company cell phone'),
+    ipad: gear.includes('Company iPad'),
+    vehicle_transfer: gear.includes('Company vehicle transfer'),
+    wex_card: gear.includes('WEX fuel card'),
+    company_vehicle: !!vals.company_vehicle,
+    vehicle_details: vals.vehicle_details || undefined,
   };
 }
 
