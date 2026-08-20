@@ -30,15 +30,25 @@
   /* conversation */
   #scroll{flex:1;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column}
   .col{width:100%;max-width:860px;margin:0 auto;padding:6px 26px 26px;flex:1;display:flex;flex-direction:column;gap:20px}
-  .col.empty{justify-content:flex-start}
+  /* Empty landing: center the hero in the available height so a wide screen does not read as a
+     sparse, top-anchored column with a large void beneath it. Once a conversation starts the column
+     switches back to top-aligned (the .empty class is dropped). */
+  .col.empty{justify-content:center;padding-bottom:60px}
   .op-hero{display:flex;flex-direction:column}
-  .op-hero h1{font-weight:800;font-size:26px;letter-spacing:-.02em;color:var(--ink);line-height:1.15}
-  .op-hero .os-question{font-weight:500;font-size:14px;color:var(--muted);margin-top:6px;max-width:64ch}
-  .op-hero p{margin:12px 0 0;font-weight:500;font-size:13.5px;line-height:1.65;color:var(--ink-3);max-width:70ch}
-  .starters{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
-  .starter{background:var(--panel);border:1px solid var(--border);border-radius:var(--r-pill,999px);color:var(--ink-2);
-    font-family:var(--sans);font-weight:600;font-size:12.5px;padding:9px 15px;cursor:pointer;transition:border-color .18s,box-shadow .26s}
-  .starter:hover{color:var(--ink);border-color:var(--border-strong);box-shadow:var(--sh-rest)}
+  .op-hero h1{font-weight:800;font-size:28px;letter-spacing:-.02em;color:var(--ink);line-height:1.15}
+  .op-hero .os-question{font-weight:500;font-size:14.5px;color:var(--muted);margin-top:7px;max-width:64ch}
+  .op-hero p{margin:13px 0 0;font-weight:500;font-size:13.5px;line-height:1.65;color:var(--ink-3);max-width:64ch}
+  .starters-lab{margin:26px 0 11px;font-weight:700;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .starters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;max-width:660px}
+  .starter{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;
+    background:var(--panel);border:1px solid var(--border);border-radius:13px;cursor:pointer;
+    padding:14px 16px;transition:border-color .18s,box-shadow .26s,transform .18s}
+  .starter:hover{border-color:var(--border-strong);box-shadow:var(--sh-rest);transform:translateY(-1px)}
+  .starter .st-q{display:block;font-family:var(--sans);font-weight:700;font-size:13.5px;color:var(--ink);line-height:1.25}
+  .starter .st-h{display:block;font-family:var(--sans);font-weight:500;font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
+  .starter .st-arrow{flex:none;color:var(--faint);transition:color .18s,transform .18s}
+  .starter:hover .st-arrow{color:var(--ink-2);transform:translateX(2px)}
+  @media (max-width:640px){ .starters{grid-template-columns:1fr} }
 
   .msg{animation:rise .3s var(--ease) both}
   .msg.you{display:flex;justify-content:flex-end}
@@ -158,6 +168,7 @@
       <h1 id="greet">The Operator</h1>
       <div class="os-question">What do you want to know?</div>
       <p>The Operator reads every invoice, call, review, license and agent. It answers in plain English, shows the numbers it used, names its source, and can open the right screen for you. Nothing is sent or granted without your approval.</p>
+      <div class="starters-lab">Try asking</div>
       <div class="starters" id="starters"></div>
     </div>
   </div></div>
@@ -240,9 +251,17 @@ fetch('/api/operator').then(function(r){return r.json();}).then(function(d){
   var h=new Date().getHours();
   document.getElementById('greet').textContent=(h<12?'Good morning, Devon.':h<17?'Good afternoon, Devon.':'Good evening, Devon.');
 }).catch(function(){});
-var STARTERS=['How are we doing today?',"Who's slowest to pay?",'What did the front desk miss?','Where are we losing money?'];
-document.getElementById('starters').innerHTML=STARTERS.map(function(s){return '<button class="starter">'+esc(s)+'</button>';}).join('');
-document.querySelectorAll('.starter').forEach(function(b){b.addEventListener('click',function(){ask(b.textContent);});});
+var STARTERS=[
+  {q:'How are we doing today?', h:'A quick read on the whole business'},
+  {q:"Who's slowest to pay?", h:'Your worst-aging receivables'},
+  {q:'What did the front desk miss?', h:'Calls and leads that slipped'},
+  {q:'Where are we losing money?', h:'Margin leaks and unbilled work'}
+];
+var ARROW='<svg class="st-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+document.getElementById('starters').innerHTML=STARTERS.map(function(s){
+  return '<button class="starter" data-q="'+esc(s.q)+'"><span><span class="st-q">'+esc(s.q)+'</span><span class="st-h">'+esc(s.h)+'</span></span>'+ARROW+'</button>';
+}).join('');
+document.querySelectorAll('.starter').forEach(function(b){b.addEventListener('click',function(){ask(b.getAttribute('data-q'));});});
 
 /* chat */
 function addYou(text){
