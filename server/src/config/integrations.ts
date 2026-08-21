@@ -5,6 +5,7 @@
  * Wired to Northstar's REAL stack: ServiceTrade (field service system of record), Vapi + Twilio
  * (telephony into Microsoft Teams), Microsoft 365, Google Business Profile + Facebook (reviews).
  */
+import { googleConnected } from '../services/googleBusiness';
 
 export type IntegrationStatus = 'connected' | 'available' | 'planned';
 
@@ -80,7 +81,7 @@ const CATALOG: IntegrationDef[] = [
     category: 'Reputation',
     why: 'Pull in and reply to Google reviews for the Review Collector.',
     baseline: 'planned',
-    isConnected: () => !!process.env.GOOGLE_BUSINESS_TOKEN,
+    isConnected: () => !!process.env.GOOGLE_BUSINESS_TOKEN || googleConnected(),
   },
   {
     id: 'facebook',

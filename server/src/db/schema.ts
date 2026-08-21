@@ -1230,6 +1230,23 @@ export function initDb(): void {
   addColumn('intake_links', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
+  // Live Google reviews: the Google review id (for dedupe + posting a reply), the location it is on,
+  // whether the reply was auto-published, and when it published.
+  addColumn('reviews', 'ext_id', 'TEXT');
+  addColumn('reviews', 'location', 'TEXT');
+  addColumn('reviews', 'auto_replied', 'INTEGER DEFAULT 0');
+  addColumn('reviews', 'reply_published_at', 'TEXT');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_ext ON reviews(ext_id) WHERE ext_id IS NOT NULL;`);
+  // The connected Google Business Profile account (OAuth refresh token + who connected it). One row.
+  db.exec(`CREATE TABLE IF NOT EXISTS google_connection (
+    id            INTEGER PRIMARY KEY CHECK (id = 1),
+    refresh_token TEXT,
+    email         TEXT,
+    scope         TEXT,
+    account_name  TEXT,
+    connected_by  TEXT,
+    connected_at  TEXT DEFAULT (datetime('now'))
+  );`);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_bamboo ON employees(bamboo_id) WHERE bamboo_id IS NOT NULL;`);
 
   // OS office scope (Phase 1): an app user is authorized for a set of offices (CSV of canonical

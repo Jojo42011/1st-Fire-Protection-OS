@@ -15,6 +15,14 @@
   .rv-draft .lb{font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--indigo)}
   .rv-draft p{margin:4px 0 0;font-weight:500;font-size:12px;line-height:1.5;color:var(--ink-3)}
   .rv-stars{color:var(--amber);letter-spacing:1px;font-size:12.5px;white-space:nowrap}
+  /* Google Business connection banner */
+  .gb{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--divider);border-radius:12px;background:var(--panel);margin-bottom:16px}
+  .gb-ic{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;background:#1a73e8;flex:0 0 auto}
+  .gb-body{flex:1;min-width:0}
+  .gb-title{font-weight:700;font-size:13px;color:var(--ink-1)}
+  .gb-sub{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.45}
+  .gb-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .gb-acts{display:flex;gap:8px;flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -29,6 +37,8 @@
         <button class="os-btn primary" id="reputation">Full reputation view</button>
       </div>
     </div>
+
+    <div id="gconn"></div>
 
     <div id="strip"></div>
 
@@ -50,7 +60,7 @@
 <script src="/os.js"></script>
 <script>
 "use strict";
-var REVIEWS=[], SUMMARY={}, REQ={}, LIVE=false;
+var REVIEWS=[], SUMMARY={}, REQ={}, LIVE=false, GBIZ={};
 function esc(t){return OS.esc(t);}
 function starStr(n){n=Math.max(0,Math.min(5,Number(n)||0));return '★★★★★'.slice(0,n)+'☆☆☆☆☆'.slice(0,5-n);}
 function isDone(r){var s=String(r.reply_status||'');return s==='approved'||s==='published';}
@@ -60,11 +70,13 @@ function load(){
   Promise.all([
     fetch('/api/reviews').then(function(r){return r.json();}).catch(function(){return {};}),
     fetch('/api/reviews/targets').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/reviews/queue').then(function(r){return r.json();}).catch(function(){return {};})
+    fetch('/api/reviews/queue').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/google/status').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
     var rev=res[0]||{}, tg=res[1]||{}, q=res[2]||{};
     REVIEWS=rev.reviews||[]; SUMMARY=rev.summary||{}; LIVE=!!rev.live; REQ=(tg.summary)||{};
-    REQUESTS=(q.requests)||[];
+    REQUESTS=(q.requests)||[]; GBIZ=res[3]||{};
+    renderGconn();
     renderStrip();
     renderDist();
     renderQueue();
@@ -76,6 +88,52 @@ function load(){
 }
 
 function needsReply(){ return REVIEWS.filter(function(r){return !isDone(r);}); }
+
+function renderGconn(){
+  var g=GBIZ||{}, el=document.getElementById('gconn');
+  if(!el) return;
+  var connected=!!g.connected, configured=!!g.configured;
+  var dot, title, sub, acts;
+  if(connected){
+    dot='var(--good, #1f9d55)';
+    title='Google Business Profile connected';
+    sub='Signed in as <b>'+esc(g.email||'the owner')+'</b>'+(g.account?' · '+esc(g.account):'')+'. New reviews sync automatically: <b>4-5 stars auto-reply and post</b>, 3-and-under are held below for your approval.';
+    acts='<button class="os-btn primary" style="padding:6px 12px;font-size:12px" id="gb-sync">Sync now</button>'+
+         '<button class="os-btn" style="padding:6px 12px;font-size:12px" id="gb-disc">Disconnect</button>';
+  } else if(configured){
+    dot='var(--amber, #d19a1a)';
+    title='Connect Google Business Profile';
+    sub='Sign in with the Google account that owns your locations. Once connected, reviews sync in and positive ones get an on-brand reply automatically.';
+    acts='<a class="os-btn primary" style="padding:6px 12px;font-size:12px;text-decoration:none" href="/api/google/auth">Connect Google</a>';
+  } else {
+    dot='var(--ink-4, #9aa)';
+    title='Google Business Profile not configured yet';
+    sub='This needs a Google Cloud OAuth client (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) and Google’s approval of the Business Profile API. Until then, replies are drafted and held here but nothing posts.';
+    acts='';
+  }
+  el.innerHTML='<div class="gb"><div class="gb-ic">G</div><div class="gb-body">'+
+    '<div class="gb-title"><span class="gb-dot" style="background:'+dot+'"></span>'+esc(title)+'</div>'+
+    '<div class="gb-sub">'+sub+'</div></div>'+
+    (acts?'<div class="gb-acts">'+acts+'</div>':'')+'</div>';
+}
+document.getElementById('gconn').addEventListener('click',function(e){
+  var sync=e.target.closest('#gb-sync');
+  if(sync){ sync.disabled=true; sync.textContent='Syncing…';
+    fetch('/api/google/sync',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ OS.toast('Synced '+d.pulled+' new review(s): '+d.autoReplied+' auto-replied, '+d.held+' held.'); }
+      else{ OS.toast((d&&d.error)||'Could not sync Google reviews.','bad'); }
+      load();
+    }).catch(function(){ sync.disabled=false; sync.textContent='Sync now'; OS.toast('Could not reach Google.','bad'); });
+    return;
+  }
+  var disc=e.target.closest('#gb-disc');
+  if(disc){ if(!confirm('Disconnect Google Business Profile? Existing reviews stay; no more auto-sync or replies until you reconnect.')) return;
+    disc.disabled=true;
+    fetch('/api/google/disconnect',{method:'POST'}).then(function(r){return r.json();}).then(function(){ OS.toast('Google Business disconnected.'); load(); })
+      .catch(function(){ disc.disabled=false; OS.toast('Could not disconnect.','bad'); });
+    return;
+  }
+});
 
 function renderStrip(){
   var s=SUMMARY||{};
@@ -184,7 +242,10 @@ document.getElementById('queue').addEventListener('click',function(e){
 document.getElementById('requests').addEventListener('click',function(){ try{location.href='/review-requests';}catch(_){} });
 document.getElementById('reputation').addEventListener('click',function(){ try{location.href='/reviews';}catch(_){} });
 
-OS.ready(function(){ load(); });
+OS.ready(function(){
+  load();
+  try{ if(/[?&]google=connected/.test(location.search)){ OS.toast('Google Business Profile connected. Reviews will sync automatically.'); } }catch(_){}
+});
 OS.onChange(load);
 </script>
 </body>

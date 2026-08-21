@@ -15,6 +15,7 @@ import { syncFromVapi } from './receptionist';
 import { importFromBamboo } from '../people/service';
 import { fetchAllVendorSeats } from './licenseSources';
 import { detectExceptions } from '../os/exceptions';
+import { syncReviews, googleConnected } from './googleBusiness';
 
 export interface SyncDef {
   key: string;
@@ -88,6 +89,18 @@ export const SYNC_DEFS: SyncDef[] = [
       const r: any = await syncFromVapi();
       if (r && r.error) return `error: ${r.error}`;
       return r && r.synced ? `${r.synced} call(s) synced` : 'no new calls';
+    },
+  },
+  {
+    key: 'google_business',
+    label: 'Google Business reviews',
+    detail: 'New Google reviews (auto-reply 4-5 stars, hold the rest for approval)',
+    defaultInterval: 30,
+    run: async () => {
+      if (!googleConnected()) return 'not connected';
+      const r = await syncReviews();
+      if (!r.ok) return `error: ${r.error}`;
+      return `${r.pulled} new across ${r.locations} location(s): ${r.autoReplied} auto-replied, ${r.held} held`;
     },
   },
 ];

@@ -63,6 +63,7 @@ import exceptions from './routes/exceptions';
 import work from './routes/work';
 import operations from './routes/operations';
 import sharepoint from './routes/sharepoint';
+import google from './routes/google';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
@@ -153,6 +154,7 @@ app.use(exceptions);
 app.use(work);
 app.use(operations);
 app.use(sharepoint);
+app.use(google);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 //

@@ -135,6 +135,25 @@ function mailCard(m){
           :'<div class="muted" style="font-size:12px;line-height:1.5">Connect Microsoft Graph (and grant <b>Mail.Send</b>) to enable outbound email.</div>')+
   '</div>';
 }
+function googleCard(g, sc){
+  var connected=!!(g&&g.connected), configured=!!(g&&g.configured);
+  var pill=connected?OS.pill('Connected','good'):(configured?OS.pill('Not connected','warn'):OS.pill('Not configured','neutral'));
+  var action=connected
+    ? '<div class="sc-controls" style="margin-top:10px"><button class="sc-now" data-google-disc>Disconnect</button></div>'
+    : (configured
+        ? '<a class="ic-connect" style="text-decoration:none;text-align:center;display:block" href="/api/google/auth">Connect Google</a>'
+        : '<div class="muted" style="font-size:12px;line-height:1.5">Needs a Google Cloud OAuth client (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) and Google’s approval of the Business Profile API. Replies are drafted and held until then; nothing posts.</div>');
+  return '<div class="ic'+(connected?'':' off')+'">'+
+    '<div class="ic-top"><div><div class="ic-nm">Google Business Profile</div><div class="ic-role">Reviews · auto-reply 4-5 stars, hold the rest</div></div>'+pill+'</div>'+
+    '<div class="ic-rows">'+
+      row('Connection', connected?('Signed in as '+OS.esc(g.email||'owner')):'Not connected', connected?'good':'warn')+
+      (connected&&g.account?row('Account', OS.esc(g.account)):'')+
+      row('Policy', 'Auto-reply positives · hold negatives', 'good')+
+    '</div>'+
+    (connected?schedBlock('google_business', sc):'')+
+    action+
+  '</div>';
+}
 function intacctCard(s){
   var unavailable=[
     'True accounts receivable and cash collected (only operational invoice data exists today)',
@@ -156,11 +175,13 @@ function load(){
     OS.sources(),
     fetch('/api/licenses').then(function(r){return r.json();}).catch(function(){return {};}),
     fetch('/api/sync-schedules').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/onboarding/mail-status').then(function(r){return r.json();}).catch(function(){return {};})
+    fetch('/api/onboarding/mail-status').then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch('/api/google/status').then(function(r){return r.json();}).catch(function(){return {};})
   ]).then(function(res){
     var src=(res[0].sources||[]);
     var lic=res[1]||{}; var sum=lic.summary||{};
     var mail=res[3]||{};
+    var gbiz=res[4]||{};
     SCH={}; ((res[2]&&res[2].schedules)||[]).forEach(function(s){ SCH[s.integration_key]=s; });
     var by={}; src.forEach(function(s){by[s.key]=s;});
 
@@ -176,6 +197,7 @@ function load(){
       return connectorCard(s, records, SCH[k]);
     });
     cards.push(mailCard(mail));
+    cards.push(googleCard(gbiz, SCH['google_business']));
     var intacct=by.intacct;
     cards.push(intacct?intacctCard(intacct):'');
     document.getElementById('grid').innerHTML=cards.filter(Boolean).join('');
@@ -203,9 +225,16 @@ document.addEventListener('change',function(e){
       OS.toast((by(key)||key)+' auto-sync set to '+cadenceLabel(d.schedule).toLowerCase()+'.');
     }).catch(function(){ sel.disabled=false; OS.toast('Could not reach the schedule service.','bad'); });
 });
-function by(key){ return {servicetrade:'ServiceTrade',bamboo:'BambooHR',microsoft:'Microsoft 365'}[key]||key; }
+function by(key){ return {servicetrade:'ServiceTrade',bamboo:'BambooHR',microsoft:'Microsoft 365',google_business:'Google Business'}[key]||key; }
 document.addEventListener('click',function(e){
   if(e.target.closest('#ic-connect')){ try{parent.postMessage({type:'open-intacct'},'*');}catch(_){} return; }
+  if(e.target.closest('[data-google-disc]')){
+    if(!confirm('Disconnect Google Business Profile? Existing reviews stay; auto-sync and replies stop until you reconnect.')) return;
+    var db=e.target.closest('[data-google-disc]'); db.disabled=true;
+    fetch('/api/google/disconnect',{method:'POST'}).then(function(r){return r.json();}).then(function(){ OS.toast('Google Business disconnected.'); load(); })
+      .catch(function(){ db.disabled=false; OS.toast('Could not disconnect.','bad'); });
+    return;
+  }
   var ms=e.target.closest('[data-mail-save]');
   if(ms){ var mkey=ms.getAttribute('data-mail-save');
     var input=document.querySelector('[data-mail-key="'+mkey+'"]'); var addr=input?input.value.trim():'';

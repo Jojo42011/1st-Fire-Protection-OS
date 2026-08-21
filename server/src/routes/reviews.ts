@@ -212,11 +212,28 @@ router.post('/api/reviews/:id/draft-reply', async (req, res) => {
   }
 });
 
-router.post('/api/reviews/:id/approve-reply', (req, res) => {
+router.post('/api/reviews/:id/approve-reply', async (req, res) => {
   const db = getDb();
+  const id = Number(req.params.id);
+  const row = db.prepare(`SELECT ext_id, reply_draft FROM reviews WHERE id = ?`).get(id) as
+    | { ext_id: string | null; reply_draft: string | null }
+    | undefined;
+  if (!row) return res.status(404).json({ ok: false, error: 'review not found' });
+
+  // A human is approving a held reply. If this is a live Google review and we are connected, post it
+  // to Google now; otherwise just mark it approved (keyless-safe, nothing external attempted).
+  const comment = (req.body && req.body.reply) || row.reply_draft || '';
+  const { googleConnected, publishReply } = await import('../services/googleBusiness');
+  if (row.ext_id && googleConnected()) {
+    if (req.body && req.body.reply) db.prepare(`UPDATE reviews SET reply_draft = ? WHERE id = ?`).run(comment, id);
+    const out = await publishReply(id, comment);
+    if (!out.ok) return res.status(400).json({ ok: false, error: out.error, status: 'approved' });
+    return res.json({ ok: true, status: 'published', published: true });
+  }
+
   const publishable = integrationConnected('google_business');
   const status = publishable ? 'published' : 'approved';
-  db.prepare(`UPDATE reviews SET reply_status = ? WHERE id = ?`).run(status, Number(req.params.id));
+  db.prepare(`UPDATE reviews SET reply_status = ? WHERE id = ?`).run(status, id);
   res.json({ ok: true, status, published: publishable });
 });
 
