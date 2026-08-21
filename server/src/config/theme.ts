@@ -1,30 +1,30 @@
 /**
- * Brand theme — the single source of truth for colors, mirrored in client/theme.css
- * and the shell. This is the REAL Northstar Fire & Safety brand: a fire-station command
- * center — red = the fire, navy = the uniform, off-white = the blueprint, gold = the badge.
+ * Brand theme: the single source of truth for colors, mirrored in client/theme.css and the shell.
+ * The 1st Fire Protection system is subtractive: ink carries the interface, ember is identity only
+ * (never a status color or an email button), gold marks credentials, off-white is the ground.
  */
 export const THEME = {
-  // Off-white blueprint paper — the page ground
-  paper: '#F5F7F9',
+  // Off-white paper: the page ground
+  paper: '#FAFAFA',
   panel: '#FFFFFF',
-  // Navy — the uniform: sidebar, dark sections, footer
-  navy: '#1E2D40',
-  navy2: '#26384f',
-  navyLine: '#34465d',
-  // Ink + neutrals (navy-biased, never pure grey)
-  ink: '#1E2D40',
-  muted: '#5C6B7D',
-  line: '#D2DAE2',
-  line2: '#B9C4CF',
-  // Primary red — the fire
-  red: '#E53935',
-  redDeep: '#C62828',
-  redTint: '#FCE9E8',
-  // Accent gold — the badge (certifications, excellence)
-  gold: '#F5B81B',
-  goldDeep: '#B9860C',
-  ok: '#2E9E5B',
+  // Ink: primary type, buttons, nav, dark bands, active states
+  navy: '#101828',
+  navy2: '#1A2233',
+  navyLine: '#1F2637',
+  // Ink + neutrals
+  ink: '#101828',
+  muted: '#667085',
+  line: '#E4E7EC',
+  line2: '#98A2B3',
+  // Ember: brand accent, identity only, never a button in email
+  red: '#C0362B',
+  redDeep: '#A32B22',
+  redTint: '#F9EAE8',
+  // Gold: credentials, licenses, certifications (#8A6A2F when set on white)
+  gold: '#A8823C',
+  goldDeep: '#8A6A2F',
+  ok: '#12805C',
   // Type
-  sans: "'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
-  mono: "'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace",
+  sans: "'Geist','Helvetica Neue',Helvetica,Arial,sans-serif",
+  mono: "'Geist Mono',ui-monospace,Consolas,'Courier New',monospace",
 };

@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { mailConfigured, sendMail } from './msGraphMail';
 import { senderFor } from './mailSenders';
+import { renderEmail, p, em, escapeHtml } from './emailShell';
 
 /**
  * Google review requests, routed per office.
@@ -161,7 +162,6 @@ function recentlyAsked(email: string): boolean {
  */
 const REVIEW_BRAND = {
   name: '1st Fire Protection',
-  headline: '1ST FIRE PROTECTION',
   site: '1stfpservices.com',
 };
 
@@ -186,7 +186,6 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
   const office = officeDisplay(job.office_name);
   const city = office.replace(new RegExp(REVIEW_BRAND.name, 'i'), '').replace(/1st\s*FP/i, '').trim(); // "Houston", ...
   const phone = formatPhone(job.target_phone || job.office_phone); // real office number only; no fake fallback
-  const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
   const sign = `${office}${phone ? `\n${phone}` : ''} · ${REVIEW_BRAND.site}`;
   const body =
@@ -196,34 +195,20 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
     `If anything fell short, just reply to this email and we will make it right.\n\n` +
     `Thank you,\n${sign}`;
 
-  // Table-based, inline-styled email in the Northstar palette (navy #1E2D40, red #E53935, gold #F5B81B).
-  const gold = city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : '';
-  const html =
-`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">` +
-`<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">` +
-`<tr><td style="background:#1E2D40;padding:20px 28px;font-family:Arial,Helvetica,sans-serif;">` +
-`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">${escapeHtml(REVIEW_BRAND.headline)}</div>${gold}</td></tr>` +
-`<tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>` +
-`<tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">` +
-`<p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>` +
-`<p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(REVIEW_BRAND.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
-`<p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other businesses find dependable fire protection.</p>` +
-`<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#E53935;">` +
-`<a href="${url}" style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">Leave a Google review</a>` +
-`</td></tr></table>` +
-`<p style="margin:18px 0 0;font-size:13px;color:#6B7683;">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p></td></tr>` +
-`<tr><td style="padding:22px 30px 26px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1E2D40;border-top:1px solid #EDF1F4;">` +
-`<div style="font-weight:800;">${escapeHtml(office)}</div>` +
-`<div style="color:#6B7683;">${escapeHtml(REVIEW_BRAND.name)}${phone ? ` &middot; ${escapeHtml(phone)}` : ''} &middot; ${escapeHtml(REVIEW_BRAND.site)}</div>` +
-`</td></tr></table></td></tr></table>`;
+  const html = renderEmail({
+    eyebrow: city || null,
+    body:
+      p(`Hi ${escapeHtml(first)},`) +
+      p(`Thank you for choosing ${em(REVIEW_BRAND.name)} for your recent service. We hope our ${escapeHtml(office)} team took great care of you.`) +
+      p(`If you have a minute, a quick Google review would mean a lot to us and helps other businesses find dependable fire protection.`, true),
+    cta: { label: 'Leave a Google review', url: job.review_url || '#' },
+    note: 'The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.',
+    footerName: office,
+    footerMeta: [phone, REVIEW_BRAND.site].filter(Boolean).join(' · '),
+    credentials: 'SCTRCA · MBE · SBE · HUB',
+    reason: "You're receiving this because we recently completed service at your property.",
+  });
   return { subject, body, html, fromName: office };
-}
-
-function escapeHtml(s: string): string {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/"/g, '&quot;');
 }
 
 /**
