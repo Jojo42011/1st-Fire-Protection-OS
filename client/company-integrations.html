@@ -141,7 +141,7 @@ function googleCard(g, sc){
   var action=connected
     ? '<div class="sc-controls" style="margin-top:10px"><button class="sc-now" data-google-disc>Disconnect</button></div>'
     : (configured
-        ? '<a class="ic-connect" style="text-decoration:none;text-align:center;display:block" href="/api/google/auth">Connect Google</a>'
+        ? '<a class="ic-connect" style="text-decoration:none;text-align:center;display:block" href="/api/google/auth" target="_top" rel="noopener">Connect Google</a>'
         : '<div class="muted" style="font-size:12px;line-height:1.5">Needs a Google Cloud OAuth client (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET) and Google’s approval of the Business Profile API. Replies are drafted and held until then; nothing posts.</div>');
   return '<div class="ic'+(connected?'':' off')+'">'+
     '<div class="ic-top"><div><div class="ic-nm">Google Business Profile</div><div class="ic-role">Reviews · auto-reply 4-5 stars, hold the rest</div></div>'+pill+'</div>'+
