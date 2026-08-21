@@ -8,7 +8,7 @@ import { senderFor } from './mailSenders';
  *
  * A completed ServiceTrade job carries assignedOffice (which Northstar branch serviced it) and
  * primaryContact (who to ask). We map each office to its public Google "write a review" link,
- * then on completion send that customer a request pointing at THEIR office's link — so the
+ * then on completion send that customer a request pointing at THEIR office's link, so the
  * review lands on the right profile.
  *
  * Send mode is 'hold' (queue for review) or 'auto' (send on completion). Guardrails: only jobs
@@ -178,7 +178,7 @@ function formatPhone(raw: string | null): string | null {
   const d = raw.replace(/\D/g, '');
   if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
   if (d.length === 11 && d[0] === '1') return `${d.slice(1, 4)}-${d.slice(4, 7)}-${d.slice(7)}`;
-  return raw.trim(); // already formatted or unusual — leave as-is
+  return raw.trim(); // already formatted or unusual, leave as-is
 }
 
 function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
@@ -300,7 +300,7 @@ export async function runReviewSweep(max = 5000): Promise<{ queued: number; skip
   const jobs = pendingReviewJobs(max);
   let skipped = 0, queued = 0;
   for (const j of jobs) {
-    const r = queueForJob(j); // uses the already-fetched job — no per-job re-scan
+    const r = queueForJob(j); // uses the already-fetched job (no per-job re-scan)
     if (r.ok) queued++; else skipped++;
   }
   return { queued, skipped };
