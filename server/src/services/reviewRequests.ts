@@ -1,5 +1,4 @@
 import { getDb } from '../db/index';
-import { COMPANY } from '../config/constants';
 import { getState, setState } from '../db/schema';
 import { mailConfigured, sendMail } from './msGraphMail';
 import { senderFor } from './mailSenders';
@@ -155,11 +154,22 @@ function recentlyAsked(email: string): boolean {
   return !!row;
 }
 
-/** Friendly, recognizable office name for the From line + signature ("Northstar Fire & Safety Houston"). */
+/**
+ * Customer-facing brand for the review-request email. Kept local to this file so the outbound
+ * email is correctly branded as 1st Fire Protection now, ahead of the full founder-layer swap
+ * (config/constants.ts, which still drives the receptionist + agent copy) that comes later.
+ */
+const REVIEW_BRAND = {
+  name: '1st Fire Protection',
+  headline: '1ST FIRE PROTECTION',
+  site: '1stfpservices.com',
+};
+
+/** Friendly, recognizable office name for the From line + signature ("1st Fire Protection Houston"). */
 export function officeDisplay(officeName: string | null): string {
-  if (!officeName) return COMPANY.name;
-  const clean = officeName.replace(/\bLLC\b/gi, '').replace(/Northstar/gi, 'Northstar Fire & Safety').replace(/\s+/g, ' ').trim();
-  return clean || COMPANY.name;
+  if (!officeName) return REVIEW_BRAND.name;
+  const clean = officeName.replace(/\bLLC\b/gi, '').replace(/\s+/g, ' ').trim();
+  return clean || REVIEW_BRAND.name;
 }
 
 /** Format a raw ServiceTrade phone into (xxx) xxx-xxxx when it is a clean 10-digit US number. */
@@ -174,16 +184,17 @@ function formatPhone(raw: string | null): string | null {
 function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
-  const city = office.replace(/Northstar Fire & Safety/i, '').trim(); // "Houston", "Services", ...
-  const phone = formatPhone(job.target_phone || job.office_phone) || COMPANY.phonePretty; // override > ServiceTrade > main line
+  const city = office.replace(new RegExp(REVIEW_BRAND.name, 'i'), '').replace(/1st\s*FP/i, '').trim(); // "Houston", ...
+  const phone = formatPhone(job.target_phone || job.office_phone); // real office number only; no fake fallback
   const url = escapeAttr(job.review_url || '#');
   const subject = `How was your recent service with ${office}?`;
+  const sign = `${office}${phone ? `\n${phone}` : ''} · ${REVIEW_BRAND.site}`;
   const body =
     `Hi ${first},\n\n` +
-    `Thank you for choosing ${COMPANY.name} for your recent service. We hope our ${office} team took great care of you.\n\n` +
-    `If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection. It opens Google and takes about a minute:\n${job.review_url || ''}\n\n` +
+    `Thank you for choosing ${REVIEW_BRAND.name} for your recent service. We hope our ${office} team took great care of you.\n\n` +
+    `If you have a minute, a quick Google review would mean a lot to us and helps other businesses find dependable fire protection. It opens Google and takes about a minute:\n${job.review_url || ''}\n\n` +
     `If anything fell short, just reply to this email and we will make it right.\n\n` +
-    `Thank you,\n${office}\n${phone} · ${COMPANY.site}`;
+    `Thank you,\n${sign}`;
 
   // Table-based, inline-styled email in the Northstar palette (navy #1E2D40, red #E53935, gold #F5B81B).
   const gold = city ? `<div style="color:#F5B81B;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:2px;">${escapeHtml(city)}</div>` : '';
@@ -191,19 +202,19 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
 `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F5F7F9;padding:24px 0;"><tr><td align="center">` +
 `<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:92%;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E4E9EE;">` +
 `<tr><td style="background:#1E2D40;padding:20px 28px;font-family:Arial,Helvetica,sans-serif;">` +
-`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">NORTHSTAR FIRE & SAFETY</div>${gold}</td></tr>` +
+`<div style="color:#FFFFFF;font-weight:800;font-size:17px;letter-spacing:.03em;">${escapeHtml(REVIEW_BRAND.headline)}</div>${gold}</td></tr>` +
 `<tr><td style="height:3px;background:#E53935;font-size:0;line-height:0;">&nbsp;</td></tr>` +
 `<tr><td style="padding:28px 30px 6px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1E2D40;">` +
 `<p style="margin:0 0 14px;">Hi ${escapeHtml(first)},</p>` +
-`<p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(COMPANY.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
-`<p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other Texas businesses find dependable fire protection.</p>` +
+`<p style="margin:0 0 14px;">Thank you for choosing <b>${escapeHtml(REVIEW_BRAND.name)}</b> for your recent service. We hope our ${escapeHtml(office)} team took great care of you.</p>` +
+`<p style="margin:0 0 22px;">If you have a minute, a quick Google review would mean a lot to us and helps other businesses find dependable fire protection.</p>` +
 `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:8px;background:#E53935;">` +
 `<a href="${url}" style="display:inline-block;padding:14px 30px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:8px;">Leave a Google review</a>` +
 `</td></tr></table>` +
 `<p style="margin:18px 0 0;font-size:13px;color:#6B7683;">The button opens Google and takes about a minute. If anything fell short, just reply to this email and we will make it right.</p></td></tr>` +
 `<tr><td style="padding:22px 30px 26px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1E2D40;border-top:1px solid #EDF1F4;">` +
 `<div style="font-weight:800;">${escapeHtml(office)}</div>` +
-`<div style="color:#6B7683;">${escapeHtml(COMPANY.name)} &middot; ${escapeHtml(phone)} &middot; ${escapeHtml(COMPANY.site)}</div>` +
+`<div style="color:#6B7683;">${escapeHtml(REVIEW_BRAND.name)}${phone ? ` &middot; ${escapeHtml(phone)}` : ''} &middot; ${escapeHtml(REVIEW_BRAND.site)}</div>` +
 `</td></tr></table></td></tr></table>`;
   return { subject, body, html, fromName: office };
 }
@@ -278,7 +289,7 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
 export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
   return buildMessage({
     id: 0, number: null, kind: null, completed_at: null,
-    office_id: null, office_name: officeName || 'Northstar Houston LLC', office_phone: '2813334444', target_phone: null,
+    office_id: null, office_name: officeName || '1st Fire Protection Houston', office_phone: '2813334444', target_phone: null,
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
     account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
   });
