@@ -9,6 +9,7 @@ import {
   getFormOptions,
   computerTierList,
   DOCK_PRICE,
+  provisionRequestGroups,
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
@@ -18,6 +19,7 @@ import {
   voidIntakeLink,
   getSubmission,
   linkForEmail,
+  duplicateOnboardingWarning,
 } from '../services/intakeLinks';
 import { sendMail, mailCredsPresent } from '../services/msGraphMail';
 import { intakeInviteHtml } from '../services/onboardingEmail';
@@ -153,7 +155,16 @@ router.post('/api/onboarding/intake-links', async (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
   let emailed: { ok: boolean; error?: string; to?: string } | undefined;
   if (b.send) emailed = await emailInvite(link.id, base);
-  res.json({ ok: true, link, url: `${base}/intake/${token}`, emailed });
+  // Warn (do not block) if this hire already has onboarding in flight, so a duplicate is a choice.
+  const warning = b.employee_id ? duplicateOnboardingWarning(Number(b.employee_id), link.id) : null;
+  res.json({ ok: true, link, url: `${base}/intake/${token}`, emailed, warning });
+});
+
+/** Auto-provision the access-group items for a request via Microsoft Graph (adds the hire to each
+ *  mapped Entra group and marks those items done). Bound hires with a work email only. */
+router.post('/api/onboarding/:id(\\d+)/provision', async (req, res) => {
+  const out = await provisionRequestGroups(Number(req.params.id), actor(req));
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Send (or re-send) the invite email for an existing link. */

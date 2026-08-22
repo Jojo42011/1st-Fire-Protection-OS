@@ -1,5 +1,6 @@
 import { getDb } from '../db/index';
-import { catalogByKind, catalogAll } from './onboardingCatalog';
+import { catalogByKind, catalogAll, CatalogItem } from './onboardingCatalog';
+import { addUserToGroup, graphConfigured } from './msGraphGroups';
 
 /**
  * New-hire Onboarding engine.
@@ -315,6 +316,64 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
   for (const d of drafts) insItem.run(requestId, d.owner, OWNER_LABEL[d.owner], d.kind, d.label, d.detail || null);
 
   return { request: req, items: itemsFor(requestId) };
+}
+
+/* ─────────────────────────── one-click provisioning (Microsoft Graph) ───────────────────────────
+ * Execute the access-group items IT would otherwise click one by one: for each pending group item
+ * that resolves to an Entra group, add the hire to that group via Graph and mark the item done.
+ * Keyless-safe (a no-op with a reason when Graph is not connected), and it only touches items that
+ * carry a real group id; approvals, hardware and pay tasks are left for a human. */
+
+/** Resolve the Entra group an "Add to ..." item targets, from the editable catalog. */
+function itemGroup(label: string, printers: CatalogItem[], groups: CatalogItem[]): { id: string | null; name: string } | null {
+  let m = /^Add to security group:\s*(.+)$/.exec(label);
+  if (m) {
+    const name = m[1].trim();
+    const g = printers.find((p) => p.group_name === name);
+    return { id: g ? g.group_id : null, name: g ? g.group_name || name : name };
+  }
+  m = /^Add to SharePoint group:\s*(.+)$/.exec(label);
+  if (m) {
+    const name = m[1].trim();
+    const g = groups.find((x) => x.name === name);
+    return { id: g ? g.group_id : null, name: g ? g.group_name || name : name };
+  }
+  return null;
+}
+
+export async function provisionRequestGroups(
+  requestId: number,
+  actor: string,
+): Promise<{ ok: boolean; error?: string; results: { item_id: number; group: string; ok: boolean; error?: string }[]; done: number; skipped: number }> {
+  const db = getDb();
+  const request = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
+  if (!request) return { ok: false, error: 'request not found', results: [], done: 0, skipped: 0 };
+  if (!graphConfigured()) return { ok: false, error: 'Microsoft Graph is not connected, so groups cannot be auto-provisioned. Set the Entra app credentials to enable this.', results: [], done: 0, skipped: 0 };
+
+  let upn: string | null = null;
+  if (request.employee_id) {
+    const e = db.prepare(`SELECT work_email FROM employees WHERE id = ?`).get(request.employee_id) as { work_email: string | null } | undefined;
+    upn = (e && e.work_email) || null;
+  }
+  if (!upn) return { ok: false, error: 'No Microsoft work email on file for this hire yet. Create their M365 account first, then provision groups.', results: [], done: 0, skipped: 0 };
+
+  const items = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = 'it' AND kind = 'task' AND status = 'pending'`).all(requestId) as OnboardingItem[];
+  const printers = catalogByKind('printer');
+  const groups = catalogByKind('sharepoint');
+  const results: { item_id: number; group: string; ok: boolean; error?: string }[] = [];
+  let done = 0, skipped = 0;
+  for (const it of items) {
+    const target = itemGroup(it.label, printers, groups);
+    if (!target || !target.id) { skipped++; continue; } // not a group item, or no Entra id mapped yet
+    // eslint-disable-next-line no-await-in-loop
+    const out = await addUserToGroup(upn, { groupId: target.id, groupName: target.name });
+    results.push({ item_id: it.id, group: target.name, ok: out.ok, error: out.error });
+    if (out.ok) {
+      db.prepare(`UPDATE onboarding_items SET status = 'done', decided_by = ?, decided_at = datetime('now') WHERE id = ?`).run(actor, it.id);
+      done++;
+    }
+  }
+  return { ok: true, results, done, skipped };
 }
 
 /** All items for a request, ordered by the owner display order then id. */

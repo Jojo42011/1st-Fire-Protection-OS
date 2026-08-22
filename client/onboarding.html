@@ -426,6 +426,8 @@ document.getElementById('mk-create').addEventListener('click',function(){
       if(d.emailed && d.emailed.ok){ OS.toast('Intake link created and emailed to '+d.emailed.to+'. It expires in 7 days.'); }
       else if(send && d.emailed && !d.emailed.ok){ OS.toast('Link created and copied, but the email did not send: '+(d.emailed.error||'unknown error'),'bad'); }
       else { OS.toast('Intake link created for '+(h.name||'the new hire')+' and copied. Send it to the hiring manager; it expires in 7 days.'); }
+      // Not a blocker: this hire already has onboarding in flight, so flag the possible duplicate.
+      if(d.warning){ setTimeout(function(){ OS.toast('Heads up: '+d.warning,'bad'); }, 2800); }
     }).catch(function(){ OS.toast('Could not create the link.','bad'); });
 });
 
@@ -494,10 +496,26 @@ function openReq(id){
       var items=g.items.map(itemRow).join('');
       return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span>'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+'</div>'+items+'</div>';
     }).join('');
+    // Offer one-click provisioning only when IT has pending group-add tasks to run.
+    var itGrp=(d.groups||[]).filter(function(g){return g.owner==='it';})[0];
+    var itPending=itGrp?itGrp.items.filter(function(i){return i.status==='pending'&&i.kind==='task'&&/^Add to (security|SharePoint) group:/.test(i.label);}).length:0;
+    var provBtn=itPending>0?'<button class="os-btn primary" id="provisionReq" title="Add this hire to each mapped Entra group via Microsoft 365">Provision access groups</button>':'';
     document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
       '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
-      '<button class="os-btn" id="closeReq">Close</button></div>'+groups+'</div>';
+      '<div style="display:flex;gap:9px">'+provBtn+'<button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
     document.getElementById('closeReq').addEventListener('click',closeReq);
+    var pv=document.getElementById('provisionReq');
+    if(pv) pv.addEventListener('click',function(){
+      pv.disabled=true; pv.textContent='Provisioning…';
+      fetch('/api/onboarding/'+id+'/provision',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+        if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not provision.','bad'); pv.disabled=false; pv.textContent='Provision access groups'; return; }
+        var failed=(res.results||[]).filter(function(x){return !x.ok;});
+        if(res.done>0 && failed.length===0){ OS.toast('Added '+(req.name||'the hire')+' to '+res.done+' group'+(res.done===1?'':'s')+' in Microsoft 365.'); }
+        else if(res.done>0){ OS.toast('Added to '+res.done+' group(s); '+failed.length+' failed: '+(failed[0].error||'error'),'bad'); }
+        else { OS.toast('Nothing was provisioned: '+(failed.length?(failed[0].error||'group not found'):'no mapped Entra groups on these items'),'bad'); }
+        loadBoard();
+      }).catch(function(){ OS.toast('Could not reach the provisioning service.','bad'); pv.disabled=false; pv.textContent='Provision access groups'; });
+    });
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }

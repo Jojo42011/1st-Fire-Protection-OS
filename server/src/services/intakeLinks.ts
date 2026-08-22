@@ -80,6 +80,22 @@ function present(row: IntakeLink) {
   };
 }
 
+/** Warn (do not block) when a hire already has onboarding in flight: a submitted request, or another
+ *  open link. Returns a human sentence for the admin, or null when this is the first one. */
+export function duplicateOnboardingWarning(employeeId: number | null | undefined, excludeLinkId?: number): string | null {
+  if (!employeeId) return null;
+  const db = getDb();
+  const req = db.prepare(`SELECT created_at FROM onboarding_requests WHERE employee_id = ? ORDER BY id DESC LIMIT 1`).get(employeeId) as { created_at: string } | undefined;
+  if (req) {
+    const when = req.created_at ? String(req.created_at).slice(0, 10) : 'earlier';
+    return `This hire already has a submitted onboarding request (${when}). Creating another will duplicate the provisioning tasks: void one if this was not intended.`;
+  }
+  const links = db.prepare(`SELECT * FROM intake_links WHERE employee_id = ?`).all(employeeId) as IntakeLink[];
+  const open = links.filter((l) => l.id !== excludeLinkId && (liveStatus(l) === 'sent' || liveStatus(l) === 'opened'));
+  if (open.length) return `There is already an open intake link for this hire that has not been submitted yet. You now have ${open.length + 1}; void the extras to avoid duplicate requests.`;
+  return null;
+}
+
 export function createIntakeLink(input: {
   employee_id?: number;
   job_title?: string;
