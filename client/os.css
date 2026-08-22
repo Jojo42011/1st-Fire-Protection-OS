@@ -18,6 +18,15 @@
   --os-good:#4CC38A; --os-warn:#E0AC55; --os-bad:#F0715F; --os-neutral:#A7B0C0;
   --os-good-bg:rgba(76,195,138,.12); --os-warn-bg:rgba(224,172,85,.12); --os-bad-bg:rgba(240,113,95,.12); --os-neutral-bg:#1d2027;
 }
+/* Dark: --ink is a light fill, so any ink-backed control with white text must flip its label to
+   the dark ground, otherwise it reads as light-on-light. */
+:root[data-theme="dark"] .os-btn.primary,
+:root[data-theme="dark"] .os-chip.on,
+:root[data-theme="dark"] .os-acard .go,
+:root[data-theme="dark"] .os-fb.on,
+:root[data-theme="dark"] .os-toast,
+:root[data-theme="dark"] .dq-act:hover{color:var(--bg)}
+:root[data-theme="dark"] .os-acard .go:hover{background:#fff}
 
 .os-wrap{max-width:1160px;margin:0 auto;padding:24px 24px 64px}
 @media(max-width:640px){.os-wrap{padding:16px 14px 52px}}

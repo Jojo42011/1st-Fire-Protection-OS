@@ -93,37 +93,37 @@
      (uncollapsed) nav the flex column would otherwise squeeze the first section to nothing
      instead of letting the pane scroll. */
   .side nav>*{flex:0 0 auto}
-  .nav-item{position:relative;border-radius:8px;padding:9px 11px;font-weight:400;font-size:13.5px;color:#475467;transition:background .18s var(--ease),color .18s var(--ease)}
-  .nav-item:hover{background:#FAFAFA}
-  .nav-item.on{background:#F5F6F8;color:#101828;font-weight:500}
-  .nav-item .ic{flex:none;color:#A6ADB8}
-  .nav-item.on .ic{color:#101828}
-  .nav-item:hover .ic{color:#667085}
-  .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:#101828;animation:railIn .35s var(--ease)}
+  .nav-item{position:relative;border-radius:8px;padding:9px 11px;font-weight:400;font-size:13.5px;color:var(--ink-2);transition:background .18s var(--ease),color .18s var(--ease)}
+  .nav-item:hover{background:var(--panel-alt)}
+  .nav-item.on{background:var(--fill);color:var(--ink);font-weight:500}
+  .nav-item .ic{flex:none;color:var(--faint)}
+  .nav-item.on .ic{color:var(--ink)}
+  .nav-item:hover .ic{color:var(--muted)}
+  .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--ink);animation:railIn .35s var(--ease)}
   @keyframes railIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
   .nav-item .dotk{display:none}
   .nav-item .count{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
   .nav-item .count.problem{color:var(--amber)}
 
   /* primary-tier group label (static, no accordion) */
-  .grouplabel{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A6ADB8;padding:18px 11px 8px}
+  .grouplabel{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:18px 11px 8px}
 
   /* divider between the primary tier and the secondary flyout tier */
-  .nav-div{height:1px;background:#EEF0F3;margin:10px 11px 4px}
+  .nav-div{height:1px;background:var(--divider);margin:10px 11px 4px}
 
   /* secondary tier: quiet flyout rows (destinations, not queues) */
   .nav-fly{position:relative}
-  .nav-flyrow{color:#667085;font-weight:400}
-  .nav-flyrow .ic{color:#B0B7C3}
-  .nav-flyrow.on .ic,.nav-flyrow.on{color:#101828}
-  .nav-flyrow .flychev{margin-left:auto;font-size:13px;line-height:1;color:#C7CDD6;transition:transform .16s var(--ease)}
+  .nav-flyrow{color:var(--muted);font-weight:400}
+  .nav-flyrow .ic{color:var(--faint)}
+  .nav-flyrow.on .ic,.nav-flyrow.on{color:var(--ink)}
+  .nav-flyrow .flychev{margin-left:auto;font-size:13px;line-height:1;color:var(--border-hover);transition:transform .16s var(--ease)}
   .nav-fly.open .nav-flyrow .flychev{transform:rotate(90deg)}
   .flyout{position:fixed;left:250px;top:0;min-width:210px;background:var(--panel);border:1px solid var(--border);
     border-radius:12px;box-shadow:var(--sh-float);padding:7px;z-index:1000;
     opacity:0;visibility:hidden;transform:translateX(-6px);transition:opacity .16s var(--ease),transform .16s var(--ease),visibility .16s;
     display:flex;flex-direction:column;gap:1px}
   .nav-fly:hover .flyout,.nav-fly.open .flyout{opacity:1;visibility:visible;transform:none}
-  .flyout-h{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A6ADB8;padding:6px 11px 7px}
+  .flyout-h{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:6px 11px 7px}
   @media (max-width:900px){ .flyout{position:static;box-shadow:none;border:0;border-radius:0;padding:0 0 0 12px;min-width:0;
     opacity:1;visibility:hidden;height:0;overflow:hidden;transform:none;transition:none}
     .nav-fly.open .flyout{visibility:visible;height:auto} .flyout-h{display:none} }
@@ -137,6 +137,9 @@
   .intacct-card .ic-connect{margin-top:9px;font-family:var(--sans);font-weight:500;font-size:12px;color:#fff;
     background:var(--ink);border:0;border-radius:7px;padding:7px 12px;cursor:pointer;transition:.15s}
   .intacct-card .ic-connect:hover{background:#000}
+  /* dark: ink inverts to a light fill, so the button label must flip to dark */
+  :root[data-theme="dark"] .intacct-card .ic-connect{color:var(--bg)}
+  :root[data-theme="dark"] .intacct-card .ic-connect:hover{background:#fff}
 
   /* Intacct modal */
   .modal-scrim{position:fixed;inset:0;z-index:1000;background:rgba(15,18,25,.5);display:flex;align-items:center;justify-content:center;

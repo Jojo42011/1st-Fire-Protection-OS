@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
+    /* This public onboarding form is intentionally light-only (no dark tokens); pin the scheme so a
+       viewer's dark OS/browser never force-darkens its inputs or ground. */
+    color-scheme:light;
     --ink:#0B111C; --ink-2:#3A4557; --muted:#697588; --faint:#9AA4B3;
     --line:#E7E9EE; --line-2:#DCDFE7; --bg-card:#FFFFFF;
     --accent:#0E6B4D; --accent-soft:#E7F4EE; --accent-line:#BFE3D3;
@@ -20,7 +23,7 @@
   body{margin:0;background:transparent;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color:var(--ink)}
   /* Opened directly (not inside the app overlay): give the card room to breathe from the top. The
      overlay host sizes the iframe to the card, so this padding is only added when standalone. */
-  body.standalone{padding:28px 16px 40px}
+  body.standalone{padding:28px 16px 40px;background:var(--wash);min-height:100vh}
   .card{width:100%;max-width:564px;margin:0 auto;background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
   .head{padding:22px 26px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
   .emblem{width:34px;height:34px;border-radius:50%;object-fit:contain;flex:none;background:#fff;padding:2px;box-shadow:0 0 0 1px var(--line)}

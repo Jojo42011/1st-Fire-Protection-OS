@@ -97,13 +97,13 @@ a:hover{color:var(--indigo-deep)}
 .side .brand .n{font-weight:600;font-size:13.5px;letter-spacing:-.015em;color:var(--ink);display:block}
 .side .brand .s{font-weight:400;font-size:10.5px;color:#8C97A5;display:block}
 .side nav{flex:1;overflow-y:auto;padding:6px 12px 12px;display:flex;flex-direction:column;gap:2px}
-.side .group{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A6ADB8;padding:18px 11px 8px}
-.nav-item{width:100%;display:flex;align-items:center;gap:11px;padding:9px 11px;border:none;border-radius:var(--r-tile);background:transparent;text-align:left;cursor:pointer;font-family:var(--sans);font-weight:400;font-size:13.5px;color:#475467;transition:background .18s}
-.nav-item:hover{background:#FAFAFA}
-.nav-item.on{background:#F5F6F8;color:#101828;font-weight:500}
-.nav-item .ic{width:15px;height:15px;display:flex;color:#A6ADB8}
-.nav-item:hover .ic{color:#667085}
-.nav-item.on .ic{color:#101828}
+.side .group{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:18px 11px 8px}
+.nav-item{width:100%;display:flex;align-items:center;gap:11px;padding:9px 11px;border:none;border-radius:var(--r-tile);background:transparent;text-align:left;cursor:pointer;font-family:var(--sans);font-weight:400;font-size:13.5px;color:var(--ink-2);transition:background .18s}
+.nav-item:hover{background:var(--panel-alt)}
+.nav-item.on{background:var(--fill);color:var(--ink);font-weight:500}
+.nav-item .ic{width:15px;height:15px;display:flex;color:var(--faint)}
+.nav-item:hover .ic{color:var(--muted)}
+.nav-item.on .ic{color:var(--ink)}
 .nav-item .sq{width:9px;height:9px;border-radius:3px;margin:0 3.5px;flex:none}
 .nav-item .count{font-family:var(--mono);font-weight:500;font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--faint)}
 .nav-item .badge{font-weight:600;font-size:10.5px;color:#fff;background:var(--money);border-radius:var(--r-pill);padding:2px 7px}
@@ -260,7 +260,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--ink);cursor:pointer}
 :root[data-theme="dark"] .seg button.on{background:var(--fill)}
 :root[data-theme="dark"] .btn,:root[data-theme="dark"] .palette,
 :root[data-theme="dark"] input,:root[data-theme="dark"] .deal{background:var(--panel)}
-:root[data-theme="dark"] .btn-primary{background:var(--ink);color:var(--bg)}
+:root[data-theme="dark"] .btn-primary,:root[data-theme="dark"] .btn-accent{background:var(--ink);color:var(--bg)}
 :root[data-theme="dark"] .avatar{background:var(--fill);color:var(--ink)}
 
 /* ---- responsive: phones & narrow tablets ----
