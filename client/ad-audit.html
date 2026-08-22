@@ -40,6 +40,20 @@
   .filters button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
   :root[data-theme="dark"] .filters button.on{color:var(--bg)}
   .note{font-size:11.5px;color:var(--muted);margin-top:8px}
+  .adset{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:18px;padding:2px 16px}
+  .adset>summary{cursor:pointer;font-weight:600;font-size:13px;padding:12px 0;list-style:none;color:var(--ink)}
+  .adset>summary::-webkit-details-marker{display:none}
+  .adset>summary::before{content:"▸ ";color:var(--muted)} .adset[open]>summary::before{content:"▾ "}
+  .adsetBody{padding:6px 0 16px}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px}
+  .fld{display:flex;flex-direction:column;gap:4px} .fld.full{grid-column:1/3}
+  .fld label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .fld input{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;outline:none}
+  .fld input:focus{border-color:var(--ink)}
+  .offrow{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;margin-bottom:6px}
+  .offrow .on{font-size:12px;color:var(--ink-2)}
+  .offrow input{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;outline:none}
+  .subh{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
 </style>
 <script src="/os.js" defer></script>
 </head>
@@ -52,6 +66,10 @@
     </div>
     <button class="os-btn" id="refresh">Refresh</button>
   </div>
+  <details id="adset" class="adset">
+    <summary>New-hire provisioning settings</summary>
+    <div id="adsetBody" class="adsetBody"></div>
+  </details>
   <div id="body"></div>
 </div>
 
@@ -132,9 +150,38 @@ function load(){
     var d=res[0]||{}; d.agentConfigured=(res[1]||{}).agentConfigured; draw(d);
   }).catch(function(){ document.getElementById('body').innerHTML='<div class="empty">Could not load the audit. Try Refresh.</div>'; });
 }
+/* ---------- provisioning settings (default OU, UPN domain, SKU, per-office OUs) ---------- */
+function loadSettings(){
+  fetch('/api/onboarding/ad-settings').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok)return; var s=d.settings||{}, offices=d.offices||[], map=s.officeOuMap||{};
+    var offRows=offices.map(function(o){
+      return '<div class="offrow"><span class="on">'+esc(o)+'</span><input data-off="'+esc(o)+'" type="text" spellcheck="false" placeholder="OU=... (leave blank to use default)" value="'+esc(map[o]||'')+'"></div>';
+    }).join('');
+    document.getElementById('adsetBody').innerHTML=
+      '<div class="fgrid">'+
+      '<div class="fld full"><label>Default OU (used when an office has no mapping)</label><input id="s_ou" type="text" spellcheck="false" placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'"></div>'+
+      '<div class="fld"><label>UPN domain</label><input id="s_dom" type="text" spellcheck="false" value="'+esc(s.upnDomain||'')+'"></div>'+
+      '<div class="fld"><label>Default license SKU</label><input id="s_sku" type="text" spellcheck="false" placeholder="e.g. SPE_E3" value="'+esc(s.licenseSku||'')+'"></div>'+
+      '</div>'+
+      '<div class="subh">Per-office OU (a hire lands in their office’s OU)</div>'+offRows+
+      '<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="os-btn primary" id="s_save">Save</button><span id="s_status" class="note"></span></div>';
+    document.getElementById('s_save').addEventListener('click',saveSettings);
+  });
+}
+function saveSettings(){
+  var map={};
+  document.querySelectorAll('#adsetBody input[data-off]').forEach(function(i){var v=i.value.trim();if(v)map[i.getAttribute('data-off')]=v;});
+  var body={targetOu:document.getElementById('s_ou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map};
+  var st=document.getElementById('s_status'); st.textContent='Saving…';
+  fetch('/api/onboarding/ad-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){ st.textContent=d&&d.ok?'Saved.':'Save failed.'; if(d&&d.ok)OS.toast('Provisioning settings saved.'); })
+    .catch(function(){ st.textContent='Save failed.'; });
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
+  loadSettings();
   load();
 });
 </script>

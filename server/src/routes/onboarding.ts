@@ -208,13 +208,13 @@ router.get('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
   res.json({ ok: true, job: { id: job.id, status: job.status, error: job.error, finished_at: job.finished_at } });
 });
 
-/** The editable AD provisioning settings (target OU, UPN domain, default license SKU). */
+/** The editable AD provisioning settings + the office list (so the UI can offer a per-office OU row). */
 router.get('/api/onboarding/ad-settings', (_req, res) => {
-  res.json({ ok: true, settings: getAdSettings() });
+  res.json({ ok: true, settings: getAdSettings(), offices: operatingOffices().map((o) => o.label) });
 });
 router.put('/api/onboarding/ad-settings', (req, res) => {
   const b = req.body || {};
-  res.json({ ok: true, settings: setAdSettings({ targetOu: b.targetOu, upnDomain: b.upnDomain, licenseSku: b.licenseSku }) });
+  res.json({ ok: true, settings: setAdSettings({ targetOu: b.targetOu, upnDomain: b.upnDomain, licenseSku: b.licenseSku, officeOuMap: b.officeOuMap }) });
 });
 
 /** Send (or re-send) the invite email for an existing link. */
