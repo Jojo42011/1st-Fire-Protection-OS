@@ -18,15 +18,23 @@
   function readLS(k, d){ try { return localStorage.getItem(k) || d; } catch(_){ return d; } }
   OS.office = function(){ return readLS('fpos_office','all') || 'all'; };
   OS.period = function(){ return readLS('fpos_period','month') || 'month'; };
-  OS.setPeriod = function(p){ try{ localStorage.setItem('fpos_period', p); }catch(_){} fire(); try{ w.parent.postMessage({type:'fp-period',period:p},'*'); }catch(_){} };
+  OS.setPeriod = function(p){ try{ localStorage.setItem('fpos_period', p); }catch(_){} lastCtx.period = p; fire(); try{ w.parent.postMessage({type:'fp-period',period:p},'*'); }catch(_){} };
   OS.me = function(){ return ctx.me; };
   function fire(){ changeCbs.forEach(function(cb){ try{ cb(); }catch(_){} }); }
   OS.onChange = function(cb){ changeCbs.push(cb); };
 
-  // office/period changes broadcast from the shell
+  // The office/period the page last rendered with. The shell re-broadcasts the CURRENT context into
+  // every frame as it loads; that value matches what the page just drew, so firing again would
+  // replay every entrance animation (bars visibly reset to 0 and regrow). Track it and only re-render
+  // when it actually changed.
+  var lastCtx = { office: OS.office(), period: OS.period() };
   w.addEventListener('message', function(e){
     var d = e.data || {};
-    if (d.type === 'fp-office' || d.type === 'fp-period') { fire(); }
+    if (d.type === 'fp-office' || d.type === 'fp-period') {
+      var key = d.type === 'fp-office' ? 'office' : 'period';
+      var val = d[key];
+      if (val == null || val !== lastCtx[key]) { lastCtx[key] = val; fire(); }
+    }
     // shell → active frame: open a metric's drill drawer (from the ⌘K palette)
     if (d.type === 'open-drill' && d.key && OS.openDrill) { OS.openDrill(d.key, d.label); }
   });
