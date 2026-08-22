@@ -24,11 +24,47 @@
   .side .brand .s{font-weight:400;font-size:10.5px;color:#8C97A5}
 
   /* sidebar: collapsible on desktop */
-  .side{position:relative;z-index:20;transition:margin-left .34s cubic-bezier(.4,0,.2,1),opacity .3s}
+  .side{position:relative;z-index:20;transition:margin-left .34s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),flex-basis .28s cubic-bezier(.4,0,.2,1),opacity .3s}
   .app.collapsed .side{margin-left:calc(-1 * var(--sidebar));opacity:0}
   .side .brand .grip{margin-left:auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--border);
     background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
   .side .brand .grip:hover{border-color:var(--border-strong);color:var(--ink-2);background:var(--fill)}
+
+  /* ---- collapsed icon rail (desktop): 56px, glyph-only, the one place a shape is the whole label ---- */
+  .app.rail .side{flex:0 0 56px;width:56px;overflow:visible}
+  .app.rail .side nav{overflow:visible;padding:6px 0 12px;align-items:center}
+  .app.rail .side .brand{padding:13px 0 9px;justify-content:center}
+  .app.rail .side .brand>span:not(.mark),.app.rail .side .brand .grip{display:none}
+  .app.rail .side .brand .mark{width:34px;height:34px;font-size:18px;cursor:pointer}
+  .app.rail .searchsec{padding:0 0 8px !important;display:flex;justify-content:center}
+  .app.rail .searchbtn{width:38px;height:34px;justify-content:center;padding:0}
+  .app.rail .searchbtn .lbl,.app.rail .searchbtn .key{display:none}
+  /* rows become centered 38x34 tiles; labels + numeric counts drop away */
+  .app.rail .nav-block,.app.rail .nav-sect,.app.rail .nav-fly{width:38px;margin-left:auto;margin-right:auto}
+  .app.rail .nav-item{width:38px;height:34px;padding:0;justify-content:center;position:relative}
+  .app.rail .nav-item .grow,.app.rail .nav-flyrow .flychev{display:none}
+  .app.rail .nav-item .ic{margin:0}
+  .app.rail .nav-item .ic svg{width:16px;height:16px}
+  .app.rail .nav-item.on::before{top:6px;bottom:6px}
+  /* group label -> a short hairline divider */
+  .app.rail .grouplabel{font-size:0;padding:0;height:1px;width:38px;background:#EEF0F3;margin:6px auto;overflow:hidden}
+  .app.rail .nav-div{width:38px;margin:8px auto 4px}
+  /* count -> a corner dot (hidden entirely when empty) */
+  .app.rail .nav-item .count{position:absolute;top:4px;right:5px;margin:0;width:5px;height:5px;padding:0;border-radius:50%;
+    font-size:0;line-height:0;background:var(--faint);box-shadow:0 0 0 1.5px var(--panel)}
+  .app.rail .nav-item .count.problem{background:var(--amber)}
+  .app.rail .nav-item .count:empty{display:none}
+  /* footer: drop the Intacct card + identity text, keep a centered avatar */
+  .app.rail .intacct-card{display:none}
+  .app.rail .me{justify-content:center;padding:11px 0}
+  .app.rail .me>span:not(.avatar),.app.rail .me #signout{display:none}
+  /* the flyout PANEL keeps full rows (icon + label): it is the label the rail row is hiding */
+  .app.rail .flyout .nav-item{width:auto;height:auto;padding:9px 11px;justify-content:flex-start}
+  .app.rail .flyout .nav-item .grow{display:block}
+  .app.rail .flyout .nav-item .ic svg{width:15px;height:15px}
+  .app.rail .flyout .nav-item .count{position:static;width:auto;height:auto;font-size:11.5px;line-height:1;
+    border-radius:0;box-shadow:none;background:none;color:var(--faint);margin-left:auto}
+  .app.rail .flyout .nav-item .count.problem{background:none;color:var(--amber)}
 
   /* the search "field" button that opens the palette */
   .searchbtn{width:100%;display:flex;align-items:center;gap:8px;background:var(--fill);border:none;
@@ -241,7 +277,7 @@
         </button>
       </div>
 
-      <div style="padding:0 12px 10px">
+      <div class="searchsec" style="padding:0 12px 10px">
         <button class="searchbtn" id="open-palette" aria-label="Search (⌘K)">
           <span class="mag"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></span>
           <span class="lbl">Search</span>
@@ -634,18 +670,26 @@ nav.addEventListener('click',function(e){
   Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); });
 });
 
-/* ---- collapse / mobile drawer ---- */
-function setCollapsed(v){app.classList.toggle('collapsed',v);if(!isMobile()){try{localStorage.setItem('shell_collapsed',v?'1':'0');}catch(_){}}}
-document.getElementById('collapse').onclick=function(){setCollapsed(true);};
+/* ---- collapse / rail (desktop) / mobile drawer ----
+   Mobile: the sidebar is a drawer that slides fully off (.collapsed) with a Menu pill to reopen.
+   Desktop: collapsing shrinks the sidebar to a 56px glyph-only rail (.rail) instead of hiding it;
+   the signet toggles it back open. */
+function setCollapsed(v){app.classList.toggle('collapsed',v);}
+function setRail(v){app.classList.toggle('rail',v);try{localStorage.setItem('shell_rail',v?'1':'0');}catch(_){}}
+function isRail(){return app.classList.contains('rail');}
+document.getElementById('collapse').onclick=function(){ if(isMobile())setCollapsed(true); else setRail(true); };
 reopen.onclick=function(){setCollapsed(false);};
 backdrop.addEventListener('click',function(){setCollapsed(true);});
-document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&e.key==='\\'){e.preventDefault();setCollapsed(!app.classList.contains('collapsed'));}});
+// The signet expands the rail (or collapses to it) on desktop.
+var brandMark=document.querySelector('.side .brand .mark');
+if(brandMark){ brandMark.title='Toggle sidebar (Ctrl/⌘ + \\)'; brandMark.addEventListener('click',function(){ if(!isMobile())setRail(!isRail()); }); }
+document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&e.key==='\\'){e.preventDefault(); if(isMobile())setCollapsed(!app.classList.contains('collapsed')); else setRail(!isRail());}});
 if(isMobile()){app.classList.add('collapsed');}
-else{try{if(localStorage.getItem('shell_collapsed')==='1')app.classList.add('collapsed');}catch(_){}}
+else{try{if(localStorage.getItem('shell_rail')==='1')app.classList.add('rail');}catch(_){}}
 function syncHeights(){if(isMobile()){fitFrame(frameEl(current));}else{KEYS.forEach(function(k){frameEl(k).style.height='';});}}
 (mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(function(){
-  if(isMobile())setCollapsed(true);
-  else{try{setCollapsed(localStorage.getItem('shell_collapsed')==='1');}catch(_){setCollapsed(false);}}
+  if(isMobile()){ app.classList.remove('rail'); setCollapsed(true); }
+  else{ setCollapsed(false); try{setRail(localStorage.getItem('shell_rail')==='1');}catch(_){setRail(false);} }
   syncHeights();
 });
 window.addEventListener('resize',syncHeights);
