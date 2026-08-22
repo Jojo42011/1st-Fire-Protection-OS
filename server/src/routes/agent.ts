@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, AdUserIn } from '../services/adAudit';
 import { claimPending, completeJob } from '../services/dcJobs';
+import { listGroupsWithMembers } from '../services/msGraphGroups';
 
 /**
  * On-prem AD agent endpoints (P1: read-only inventory) + the audit dashboard read.
@@ -71,6 +72,14 @@ router.get('/api/ad-audit', (_req, res) => {
 /** Whether the agent token is set, so the UI can tell the admin if the DC agent can connect yet. */
 router.get('/api/ad-audit/status', (_req, res) => {
   res.json({ ok: true, agentConfigured: !!agentToken() });
+});
+
+/** Security groups (by name prefix) with their members, from Entra via Graph. Powers the SharePoint
+ *  access reconciliation: the folder audit shows which group grants a folder, not who is in it. */
+router.get('/api/ad-audit/sp-groups', async (req, res) => {
+  const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
+  const out = await listGroupsWithMembers(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 export default router;

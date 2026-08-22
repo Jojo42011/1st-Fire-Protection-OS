@@ -71,6 +71,18 @@
     <summary>New-hire provisioning settings</summary>
     <div id="adsetBody" class="adsetBody"></div>
   </details>
+  <details id="spg" class="adset">
+    <summary>SharePoint access groups (members, live from Entra)</summary>
+    <div id="spgBody" class="adsetBody">
+      <div class="offrow" style="grid-template-columns:auto auto auto 1fr;max-width:640px">
+        <span class="on">Name starts with</span>
+        <input id="spgPrefix" type="text" value="SG-SP-" style="font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 9px;width:120px">
+        <button class="os-btn primary" id="spgLoad">Load</button>
+        <button class="os-btn" id="spgCsv" disabled>Download CSV</button>
+      </div>
+      <div id="spgResult" class="note" style="margin-top:10px">Loads each matching security group and its members from Entra. Needs the Graph GroupMember.Read.All permission.</div>
+    </div>
+  </details>
   <div id="body"></div>
 </div>
 
@@ -200,9 +212,48 @@ function saveSettings(){
     .catch(function(){ st.textContent='Save failed.'; });
 }
 
+/* ---------- SharePoint access groups + members (live from Entra) ---------- */
+var SPG=[];
+function csvCell(v){ v=(v==null?'':String(v)); return /[",\n]/.test(v)?('"'+v.replace(/"/g,'""')+'"'):v; }
+function loadSpGroups(){
+  var pfx=(document.getElementById('spgPrefix').value||'SG-SP-').trim();
+  var out=document.getElementById('spgResult'), btn=document.getElementById('spgLoad');
+  btn.disabled=true; btn.textContent='Loading…'; out.textContent='Pulling groups and members from Entra…';
+  fetch('/api/ad-audit/sp-groups?prefix='+encodeURIComponent(pfx)).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Load';
+    if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not load groups.'; return; }
+    SPG=d.groups||[];
+    if(!SPG.length){ out.textContent='No groups start with "'+pfx+'".'; document.getElementById('spgCsv').disabled=true; return; }
+    var total=SPG.reduce(function(s,g){return s+g.members.length;},0);
+    var rows=SPG.map(function(g){
+      var mem=g.members.map(function(m){
+        var badge=m.enabled===false?' <span style="color:var(--critical,#8C1D18)">(disabled)</span>':'';
+        return '<div style="font-size:12px;color:var(--ink-2)">'+esc(m.name||m.upn||'?')+' <span class="mono" style="color:var(--muted)">'+esc(m.upn||m.type)+'</span>'+badge+'</div>';
+      }).join('')||'<div class="note">(no members)</div>';
+      return '<details style="border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:6px">'+
+        '<summary style="cursor:pointer;font-weight:600;font-size:13px">'+esc(g.name)+' <span class="mono" style="color:var(--muted);font-weight:400">· '+g.members.length+' member'+(g.members.length===1?'':'s')+(g.syncedFromAD?' · synced from AD':' · cloud-only')+'</span></summary>'+
+        '<div style="padding:8px 0 4px">'+mem+'</div></details>';
+    }).join('');
+    out.innerHTML='<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">'+SPG.length+' groups · '+total+' memberships</div>'+rows;
+    document.getElementById('spgCsv').disabled=false;
+  }).catch(function(){ btn.disabled=false; btn.textContent='Load'; out.textContent='Could not reach Graph.'; });
+}
+function downloadSpCsv(){
+  var lines=[['Group','SyncedFromAD','Member','UPN','Type','Enabled'].join(',')];
+  SPG.forEach(function(g){
+    if(!g.members.length){ lines.push([g.name,g.syncedFromAD,'','','(empty)',''].map(csvCell).join(',')); return; }
+    g.members.forEach(function(m){ lines.push([g.name,g.syncedFromAD,m.name,m.upn,m.type,m.enabled].map(csvCell).join(',')); });
+  });
+  var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='spgroup-members.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
+  document.getElementById('spgLoad').addEventListener('click',loadSpGroups);
+  document.getElementById('spgCsv').addEventListener('click',downloadSpCsv);
   loadSettings();
   load();
 });

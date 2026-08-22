@@ -80,6 +80,46 @@ export async function listUserGroups(upn: string): Promise<{ ok: boolean; error?
   }
 }
 
+export interface GroupMember { name: string | null; upn: string | null; type: string; enabled: boolean | null }
+export interface GroupWithMembers { id: string; name: string; kind: string; syncedFromAD: boolean; members: GroupMember[] }
+
+/**
+ * Every group whose display name starts with `prefix`, each with its direct members. This is what
+ * powers the SharePoint-access reconciliation: the folder audit shows which group grants a folder,
+ * but not who is in the group. Needs GroupMember.Read.All (or Directory.Read.All). Keyless-safe.
+ */
+export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boolean; error?: string; groups: GroupWithMembers[] }> {
+  if (!graphConfigured()) return { ok: false, error: 'Microsoft Graph is not connected', groups: [] };
+  try {
+    const token = await graphToken();
+    if (!token) return { ok: false, error: 'could not acquire a Graph token', groups: [] };
+    const flt = encodeURIComponent(`startswith(displayName,'${prefix.replace(/'/g, "''")}')`);
+    const groupRows = await collect(`https://graph.microsoft.com/v1.0/groups?$filter=${flt}&$select=id,displayName,securityEnabled,mailEnabled,groupTypes,mail,onPremisesSyncEnabled&$top=999`);
+    if (!groupRows.length) return { ok: true, groups: [] };
+    const out: GroupWithMembers[] = [];
+    for (const g of groupRows) {
+      // eslint-disable-next-line no-await-in-loop
+      const members = await collect(`https://graph.microsoft.com/v1.0/groups/${g.id}/members?$select=id,displayName,userPrincipalName,accountEnabled&$top=999`);
+      const cls = classifyGroup(g);
+      out.push({
+        id: g.id,
+        name: cls.name,
+        kind: cls.kind,
+        syncedFromAD: !!g.onPremisesSyncEnabled,
+        members: members.map((m) => ({
+          name: m.displayName || null,
+          upn: m.userPrincipalName || null,
+          type: String(m['@odata.type'] || '').replace('#microsoft.graph.', '') || 'unknown',
+          enabled: typeof m.accountEnabled === 'boolean' ? m.accountEnabled : null,
+        })),
+      });
+    }
+    return { ok: true, groups: out.sort((a, b) => a.name.localeCompare(b.name)) };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message, groups: [] };
+  }
+}
+
 /** Look up a security group's object id by display name (when only the name is known). */
 export async function findGroupIdByName(name: string): Promise<string | null> {
   if (!graphConfigured()) return null;
