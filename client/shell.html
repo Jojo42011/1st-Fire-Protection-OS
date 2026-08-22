@@ -4,8 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>1st Fire Protection · Operating System</title>
-<link rel="icon" type="image/png" href="/brand/logo.png" />
-<link rel="apple-touch-icon" href="/brand/logo.png" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23101828'/%3E%3Ctext x='32' y='33' dominant-baseline='central' text-anchor='middle' font-family='Geist,Helvetica,Arial,sans-serif' font-size='38' font-weight='600' letter-spacing='-2' fill='%23ffffff'%3E1%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23101828'/%3E%3Ctext x='32' y='33' dominant-baseline='central' text-anchor='middle' font-family='Helvetica,Arial,sans-serif' font-size='38' font-weight='600' fill='%23ffffff'%3E1%3C/text%3E%3C/svg%3E" />
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
@@ -17,11 +17,11 @@
   html,body{height:100%;overflow:hidden}
   .app{height:100vh;overflow:hidden}
 
-  /* brand emblem: circular logo */
+  /* brand emblem: ink squircle signet (not a circle) */
   .side .brand{padding:16px 16px 14px}
-  img.mark{width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border-card);background:var(--panel);flex:none}
-  .side .brand .n{font-weight:750;font-size:13.5px;color:var(--ink)}
-  .side .brand .s{font-weight:500;font-size:10.5px;color:var(--muted)}
+  img.mark{width:30px;height:30px;border-radius:7px;object-fit:cover;flex:none}
+  .side .brand .n{font-weight:600;font-size:13.5px;letter-spacing:-.015em;color:var(--ink)}
+  .side .brand .s{font-weight:400;font-size:10.5px;color:#8C97A5}
 
   /* sidebar: collapsible on desktop */
   .side{position:relative;z-index:20;transition:margin-left .34s cubic-bezier(.4,0,.2,1),opacity .3s}
@@ -53,27 +53,50 @@
   .nav-block.collapsed .nav-group .chev{transform:rotate(0deg)}
   .nav-sect{display:flex;flex-direction:column;gap:1px;overflow:hidden}
   .nav-block.collapsed .nav-sect{display:none}
-  .nav-item{position:relative;border-radius:8px;padding:8px 10px 8px 12px;font-weight:500;font-size:13px;color:var(--ink-2);transition:background .18s var(--ease),color .18s var(--ease)}
-  .nav-item:hover{background:var(--panel-alt)}
-  .nav-item.on{background:var(--fill);color:var(--ink);font-weight:650}
-  .nav-item .ic{flex:none}
-  .nav-item.on .ic{color:var(--brand)}
-  .nav-item:hover .ic{color:var(--ink-2)}
-  .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--brand);animation:railIn .35s var(--ease)}
+  .nav-item{position:relative;border-radius:8px;padding:9px 11px;font-weight:400;font-size:13.5px;color:#475467;transition:background .18s var(--ease),color .18s var(--ease)}
+  .nav-item:hover{background:#FAFAFA}
+  .nav-item.on{background:#F5F6F8;color:#101828;font-weight:500}
+  .nav-item .ic{flex:none;color:#A6ADB8}
+  .nav-item.on .ic{color:#101828}
+  .nav-item:hover .ic{color:#667085}
+  .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:#101828;animation:railIn .35s var(--ease)}
   @keyframes railIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
   .nav-item .dotk{display:none}
-  .nav-item .count{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-  .nav-item .count.problem{color:var(--amber-ink)}
+  .nav-item .count{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+  .nav-item .count.problem{color:var(--amber)}
+
+  /* primary-tier group label (static, no accordion) */
+  .grouplabel{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A6ADB8;padding:18px 11px 8px}
+
+  /* divider between the primary tier and the secondary flyout tier */
+  .nav-div{height:1px;background:#EEF0F3;margin:10px 11px 4px}
+
+  /* secondary tier: quiet flyout rows (destinations, not queues) */
+  .nav-fly{position:relative}
+  .nav-flyrow{color:#667085;font-weight:400}
+  .nav-flyrow .ic{color:#B0B7C3}
+  .nav-flyrow.on .ic,.nav-flyrow.on{color:#101828}
+  .nav-flyrow .flychev{margin-left:auto;font-size:13px;line-height:1;color:#C7CDD6;transition:transform .16s var(--ease)}
+  .nav-fly.open .nav-flyrow .flychev{transform:rotate(90deg)}
+  .flyout{position:fixed;left:250px;top:0;min-width:210px;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;box-shadow:var(--sh-float);padding:7px;z-index:1000;
+    opacity:0;visibility:hidden;transform:translateX(-6px);transition:opacity .16s var(--ease),transform .16s var(--ease),visibility .16s;
+    display:flex;flex-direction:column;gap:1px}
+  .nav-fly:hover .flyout,.nav-fly.open .flyout{opacity:1;visibility:visible;transform:none}
+  .flyout-h{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A6ADB8;padding:6px 11px 7px}
+  @media (max-width:900px){ .flyout{position:static;box-shadow:none;border:0;border-radius:0;padding:0 0 0 12px;min-width:0;
+    opacity:1;visibility:hidden;height:0;overflow:hidden;transform:none;transition:none}
+    .nav-fly.open .flyout{visibility:visible;height:auto} .flyout-h{display:none} }
 
   /* Sage Intacct status card (sidebar footer) */
-  .intacct-card{margin:10px 12px 6px;padding:12px 13px;border-radius:12px;background:var(--amber-bg);
-    border:1px solid #F0DBB4;display:flex;gap:9px;align-items:flex-start}
-  .intacct-card .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none;margin-top:5px}
-  .intacct-card b{display:block;font-weight:700;font-size:12px;color:var(--amber-ink)}
-  .intacct-card p{font-weight:500;font-size:11px;line-height:1.5;color:var(--ink-3);margin-top:4px}
-  .intacct-card .ic-connect{margin-top:9px;font-family:var(--sans);font-weight:700;font-size:11.5px;color:#fff;
-    background:var(--amber-ink);border:0;border-radius:8px;padding:6px 12px;cursor:pointer;transition:.15s}
-  .intacct-card .ic-connect:hover{background:var(--amber)}
+  .intacct-card{margin:10px 12px 6px;padding:12px 13px;border-radius:12px;background:var(--panel);
+    border:1px solid var(--divider);display:flex;gap:9px;align-items:flex-start}
+  .intacct-card .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex:none;margin-top:6px}
+  .intacct-card b{display:block;font-weight:500;font-size:12.5px;color:var(--ink)}
+  .intacct-card p{font-weight:400;font-size:11.5px;line-height:1.5;color:#8C97A5;margin-top:4px}
+  .intacct-card .ic-connect{margin-top:9px;font-family:var(--sans);font-weight:500;font-size:12px;color:#fff;
+    background:var(--ink);border:0;border-radius:7px;padding:7px 12px;cursor:pointer;transition:.15s}
+  .intacct-card .ic-connect:hover{background:#000}
 
   /* Intacct modal */
   .modal-scrim{position:fixed;inset:0;z-index:1000;background:rgba(15,18,25,.5);display:flex;align-items:center;justify-content:center;
@@ -208,7 +231,7 @@
   <div class="app" id="app">
     <aside class="side" id="side">
       <div class="brand">
-        <img class="mark" src="/brand/logo-email.png" alt="1st Fire Protection" width="32" height="32" />
+        <span class="mark" role="img" aria-label="1st Fire Protection">1</span>
         <span style="flex:1;min-width:0">
           <span class="n">1st Fire Protection</span>
           <span class="s">Operating system</span>
@@ -381,16 +404,18 @@ var SCREENS = {
 
 /* The business-oriented navigation. Groups are collapsible (accordion); the group holding the
    active screen opens on load. Screens not yet built route to a graceful /soon placeholder. */
+// Two-tier nav. Primary tier (18 rows, always visible) is the queues you monitor. Then a divider and
+// a secondary tier of quiet flyout rows: destinations you visit, not queues, each opening a panel.
 var NAV = [
   { items:[ 'home','operator' ] },
   { group:'Work',       items:[ 'tasks','approve','exceptions' ] },
   { group:'Money',      items:[ 'moneyOverview','receivables','handoffs','close' ] },
   { group:'Operations', items:[ 'service','schedule','deficiencies','jobs','agreements','costing' ] },
   { group:'Front desk', items:[ 'phones','reviews','oncall' ] },
-  { group:'People',     items:[ 'people' ] },
-  { group:'Customers',  items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
-  { group:'Reports',    items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
-  { group:'Company',    items:[ 'companyOffices','itSystems','integrations','sync','settings','team','hire' ] }
+  { group:'Reports',    flyout:true, icon:'bars',      items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
+  { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
+  { group:'People',     flyout:true, icon:'users',     items:[ 'people' ] },
+  { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','integrations','sync','settings','team','hire' ] }
 ];
 /* Which People module governs each screen, so the nav can hide areas a role does not include.
    Mirrors the server's PAGE_MODULE map (server/src/app.ts): the server refuses the page, this just
@@ -484,23 +509,25 @@ var ICON={
   bot:'<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/>',
   plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
   briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'
+  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+  deficiency:'<path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M12.5 11.5a2.4 2.4 0 0 0 3 3l-4 4-2-2z"/>',
+  exchange:'<path d="M4 8.5h13l-3-3M20 15.5H7l3 3"/>'
 };
 var KEY_ICON={
   home:'home', operator:'chat',
   tasks:'list', approve:'check', exceptions:'alert',
-  moneyOverview:'dollar', receivables:'invoice', handoffs:'repeat', close:'lock',
-  service:'wrench', schedule:'calendar', deficiencies:'alert', jobs:'clipboard', agreements:'repeat', costing:'trend',
+  moneyOverview:'dollar', receivables:'invoice', handoffs:'exchange', close:'lock',
+  service:'wrench', schedule:'calendar', deficiencies:'deficiency', jobs:'clipboard', agreements:'repeat', costing:'trend',
   phones:'phone', reviews:'star', oncall:'bell',
   people:'users',
   accounts:'briefcase', sites:'pin', quotes:'invoice', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
   reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
   companyOffices:'building', itSystems:'server', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'
 };
-function iconSvg(k){
-  var name=KEY_ICON[k]||'list';
-  return '<span class="ic"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||ICON.list)+'</svg></span>';
+function iconSvgByName(name){
+  return '<span class="ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||ICON.list)+'</svg></span>';
 }
+function iconSvg(k){ return iconSvgByName(KEY_ICON[k]||'list'); }
 function navItemHTML(k){
   var s=SCREENS[k]; if(!s) return '';
   var badge = COUNTS[k] ? '<span class="count'+(PROBLEM_COUNT[k]?' problem':'')+'" id="'+COUNTS[k]+'"></span>' : '';
@@ -508,41 +535,51 @@ function navItemHTML(k){
 }
 // Which nav sections the user has collapsed, remembered across visits so a long sidebar can be
 // trimmed to just the areas someone works in.
+// Legacy collapse map kept as a harmless no-op so any stored value is ignored; the two-tier nav has
+// no accordion. saveNavCollapsed is retained because activate() still references it.
 var NAV_COLLAPSED = {};
-var navStored = null;
-try { navStored = localStorage.getItem('fpos_nav_collapsed'); } catch(_){}
-if (navStored) {
-  try { NAV_COLLAPSED = JSON.parse(navStored) || {}; } catch(_){ NAV_COLLAPSED = {}; }
-} else {
-  // First visit: start every section collapsed so the pane is short and scannable. activate() opens
-  // the section holding the current screen; the user's own expand/collapse choices are remembered
-  // from then on. Home and Ask the Operator sit outside any section, so they always show.
-  NAV.forEach(function(g){ if(g.group) NAV_COLLAPSED[g.group]=1; });
-}
-function saveNavCollapsed(){ try { localStorage.setItem('fpos_nav_collapsed', JSON.stringify(NAV_COLLAPSED)); } catch(_){} }
+function saveNavCollapsed(){}
 function renderNav(){
+  var firstFly = true;
   nav.innerHTML = NAV.map(function(g){
     var keys = g.items.filter(allowedScreen);
     if(!keys.length) return ''; // whole section hidden when the role includes none of its screens
-    var items = keys.map(navItemHTML).join('');
-    if(!g.group) return '<div class="nav-sect lead">'+items+'</div>';
-    var collapsed = NAV_COLLAPSED[g.group] ? ' collapsed' : '';
-    return '<div class="nav-block'+collapsed+'" data-group="'+g.group+'">'+
-      '<button class="nav-group" data-group-toggle="'+g.group+'" aria-expanded="'+(collapsed?'false':'true')+'"><span class="grow">'+g.group+'</span><span class="chev">›</span></button>'+
-      '<div class="nav-sect">'+items+'</div></div>';
+    if(!g.group) return '<div class="nav-sect lead">'+keys.map(navItemHTML).join('')+'</div>';
+    if(g.flyout){
+      var div = firstFly ? '<div class="nav-div" aria-hidden="true"></div>' : ''; firstFly = false;
+      return div+'<div class="nav-fly" data-group="'+g.group+'">'+
+        '<button class="nav-item nav-flyrow" data-fly="'+g.group+'" aria-haspopup="true" aria-expanded="false">'+
+          iconSvgByName(g.icon)+'<span class="grow">'+g.group+'</span><span class="flychev" aria-hidden="true">›</span></button>'+
+        '<div class="flyout" role="menu"><div class="flyout-h">'+g.group+'</div>'+keys.map(navItemHTML).join('')+'</div></div>';
+    }
+    // Primary tier: static group label, always expanded (no accordion at 18 rows).
+    return '<div class="nav-block" data-group="'+g.group+'"><div class="grouplabel">'+g.group+'</div>'+
+      '<div class="nav-sect">'+keys.map(navItemHTML).join('')+'</div></div>';
   }).join('');
 }
 renderNav();
-// Collapse or expand a section on header click, and remember the choice.
+// Position each fixed flyout panel beside its row (fixed, so the sidebar's overflow can't clip it).
+// Skipped on mobile where the panel renders inline underneath the row.
+function placeFlyout(wrap){
+  if(isMobile && isMobile()) return;
+  var row=wrap.querySelector('.nav-flyrow'), panel=wrap.querySelector('.flyout'); if(!row||!panel) return;
+  var r=row.getBoundingClientRect();
+  panel.style.left=(r.right-6)+'px';
+  var top=Math.min(r.top-4, window.innerHeight-panel.offsetHeight-12);
+  panel.style.top=Math.max(8, top)+'px';
+}
+Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly'), function(wrap){
+  wrap.addEventListener('mouseenter', function(){ placeFlyout(wrap); });
+});
+// Flyout rows: toggle the panel open on click (covers touch; hover handles pointer devices via CSS).
 nav.addEventListener('click', function(e){
-  var h=e.target.closest('[data-group-toggle]'); if(!h) return;
-  var g=h.getAttribute('data-group-toggle');
-  var block=nav.querySelector('.nav-block[data-group="'+g+'"]'); if(!block) return;
-  var nowCollapsed=!block.classList.contains('collapsed');
-  block.classList.toggle('collapsed', nowCollapsed);
-  h.setAttribute('aria-expanded', nowCollapsed?'false':'true');
-  if(nowCollapsed) NAV_COLLAPSED[g]=1; else delete NAV_COLLAPSED[g];
-  saveNavCollapsed();
+  var fr=e.target.closest('[data-fly]'); if(!fr) return;
+  var wrap=fr.closest('.nav-fly'); if(!wrap) return;
+  var open=wrap.classList.toggle('open');
+  fr.setAttribute('aria-expanded', open?'true':'false');
+  if(open) placeFlyout(wrap);
+  // close any other open flyout
+  Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ if(w!==wrap){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); } });
 });
 
 /* ---- mobile: size each iframe to its content so the outer document scrolls ---- */
@@ -580,11 +617,9 @@ function activate(key,announce){
   });
   current=key;
   var grp=GROUP_LABEL[key]||'';
-  // Never leave the active screen hidden inside a collapsed section: open its section (and remember).
-  if(grp){ var blk=nav.querySelector('.nav-block[data-group="'+grp+'"]');
-    if(blk&&blk.classList.contains('collapsed')){ blk.classList.remove('collapsed');
-      var hh=blk.querySelector('[data-group-toggle]'); if(hh)hh.setAttribute('aria-expanded','true');
-      delete NAV_COLLAPSED[grp]; saveNavCollapsed(); } }
+  // Mark the active flyout row (secondary-tier destinations live inside a flyout, not an inline row).
+  Array.prototype.forEach.call(nav.querySelectorAll('.nav-flyrow'), function(fr){
+    var w=fr.closest('.nav-fly'); fr.classList.toggle('on', !!(w && w.getAttribute('data-group')===grp)); });
   if(crumbGroupEl){ crumbGroupEl.textContent=grp; crumbGroupEl.style.display=grp?'':'none'; }
   var sep=document.querySelector('.crumb .cs'); if(sep) sep.style.display=grp?'':'none';
   if(crumbPageEl) crumbPageEl.textContent=SCREENS[key].title;
@@ -592,7 +627,11 @@ function activate(key,announce){
   if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}
 }
 nav.addEventListener('click',function(e){
-  var it=e.target.closest('.nav-item'); if(it)activate(it.getAttribute('data-key'),true);
+  var it=e.target.closest('.nav-item'); if(!it) return;
+  var key=it.getAttribute('data-key'); if(!key) return; // flyout header rows carry no key
+  activate(key,true);
+  // selecting a destination closes any open flyout
+  Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); });
 });
 
 /* ---- collapse / mobile drawer ---- */
