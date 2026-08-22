@@ -154,7 +154,7 @@ function load(){
 /* ---------- provisioning settings (default OU, UPN domain, SKU, per-office OUs) ---------- */
 function loadSettings(){
   fetch('/api/onboarding/ad-settings').then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok)return; var s=d.settings||{}, offices=d.offices||[], map=s.officeOuMap||{}, ous=d.ouOptions||[];
+    if(!d||!d.ok)return; var s=d.settings||{}, offices=d.offices||[], departments=d.departments||[], map=s.officeOuMap||{}, dmap=s.departmentOuMap||{}, ous=d.ouOptions||[];
     var haveOus=ous.length>0;
     // Build the <option> set once. Include any stored value that is not in the mirror so it is kept.
     function optionsFor(sel){
@@ -163,29 +163,37 @@ function loadSettings(){
       if(sel && !seen[sel]) opts+='<option value="'+esc(sel)+'" selected>'+esc(sel)+' (not in mirror)</option>';
       return opts;
     }
+    function rowField(attr,key,cur){
+      return haveOus
+        ? '<select '+attr+'="'+esc(key)+'">'+optionsFor(cur||'')+'</select>'
+        : '<input '+attr+'="'+esc(key)+'" type="text" spellcheck="false" placeholder="OU=... (leave blank to use default)" value="'+esc(cur||'')+'">';
+    }
+    var deptRows=departments.map(function(dp){
+      return '<div class="offrow"><span class="on">'+esc(dp)+'</span>'+rowField('data-dept',dp,dmap[dp]||'')+'</div>';
+    }).join('');
     var offRows=offices.map(function(o){
-      var field=haveOus
-        ? '<select data-off="'+esc(o)+'">'+optionsFor(map[o]||'')+'</select>'
-        : '<input data-off="'+esc(o)+'" type="text" spellcheck="false" placeholder="OU=... (leave blank to use default)" value="'+esc(map[o]||'')+'">';
-      return '<div class="offrow"><span class="on">'+esc(o)+'</span>'+field+'</div>';
+      return '<div class="offrow"><span class="on">'+esc(o)+'</span>'+rowField('data-off',o,map[o]||'')+'</div>';
     }).join('');
     var dlist=haveOus?('<datalist id="oulist">'+ous.map(function(o){return '<option value="'+esc(o.dn)+'">'+esc(o.label)+'</option>';}).join('')+'</datalist>'):'';
     var hint=haveOus?'':'<div class="note" style="margin-bottom:10px">No OUs from AD yet: once the DC agent posts an inventory, these become dropdowns. Paste distinguished names for now.</div>';
     document.getElementById('adsetBody').innerHTML=hint+
       '<div class="fgrid">'+
-      '<div class="fld full"><label>Default OU (used when an office has no mapping)</label><input id="s_ou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'">'+dlist+'</div>'+
+      '<div class="fld full"><label>Default OU (used when nothing else matches)</label><input id="s_ou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'">'+dlist+'</div>'+
       '<div class="fld"><label>UPN domain</label><input id="s_dom" type="text" spellcheck="false" value="'+esc(s.upnDomain||'')+'"></div>'+
       '<div class="fld"><label>Default license SKU</label><input id="s_sku" type="text" spellcheck="false" placeholder="e.g. SPE_E3" value="'+esc(s.licenseSku||'')+'"></div>'+
       '</div>'+
-      '<div class="subh">Per-office OU (a hire lands in their office’s OU)</div>'+offRows+
+      '<div class="subh">Per-department OU (wins over office: back-office functions land in MGMT)</div>'+
+      (deptRows||'<div class="note">No departments on the employee roster yet.</div>')+
+      '<div class="subh">Per-office OU (used when the department is not mapped above)</div>'+offRows+
       '<div style="margin-top:12px;display:flex;gap:10px;align-items:center"><button class="os-btn primary" id="s_save">Save</button><span id="s_status" class="note"></span></div>';
     document.getElementById('s_save').addEventListener('click',saveSettings);
   });
 }
 function saveSettings(){
-  var map={};
+  var map={}, dmap={};
   document.querySelectorAll('#adsetBody [data-off]').forEach(function(i){var v=(i.value||'').trim();if(v)map[i.getAttribute('data-off')]=v;});
-  var body={targetOu:document.getElementById('s_ou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map};
+  document.querySelectorAll('#adsetBody [data-dept]').forEach(function(i){var v=(i.value||'').trim();if(v)dmap[i.getAttribute('data-dept')]=v;});
+  var body={targetOu:document.getElementById('s_ou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map,departmentOuMap:dmap};
   var st=document.getElementById('s_status'); st.textContent='Saving…';
   fetch('/api/onboarding/ad-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){ st.textContent=d&&d.ok?'Saved.':'Save failed.'; if(d&&d.ok)OS.toast('Provisioning settings saved.'); })

@@ -24,19 +24,21 @@ const K_OU = 'ad_target_ou';
 const K_DOMAIN = 'ad_upn_domain';
 const K_SKU = 'ad_license_sku';
 const K_OFFICE_OU = 'ad_office_ou_map';
+const K_DEPT_OU = 'ad_dept_ou_map';
 
 const DEFAULT_DOMAIN = '1stfpservices.com';
 const OU_PLACEHOLDER = 'OU=New Hires,OU=Users,DC=1stfp,DC=local';
 
 export interface AdSettings {
-  targetOu: string | null; // the default OU, used when a hire's office has no specific mapping
+  targetOu: string | null; // the default OU, used when neither department nor office has a mapping
   upnDomain: string;
   licenseSku: string | null;
   officeOuMap: Record<string, string>; // office label -> OU distinguished name
+  departmentOuMap: Record<string, string>; // department -> OU DN; takes precedence over office
 }
 
-function readOfficeMap(): Record<string, string> {
-  const raw = getState(K_OFFICE_OU);
+function readMap(key: string): Record<string, string> {
+  const raw = getState(key);
   if (!raw) return {};
   try { const v = JSON.parse(raw); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
 }
@@ -47,37 +49,47 @@ export function getAdSettings(): AdSettings {
     targetOu: getState(K_OU) || null,
     upnDomain: getState(K_DOMAIN) || DEFAULT_DOMAIN,
     licenseSku: getState(K_SKU) || null,
-    officeOuMap: readOfficeMap(),
+    officeOuMap: readMap(K_OFFICE_OU),
+    departmentOuMap: readMap(K_DEPT_OU),
   };
 }
 
+function cleanMap(m: Record<string, string>): Record<string, string> {
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(m)) { const dn = String(v || '').trim(); if (k && dn) clean[k] = dn; }
+  return clean;
+}
+
 /** Update whichever settings are provided. Blank clears back to the default/placeholder. */
-export function setAdSettings(patch: { targetOu?: string; upnDomain?: string; licenseSku?: string; officeOuMap?: Record<string, string> }): AdSettings {
+export function setAdSettings(patch: { targetOu?: string; upnDomain?: string; licenseSku?: string; officeOuMap?: Record<string, string>; departmentOuMap?: Record<string, string> }): AdSettings {
   if (patch.targetOu !== undefined) setState(K_OU, String(patch.targetOu).trim());
   if (patch.upnDomain !== undefined) setState(K_DOMAIN, String(patch.upnDomain).trim() || DEFAULT_DOMAIN);
   if (patch.licenseSku !== undefined) setState(K_SKU, String(patch.licenseSku).trim());
-  if (patch.officeOuMap !== undefined && patch.officeOuMap && typeof patch.officeOuMap === 'object') {
-    // Keep only non-empty entries, trimmed.
-    const clean: Record<string, string> = {};
-    for (const [k, v] of Object.entries(patch.officeOuMap)) {
-      const dn = String(v || '').trim();
-      if (k && dn) clean[k] = dn;
-    }
-    setState(K_OFFICE_OU, JSON.stringify(clean));
-  }
+  if (patch.officeOuMap !== undefined && patch.officeOuMap && typeof patch.officeOuMap === 'object') setState(K_OFFICE_OU, JSON.stringify(cleanMap(patch.officeOuMap)));
+  if (patch.departmentOuMap !== undefined && patch.departmentOuMap && typeof patch.departmentOuMap === 'object') setState(K_DEPT_OU, JSON.stringify(cleanMap(patch.departmentOuMap)));
   return getAdSettings();
 }
 
-/** Resolve the OU a hire in `office` should be created in: their office's mapping, else the default. */
-export function resolveOu(office: string | null | undefined, settings: AdSettings): { ou: string; isPlaceholder: boolean; matchedOffice: boolean } {
-  const map = settings.officeOuMap || {};
-  if (office) {
-    // Case-insensitive office lookup so "Austin" matches a map key "austin".
-    const hit = Object.keys(map).find((k) => k.toLowerCase() === String(office).toLowerCase());
-    if (hit && map[hit]) return { ou: map[hit], isPlaceholder: false, matchedOffice: true };
-  }
-  if (settings.targetOu) return { ou: settings.targetOu, isPlaceholder: false, matchedOffice: false };
-  return { ou: OU_PLACEHOLDER, isPlaceholder: true, matchedOffice: false };
+export type OuMatch = 'department' | 'office' | 'default';
+
+/**
+ * Resolve the OU a hire should be created in. Department wins over office, but ONLY for departments
+ * that are explicitly mapped: back-office functions (Accounting, IT, HR) live in MGMT OUs regardless
+ * of which office they nominally sit in, while field staff (whose department is not mapped) route by
+ * office. Falls back to the default OU.
+ */
+export function resolveOu(department: string | null | undefined, office: string | null | undefined, settings: AdSettings): { ou: string; isPlaceholder: boolean; matched: OuMatch } {
+  const find = (map: Record<string, string>, key: string | null | undefined): string | null => {
+    if (!key) return null;
+    const hit = Object.keys(map || {}).find((k) => k.toLowerCase() === String(key).toLowerCase());
+    return hit && map[hit] ? map[hit] : null;
+  };
+  const dept = find(settings.departmentOuMap, department);
+  if (dept) return { ou: dept, isPlaceholder: false, matched: 'department' };
+  const off = find(settings.officeOuMap, office);
+  if (off) return { ou: off, isPlaceholder: false, matched: 'office' };
+  if (settings.targetOu) return { ou: settings.targetOu, isPlaceholder: false, matched: 'default' };
+  return { ou: OU_PLACEHOLDER, isPlaceholder: true, matched: 'default' };
 }
 
 /** first.last, ASCII, lower-case, punctuation-stripped: the sAMAccountName / UPN local part. */
@@ -156,13 +168,13 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
   const settings = getAdSettings();
   const warnings: string[] = [];
 
-  // Name + office: prefer the bound BambooHR record; fall back to parsing the typed name.
-  let first = '', last = '', office: string | null = null;
+  // Name + office + department: prefer the bound BambooHR record; fall back to parsing the typed name.
+  let first = '', last = '', office: string | null = null, department: string | null = null;
   if (request.employee_id) {
-    const e = db.prepare(`SELECT legal_first_name, legal_last_name, office FROM employees WHERE id = ?`).get(request.employee_id) as
-      | { legal_first_name: string | null; legal_last_name: string | null; office: string | null }
+    const e = db.prepare(`SELECT legal_first_name, legal_last_name, office, department FROM employees WHERE id = ?`).get(request.employee_id) as
+      | { legal_first_name: string | null; legal_last_name: string | null; office: string | null; department: string | null }
       | undefined;
-    if (e) { first = e.legal_first_name || ''; last = e.legal_last_name || ''; office = e.office || null; }
+    if (e) { first = e.legal_first_name || ''; last = e.legal_last_name || ''; office = e.office || null; department = e.department || null; }
   }
   if (!office) office = request.office || null;
   if (!first && !last) { const s = splitName(request.name); first = s.first; last = s.last; }
@@ -173,11 +185,11 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
   const sam = [fSan, lSan].filter(Boolean).join('.') || 'new.hire';
   const upn = `${sam}@${settings.upnDomain}`;
 
-  // Resolve the OU from the hire's office (per-office map), falling back to the default OU.
-  const ouRes = resolveOu(office, settings);
+  // Resolve the OU: department mapping (back-office functions) wins over office, then the default OU.
+  const ouRes = resolveOu(department, office, settings);
   const ou = ouRes.ou;
-  if (ouRes.isPlaceholder) warnings.push('No target OU is set yet. Set a default OU (and per-office OUs) on the Active Directory page before creating the account.');
-  else if (!ouRes.matchedOffice && office && Object.keys(settings.officeOuMap).length) warnings.push(`No OU is mapped for office "${office}"; using the default OU. Add it on the Active Directory page to place this hire in the right location.`);
+  if (ouRes.isPlaceholder) warnings.push('No target OU is set yet. Set a default OU (plus per-office / per-department OUs) on the Active Directory page before creating the account.');
+  else if (ouRes.matched === 'default' && (office || department) && (Object.keys(settings.officeOuMap).length || Object.keys(settings.departmentOuMap).length)) warnings.push(`No OU is mapped for ${department ? `department "${department}"` : `office "${office}"`}; using the default OU. Add a mapping on the Active Directory page to place this hire in the right location.`);
 
   // The mapped on-prem security groups the hire needs (from the IT group items). SharePoint-group
   // items are listed as a note: SharePoint groups live in SharePoint, not on-prem AD.
