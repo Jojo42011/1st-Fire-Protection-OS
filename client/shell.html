@@ -608,8 +608,12 @@ function placeFlyout(wrap){
   var top=Math.min(r.top-4, window.innerHeight-panel.offsetHeight-12);
   panel.style.top=Math.max(8, top)+'px';
 }
-Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly'), function(wrap){
-  wrap.addEventListener('mouseenter', function(){ placeFlyout(wrap); });
+// Delegated on the persistent nav container so it survives re-renders (the nav is rebuilt when the
+// permission gate resolves). A per-node mouseenter listener would be lost on that rebuild, leaving
+// the fixed-position panel stuck at its default top:0 instead of beside its row.
+nav.addEventListener('mouseover', function(e){
+  var wrap = e.target && e.target.closest ? e.target.closest('.nav-fly') : null;
+  if(wrap) placeFlyout(wrap);
 });
 // Flyout rows: toggle the panel open on click (covers touch; hover handles pointer devices via CSS).
 nav.addEventListener('click', function(e){
