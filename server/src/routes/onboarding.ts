@@ -30,6 +30,7 @@ import { catalogByKind } from '../services/onboardingCatalog';
 import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
 import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings } from '../services/adProvision';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
+import { adOuOptions } from '../services/adAudit';
 
 const router = Router();
 
@@ -208,9 +209,10 @@ router.get('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
   res.json({ ok: true, job: { id: job.id, status: job.status, error: job.error, finished_at: job.finished_at } });
 });
 
-/** The editable AD provisioning settings + the office list (so the UI can offer a per-office OU row). */
+/** The editable AD provisioning settings + the office list + the real OUs from the AD mirror (so the
+ *  UI can offer a per-office OU dropdown instead of pasted distinguished names). */
 router.get('/api/onboarding/ad-settings', (_req, res) => {
-  res.json({ ok: true, settings: getAdSettings(), offices: operatingOffices().map((o) => o.label) });
+  res.json({ ok: true, settings: getAdSettings(), offices: operatingOffices().map((o) => o.label), ouOptions: adOuOptions() });
 });
 router.put('/api/onboarding/ad-settings', (req, res) => {
   const b = req.body || {};

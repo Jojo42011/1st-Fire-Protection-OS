@@ -52,7 +52,8 @@
   .fld input:focus{border-color:var(--ink)}
   .offrow{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;margin-bottom:6px}
   .offrow .on{font-size:12px;color:var(--ink-2)}
-  .offrow input{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;outline:none}
+  .offrow input,.offrow select{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;outline:none;width:100%}
+  .offrow select:focus{border-color:var(--ink)}
   .subh{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
 </style>
 <script src="/os.js" defer></script>
@@ -153,13 +154,26 @@ function load(){
 /* ---------- provisioning settings (default OU, UPN domain, SKU, per-office OUs) ---------- */
 function loadSettings(){
   fetch('/api/onboarding/ad-settings').then(function(r){return r.json();}).then(function(d){
-    if(!d||!d.ok)return; var s=d.settings||{}, offices=d.offices||[], map=s.officeOuMap||{};
+    if(!d||!d.ok)return; var s=d.settings||{}, offices=d.offices||[], map=s.officeOuMap||{}, ous=d.ouOptions||[];
+    var haveOus=ous.length>0;
+    // Build the <option> set once. Include any stored value that is not in the mirror so it is kept.
+    function optionsFor(sel){
+      var seen={}, opts='<option value="">(use default OU)</option>';
+      ous.forEach(function(o){ seen[o.dn]=1; opts+='<option value="'+esc(o.dn)+'"'+(sel===o.dn?' selected':'')+'>'+esc(o.label)+' ('+o.users+')</option>'; });
+      if(sel && !seen[sel]) opts+='<option value="'+esc(sel)+'" selected>'+esc(sel)+' (not in mirror)</option>';
+      return opts;
+    }
     var offRows=offices.map(function(o){
-      return '<div class="offrow"><span class="on">'+esc(o)+'</span><input data-off="'+esc(o)+'" type="text" spellcheck="false" placeholder="OU=... (leave blank to use default)" value="'+esc(map[o]||'')+'"></div>';
+      var field=haveOus
+        ? '<select data-off="'+esc(o)+'">'+optionsFor(map[o]||'')+'</select>'
+        : '<input data-off="'+esc(o)+'" type="text" spellcheck="false" placeholder="OU=... (leave blank to use default)" value="'+esc(map[o]||'')+'">';
+      return '<div class="offrow"><span class="on">'+esc(o)+'</span>'+field+'</div>';
     }).join('');
-    document.getElementById('adsetBody').innerHTML=
+    var dlist=haveOus?('<datalist id="oulist">'+ous.map(function(o){return '<option value="'+esc(o.dn)+'">'+esc(o.label)+'</option>';}).join('')+'</datalist>'):'';
+    var hint=haveOus?'':'<div class="note" style="margin-bottom:10px">No OUs from AD yet: once the DC agent posts an inventory, these become dropdowns. Paste distinguished names for now.</div>';
+    document.getElementById('adsetBody').innerHTML=hint+
       '<div class="fgrid">'+
-      '<div class="fld full"><label>Default OU (used when an office has no mapping)</label><input id="s_ou" type="text" spellcheck="false" placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'"></div>'+
+      '<div class="fld full"><label>Default OU (used when an office has no mapping)</label><input id="s_ou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'">'+dlist+'</div>'+
       '<div class="fld"><label>UPN domain</label><input id="s_dom" type="text" spellcheck="false" value="'+esc(s.upnDomain||'')+'"></div>'+
       '<div class="fld"><label>Default license SKU</label><input id="s_sku" type="text" spellcheck="false" placeholder="e.g. SPE_E3" value="'+esc(s.licenseSku||'')+'"></div>'+
       '</div>'+
@@ -170,7 +184,7 @@ function loadSettings(){
 }
 function saveSettings(){
   var map={};
-  document.querySelectorAll('#adsetBody input[data-off]').forEach(function(i){var v=i.value.trim();if(v)map[i.getAttribute('data-off')]=v;});
+  document.querySelectorAll('#adsetBody [data-off]').forEach(function(i){var v=(i.value||'').trim();if(v)map[i.getAttribute('data-off')]=v;});
   var body={targetOu:document.getElementById('s_ou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map};
   var st=document.getElementById('s_status'); st.textContent='Saving…';
   fetch('/api/onboarding/ad-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})

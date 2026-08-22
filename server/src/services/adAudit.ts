@@ -135,6 +135,20 @@ export function ouTree(): OuNode[] {
   return roots;
 }
 
+/** Distinct OU distinguished names from the mirror, each with a readable top-down label and a user
+ *  count, for the provisioning-settings dropdowns. Sorted by label. */
+export function adOuOptions(): { dn: string; label: string; users: number }[] {
+  const db = getDb();
+  const rows = db.prepare(`SELECT ou, COUNT(*) AS c FROM ad_users WHERE ou IS NOT NULL AND ou != '' GROUP BY ou`).all() as { ou: string; c: number }[];
+  const label = (dn: string): string => {
+    const ous = dn.split(',').map((p) => p.trim()).filter((p) => /^OU=/i.test(p)).map((p) => p.slice(3));
+    return ous.reverse().join(' / ') || dn;
+  };
+  return rows
+    .map((r) => ({ dn: r.ou, label: label(r.ou), users: r.c }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /* ─────────────────────────── drift ─────────────────────────── */
 
 export type DriftCode =
