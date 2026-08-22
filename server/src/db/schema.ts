@@ -1353,6 +1353,41 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_exceptions_office ON exceptions(office);
     CREATE INDEX IF NOT EXISTS idx_exceptions_owner ON exceptions(owner_team);
   `);
+
+  // On-prem Active Directory mirror. The DC agent (a scheduled PowerShell task) reads AD read-only
+  // and posts a full snapshot here; the OS compares it against the employee record to find drift.
+  // Replace-all on each sync, so these tables always reflect the last snapshot, never a merge.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ad_users (
+      object_guid   TEXT PRIMARY KEY,
+      sam           TEXT,
+      upn           TEXT,
+      display_name  TEXT,
+      given_name    TEXT,
+      surname       TEXT,
+      title         TEXT,
+      mobile        TEXT,
+      department    TEXT,
+      office        TEXT,
+      email         TEXT,
+      enabled       INTEGER DEFAULT 1,
+      ou            TEXT,               -- parent OU distinguished name (the container, not the user CN)
+      dn            TEXT,
+      when_created  TEXT,
+      last_logon    TEXT,
+      synced_at     TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ad_users_sam ON ad_users(sam);
+    CREATE INDEX IF NOT EXISTS idx_ad_users_upn ON ad_users(upn);
+
+    CREATE TABLE IF NOT EXISTS ad_user_groups (
+      object_guid  TEXT NOT NULL,
+      sam          TEXT,
+      group_name   TEXT NOT NULL,
+      group_dn     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ad_user_groups_guid ON ad_user_groups(object_guid);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

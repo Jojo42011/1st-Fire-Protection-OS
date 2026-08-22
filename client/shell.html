@@ -437,6 +437,7 @@ var SCREENS = {
   // COMPANY
   companyOffices:{ src:'/offices',   title:'Offices',             sub:'Each office, at a glance' },
   itSystems:   { src:'/it-systems',  title:'IT & Systems',        sub:'Access, licenses, and system health' },
+  adAudit:     { src:'/ad-audit',    title:'Active Directory',    sub:'On-prem AD mirror: OU structure and account cleanup' },
   spend:       { src:'/licenses',    title:'License cleanup',     sub:'Finds the seats you pay for but nobody uses' },
   integrations:{ src:'/company-integrations', title:'Integrations', sub:'Systems of record and sync health' },
   sync:        { src:'/sync',        title:'ServiceTrade sync',   sub:'Two-way, every 15 minutes' },
@@ -458,7 +459,7 @@ var NAV = [
   { group:'Reports',    flyout:true, icon:'bars',      items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
   { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
   { group:'People',     flyout:true, icon:'users',     items:[ 'people' ] },
-  { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','integrations','sync','settings','team','hire' ] }
+  { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','adAudit','integrations','sync','settings','team','hire' ] }
 ];
 /* Which People module governs each screen, so the nav can hide areas a role does not include.
    Mirrors the server's PAGE_MODULE map (server/src/app.ts): the server refuses the page, this just
@@ -473,7 +474,7 @@ var SCREEN_MODULE = {
   people:'people',
   accounts:'service', sites:'service', quotes:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
   reportsExec:'overview', officePerf:'overview', reportsMoney:'accounting', reportsOps:'service', reportsPeople:'people', customReports:'overview',
-  companyOffices:'overview', itSystems:'access', spend:'access', integrations:'access', sync:'access', settings:'access', team:'access', hire:'access'
+  companyOffices:'overview', itSystems:'access', adAudit:'access', spend:'access', integrations:'access', sync:'access', settings:'access', team:'access', hire:'access'
 };
 // Gate state, populated once /api/me resolves. GATE stays false (show everything) until we know the
 // session is a People identity with roles; ME_MODULES is that identity's module->level map.
@@ -565,7 +566,7 @@ var KEY_ICON={
   people:'users',
   accounts:'briefcase', sites:'pin', quotes:'invoice', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
   reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
-  companyOffices:'building', itSystems:'server', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'
+  companyOffices:'building', itSystems:'server', adAudit:'users', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'
 };
 function iconSvgByName(name){
   return '<span class="ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||ICON.list)+'</svg></span>';

@@ -64,6 +64,7 @@ import work from './routes/work';
 import operations from './routes/operations';
 import sharepoint from './routes/sharepoint';
 import google from './routes/google';
+import adAgent from './routes/agent';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
@@ -155,6 +156,7 @@ app.use(work);
 app.use(operations);
 app.use(sharepoint);
 app.use(google);
+app.use(adAgent);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 //
@@ -181,7 +183,7 @@ const PAGE_MODULE: Record<string, string> = {
   'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access',
   'company-integrations.html': 'access', 'integrations.html': 'access', 'sync.html': 'access',
   'access.html': 'access', 'roster.html': 'access', 'harness.html': 'access',
-  'department.html': 'access', 'agent.html': 'access',
+  'department.html': 'access', 'agent.html': 'access', 'ad-audit.html': 'access',
 };
 const NO_ACCESS_HTML = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>No access</title><style>html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;
@@ -217,6 +219,7 @@ app.get('/harness', page('harness.html'));
 app.get('/roster', page('roster.html'));
 app.get('/department', page('department.html'));
 app.get('/agent', page('agent.html'));
+app.get('/ad-audit', page('ad-audit.html'));
 app.get('/integrations', page('integrations.html'));
 app.get('/licenses', page('licenses.html'));
 app.get('/onboarding', page('onboarding.html'));

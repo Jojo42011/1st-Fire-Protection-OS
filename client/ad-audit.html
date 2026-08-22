@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Active Directory · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .wrap{padding:22px 26px;max-width:1120px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .kpi .lab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .kpi .val{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px}
+  .kpi .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .sec{margin-top:26px}
+  .sec-h{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .sec-h::after{content:"";flex:1;height:1px;background:var(--border)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:10px 14px;border-bottom:1px solid var(--border);font-weight:500}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--ink-2);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .who{font-weight:600;color:var(--ink)}
+  .sub2{font-size:11px;color:var(--muted)}
+  .exp{color:var(--good,#12805C);font-family:var(--mono);font-size:11.5px}
+  .cur{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+  .empty{background:var(--panel);border:1px dashed var(--border);border-radius:12px;padding:26px;color:var(--muted);font-size:13px;line-height:1.6}
+  .empty h3{margin:0 0 8px;font-size:14px;color:var(--ink)}
+  .empty code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 6px}
+  .empty ol{margin:10px 0 0;padding-left:20px} .empty li{margin:6px 0}
+  .tree{font-family:var(--mono);font-size:12.5px;line-height:1.9}
+  .tree .row{display:flex;align-items:center;gap:10px;padding:2px 0}
+  .tree .nm{color:var(--ink)} .tree .ct{color:var(--muted);font-variant-numeric:tabular-nums}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .filters button{font-family:var(--mono);font-size:11px;letter-spacing:.04em;border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:20px;padding:5px 12px;cursor:pointer}
+  .filters button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  :root[data-theme="dark"] .filters button.on{color:var(--bg)}
+  .note{font-size:11.5px;color:var(--muted);margin-top:8px}
+</style>
+<script src="/os.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:4px">
+    <div>
+      <h1 style="font-size:20px;font-weight:600;margin:0">Active Directory</h1>
+      <p style="font-size:13px;color:var(--muted);margin:6px 0 0;max-width:640px">A read-only mirror of on-prem AD, posted by the agent on the domain controller. The OS compares it against the employee record to surface accounts that need cleanup. Nothing here changes AD.</p>
+    </div>
+    <button class="os-btn" id="refresh">Refresh</button>
+  </div>
+  <div id="body"></div>
+</div>
+
+<script>
+function esc(t){return OS.esc(t);}
+var SEV={critical:'bad',high:'bad',medium:'warn',low:'neutral'};
+var CODE_LABEL={terminated_enabled:'Terminated, still enabled',terminated_in_groups:'Terminated, still in groups',missing_title:'Missing job title',missing_mobile:'Missing mobile number',title_mismatch:'Title mismatch',orphan_enabled:'No employee match'};
+var ALL=[], FILTER='all';
+
+function kpi(lab,val,sub){return '<div class="kpi"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';}
+
+function renderTree(nodes,depth){
+  return (nodes||[]).map(function(n){
+    var pad=12+depth*20;
+    return '<div class="row" style="padding-left:'+pad+'px"><span class="nm">'+esc(n.label)+'</span>'+
+      '<span class="ct">'+n.users+(n.enabled<n.users?(' · '+n.enabled+' enabled'):'')+'</span></div>'+
+      renderTree(n.children,depth+1);
+  }).join('');
+}
+
+function renderFindings(){
+  var rows=ALL.filter(function(f){return FILTER==='all'||f.code===FILTER;});
+  if(!rows.length) return '<div class="card"><table><tr><td style="color:var(--muted)">No findings in this view.</td></tr></table></div>';
+  var body=rows.map(function(f){
+    return '<tr><td>'+OS.pill(f.severity,SEV[f.severity]||'neutral')+'</td>'+
+      '<td><div class="who">'+esc(f.name||f.sam||f.upn||'-')+'</div><div class="sub2 mono">'+esc(f.upn||f.sam||'')+'</div></td>'+
+      '<td>'+esc(CODE_LABEL[f.code]||f.code)+'<div class="sub2">'+esc(f.detail||'')+'</div></td>'+
+      '<td>'+(f.current?'<span class="cur">'+esc(f.current)+'</span>':'')+
+        (f.expected?'<div class="exp">&rarr; '+esc(f.expected)+'</div>':'')+'</td></tr>';
+  }).join('');
+  return '<div class="card"><table><thead><tr><th>Severity</th><th>Account</th><th>Finding</th><th>Now / target</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function renderFilters(counts){
+  var codes=Object.keys(counts||{});
+  if(!codes.length) return '';
+  var btns='<button data-f="all" class="'+(FILTER==='all'?'on':'')+'">All ('+ALL.length+')</button>';
+  btns+=codes.map(function(c){return '<button data-f="'+c+'" class="'+(FILTER===c?'on':'')+'">'+esc(CODE_LABEL[c]||c)+' ('+counts[c]+')</button>';}).join('');
+  return '<div class="filters">'+btns+'</div>';
+}
+
+function draw(d){
+  ALL=d.findings||[];
+  var sync=d.lastSync;
+  if(!sync){
+    document.getElementById('body').innerHTML=
+      '<div class="empty"><h3>No AD snapshot yet</h3>'+
+      'The domain-controller agent has not posted an inventory. To connect it:'+
+      '<ol><li>Set <code>AGENT_TOKEN</code> as a server secret (a long random string).</li>'+
+      '<li>On the DC, put that token in the agent script and run <code>collect-ad-inventory.ps1</code> once to test.</li>'+
+      '<li>Register it as a scheduled task (every 15 minutes). See <code>dc-agent/README.md</code> in the repo.</li></ol>'+
+      '<div class="note">Agent token on server: <b>'+(d.agentConfigured?'set':'not set yet')+'</b>. The agent reads AD read-only; this page never writes back.</div></div>';
+    return;
+  }
+  var when=new Date(sync.at).toLocaleString();
+  var driftTotal=ALL.length;
+  var html=''+
+    '<div class="kpis">'+
+      kpi('AD accounts',d.adUserCount,d.enabledCount+' enabled')+
+      kpi('Matched to employees',d.matched,d.unmatched+' unmatched')+
+      kpi('Cleanup findings',driftTotal,(d.counts.terminated_enabled||0)+' critical')+
+      kpi('Last sync',(sync.users||d.adUserCount),when)+
+    '</div>'+
+    '<div class="sec"><div class="sec-h">Cleanup findings</div>'+renderFilters(d.counts)+'<div id="fwrap">'+renderFindings()+'</div></div>'+
+    '<div class="sec"><div class="sec-h">OU structure</div><div class="card"><div class="tree" style="padding:12px 6px">'+(renderTree(d.ouTree,0)||'<div style="padding:12px;color:var(--muted)">No OU data.</div>')+'</div></div></div>';
+  document.getElementById('body').innerHTML=html;
+  var fbar=document.querySelector('.filters');
+  if(fbar) fbar.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;FILTER=b.getAttribute('data-f');
+    document.querySelectorAll('.filters button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-f')===FILTER);});
+    document.getElementById('fwrap').innerHTML=renderFindings();});
+}
+
+function load(){
+  Promise.all([
+    fetch('/api/ad-audit').then(function(r){return r.json();}),
+    fetch('/api/ad-audit/status').then(function(r){return r.json();}).catch(function(){return {};})
+  ]).then(function(res){
+    var d=res[0]||{}; d.agentConfigured=(res[1]||{}).agentConfigured; draw(d);
+  }).catch(function(){ document.getElementById('body').innerHTML='<div class="empty">Could not load the audit. Try Refresh.</div>'; });
+}
+document.addEventListener('DOMContentLoaded',function(){
+  if(!window.OS){ setTimeout(arguments.callee,50); return; }
+  document.getElementById('refresh').addEventListener('click',load);
+  load();
+});
+</script>
+</body>
+</html>
