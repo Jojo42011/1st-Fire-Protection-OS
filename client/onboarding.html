@@ -496,30 +496,59 @@ function openReq(id){
       var items=g.items.map(itemRow).join('');
       return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span>'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+'</div>'+items+'</div>';
     }).join('');
-    // Offer one-click provisioning only when IT has pending group-add tasks to run.
-    var itGrp=(d.groups||[]).filter(function(g){return g.owner==='it';})[0];
-    var itPending=itGrp?itGrp.items.filter(function(i){return i.status==='pending'&&i.kind==='task'&&/^Add to (security|SharePoint) group:/.test(i.label);}).length:0;
-    var provBtn=itPending>0?'<button class="os-btn primary" id="provisionReq" title="Add this hire to each mapped Entra group via Microsoft 365">Provision access groups</button>':'';
+    // Offer AD account provisioning while the request is still open. We run hybrid identity (on-prem
+    // AD synced to Entra), so the OS generates a New-ADUser + Add-ADGroupMember script IT runs on a
+    // domain controller: it does not create the account cloud-side.
+    var provBtn=(ru.pending>0)?'<button class="os-btn primary" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run on a domain controller">Generate AD account script</button>':'';
     document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
       '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
       '<div style="display:flex;gap:9px">'+provBtn+'<button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
     document.getElementById('closeReq').addEventListener('click',closeReq);
     var pv=document.getElementById('provisionReq');
     if(pv) pv.addEventListener('click',function(){
-      pv.disabled=true; pv.textContent='Provisioning…';
-      fetch('/api/onboarding/'+id+'/provision',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
-        if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not provision.','bad'); pv.disabled=false; pv.textContent='Provision access groups'; return; }
-        var failed=(res.results||[]).filter(function(x){return !x.ok;});
-        if(res.done>0 && failed.length===0){ OS.toast('Added '+(req.name||'the hire')+' to '+res.done+' group'+(res.done===1?'':'s')+' in Microsoft 365.'); }
-        else if(res.done>0){ OS.toast('Added to '+res.done+' group(s); '+failed.length+' failed: '+(failed[0].error||'error'),'bad'); }
-        else { OS.toast('Nothing was provisioned: '+(failed.length?(failed[0].error||'group not found'):'no mapped Entra groups on these items'),'bad'); }
-        loadBoard();
-      }).catch(function(){ OS.toast('Could not reach the provisioning service.','bad'); pv.disabled=false; pv.textContent='Provision access groups'; });
+      pv.disabled=true; pv.textContent='Generating…';
+      fetch('/api/onboarding/'+id+'/provision-script').then(function(r){return r.json();}).then(function(res){
+        pv.disabled=false; pv.textContent='Generate AD account script';
+        if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not generate the script.','bad'); return; }
+        showScript(res);
+      }).catch(function(){ pv.disabled=false; pv.textContent='Generate AD account script'; OS.toast('Could not reach the provisioning service.','bad'); });
     });
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }
 function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; }
+// The generated on-prem AD script: shown in a modal to copy or download. Run on a domain controller.
+function showScript(res){
+  var warn=(res.warnings||[]).map(function(w){return '<div style="font-weight:600;font-size:12px;color:var(--critical,#8C1D18);margin:2px 0">'+esc(w)+'</div>';}).join('');
+  var meta='<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:8px">'+esc(res.upn||'')+
+    (res.securityGroups&&res.securityGroups.length?(' · '+res.securityGroups.length+' security group'+(res.securityGroups.length===1?'':'s')):' · no groups')+'</div>';
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px';
+  ov.innerHTML='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r-card,12px);max-width:820px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)">'+
+      '<div><div style="font-weight:600;font-size:14px">Active Directory account script</div>'+
+      '<div style="font-size:12px;color:var(--muted)">Run on a domain controller. Creates the account on-prem; it syncs up to Entra.</div></div>'+
+      '<button class="os-btn" id="scriptClose">Close</button></div>'+
+    '<div style="padding:14px 18px;overflow:auto">'+warn+meta+
+      '<pre id="scriptText" style="font-family:var(--mono);font-size:12px;line-height:1.55;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:0;white-space:pre;overflow:auto">'+esc(res.script||'')+'</pre></div>'+
+    '<div style="display:flex;gap:9px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--border)">'+
+      '<button class="os-btn" id="scriptDownload">Download .ps1</button>'+
+      '<button class="os-btn primary" id="scriptCopy">Copy script</button></div></div>';
+  document.body.appendChild(ov);
+  function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  ov.querySelector('#scriptClose').addEventListener('click',close);
+  ov.querySelector('#scriptCopy').addEventListener('click',function(){
+    var t=res.script||'';
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(function(){OS.toast('Script copied.');},function(){OS.toast('Copy failed: select the text manually.','bad');}); }
+    else { OS.toast('Copy is not available here: select the text manually.','bad'); }
+  });
+  ov.querySelector('#scriptDownload').addEventListener('click',function(){
+    var blob=new Blob([res.script||''],{type:'text/plain'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=res.filename||'provision.ps1';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+  });
+}
 function itemRow(it){
   var st, act='';
   if(it.status==='pending'){ st=OS.pill('Pending','neutral');
@@ -630,7 +659,7 @@ function catAddRow(kind){
 var CAT_SECTIONS=[['computer','Computers','Described by role, not a specific model. Every choice routes to an owner approval.'],
   ['software','Software','Routes to IT unless it needs an owner license approval.'],
   ['sharepoint','SharePoint groups','One per office plus function groups. Approval-gated where marked.'],
-  ['printer','Printers','Each office maps to an Entra security group (SG-PR-...). Picking it on the form adds the hire to that group, auto-provisioned through Graph when Microsoft is connected.']];
+  ['printer','Printers','Each office maps to an on-prem AD security group (SG-PR-...) that syncs to Entra. Picking it on the form adds that group to the hire, included in the generated New-ADUser script IT runs on a domain controller.']];
 function renderCatalog(cat){
   var html=CAT_SECTIONS.map(function(s){
     var kind=s[0], items=(cat[kind]||[]);

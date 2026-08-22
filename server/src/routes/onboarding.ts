@@ -28,6 +28,7 @@ import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
 import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
+import { buildProvisionScript, getAdSettings, setAdSettings } from '../services/adProvision';
 
 const router = Router();
 
@@ -165,6 +166,23 @@ router.post('/api/onboarding/intake-links', async (req, res) => {
 router.post('/api/onboarding/:id(\\d+)/provision', async (req, res) => {
   const out = await provisionRequestGroups(Number(req.params.id), actor(req));
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Generate the on-prem AD PowerShell (New-ADUser + Add-ADGroupMember) for a hire. 1st Fire runs
+ *  hybrid identity (AD synced to Entra), so accounts are created on-prem, not cloud-side via Graph.
+ *  IT runs the returned script on a domain controller. Pure generation: it writes no state. */
+router.get('/api/onboarding/:id(\\d+)/provision-script', (req, res) => {
+  const out = buildProvisionScript(Number(req.params.id));
+  res.status(out.ok ? 200 : 404).json(out);
+});
+
+/** The editable AD provisioning settings (target OU, UPN domain, default license SKU). */
+router.get('/api/onboarding/ad-settings', (_req, res) => {
+  res.json({ ok: true, settings: getAdSettings() });
+});
+router.put('/api/onboarding/ad-settings', (req, res) => {
+  const b = req.body || {};
+  res.json({ ok: true, settings: setAdSettings({ targetOu: b.targetOu, upnDomain: b.upnDomain, licenseSku: b.licenseSku }) });
 });
 
 /** Send (or re-send) the invite email for an existing link. */
