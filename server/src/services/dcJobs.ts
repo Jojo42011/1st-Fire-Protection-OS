@@ -1,5 +1,6 @@
 import { getDb } from '../db/index';
 import { applyCreateUserResult } from './onboardingAgent';
+import { enqueueLicense } from './entraLicensing';
 
 /**
  * DC agent job queue.
@@ -68,6 +69,10 @@ function dispatchSideEffects(job: any, result: any): void {
       objectGuid: result.objectGuid,
       groupsAdded: result.groupsAdded,
     });
+    // Queue the cloud-side license assignment; it retries over Graph until the account syncs to Entra.
+    const payload = safeParse(job.payload_json);
+    const upn = result.upn || payload.upn;
+    if (upn && payload.licenseSku) enqueueLicense(String(upn), String(payload.licenseSku), { type: 'onboarding_request', id: Number(job.ref_id) });
   }
 }
 

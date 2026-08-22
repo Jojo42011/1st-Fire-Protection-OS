@@ -1461,6 +1461,30 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_dc_jobs_status ON dc_jobs(status);
     CREATE INDEX IF NOT EXISTS idx_dc_jobs_ref ON dc_jobs(ref_type, ref_id);
   `);
+
+  // Entra license assignment queue (cloud-side, after AD Connect sync). When a hire's on-prem account
+  // is created it does not exist in Entra yet, so license assignment is queued and retried by the OS
+  // over Graph until the synced user appears, then the license is assigned. Not a DC job: the OS runs
+  // these against Graph directly.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS entra_license_queue (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      upn            TEXT NOT NULL,
+      sku_part       TEXT NOT NULL,            -- e.g. O365_BUSINESS_PREMIUM (Business Standard)
+      sku_id         TEXT,                     -- resolved Entra skuId (GUID), filled on success
+      usage_location TEXT DEFAULT 'US',
+      ref_type       TEXT,                     -- onboarding_request | ...
+      ref_id         INTEGER,
+      status         TEXT DEFAULT 'pending',   -- pending | assigned | error | expired
+      attempts       INTEGER DEFAULT 0,
+      last_error     TEXT,
+      created_at     TEXT DEFAULT (datetime('now')),
+      updated_at     TEXT DEFAULT (datetime('now')),
+      assigned_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_entra_lic_status ON entra_license_queue(status);
+    CREATE INDEX IF NOT EXISTS idx_entra_lic_ref ON entra_license_queue(ref_type, ref_id);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

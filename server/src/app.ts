@@ -12,6 +12,7 @@ import { sendAiosReport } from './services/aiosReport';
 import { sttEnabled } from './config/voice';
 import { runDueReports } from './services/reportScheduler';
 import { runDueSyncs } from './services/syncScheduler';
+import { processLicenseQueue } from './services/entraLicensing';
 
 import { gate, handleLogin, handleLogout, authRequired } from './auth';
 import { currentContext } from './os/scope';
@@ -340,6 +341,15 @@ setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s
 setInterval(() => { void runDueSyncs(); }, SYNC_TICK_MS).unref();
 // One detection pass at boot so the exceptions queue is populated before the first sync cycle.
 setTimeout(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] boot detect error:', (e as Error).message); } }, 1000 * 8).unref();
+
+// Entra license assignment: retry the queue every few minutes until each new hire's account has
+// synced to Entra and its license lands. Keyless-safe: a no-op when Graph is not connected.
+const LICENSE_MS = 1000 * 60 * 5;
+setInterval(() => {
+  void processLicenseQueue()
+    .then((r) => { if (r.assigned) console.log(`[license] assigned ${r.assigned} Entra license(s)`); })
+    .catch((e) => console.warn('[license] queue error:', (e as Error).message));
+}, LICENSE_MS).unref();
 
 // Scheduled-report delivery: check hourly for saved reports that are due and email them.
 const REPORTS_MS = 60 * 60 * 1000;

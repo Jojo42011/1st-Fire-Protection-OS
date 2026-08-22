@@ -31,6 +31,7 @@ import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
 import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings } from '../services/adProvision';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
+import { licenseStatusForRef } from '../services/entraLicensing';
 
 const router = Router();
 
@@ -197,16 +198,18 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
     password: plan.password,
     changePasswordAtLogon: true,
     securityGroups: plan.securityGroups,
+    licenseSku: plan.licenseSku, // the default SKU to assign cloud-side once the account syncs
   };
   const job = enqueue('ad_create_user', payload, { type: 'onboarding_request', id }, actor(req));
   res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: plan.securityGroups, warnings: plan.warnings });
 });
 
-/** The latest DC create-user job for a request, so the UI can show queued / done / error. */
+/** The latest DC create-user job for a request + the license-queue status, for the UI. */
 router.get('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
-  const job = latestJobForRef('onboarding_request', Number(req.params.id));
-  if (!job) return res.json({ ok: true, job: null });
-  res.json({ ok: true, job: { id: job.id, status: job.status, error: job.error, finished_at: job.finished_at } });
+  const id = Number(req.params.id);
+  const job = latestJobForRef('onboarding_request', id);
+  const license = licenseStatusForRef('onboarding_request', id);
+  res.json({ ok: true, job: job ? { id: job.id, status: job.status, error: job.error, finished_at: job.finished_at } : null, license });
 });
 
 /** The editable AD provisioning settings + the office and department lists + the real OUs from the AD
