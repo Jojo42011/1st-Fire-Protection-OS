@@ -1388,6 +1388,55 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_ad_user_groups_guid ON ad_user_groups(object_guid);
   `);
+
+  // Offboarding: the account/mailbox lifecycle after a termination. One request per departing person
+  // routes into dated items across the SOP stages (lock down, stop paying, cut the forward, retire).
+  // The destructive steps (delete AD object, delete mailbox) are approvals, not tasks. Execution
+  // against AD/365 lands in a later phase; for now the items carry action codes and due dates.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS offboarding_requests (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id       INTEGER,
+      object_guid       TEXT,                 -- the mirrored AD account, when known
+      name              TEXT NOT NULL,
+      upn               TEXT,
+      sam               TEXT,
+      manager_email     TEXT,
+      office            TEXT,
+      termination_date  TEXT,
+      last_working_date TEXT,
+      forward_to        TEXT,                 -- mailbox forwards here until forward_until
+      forward_until     TEXT,                 -- date the forward + auto-reply turn off
+      retain_until      TEXT,                 -- date the account/mailbox is retired
+      mailbox_action    TEXT DEFAULT 'delete',-- delete | hold  (per-person choice at retention)
+      source            TEXT DEFAULT 'manual',-- manual | backlog
+      status            TEXT DEFAULT 'open',  -- open | complete | cancelled
+      created_by        TEXT,
+      created_at        TEXT DEFAULT (datetime('now')),
+      updated_at        TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_offboarding_status ON offboarding_requests(status);
+    CREATE INDEX IF NOT EXISTS idx_offboarding_emp ON offboarding_requests(employee_id);
+
+    CREATE TABLE IF NOT EXISTS offboarding_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id    INTEGER NOT NULL,
+      owner         TEXT NOT NULL,            -- it | manager | accounting | hr
+      owner_label   TEXT,
+      stage         TEXT,                     -- s1 | s2 | s3 | s4
+      kind          TEXT NOT NULL,            -- task | timed | approval
+      action_code   TEXT,                     -- ad_disable | mbx_shared | license_remove | ...
+      label         TEXT NOT NULL,
+      detail        TEXT,
+      due_at        TEXT,                     -- date this step is meant to happen
+      status        TEXT DEFAULT 'pending',   -- pending | done | approved | rejected | skipped
+      snapshot_json TEXT,                     -- capture-before-change (e.g. group list), for audit
+      decided_by    TEXT,
+      decided_at    TEXT,
+      created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_offboarding_items_req ON offboarding_items(request_id);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

@@ -65,6 +65,7 @@ import operations from './routes/operations';
 import sharepoint from './routes/sharepoint';
 import google from './routes/google';
 import adAgent from './routes/agent';
+import offboarding from './routes/offboarding';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
@@ -157,6 +158,7 @@ app.use(operations);
 app.use(sharepoint);
 app.use(google);
 app.use(adAgent);
+app.use(offboarding);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 //
@@ -173,7 +175,7 @@ const PAGE_MODULE: Record<string, string> = {
   'ops-jobs.html': 'service', 'jobs.html': 'service', 'agreements.html': 'service', 'costing.html': 'service',
   'calls.html': 'service', 'reviews-hub.html': 'service', 'reviews.html': 'service',
   'review-requests.html': 'service', 'oncall.html': 'service', 'plans.html': 'service',
-  'people.html': 'people', 'onboarding.html': 'people',
+  'people.html': 'people', 'onboarding.html': 'people', 'offboarding.html': 'people',
   'accounts.html': 'service', 'sites.html': 'service', 'quotes.html': 'deficiencies',
   'pipeline.html': 'deficiencies', 'closer.html': 'deficiencies', 'estimates.html': 'deficiencies',
   'account.html': 'service',
@@ -220,6 +222,7 @@ app.get('/roster', page('roster.html'));
 app.get('/department', page('department.html'));
 app.get('/agent', page('agent.html'));
 app.get('/ad-audit', page('ad-audit.html'));
+app.get('/offboarding', page('offboarding.html'));
 app.get('/integrations', page('integrations.html'));
 app.get('/licenses', page('licenses.html'));
 app.get('/onboarding', page('onboarding.html'));

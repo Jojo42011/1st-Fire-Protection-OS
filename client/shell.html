@@ -419,6 +419,7 @@ var SCREENS = {
   oncall:      { src:'/oncall',      title:'On-call',             sub:'Who the after-hours line reaches, per office' },
   // PEOPLE
   people:      { src:'/people',      title:'People',              sub:'Onboarding, active employees, and offboarding' },
+  offboarding: { src:'/offboarding', title:'Offboarding',         sub:'The departure SOP and terminated-account cleanup' },
   // CUSTOMERS
   accounts:    { src:'/accounts',    title:'Accounts',            sub:'Customers, live from ServiceTrade' },
   sites:       { src:'/sites',       title:'Sites',               sub:'Every service location, searchable' },
@@ -458,7 +459,7 @@ var NAV = [
   { group:'Front desk', items:[ 'phones','reviews','oncall' ] },
   { group:'Reports',    flyout:true, icon:'bars',      items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
   { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
-  { group:'People',     flyout:true, icon:'users',     items:[ 'people' ] },
+  { group:'People',     flyout:true, icon:'users',     items:[ 'people','offboarding' ] },
   { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','adAudit','integrations','sync','settings','team','hire' ] }
 ];
 /* Which People module governs each screen, so the nav can hide areas a role does not include.
@@ -471,7 +472,7 @@ var SCREEN_MODULE = {
   moneyOverview:'receivables', receivables:'receivables', handoffs:'accounting', close:'accounting',
   service:'service', schedule:'service', deficiencies:'deficiencies', jobs:'service', agreements:'service', costing:'service',
   phones:'service', reviews:'service', oncall:'service',
-  people:'people',
+  people:'people', offboarding:'people',
   accounts:'service', sites:'service', quotes:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
   reportsExec:'overview', officePerf:'overview', reportsMoney:'accounting', reportsOps:'service', reportsPeople:'people', customReports:'overview',
   companyOffices:'overview', itSystems:'access', adAudit:'access', spend:'access', integrations:'access', sync:'access', settings:'access', team:'access', hire:'access'
@@ -563,7 +564,7 @@ var KEY_ICON={
   moneyOverview:'dollar', receivables:'invoice', handoffs:'exchange', close:'lock',
   service:'wrench', schedule:'calendar', deficiencies:'deficiency', jobs:'clipboard', agreements:'repeat', costing:'trend',
   phones:'phone', reviews:'star', oncall:'bell',
-  people:'users',
+  people:'users', offboarding:'users',
   accounts:'briefcase', sites:'pin', quotes:'invoice', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
   reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
   companyOffices:'building', itSystems:'server', adAudit:'users', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'

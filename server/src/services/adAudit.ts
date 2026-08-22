@@ -157,7 +157,7 @@ export interface DriftFinding {
   detail: string;
 }
 
-interface EmpRow {
+export interface EmpRow {
   id: number;
   legal_first_name: string | null;
   legal_last_name: string | null;
@@ -168,10 +168,36 @@ interface EmpRow {
   job_position: string | null;
   public_job_title: string | null;
   personal_phone: string | null;
+  manager: string | null;
+  office: string | null;
 }
 
 const norm = (v: string | null | undefined): string => (v || '').trim().toLowerCase();
 const digits = (v: string | null | undefined): string => (v || '').replace(/\D/g, '');
+
+export interface EmployeeIndex { byUpn: Map<string, EmpRow>; bySam: Map<string, EmpRow>; all: EmpRow[] }
+
+/** Load employees and index them by the identifiers an AD account can carry (UPN, work email, sAM). */
+export function buildEmployeeIndex(): EmployeeIndex {
+  const db = getDb();
+  const all = db.prepare(
+    `SELECT id, legal_first_name, legal_last_name, work_email, upn, ad_username, employment_status,
+            job_position, public_job_title, personal_phone, manager, office FROM employees`
+  ).all() as EmpRow[];
+  const byUpn = new Map<string, EmpRow>();
+  const bySam = new Map<string, EmpRow>();
+  for (const e of all) {
+    if (e.upn) byUpn.set(norm(e.upn), e);
+    if (e.work_email) byUpn.set(norm(e.work_email), e);
+    if (e.ad_username) bySam.set(norm(e.ad_username), e);
+  }
+  return { byUpn, bySam, all };
+}
+
+/** Match one AD user row (or {upn,email,sam}) to an employee via the index. */
+export function matchAdToEmployee(a: { upn?: string | null; email?: string | null; sam?: string | null }, idx: EmployeeIndex): EmpRow | undefined {
+  return (a.upn && idx.byUpn.get(norm(a.upn))) || (a.email && idx.byUpn.get(norm(a.email))) || (a.sam && idx.bySam.get(norm(a.sam))) || undefined;
+}
 
 /** Compare the AD mirror against the employee record and return every drift finding. */
 export function computeDrift(): { findings: DriftFinding[]; counts: Record<string, number>; matched: number; unmatched: number } {
@@ -179,21 +205,9 @@ export function computeDrift(): { findings: DriftFinding[]; counts: Record<strin
   const adUsers = db.prepare(`SELECT * FROM ad_users`).all() as any[];
   const groupCounts = db.prepare(`SELECT object_guid, COUNT(*) AS c FROM ad_user_groups GROUP BY object_guid`).all() as { object_guid: string; c: number }[];
   const groupsByGuid = new Map(groupCounts.map((g) => [g.object_guid, g.c]));
-  const emps = db.prepare(
-    `SELECT id, legal_first_name, legal_last_name, work_email, upn, ad_username, employment_status,
-            job_position, public_job_title, personal_phone FROM employees`
-  ).all() as EmpRow[];
 
-  // Index employees by the identifiers AD can carry: UPN, work email, and sAMAccountName.
-  const byUpn = new Map<string, EmpRow>();
-  const bySam = new Map<string, EmpRow>();
-  for (const e of emps) {
-    if (e.upn) byUpn.set(norm(e.upn), e);
-    if (e.work_email) byUpn.set(norm(e.work_email), e);
-    if (e.ad_username) bySam.set(norm(e.ad_username), e);
-  }
-  const matchEmp = (a: any): EmpRow | undefined =>
-    (a.upn && byUpn.get(norm(a.upn))) || (a.email && byUpn.get(norm(a.email))) || (a.sam && bySam.get(norm(a.sam))) || undefined;
+  const idx = buildEmployeeIndex();
+  const matchEmp = (a: any): EmpRow | undefined => matchAdToEmployee(a, idx);
 
   const empTitle = (e: EmpRow): string | null => e.public_job_title || e.job_position || null;
   const findings: DriftFinding[] = [];
