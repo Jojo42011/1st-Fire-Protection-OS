@@ -89,6 +89,10 @@
   .nav-block.collapsed .nav-group .chev{transform:rotate(0deg)}
   .nav-sect{display:flex;flex-direction:column;gap:1px;overflow:hidden}
   .nav-block.collapsed .nav-sect{display:none}
+  /* nav sections must not flex-shrink: overflow:hidden zeroes their min-height, so in a full
+     (uncollapsed) nav the flex column would otherwise squeeze the first section to nothing
+     instead of letting the pane scroll. */
+  .side nav>*{flex:0 0 auto}
   .nav-item{position:relative;border-radius:8px;padding:9px 11px;font-weight:400;font-size:13.5px;color:#475467;transition:background .18s var(--ease),color .18s var(--ease)}
   .nav-item:hover{background:#FAFAFA}
   .nav-item.on{background:#F5F6F8;color:#101828;font-weight:500}
