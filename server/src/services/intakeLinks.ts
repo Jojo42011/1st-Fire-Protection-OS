@@ -202,7 +202,13 @@ export function submitIntake(token: string, vals: any): { ok: true; request_id: 
     payload.start_date = hire.start_date || payload.start_date;
   }
   if (!payload.name) return { ok: false, reason: 'name_required' };
-  const out = createRequest(payload);
+  let out: ReturnType<typeof createRequest>;
+  try {
+    out = createRequest(payload);
+  } catch {
+    // The link stays open so the manager can retry; nothing is marked submitted on a failed create.
+    return { ok: false, reason: 'create_failed' };
+  }
   const requestId = out.request?.id ?? null;
   db.prepare(
     `UPDATE intake_links SET status = 'submitted', submitted_at = datetime('now'), submission_json = ?, request_id = ? WHERE token = ?`

@@ -345,7 +345,11 @@ document.getElementById('links').addEventListener('click',function(e){
       }); return;
     }
     fetch('/api/onboarding/intake-links/'+l.id+'/nudge',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-      OS.toast(d&&d.ok ? 'Nudge recorded for '+(l.recipient_name||'the manager')+'. (Email delivery is not wired yet, so send the link manually.)' : 'This link cannot be nudged.', d&&d.ok?undefined:'bad');
+      if(!d||!d.ok){ OS.toast('This link cannot be nudged.','bad'); return; }
+      var who=l.recipient_name||'the manager';
+      if(d.emailed&&d.emailed.ok){ OS.toast('Reminder emailed to '+d.emailed.to+'.'); }
+      else if(d.emailed&&d.emailed.error){ OS.toast('Nudge recorded, but the email did not send: '+d.emailed.error+' Send the link manually.','bad'); }
+      else { OS.toast('Nudge recorded for '+who+'.'); }
       loadLinks();
     });
     return;

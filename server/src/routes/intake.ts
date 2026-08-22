@@ -10,6 +10,9 @@ import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
 import { computerTierList, DOCK_PRICE } from '../services/onboardingAgent';
+import { sendMail, mailCredsPresent } from '../services/msGraphMail';
+import { senderFor } from '../services/mailSenders';
+import { intakeSubmittedHtml } from '../services/onboardingEmail';
 
 // The real offices, role templates, and the editable onboarding catalog, so the manager intake form
 // offers the exact same operational options as the internal full form (not a hardcoded few).
@@ -53,10 +56,43 @@ router.get('/api/intake/:token', (req, res) => {
 });
 
 /** Submit the form for a token. Single-use: creates the onboarding request and closes the link. */
-router.post('/api/intake/:token', (req, res) => {
+router.post('/api/intake/:token', async (req, res) => {
+  const link = resolveToken(req.params.token); // capture the bound hire before the link is closed
   const out = submitIntake(req.params.token, (req.body && req.body.vals) || req.body || {});
-  if (!out.ok) return res.status(out.reason === 'name_required' ? 400 : 410).json({ ok: false, reason: out.reason });
+  if (!out.ok) {
+    const status = out.reason === 'name_required' ? 400 : out.reason === 'create_failed' ? 500 : 410;
+    return res.status(status).json({ ok: false, reason: out.reason });
+  }
+  // Heads-up to the onboarding mailbox so the owning teams know a request is waiting. Keyless-safe:
+  // a no-op when mail is not connected, and never blocks or fails the submission for the manager.
+  void notifyOnboardingTeams(out, link.ok ? link.link : null, `${req.protocol}://${req.get('host')}`).catch(() => {});
   res.json({ ok: true, request_id: out.request_id, teams: out.teams });
 });
+
+/** Email the onboarding mailbox a summary of a fresh submission. Best-effort; failures are swallowed. */
+async function notifyOnboardingTeams(
+  out: { request_id: number; teams: string[] },
+  link: { job_title: string | null; office: string | null; recipient_name: string | null; employee_id: number | null } | null,
+  base: string,
+): Promise<void> {
+  if (!mailCredsPresent()) return;
+  const sender = senderFor('onboarding');
+  if (!sender || !sender.address) return;
+  const hire = link ? boundHire(link) : null;
+  const row = getDb().prepare(`SELECT name, job_position, start_date, manager_name FROM onboarding_requests WHERE id = ?`).get(out.request_id) as
+    | { name: string; job_position: string | null; start_date: string | null; manager_name: string | null }
+    | undefined;
+  if (!row) return;
+  const html = intakeSubmittedHtml({
+    hireName: row.name,
+    role: row.job_position || (link ? link.job_title : null),
+    office: (link ? link.office : null) || (hire ? hire.office : null),
+    start: row.start_date,
+    manager: row.manager_name || (link ? link.recipient_name : null),
+    teams: out.teams || [],
+    boardUrl: `${base}/onboarding`,
+  });
+  await sendMail(sender.address, `Onboarding intake submitted: ${row.name}`, html, { from: sender.address, fromName: sender.name });
+}
 
 export default router;

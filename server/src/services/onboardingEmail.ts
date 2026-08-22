@@ -28,3 +28,28 @@ export function intakeInviteHtml(o: {
     reason: `You are receiving this because you are the hiring manager for ${hire} at 1st Fire Protection.`,
   });
 }
+
+/** Internal heads-up sent to the onboarding mailbox the moment a manager submits an intake, so the
+ *  owning teams know work is waiting on the board instead of having to watch it. */
+export function intakeSubmittedHtml(o: {
+  hireName: string; role?: string | null; office?: string | null; start?: string | null;
+  manager?: string | null; teams: string[]; boardUrl: string;
+}): string {
+  const meta = [o.role, o.office].filter(Boolean).join(' · ') + (o.start ? ` · starts ${o.start}` : '');
+  const teamLine = o.teams.length
+    ? `Tasks were routed to ${o.teams.join(', ')}. Each owner has to complete its item before ${escapeHtml(o.hireName)} gets that access.`
+    : 'No equipment or access was requested, so there is nothing to route.';
+  return renderEmail({
+    eyebrow: 'Intake submitted',
+    body:
+      p(`${em(o.hireName)} was just submitted for onboarding${o.manager ? ` by ${escapeHtml(o.manager)}` : ''}.`) +
+      band(o.hireName, meta || 'new hire') +
+      p(teamLine, true),
+    cta: { label: 'Open the onboarding board', url: o.boardUrl },
+    note: 'Nothing is provisioned automatically. Every item on the board is a task or an approval a person completes.',
+    footerName: '1st Fire Protection Services, LLC',
+    footerMeta: 'Sent from the onboarding mailbox',
+    credentials: null,
+    reason: 'You are receiving this because you own onboarding provisioning at 1st Fire Protection.',
+  });
+}

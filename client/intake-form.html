@@ -492,7 +492,10 @@
       .then(function (res) {
         if (!res.ok || !res.d || !res.d.ok) {
           btn.disabled = false; btn.textContent = 'Done';
-          showFatal(res.d && res.d.reason === 'already_submitted' ? 'This form was already submitted. Nothing further is needed.' : 'Submission failed. Ask for a fresh link and try again.');
+          var reason = res.d && res.d.reason;
+          showFatal(reason === 'already_submitted' ? 'This form was already submitted. Nothing further is needed.'
+            : reason === 'create_failed' ? 'Something went wrong saving this. Your link is still valid, please try Submit again in a moment.'
+            : 'Submission failed. Ask for a fresh link and try again.');
           return;
         }
         var teams = (res.d.teams || []);

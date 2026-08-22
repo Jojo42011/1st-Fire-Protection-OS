@@ -171,10 +171,15 @@ router.post('/api/onboarding/intake-links/:id/resend', (req, res) => {
   res.json({ ok: true, link: out.link, url: `${base}/intake/${out.token}` });
 });
 
-/** Nudge: record that a reminder was due (no email backend yet). */
-router.post('/api/onboarding/intake-links/:id/nudge', (req, res) => {
-  const ok = nudgeIntakeLink(Number(req.params.id));
-  res.json({ ok, error: ok ? undefined : 'not_nudgeable' });
+/** Nudge: re-send the invite email to the manager and timestamp the reminder. Only for links that are
+ *  still open (sent/opened). Keyless-safe: records the nudge even when mail is not connected. */
+router.post('/api/onboarding/intake-links/:id/nudge', async (req, res) => {
+  const id = Number(req.params.id);
+  const recorded = nudgeIntakeLink(id);
+  if (!recorded) return res.json({ ok: false, error: 'not_nudgeable' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  const emailed = await emailInvite(id, base);
+  res.json({ ok: true, nudged: true, emailed });
 });
 
 /** Discard: void an outstanding link so it can no longer be opened or submitted. */
