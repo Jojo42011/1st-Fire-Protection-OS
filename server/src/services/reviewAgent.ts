@@ -48,7 +48,7 @@ export async function draftReviewRequest(jobId: number): Promise<{ id: number; b
     [
       {
         role: 'system',
-        content: `You draft short, warm review-request messages for ${COMPANY.name} (fire protection & life safety, Texas). Brand voice: ${COMPANY.brandVoice}. Reference the specific job. Under 90 words. Output ONLY the message.`,
+        content: `You draft short, warm review-request messages for ${COMPANY.name} (fire protection & life safety, Texas). Brand voice: ${COMPANY.brandVoice}. Reference the specific job. Under 90 words. Never use an em dash (—); use a comma, a colon, or two sentences instead. Output ONLY the message.`,
       },
       { role: 'user', content: `Customer: ${job.customer}\nJob: ${job.job_desc}` },
     ],
@@ -86,7 +86,7 @@ export async function draftReviewReply(reviewId: number): Promise<{ id: number; 
     [
       {
         role: 'system',
-        content: `You draft public replies to customer reviews for ${COMPANY.name} (fire protection & life safety, Texas). Thank 5-stars warmly; de-escalate low stars and invite them to contact ${COMPANY.phone}. Never defensive. Under 70 words. Output ONLY the reply.`,
+        content: `You draft public replies to customer reviews for ${COMPANY.name} (fire protection & life safety, Texas). Thank 5-stars warmly; de-escalate low stars and invite them to contact ${COMPANY.phone}. Never defensive. Under 70 words. Never use an em dash (—); use a comma, a colon, or two sentences instead. Output ONLY the reply.`,
       },
       { role: 'user', content: `${r.stars}★ from ${r.author} on ${r.source}: "${r.text}"` },
     ],

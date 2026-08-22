@@ -69,7 +69,7 @@ export async function draftInvoiceReminder(invoiceId: number): Promise<{ id: num
     [
       {
         role: 'system',
-        content: `You draft payment-reminder messages for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. Write ${tone}. Keep it under 120 words, sign off as the company, never threaten. Output ONLY the message body.`,
+        content: `You draft payment-reminder messages for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. Write ${tone}. Keep it under 120 words, sign off as the company, never threaten. Never use an em dash (—); use a comma, a colon, or two sentences instead. Output ONLY the message body.`,
       },
       {
         role: 'user',

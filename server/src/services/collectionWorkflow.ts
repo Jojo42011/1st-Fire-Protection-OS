@@ -85,7 +85,7 @@ async function draftDaily(inv: Invoice, tier: string, days: number): Promise<{ e
     [
       {
         role: 'system',
-        content: `You draft payment-reminder emails for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. This customer is on a daily reminder sequence; write ${tone}. Keep it under 120 words, sign off as the company, never threaten. Output ONLY the email body.`,
+        content: `You draft payment-reminder emails for ${COMPANY.name}, a fire protection & life safety company in Texas. Brand voice: ${COMPANY.brandVoice}. This customer is on a daily reminder sequence; write ${tone}. Keep it under 120 words, sign off as the company, never threaten. Never use an em dash (—); use a comma, a colon, or two sentences instead. Output ONLY the email body.`,
       },
       {
         role: 'user',
