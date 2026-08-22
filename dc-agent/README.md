@@ -6,16 +6,22 @@ cleanup (terminated but still enabled, terminated but still in groups, missing t
 enabled accounts with no matching employee). You see all of this on the **Active Directory** page
 under Company.
 
-This is phase 1: the agent only reads AD (`Get-ADUser`) and makes one HTTPS POST. It never changes
-AD. Creating users and remediation come in later phases.
+The agent does two things each run: it inventories AD (read-only) and posts the snapshot, then it
+pulls any pending write jobs from the OS (for example, create a new-hire account) and runs them,
+posting each result back. It is outbound-only: the DC polls the OS, nothing reaches into the DC.
 
 ## What it needs
 
 - A domain controller (or any domain-joined Windows host with the `ActiveDirectory` PowerShell
   module) that can reach `https://first-fp-os.fly.dev` outbound over 443.
-- An account that can read the directory (a standard domain user is enough to read; no admin rights
-  are needed for phase 1).
 - A shared token that matches `AGENT_TOKEN` on the server.
+- **A run account with the right permissions:**
+  - Inventory alone needs only **read** access to the directory.
+  - To run **create-user jobs** the account also needs rights to create user objects in the target
+    OU and to modify the mapped groups. The clean way is a dedicated service account with delegated
+    control over the new-hire OU (Create/Delete user objects) and write membership on the relevant
+    groups. Running the task as `SYSTEM` (the computer account) will inventory fine but cannot create
+    users, so create jobs will come back as access-denied.
 
 ## Setup
 

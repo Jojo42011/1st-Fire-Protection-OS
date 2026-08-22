@@ -499,24 +499,61 @@ function openReq(id){
     // Offer AD account provisioning while the request is still open. We run hybrid identity (on-prem
     // AD synced to Entra), so the OS generates a New-ADUser + Add-ADGroupMember script IT runs on a
     // domain controller: it does not create the account cloud-side.
-    var provBtn=(ru.pending>0)?'<button class="os-btn primary" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run on a domain controller">Generate AD account script</button>':'';
+    var canProv=(ru.pending>0);
+    var createBtn=canProv?'<button class="os-btn primary" id="createReq" title="Queue the account for the DC agent to create automatically">Create account on DC</button>':'';
+    var provBtn=canProv?'<button class="os-btn" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run by hand">Script instead</button>':'';
     document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
       '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
-      '<div style="display:flex;gap:9px">'+provBtn+'<button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
+      '<div style="display:flex;gap:9px">'+createBtn+provBtn+'<button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
     document.getElementById('closeReq').addEventListener('click',closeReq);
     var pv=document.getElementById('provisionReq');
     if(pv) pv.addEventListener('click',function(){
       pv.disabled=true; pv.textContent='Generating…';
       fetch('/api/onboarding/'+id+'/provision-script').then(function(r){return r.json();}).then(function(res){
-        pv.disabled=false; pv.textContent='Generate AD account script';
+        pv.disabled=false; pv.textContent='Script instead';
         if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not generate the script.','bad'); return; }
         showScript(res);
-      }).catch(function(){ pv.disabled=false; pv.textContent='Generate AD account script'; OS.toast('Could not reach the provisioning service.','bad'); });
+      }).catch(function(){ pv.disabled=false; pv.textContent='Script instead'; OS.toast('Could not reach the provisioning service.','bad'); });
+    });
+    var cb=document.getElementById('createReq');
+    if(cb) cb.addEventListener('click',function(){
+      if(!confirm('Queue this account for the DC agent to create in Active Directory?')) return;
+      cb.disabled=true; cb.textContent='Queuing…';
+      fetch('/api/onboarding/'+id+'/provision-job',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+        cb.disabled=false; cb.textContent='Create account on DC';
+        if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not queue the account.','bad'); return; }
+        showQueued(res);
+      }).catch(function(){ cb.disabled=false; cb.textContent='Create account on DC'; OS.toast('Could not reach the provisioning service.','bad'); });
     });
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }
 function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; }
+// Account queued for the DC agent: show the UPN and the one-time password once, for the admin to relay.
+function showQueued(res){
+  var warn=(res.warnings||[]).map(function(w){return '<div style="font-weight:600;font-size:12px;color:var(--critical,#8C1D18);margin:4px 0">'+esc(w)+'</div>';}).join('');
+  var groups=(res.securityGroups&&res.securityGroups.length)?'<div style="font-size:12px;color:var(--muted);margin-top:8px">Groups: '+res.securityGroups.map(esc).join(', ')+'</div>':'';
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px';
+  ov.innerHTML='<div style="background:var(--panel);border:1px solid var(--border);border-radius:var(--r-card,12px);max-width:520px;width:100%;overflow:hidden">'+
+    '<div style="padding:16px 20px;border-bottom:1px solid var(--border)"><div style="font-weight:600;font-size:15px">Account queued</div>'+
+      '<div style="font-size:12.5px;color:var(--muted);margin-top:3px">The DC agent will create this account on its next run (within ~15 minutes). The onboarding items complete automatically once it succeeds.</div></div>'+
+    '<div style="padding:16px 20px">'+warn+
+      '<div style="font-family:var(--mono);font-size:13px;margin-bottom:10px">'+esc(res.upn||'')+'</div>'+
+      '<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-family:var(--mono)">One-time password (relay to the hire, change at first sign-in)</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><code style="flex:1;font-family:var(--mono);font-size:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px">'+esc(res.password||'')+'</code>'+
+      '<button class="os-btn" id="qCopy">Copy</button></div>'+groups+
+      '<div style="font-size:11.5px;color:var(--muted);margin-top:10px">This password is shown once. Copy it now.</div></div>'+
+    '<div style="display:flex;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--border)"><button class="os-btn primary" id="qClose">Done</button></div></div>';
+  document.body.appendChild(ov);
+  function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); loadBoard(); }
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  ov.querySelector('#qClose').addEventListener('click',close);
+  ov.querySelector('#qCopy').addEventListener('click',function(){
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(res.password||'').then(function(){OS.toast('Password copied.');},function(){OS.toast('Copy failed.','bad');}); }
+    else OS.toast('Copy not available here.','bad');
+  });
+}
 // The generated on-prem AD script: shown in a modal to copy or download. Run on a domain controller.
 function showScript(res){
   var warn=(res.warnings||[]).map(function(w){return '<div style="font-weight:600;font-size:12px;color:var(--critical,#8C1D18);margin:2px 0">'+esc(w)+'</div>';}).join('');

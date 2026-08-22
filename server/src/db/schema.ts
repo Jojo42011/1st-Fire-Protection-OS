@@ -1437,6 +1437,30 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_offboarding_items_req ON offboarding_items(request_id);
   `);
+
+  // DC agent job queue: the OS enqueues write actions (create a user, etc.); the agent on the domain
+  // controller pulls pending jobs, executes them against AD, and posts results back. Outbound-only:
+  // the DC polls, nothing reaches into it. Destructive/onboarding side effects are applied when a
+  // job's result comes back (see services/dcJobs.ts).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dc_jobs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind          TEXT NOT NULL,            -- ad_create_user | (future kinds)
+      status        TEXT DEFAULT 'pending',   -- pending | claimed | done | error | cancelled
+      payload_json  TEXT NOT NULL,            -- instructions for the agent
+      result_json   TEXT,                     -- what the agent returned
+      error         TEXT,
+      ref_type      TEXT,                     -- onboarding_request | offboarding_request | ...
+      ref_id        INTEGER,
+      requested_by  TEXT,
+      attempts      INTEGER DEFAULT 0,
+      created_at    TEXT DEFAULT (datetime('now')),
+      claimed_at    TEXT,
+      finished_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_dc_jobs_status ON dc_jobs(status);
+    CREATE INDEX IF NOT EXISTS idx_dc_jobs_ref ON dc_jobs(ref_type, ref_id);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

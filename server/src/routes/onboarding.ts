@@ -28,7 +28,8 @@ import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
 import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
-import { buildProvisionScript, getAdSettings, setAdSettings } from '../services/adProvision';
+import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings } from '../services/adProvision';
+import { enqueue, latestJobForRef } from '../services/dcJobs';
 
 const router = Router();
 
@@ -174,6 +175,37 @@ router.post('/api/onboarding/:id(\\d+)/provision', async (req, res) => {
 router.get('/api/onboarding/:id(\\d+)/provision-script', (req, res) => {
   const out = buildProvisionScript(Number(req.params.id));
   res.status(out.ok ? 200 : 404).json(out);
+});
+
+/** Queue a create-user job for the DC agent to run (P2: onboarding auto-create). Returns the hire's
+ *  UPN and the one-time password once, for the People admin to relay. Refuses until the target OU is
+ *  set, so nothing is created into a placeholder container. */
+router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
+  const id = Number(req.params.id);
+  const plan = buildProvisionPlan(id);
+  if (!plan.ok) return res.status(404).json({ ok: false, error: plan.error || 'request not found' });
+  if (plan.ouIsPlaceholder) return res.status(400).json({ ok: false, error: 'Set the target OU in Integrations before creating accounts on the DC.' });
+  const payload = {
+    first: plan.first,
+    last: plan.last,
+    displayName: plan.displayName,
+    sam: plan.sam,
+    upn: plan.upn,
+    email: plan.upn,
+    ou: plan.ou,
+    password: plan.password,
+    changePasswordAtLogon: true,
+    securityGroups: plan.securityGroups,
+  };
+  const job = enqueue('ad_create_user', payload, { type: 'onboarding_request', id }, actor(req));
+  res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: plan.securityGroups, warnings: plan.warnings });
+});
+
+/** The latest DC create-user job for a request, so the UI can show queued / done / error. */
+router.get('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
+  const job = latestJobForRef('onboarding_request', Number(req.params.id));
+  if (!job) return res.json({ ok: true, job: null });
+  res.json({ ok: true, job: { id: job.id, status: job.status, error: job.error, finished_at: job.finished_at } });
 });
 
 /** The editable AD provisioning settings (target OU, UPN domain, default license SKU). */

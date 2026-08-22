@@ -104,3 +104,50 @@ $json = $payload | ConvertTo-Json -Depth 6 -Compress
 Write-Host "Posting $(@($users).Count) users..."
 $resp = Invoke-RestMethod -Method Post -Uri "$base/api/ad-agent/inventory" -Headers $headers -ContentType 'application/json' -Body $json
 Write-Host "Done. Server stored $($resp.stored) users and $($resp.groups) group memberships."
+
+# ---- Process write jobs from the OS (create users, etc.) ----------------------
+# The run account needs rights to create users in the target OU and modify the mapped groups. A
+# read-only account will inventory fine but every job will come back as an access-denied error.
+if (-not $Ping) {
+  try {
+    $jobsResp = Invoke-RestMethod -Method Get -Uri "$base/api/ad-agent/jobs" -Headers $headers
+    foreach ($job in @($jobsResp.jobs)) {
+      $result = @{}; $ok = $false; $err = $null
+      try {
+        switch ($job.kind) {
+          'ad_create_user' {
+            $p = $job.payload
+            $existing = Get-ADUser -Filter "SamAccountName -eq '$($p.sam)'" -ErrorAction SilentlyContinue
+            if ($existing) {
+              # Idempotent: if it already exists, report success with its guid rather than failing.
+              $result = @{ sam = $p.sam; upn = $p.upn; objectGuid = $existing.ObjectGUID.ToString(); note = 'already existed' }
+              $ok = $true
+            } else {
+              $sec = ConvertTo-SecureString $p.password -AsPlainText -Force
+              New-ADUser -Name "$($p.first) $($p.last)" -GivenName $p.first -Surname $p.last `
+                -DisplayName $p.displayName -SamAccountName $p.sam -UserPrincipalName $p.upn `
+                -EmailAddress $p.email -Path $p.ou -AccountPassword $sec `
+                -ChangePasswordAtLogon $true -Enabled $true
+              $added = @()
+              foreach ($g in @($p.securityGroups)) {
+                try { Add-ADGroupMember -Identity $g -Members $p.sam -ErrorAction Stop; $added += $g }
+                catch { Write-Warning "Group '$g' add failed: $($_.Exception.Message)" }
+              }
+              $created = Get-ADUser -Identity $p.sam
+              $result = @{ sam = $p.sam; upn = $p.upn; objectGuid = $created.ObjectGUID.ToString(); groupsAdded = $added }
+              $ok = $true
+            }
+          }
+          default { $err = "unknown job kind: $($job.kind)" }
+        }
+      } catch {
+        $err = $_.Exception.Message
+      }
+      $body = @{ ok = $ok; result = $result; error = $err } | ConvertTo-Json -Depth 5 -Compress
+      Invoke-RestMethod -Method Post -Uri "$base/api/ad-agent/jobs/$($job.id)/result" -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
+      Write-Host "Job $($job.id) [$($job.kind)]: $(if ($ok) { 'ok' } else { "error - $err" })"
+    }
+  } catch {
+    Write-Warning "Job processing failed: $($_.Exception.Message)"
+  }
+}

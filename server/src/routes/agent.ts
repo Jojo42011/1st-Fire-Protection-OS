@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, AdUserIn } from '../services/adAudit';
+import { claimPending, completeJob } from '../services/dcJobs';
 
 /**
  * On-prem AD agent endpoints (P1: read-only inventory) + the audit dashboard read.
@@ -47,6 +48,19 @@ router.post('/api/ad-agent/inventory', (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** The DC agent claims pending write jobs to execute (create user, etc.). Marks them claimed so the
+ *  same job is not handed out twice; stale claims are returned to the queue automatically. */
+router.get('/api/ad-agent/jobs', (_req, res) => {
+  res.json({ ok: true, jobs: claimPending() });
+});
+
+/** The DC agent reports the result of a job it ran. Success applies the job's side effects. */
+router.post('/api/ad-agent/jobs/:id(\\d+)/result', (req, res) => {
+  const b = req.body || {};
+  const out = completeJob(Number(req.params.id), { ok: !!b.ok, result: b.result, error: b.error });
+  res.status(out.ok ? 200 : 404).json(out);
 });
 
 /** The audit dashboard read: mirror stats, OU tree, and drift findings. Behind the normal user gate. */

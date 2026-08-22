@@ -95,15 +95,33 @@ export interface ProvisionScript {
   warnings?: string[];
 }
 
+export interface ProvisionPlan {
+  ok: boolean;
+  error?: string;
+  first: string;
+  last: string;
+  displayName: string;
+  sam: string;
+  upn: string;
+  ou: string;
+  ouIsPlaceholder: boolean;
+  password: string;
+  securityGroups: string[];
+  sharepointGroups: string[];
+  licenseSku: string | null;
+  warnings: string[];
+}
+
 /**
- * Build the New-ADUser + Add-ADGroupMember PowerShell for one onboarding request. Pure generation:
- * it reads the request and its pending IT group items, and writes no state. Regenerating yields a
- * fresh one-time password (the account has not been created yet, so that is safe).
+ * Compute the structured account plan for one onboarding request: name, UPN, sAM, OU, a fresh
+ * one-time password, and the mapped groups. Both the generated script and the DC create-user job
+ * are rendered from this, so they never drift. Reads only; writes no state.
  */
-export function buildProvisionScript(requestId: number): ProvisionScript {
+export function buildProvisionPlan(requestId: number): ProvisionPlan {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
-  if (!request) return { ok: false, error: 'request not found' };
+  const empty: ProvisionPlan = { ok: false, first: '', last: '', displayName: '', sam: '', upn: '', ou: '', ouIsPlaceholder: true, password: '', securityGroups: [], sharepointGroups: [], licenseSku: null, warnings: [] };
+  if (!request) return { ...empty, error: 'request not found' };
 
   const settings = getAdSettings();
   const warnings: string[] = [];
@@ -120,11 +138,11 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
 
   const fSan = sanitize(first);
   const lSan = sanitize(last);
-  if (!fSan || !lSan) warnings.push('Could not derive a clean first.last from the name: check $Sam and $Upn before running.');
+  if (!fSan || !lSan) warnings.push('Could not derive a clean first.last from the name: check the account name before running.');
   const sam = [fSan, lSan].filter(Boolean).join('.') || 'new.hire';
   const upn = `${sam}@${settings.upnDomain}`;
 
-  if (!settings.targetOu) warnings.push('No target OU is set yet, so the script uses a placeholder. Set the real OU distinguished name in Integrations, or edit $TargetOU before running.');
+  if (!settings.targetOu) warnings.push('No target OU is set yet. Set the real OU distinguished name in Integrations before creating the account.');
   const ou = settings.targetOu || OU_PLACEHOLDER;
 
   // The mapped on-prem security groups the hire needs (from the IT group items). SharePoint-group
@@ -140,23 +158,50 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
     m = /^Add to SharePoint group:\s*(.+)$/.exec(it.label);
     if (m) sharepointGroups.push(m[1].trim());
   }
+  const displayName = [first, last].filter(Boolean).join(' ') || request.name;
+
+  return {
+    ok: true,
+    first: first || sam,
+    last,
+    displayName,
+    sam,
+    upn,
+    ou,
+    ouIsPlaceholder: !settings.targetOu,
+    password: tempPassword(),
+    securityGroups,
+    sharepointGroups,
+    licenseSku: settings.licenseSku,
+    warnings,
+  };
+}
+
+/**
+ * Build the New-ADUser + Add-ADGroupMember PowerShell for one onboarding request. Pure generation:
+ * it reads the request and its pending IT group items, and writes no state. Regenerating yields a
+ * fresh one-time password (the account has not been created yet, so that is safe).
+ */
+export function buildProvisionScript(requestId: number): ProvisionScript {
+  const plan = buildProvisionPlan(requestId);
+  if (!plan.ok) return { ok: false, error: plan.error };
+  const { first, last, sam, upn, ou, ouIsPlaceholder, password: pw, securityGroups, sharepointGroups, displayName, licenseSku, warnings } = plan;
+
   // Confirm each security group name is one we recognise from the catalog, so a typo shows up.
   const knownGroups = new Set(catalogByKind('printer').map((p) => p.group_name).filter(Boolean) as string[]);
-  const displayName = [first, last].filter(Boolean).join(' ') || request.name;
-  const pw = tempPassword();
 
   const psq = (s: string) => `'${String(s).replace(/'/g, "''")}'`; // single-quoted PowerShell literal
 
   const lines: string[] = [];
   lines.push('# 1st Fire Protection - new-hire Active Directory provisioning');
-  lines.push(`# Hire: ${displayName}  (onboarding request #${requestId})`);
+  lines.push(`# Hire: ${displayName}`);
   lines.push('# Run on a domain controller (or a host with the ActiveDirectory module) as an account');
   lines.push('# that can create users in the target OU. Review the CONFIG block first.');
   lines.push('');
   lines.push('Import-Module ActiveDirectory');
   lines.push('');
   lines.push('# ---- CONFIG: verify before running ----');
-  lines.push(`$TargetOU     = ${psq(ou)}${settings.targetOu ? '' : '   # PLACEHOLDER - set the real OU distinguished name'}`);
+  lines.push(`$TargetOU     = ${psq(ou)}${ouIsPlaceholder ? '   # PLACEHOLDER - set the real OU distinguished name' : ''}`);
   lines.push(`$TempPassword = ${psq(pw)}   # one-time; the hire must change it at first sign-in`);
   lines.push('');
   lines.push('# ---- The new hire ----');
@@ -203,7 +248,7 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   }
 
   lines.push('# ---- Licensing (cloud-side, after this account syncs to Entra) ----');
-  if (settings.licenseSku) lines.push(`# Assign license SKU ${settings.licenseSku} in the M365 admin center or via Graph once the account appears in Entra.`);
+  if (licenseSku) lines.push(`# Assign license SKU ${licenseSku} in the M365 admin center or via Graph once the account appears in Entra.`);
   else lines.push('# Assign the new-hire license in the M365 admin center once the account appears in Entra. (Set a default SKU in Integrations to name it here.)');
   lines.push('# Force a sync instead of waiting: Start-ADSyncSyncCycle -PolicyType Delta   (run on the AAD Connect server)');
   lines.push('');

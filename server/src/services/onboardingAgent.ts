@@ -376,6 +376,24 @@ export async function provisionRequestGroups(
   return { ok: true, results, done, skipped };
 }
 
+/** Apply a completed ad_create_user DC job back to the onboarding request: mark the account and
+ *  security-group items done and stamp the hire's AD identity. Called when the agent reports success. */
+export function applyCreateUserResult(requestId: number, result: { sam?: string; upn?: string; objectGuid?: string; groupsAdded?: string[] }): void {
+  const db = getDb();
+  const req = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
+  if (!req) return;
+  const items = db.prepare(`SELECT id, label FROM onboarding_items WHERE request_id = ? AND owner = 'it' AND kind = 'task' AND status = 'pending'`).all(requestId) as { id: number; label: string }[];
+  const markDone = db.prepare(`UPDATE onboarding_items SET status = 'done', decided_by = 'dc-agent', decided_at = datetime('now') WHERE id = ?`);
+  for (const it of items) {
+    if (/^Add to security group:/.test(it.label) || it.label === 'Set up company email') markDone.run(it.id);
+  }
+  if (req.employee_id && (result.sam || result.upn)) {
+    db.prepare(`UPDATE employees SET ad_username = COALESCE(?, ad_username), upn = COALESCE(?, upn), updated_at = datetime('now') WHERE id = ?`)
+      .run(result.sam || null, result.upn || null, req.employee_id);
+  }
+  recomputeRequestStatus(requestId);
+}
+
 /** All items for a request, ordered by the owner display order then id. */
 function itemsFor(requestId: number): OnboardingItem[] {
   const rows = getDb()
