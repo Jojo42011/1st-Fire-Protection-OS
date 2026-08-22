@@ -27,7 +27,7 @@
   .num{font-variant-numeric:tabular-nums}
   .money{color:var(--money);font-weight:700}
   .oc{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;border-radius:999px;padding:4px 10px}
-  .oc.on{color:var(--green);background:var(--green-bg)} .oc.off{color:#C62828;background:rgba(198,40,40,.10)}
+  .oc.on{color:var(--green);background:var(--green-bg)} .oc.off{color:#8C1D18;background:rgba(198,40,40,.10)}
   .oc .d{width:6px;height:6px;border-radius:50%;background:currentColor}
   .best{font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--green);margin-left:6px}
 </style>
@@ -58,7 +58,7 @@
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function money(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
 function moneyK(n){n=Number(n||0);return n>=1e6?('$'+(n/1e6).toFixed(1)+'M'):n>=1e3?('$'+Math.round(n/1e3)+'k'):('$'+Math.round(n));}
-function wrColor(p){return p>=90?'var(--green)':p>=75?'#8a6d0b':'#C62828';}
+function wrColor(p){return p>=90?'var(--green)':p>=75?'#8a6d0b':'#8C1D18';}
 
 function render(d){
   var t=d.totals||{};

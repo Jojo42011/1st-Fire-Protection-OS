@@ -33,14 +33,14 @@
   .pill{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:11px;border-radius:999px;padding:3px 10px}
   .pill.ready{color:var(--green);background:var(--green-bg,rgba(31,122,77,.12))}
   .pill.at_risk{color:#8a6d0b;background:rgba(185,134,11,.14)}
-  .pill.blocked{color:#C62828;background:rgba(198,40,40,.12)}
+  .pill.blocked{color:#8C1D18;background:rgba(140,29,24,.12)}
   .team{display:inline-block;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;border-radius:6px;padding:2px 7px;color:#fff}
   .st{font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px;background:var(--fill);color:var(--muted)}
   .st.pending{background:rgba(75,87,201,.12);color:var(--indigo)}
-  .st.blocked{background:rgba(198,40,40,.1);color:#C62828}
+  .st.blocked{background:rgba(140,29,24,.1);color:#8C1D18}
   .st.awaiting_approval{background:rgba(185,134,11,.14);color:#8a6d0b}
   .st.completed,.st.approved,.st.provisioned{background:rgba(31,122,77,.12);color:var(--green)}
-  .st.rejected,.st.failed{background:rgba(198,40,40,.12);color:#C62828}
+  .st.rejected,.st.failed{background:rgba(140,29,24,.12);color:#8C1D18}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
   @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
@@ -56,7 +56,7 @@
   .backlink{font-weight:600;font-size:12.5px;color:var(--indigo);cursor:pointer}
   .btn-xs{font-weight:700;font-size:11px;color:var(--ink-2);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:4px 9px;cursor:pointer}
   .btn-xs:hover{border-color:var(--border-strong)}
-  .btn.danger,.btn-xs.danger{color:#C62828;border-color:rgba(198,40,40,.35)}
+  .btn.danger,.btn-xs.danger{color:#8C1D18;border-color:rgba(140,29,24,.35)}
   .empadd{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 14px;border-top:1px solid var(--border);background:var(--panel-alt,var(--fill))}
   .empadd input,.empadd select{box-sizing:border-box;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--ink);padding:8px 10px;font-size:13px}
   .st.available,.st.returned,.st.transferred,.st.retired,.st.waived,.st.revoked,.st.expired,.st.missing,.st.damaged{background:var(--fill);color:var(--muted)}
@@ -109,7 +109,7 @@
 var ME=null, CAT=null;
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function j(url,opts){return fetch(url,Object.assign({headers:{'content-type':'application/json'}},opts)).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});});}
-function teamColor(k){return ({it:'#4b57c9',hr:'#B9860B',safety:'#1f7a4d',accounting:'#5b86ad',executive:'#C62828'})[k]||'#5b6675';}
+function teamColor(k){return ({it:'#475467',hr:'#8A6A2F',safety:'#1f7a4d',accounting:'#5b86ad',executive:'#8C1D18'})[k]||'#5b6675';}
 function human(s){return String(s||'').replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}
 function has(role){return ME&&ME.roles&&(ME.roles.indexOf('people_admin')>=0||ME.roles.indexOf(role)>=0);}
 
@@ -299,7 +299,7 @@ function importBamboo(){
   j('/api/people/import/bamboo',{method:'POST',body:JSON.stringify({})}).then(function(r){
     if(!r.ok){
       var why=(r.body&&r.body.reason)==='bamboo_not_connected'?'BambooHR is not connected on the server.':(r.body&&r.body.reason)==='bamboo_fetch_failed'?'Could not reach BambooHR (check the API key). No changes were made.':(r.body&&r.body.error||'Import failed.');
-      if(msg){msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p style="color:var(--danger,#C62828)">'+esc(why)+'</p></div>';}
+      if(msg){msg.innerHTML='<div class="card card-pad" style="margin-bottom:12px"><p style="color:var(--danger,#8C1D18)">'+esc(why)+'</p></div>';}
       if(btn){btn.disabled=false;btn.textContent='Import from BambooHR';}
       return;
     }
