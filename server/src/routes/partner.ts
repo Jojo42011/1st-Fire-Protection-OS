@@ -56,7 +56,7 @@ router.post('/api/partner/leads', (req, res) => {
     const name = a.company || a.name;
     if (!name) continue;
     const addr = [a.address, a.city, a.state].filter(Boolean).join(', ');
-    ins.run(name, a.phone || '', addr, a.need || 'Security customer with no fire/life-safety vendor on file — inspection + service opportunity', 'VDS cross-sell');
+    ins.run(name, a.phone || '', addr, a.need || 'Security customer with no fire/life-safety vendor on file: inspection + service opportunity', 'VDS cross-sell');
     added++;
   }
   return res.json({ ok: true, added });

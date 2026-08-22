@@ -59,7 +59,7 @@ const NEXT_MOVE: Record<string, { next: string; cta: string }> = {
   nudge: { next: 'Value email due next', cta: 'Send value' },
   value: { next: 'Last call if it stays quiet', cta: 'Send early' },
   last_call: { next: 'Last-call draft is waiting on you', cta: 'Review draft' },
-  stalled: { next: 'Stalled — you decide', cta: 'Mark outcome' },
+  stalled: { next: 'Stalled: you decide', cta: 'Mark outcome' },
 };
 
 function touchCount(quoteId: number): number {
@@ -72,10 +72,10 @@ const money = (cents: number | null) => '$' + Math.round((cents || 0) / 100).toL
 function templateFollowup(tier: string, customer: string, work: string, value: string): string {
   const firstName = customer.split(/\s|—/)[0];
   if (tier === 'last_call')
-    return `${firstName} — last note from me on the ${work.toLowerCase()} quote (${value}). If it's a no for this budget cycle just say so and I'll close the file; otherwise I'd like to get it scheduled before it ages out. — ${COMPANY.name}`;
+    return `${firstName}, last note from me on the ${work.toLowerCase()} quote (${value}). If it's a no for this budget cycle just say so and I'll close the file; otherwise I'd like to get it scheduled before it ages out. ${COMPANY.name}`;
   if (tier === 'value')
-    return `Hi ${firstName} — following up on the ${work.toLowerCase()} quote. Two things worth flagging: it's ${value} at today's rate card, and getting it on the schedule now avoids the next inspection cycle writing it up. Happy to walk the line items. — ${COMPANY.name}`;
-  return `Hi ${firstName} — just making sure the ${work.toLowerCase()} quote (${value}) landed. Any questions on the scope or the number? Glad to adjust. — ${COMPANY.name}`;
+    return `Hi ${firstName}, following up on the ${work.toLowerCase()} quote. Two things worth flagging: it's ${value} at today's rate card, and getting it on the schedule now avoids the next inspection cycle writing it up. Happy to walk the line items. ${COMPANY.name}`;
+  return `Hi ${firstName}, just making sure the ${work.toLowerCase()} quote (${value}) landed. Any questions on the scope or the number? Glad to adjust. ${COMPANY.name}`;
 }
 
 export interface Followup {
@@ -190,7 +190,7 @@ function realPipelineSummary(office = '') {
   const won = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_WON)})${oc}`);
   const lost = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_LOST)})${oc}`);
   const decided = won + lost;
-  const winRate = decided > 0 ? Math.round((won / decided) * 100) + '%' : '—';
+  const winRate = decided > 0 ? Math.round((won / decided) * 100) + '%' : 'n/a';
 
   // open aggregates over the open book (in scope)
   const openCount = scalar(`SELECT COUNT(*) AS v FROM quotes WHERE source = 'servicetrade' AND lower(stage) IN (${sqlList(ST_OPEN)})${oc}`);
@@ -218,7 +218,7 @@ function realPipelineSummary(office = '') {
       if (d >= stalledAfterDays) stalled++;
     }
   }
-  const avgDays = agedN > 0 ? String(Math.round(agedSum / agedN)) : '—';
+  const avgDays = agedN > 0 ? String(Math.round(agedSum / agedN)) : 'n/a';
 
   const quotes = rows.map(shapeQuoteRow);
   const needsGrp = new Set(['awaiting price', 'last call', 'stalled']);
@@ -237,7 +237,7 @@ function realPipelineSummary(office = '') {
     const customer = urgent.customer || urgent.title || 'the customer';
     activeDraft = {
       quoteId: urgent.id,
-      title: `${customer} — ${urgent.title || 'quoted work'}`,
+      title: `${customer}: ${urgent.title || 'quoted work'}`,
       value: `${value} on the line`,
       tier: 'last call',
       body: templateFollowup('last_call', customer, urgent.title || 'the quoted work', value),
@@ -312,7 +312,7 @@ export function getPipelineSummary(office = '') {
     const customer = urgent.customer || urgent.title || 'the customer';
     activeDraft = {
       quoteId: urgent.id,
-      title: `${customer} — ${urgent.title || 'quoted work'}`,
+      title: `${customer}: ${urgent.title || 'quoted work'}`,
       value: `${value} on the line`,
       tier: 'last call · day 7',
       body: templateFollowup('last_call', customer, urgent.title || 'the quoted work', value),

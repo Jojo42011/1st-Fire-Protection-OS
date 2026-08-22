@@ -132,7 +132,7 @@ router.post('/api/licenses/import', (req, res) => {
       return res.status(400).json({ ok: false, error: 'provide csv text or a seats array' });
     }
 
-    if (!rows.length) return res.status(400).json({ ok: false, error: 'no seats parsed — check the header row (needs an email or name column)' });
+    if (!rows.length) return res.status(400).json({ ok: false, error: 'no seats parsed: check the header row (needs an email or name column)' });
     const { imported } = importManualSeats(vendor, rows, product);
     res.json({ ok: true, vendor, imported, totals: reconcile().totals });
   } catch (err) {

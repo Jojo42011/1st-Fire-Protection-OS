@@ -93,7 +93,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
     lastUsedAt: latest(`SELECT MAX(started_at) AS v FROM calls`),
     notes: telephonyEnabled()
       ? 'Answers the Riverton line via Vapi/Twilio; failures30d = missed calls.'
-      : 'Wired but no telephony provider connected — calls in the log are seeded/manual entries.',
+      : 'Wired but no telephony provider connected: calls in the log are seeded/manual entries.',
   });
 
   capabilities.push({
@@ -138,7 +138,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
       `SELECT COUNT(*) AS v FROM invoice_workflow_log WHERE status = 'failed' AND ${IN_30D('created_at')}`
     ),
     lastUsedAt: latest(`SELECT MAX(created_at) AS v FROM invoice_workflow_log`),
-    notes: `${dunningSent} touches actually sent, ${dunningSimulated} simulated (drafted+logged only) in last 30d — simulated means the email/SMS integration is not connected.`,
+    notes: `${dunningSent} touches actually sent, ${dunningSimulated} simulated (drafted+logged only) in last 30d (simulated means the email/SMS integration is not connected).`,
   });
 
   capabilities.push({
@@ -177,7 +177,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
     ),
     failures30d: 0,
     lastUsedAt: latest(`SELECT MAX(created_at) AS v FROM conversations`),
-    notes: provider === 'none' ? 'Running in reasoned-template mode — no LLM key configured.' : '',
+    notes: provider === 'none' ? 'Running in reasoned-template mode (no LLM key configured).' : '',
   });
 
   capabilities.push({
@@ -227,7 +227,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
       runs30d: 0,
       failures30d: 0,
       lastUsedAt: null,
-      notes: `${integ.status} — ${integ.why} (per-integration usage is not metered)`,
+      notes: `${integ.status}: ${integ.why} (per-integration usage is not metered)`,
     });
   }
 
@@ -244,12 +244,12 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
   const manualHotspots: string[] = [];
   if (!integrationConnected('servicetrade')) {
     manualHotspots.push(
-      'Invoices and completed jobs are keyed in by hand — ServiceTrade (the field-service system of record) is not synced, so records are re-entered manually.'
+      'Invoices and completed jobs are keyed in by hand: ServiceTrade (the field-service system of record) is not synced, so records are re-entered manually.'
     );
   }
   if (!integrationConnected('gmail') && !integrationConnected('sms')) {
     manualHotspots.push(
-      'Dunning emails and texts are drafted and logged but only SIMULATED — a human must deliver every reminder manually until an email/SMS integration is connected.'
+      'Dunning emails and texts are drafted and logged but only SIMULATED: a human must deliver every reminder manually until an email/SMS integration is connected.'
     );
   }
   if (!integrationConnected('google_business') && !integrationConnected('facebook')) {
@@ -258,14 +258,14 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
     );
   }
   if (!telephonyEnabled()) {
-    manualHotspots.push('No telephony provider connected — call records are entered manually.');
+    manualHotspots.push('No telephony provider connected: call records are entered manually.');
   }
   manualHotspots.push(
     'All outbound sends (invoice reminders, review requests, review replies) are human-approved drafts; approval happens in the dashboard, delivery depends on integrations.'
   );
   if (!getState('last_backup_at')) {
     manualHotspots.push(
-      'Database backups are manual — an operator must download /api/admin/backup; no scheduled backup exists.'
+      'Database backups are manual: an operator must download /api/admin/backup; no scheduled backup exists.'
     );
   }
 
@@ -299,7 +299,7 @@ export function buildIntrospectionSnapshot(): IntrospectionSnapshot {
     counts,
     notes:
       provider === 'none'
-        ? 'LLM provider not configured — drafting agents run in reasoned-template mode.'
+        ? 'LLM provider not configured: drafting agents run in reasoned-template mode.'
         : `LLM provider: ${provider}.`,
   };
 }

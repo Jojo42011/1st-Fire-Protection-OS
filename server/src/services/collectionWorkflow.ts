@@ -55,7 +55,7 @@ function emailBody(inv: Invoice, tier: string, days: number): string {
       : `Whenever you get a chance, we'd appreciate settling the balance. If there's any question about the work, just reply and we'll sort it out.`,
     '',
     `Thank you for trusting ${COMPANY.name} with your fire protection & life safety.`,
-    `— ${COMPANY.name} · ${COMPANY.phone}`,
+    `${COMPANY.name} · ${COMPANY.phone}`,
   ].join('\n');
 }
 

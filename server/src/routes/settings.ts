@@ -56,7 +56,7 @@ router.post('/api/settings/servicetrade/mode', (req, res) => {
   try {
     getDb()
       .prepare(`INSERT INTO sync_log (direction, text, state, object) VALUES ('out', ?, 'applied', NULL)`)
-      .run(mode === 'read_write' ? 'Write mode ENABLED — the app can now change ServiceTrade' : 'Switched to read-only — ServiceTrade is protected');
+      .run(mode === 'read_write' ? 'Write mode ENABLED: the app can now change ServiceTrade' : 'Switched to read-only: ServiceTrade is protected');
   } catch {
     /* sync_log is best-effort */
   }

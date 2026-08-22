@@ -34,7 +34,7 @@ function templateRequest(job: Job): string {
     '',
     `It takes about a minute and helps other Texas businesses find a licensed & insured team they can trust.`,
     '',
-    `— ${COMPANY.name} · ${COMPANY.phone}`,
+    `${COMPANY.name} · ${COMPANY.phone}`,
   ].join('\n');
 }
 
@@ -68,12 +68,12 @@ export async function draftReviewRequest(jobId: number): Promise<{ id: number; b
 function templateReply(r: Review): string {
   const stars = r.stars || 0;
   if (stars >= 4) {
-    return `Thank you so much, ${r.author || 'and'} — it means a lot to the whole ${COMPANY.name} crew. Keeping your people and property safe is exactly why we do this. We're here anytime you need us.`;
+    return `Thank you so much, ${r.author || 'and'}, it means a lot to the whole ${COMPANY.name} crew. Keeping your people and property safe is exactly why we do this. We're here anytime you need us.`;
   }
   if (stars === 3) {
-    return `Thanks for the honest feedback, ${r.author || ''}. We want every visit to be a five-star one — please reach out to us directly at ${COMPANY.phone} so we can make it right.`;
+    return `Thanks for the honest feedback, ${r.author || ''}. We want every visit to be a five-star one. Please reach out to us directly at ${COMPANY.phone} so we can make it right.`;
   }
-  return `We're sorry your experience fell short, ${r.author || ''}. That's not the standard we hold ourselves to. Please contact us directly at ${COMPANY.phone} — we'd like to understand what happened and make it right.`;
+  return `We're sorry your experience fell short, ${r.author || ''}. That's not the standard we hold ourselves to. Please contact us directly at ${COMPANY.phone}. We'd like to understand what happened and make it right.`;
 }
 
 export async function draftReviewReply(reviewId: number): Promise<{ id: number; body: string }> {

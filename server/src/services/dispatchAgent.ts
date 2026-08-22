@@ -143,7 +143,7 @@ export function draftReminder(appointmentId: number): { appointmentId: number; b
   const a = db.prepare(`SELECT * FROM appointments WHERE id = ?`).get(appointmentId) as Appointment | undefined;
   if (!a) throw new Error(`appointment ${appointmentId} not found`);
   const when = `${dayLabel(a.dow)}, ${a.window}`;
-  const body = `Hi — reminder from ${COMPANY.name}: your ${a.skill} visit is ${when}. Reply C to confirm or R to reschedule and we'll move it.`;
+  const body = `Reminder from ${COMPANY.name}: your ${a.skill} visit is ${when}. Reply C to confirm or R to reschedule and we'll move it.`;
   createApproval({
     agent_key: 'dispatch',
     kind: 'send_sms',
@@ -151,7 +151,7 @@ export function draftReminder(appointmentId: number): { appointmentId: number; b
     title: `Reminder · ${a.customer}`,
     stake: when,
     body,
-    trail: `Two go out per appointment — ${TRADE_CONFIG.dispatch.reminderHoursBefore[0]} hours out and the morning of`,
+    trail: `Two go out per appointment: ${TRADE_CONFIG.dispatch.reminderHoursBefore[0]} hours out and the morning of`,
     subject_type: 'appointment',
     subject_id: appointmentId,
   });

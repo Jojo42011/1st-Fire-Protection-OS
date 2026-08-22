@@ -23,7 +23,7 @@ interface DraftRow {
 }
 
 function ageInfo(iso: string | null): { days: number | null; label: string; tone: string } {
-  if (!iso) return { days: null, label: '—', tone: 'var(--muted)' };
+  if (!iso) return { days: null, label: 'n/a', tone: 'var(--muted)' };
   const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
   const label = days < 1 ? 'today' : days < 14 ? `${days}d` : days < 60 ? `${Math.round(days / 7)}w` : `${Math.round(days / 30)}mo`;
   const tone = days < 7 ? 'var(--green)' : days < 30 ? 'var(--amber-ink)' : 'var(--money)';
@@ -56,10 +56,10 @@ function realWorklist(db: ReturnType<typeof getDb>, office = '') {
     const age = ageInfo(q.st_updated_at);
     return {
       id: q.id,
-      number: q.number || '—',
+      number: q.number || 'n/a',
       customer: q.customer || 'Prospect',
       title: q.title || 'Untitled quote',
-      amount: q.amount_cents ? money(Math.round(q.amount_cents / 100)) : '—',
+      amount: q.amount_cents ? money(Math.round(q.amount_cents / 100)) : 'n/a',
       needsPrice: !q.amount_cents,
       age: age.label,
       ageTone: age.tone,
@@ -73,8 +73,8 @@ function realWorklist(db: ReturnType<typeof getDb>, office = '') {
       drafts: rows.length,
       value: money(Math.round(totalCents / 100)),
       unpriced,
-      oldestLabel: oldest ? ageInfo(new Date(Date.now() - oldest * 86400000).toISOString()).label : '—',
-      avgLabel: avg ? (avg < 14 ? `${avg}d` : `${Math.round(avg / 7)}w`) : '—',
+      oldestLabel: oldest ? ageInfo(new Date(Date.now() - oldest * 86400000).toISOString()).label : 'n/a',
+      avgLabel: avg ? (avg < 14 ? `${avg}d` : `${Math.round(avg / 7)}w`) : 'n/a',
     },
     worklist,
   };

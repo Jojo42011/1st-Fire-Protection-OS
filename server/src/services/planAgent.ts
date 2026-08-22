@@ -63,7 +63,7 @@ export function dueForVisit(): Agreement[] {
 function renewalBody(a: Agreement): string {
   const first = a.customer.split(/\s|—/)[0];
   const sites = /(\d+)\s*sites?/i.exec(a.plan_type)?.[0] || 'the same buildings';
-  return `Hi ${first} — your ${a.plan_type.split('·')[0].trim().toLowerCase()} agreement renews ${fmtDate(a.renews_at)}. Same ${sites}, same cadence, and we're holding your rate at ${money(a.price)}/yr. Say the word and I'll extend it another year; nothing changes on your end. — ${COMPANY.name}`;
+  return `Hi ${first}, your ${a.plan_type.split('·')[0].trim().toLowerCase()} agreement renews ${fmtDate(a.renews_at)}. Same ${sites}, same cadence, and we're holding your rate at ${money(a.price)}/yr. Say the word and I'll extend it another year; nothing changes on your end. ${COMPANY.name}`;
 }
 
 /** Draft a renewal (GATED). raiseRate → a price change (quote_price, sensitive); otherwise a
@@ -80,8 +80,8 @@ export function draftRenewal(agreementId: number, raiseRate = false): { agreemen
       risk: 'sensitive',
       title: `Rate change · ${a.customer}`,
       stake: `${money(Math.round(a.price * 1.06))}/yr`,
-      body: `Propose renewing ${a.customer} at ${money(Math.round(a.price * 1.06))}/yr (was ${money(a.price)}/yr) — a 6% adjustment on the ${a.plan_type}.`,
-      trail: 'New recurring price — needs your yes before it goes to the customer',
+      body: `Propose renewing ${a.customer} at ${money(Math.round(a.price * 1.06))}/yr (was ${money(a.price)}/yr), a 6% adjustment on the ${a.plan_type}.`,
+      trail: 'New recurring price: needs your yes before it goes to the customer',
       subject_type: 'account',
       subject_id: a.account_id || agreementId,
     });
@@ -119,7 +119,7 @@ export function proposePlan(index: number): { customer: string } {
     risk: 'routine',
     title: `Propose a plan · ${c.customer}`,
     stake: `${money(c.annual)}/yr`,
-    body: `Hi ${first} — the recent work is exactly what a service plan keeps ahead of. I'd set you up on a ${TRADE_CONFIG.plans.defaultIntervals[c.interval as 'annual' | 'semiannual' | 'quarterly']}-day cadence at ${money(c.annual)}/yr so it never lapses and you never get written up. Want me to put it in place? — ${COMPANY.name}`,
+    body: `Hi ${first}, the recent work is exactly what a service plan keeps ahead of. I'd set you up on a ${TRADE_CONFIG.plans.defaultIntervals[c.interval as 'annual' | 'semiannual' | 'quarterly']}-day cadence at ${money(c.annual)}/yr so it never lapses and you never get written up. Want me to put it in place? ${COMPANY.name}`,
     trail: 'Offer to the customer; nothing recurring starts until they say yes',
     subject_type: 'account',
   });
@@ -178,7 +178,7 @@ function realRecurringSummary(office = '') {
       customer: r.location_name || 'Site',
       plan: r.service_line || r.description || 'Recurring service',
       interval: r.cadence || '',
-      price: r.price_cents ? money(Math.round(annualVal)) : '—',
+      price: r.price_cents ? money(Math.round(annualVal)) : 'n/a',
       next: fmtDate(nextOccurrence(r.first_start, r.frequency, r.interval)),
       renews: r.ends_on ? `${fmtDate(r.ends_on)}${soon ? ` · ${d}d` : ''}` : 'ongoing',
       renewPill: soon ? 'money' : 'gray',
@@ -199,7 +199,7 @@ function realRecurringSummary(office = '') {
         GROUP BY a.id HAVING jobs >= 2 ORDER BY jobs DESC LIMIT 4`
     )
     .all(candBind) as { customer: string; jobs: number }[];
-  const candidates = cands.map((c) => ({ informational: true, customer: c.customer, detail: `${c.jobs} jobs on record, no recurring agreement — a plan would make this revenue recurring` }));
+  const candidates = cands.map((c) => ({ informational: true, customer: c.customer, detail: `${c.jobs} jobs on record, no recurring agreement, so a plan would make this revenue recurring` }));
 
   return {
     summary: {

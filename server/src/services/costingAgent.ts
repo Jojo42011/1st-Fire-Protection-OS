@@ -74,7 +74,7 @@ export function draftChangeOrder(jobId: number): { jobId: number; amount: string
   const amount = money(amountCents);
   const first = j.customer.split(/\s|—|-/)[0];
   const where = j.work || 'the site';
-  const body = `Hi ${first} — the scope at ${where} ran past the quote: ${Math.round(overHrs)} extra crew hours went to work that wasn't in the original bid. I'd like to attach a change order for ${amount} to cover it — happy to walk the site with you first. — ${COMPANY.name}`;
+  const body = `Hi ${first}, the scope at ${where} ran past the quote: ${Math.round(overHrs)} extra crew hours went to work that wasn't in the original bid. I'd like to attach a change order for ${amount} to cover it. Happy to walk the site with you first. ${COMPANY.name}`;
 
   createApproval({
     agent_key: 'costing',
@@ -97,7 +97,7 @@ const ST_APP = 'https://app.servicetrade.com';
 const WON = ['accepted', 'approved', 'won'];
 const OPEN = ['submitted', 'pending', 'reviewed', 'contingent', 'draft'];
 const sqlIn = (arr: string[]) => arr.map((s) => `'${s}'`).join(',');
-const officeShort = (o: string) => (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim() || '—';
+const officeShort = (o: string) => (o || '').replace(/^Northstar\s*/i, '').replace(/\s*LLC$/i, '').trim() || 'n/a';
 
 function realJobValue(office = '') {
   const db = getDb();
@@ -141,7 +141,7 @@ function realJobValue(office = '') {
         { lab: 'Open value', val: money(openCents), sub: 'quoted, not yet booked', color: 'var(--ink)' },
         { lab: 'Margins', val: 'Pending', sub: 'unlock when Sage connects', color: 'var(--money)' },
       ],
-      banner: 'This is the revenue side of every job — real, from ServiceTrade. True margins need job costs (labor, parts), which live in Sage Intacct and are not yet connected. When Sage is in, cost lands beside each number here and this becomes real margins.',
+      banner: 'This is the revenue side of every job: real, from ServiceTrade. True margins need job costs (labor, parts), which live in Sage Intacct and are not yet connected. When Sage is in, cost lands beside each number here and this becomes real margins.',
     },
     jobs,
     focus: null,
@@ -187,7 +187,7 @@ export function getCostingSummary(office = '') {
     const { j, m } = focusRow;
     focus = {
       jobId: j.id,
-      title: j.work ? `${j.customer} — ${j.work}` : j.customer,
+      title: j.work ? `${j.customer}: ${j.work}` : j.customer,
       pct: `${m.marginPct}%`,
       pctFg: marginFg(m.marginPct),
       quoted: money(j.quoted_cents || 0),
@@ -208,7 +208,7 @@ export function getCostingSummary(office = '') {
       changeOrder = {
         jobId: j.id,
         amount: money(amountCents),
-        body: `"The panel enclosures at ${j.work || 'the site'} were sealed behind work that wasn't in the original scope — ${Math.round(overHrs)} extra crew hours went to clearing and re-securing them. Attaching a change order for ${money(amountCents)}; happy to walk the site with you first." — ${COMPANY.name}`,
+        body: `"The panel enclosures at ${j.work || 'the site'} were sealed behind work that wasn't in the original scope: ${Math.round(overHrs)} extra crew hours went to clearing and re-securing them. Attaching a change order for ${money(amountCents)}; happy to walk the site with you first." ${COMPANY.name}`,
       };
     }
   }

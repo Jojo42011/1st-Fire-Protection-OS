@@ -26,12 +26,12 @@ function liveCounts(): Record<string, string> {
   const db = getDb();
   const c = (t: string) => {
     try { return ((db.prepare(`SELECT COUNT(*) AS v FROM ${t} WHERE source = 'servicetrade'`).get() as { v: number }).v || 0).toLocaleString('en-US'); }
-    catch { return '—'; }
+    catch { return 'n/a'; }
   };
   const acc = c('accounts');
-  return acc === '0' || acc === '—'
+  return acc === '0' || acc === 'n/a'
     ? { accounts: '412 / 908', equipment: '14,220', jobs: '1,904 open', quotes: '39 open', invoices: '23 open', contacts: '1,166', agent_output: '96 today' }
-    : { accounts: `${acc} / ${c('sites')}`, equipment: '—', jobs: `${c('crm_jobs')} open`, quotes: c('quotes'), invoices: '— (in balances)', contacts: '—', agent_output: '—' };
+    : { accounts: `${acc} / ${c('sites')}`, equipment: 'n/a', jobs: `${c('crm_jobs')} open`, quotes: c('quotes'), invoices: 'in balances', contacts: 'n/a', agent_output: 'n/a' };
 }
 
 const ago = (iso: string | null): string => {
@@ -68,7 +68,7 @@ router.get('/api/sync', (_req, res) => {
     const acc = db.prepare(`SELECT name FROM accounts WHERE id = ?`).get(c.local_id) as { name: string } | undefined;
     return {
       id: c.id,
-      title: `${acc ? acc.name : c.object} — ${FIELD_LABEL[c.field] || c.field}`,
+      title: `${acc ? acc.name : c.object}: ${FIELD_LABEL[c.field] || c.field}`,
       field: c.field,
       theirValue: c.their_value,
       theirWhen: c.their_updated_at ? ago(c.their_updated_at) : '',

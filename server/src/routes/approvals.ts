@@ -113,7 +113,7 @@ router.post('/api/approvals/:id/approve', (req, res) => {
     // In the shell, "executing" only logs — nothing leaves the building until keys exist.
     db.prepare(`INSERT INTO approval_events (approval_id, action, detail) VALUES (?, 'executed', ?)`).run(
       id,
-      `${row.kind} (simulated — no provider key)`
+      `${row.kind} (simulated: no provider key)`
     );
   }
   const item = db.prepare(`${SELECT} WHERE id = ?`).get(id) as ApprovalRow;
@@ -167,7 +167,7 @@ router.post('/api/approvals/approve-routine', (_req, res) => {
     for (const r of list) {
       approve.run(r.id);
       logDecide.run(r.id, r.kind);
-      logExec.run(r.id, `${r.kind} (simulated — no provider key)`);
+      logExec.run(r.id, `${r.kind} (simulated: no provider key)`);
     }
   });
   tx(rows);

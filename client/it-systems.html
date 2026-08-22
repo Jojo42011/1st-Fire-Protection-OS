@@ -213,14 +213,14 @@ document.getElementById('integrations').addEventListener('click',function(){ OS.
 var ASSETS=[], TIERS={}, TIER_LABELS={};
 function money(n){ return '$'+(n||0).toLocaleString(); }
 function tierSelect(a){
-  var opts='<option value="">—</option>'+Object.keys(TIERS).map(function(t){
+  var opts='<option value="">n/a</option>'+Object.keys(TIERS).map(function(t){
     return '<option value="'+t+'"'+(a.tier===t?' selected':'')+'>'+OS.esc(TIER_LABELS[t]||t)+' ('+money(TIERS[t])+')</option>';
   }).join('');
   return '<select data-asset-tier="'+a.id+'" style="padding:4px 6px;border:1px solid var(--os-line,#2a2f3a);border-radius:6px;background:transparent;color:inherit;font:inherit">'+opts+'</select>';
 }
 function assetRowHTML(a){
   return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(a.device_name)+'</td>'+
-    '<td>'+OS.esc(a.serial||'—')+'</td>'+
+    '<td>'+OS.esc(a.serial||'n/a')+'</td>'+
     '<td>'+(a.employee?OS.esc(a.employee):'<span class="muted">unassigned</span>')+'</td>'+
     '<td>'+OS.esc(a.office||'')+'</td>'+
     '<td><input data-asset-ram="'+a.id+'" value="'+OS.esc(a.ram||'')+'" placeholder="e.g. 16 GB" style="width:80px;padding:4px 6px;border:1px solid var(--os-line,#2a2f3a);border-radius:6px;background:transparent;color:inherit;font:inherit" /></td>'+

@@ -60,7 +60,7 @@ router.get('/api/calls/:id/recording', async (req, res) => {
     const fresh = await getFreshRecording(row.vapi_call_id, stereo);
     if (fresh.ok && fresh.url) return res.redirect(302, fresh.url);
     if (fresh.reason === 'locked')
-      return res.status(409).json({ ok: false, reason: 'locked', message: 'Recording is in Vapi private (HIPAA) storage — enable public/BYO storage in Vapi to play it here.' });
+      return res.status(409).json({ ok: false, reason: 'locked', message: 'Recording is in Vapi private (HIPAA) storage. Enable public/BYO storage in Vapi to play it here.' });
     // no key / not-found → fall through to whatever we stored
   }
   // Fallback: the stored URL (works for seeded/demo rows and non-HIPAA public URLs).

@@ -69,7 +69,7 @@ function mapAccount(db: ReturnType<typeof getDb>, a: Acc) {
     ? 'Open balance (ST)'
     : 'Scheduled';
   const tint = SEG_TINT[a.segment] || ['var(--fill)', 'var(--ink-2)'];
-  const seg = a.segment ? `${a.segment} · since ${a.customer_since || '—'}` : `Customer since ${a.customer_since || '—'}`;
+  const seg = a.segment ? `${a.segment} · since ${a.customer_since || 'n/a'}` : `Customer since ${a.customer_since || 'n/a'}`;
   return {
     id: a.id,
     initials: initials(a.name),
@@ -77,13 +77,13 @@ function mapAccount(db: ReturnType<typeof getDb>, a: Acc) {
     segment: seg,
     tintBg: tint[0],
     tintFg: tint[1],
-    sites: sites ? `${sites} site${sites === 1 ? '' : 's'}` : '—',
+    sites: sites ? `${sites} site${sites === 1 ? '' : 's'}` : 'n/a',
     contract: CONTRACT(a.contract_type),
     contractKind: a.contract_type === 'prospect' ? 'indigo' : a.contract_type === 'tm' ? 'gray' : 'green',
     next,
     balance: money(a.balance_cents),
     balanceOverdue: a.balance_cents > 0 && a.risk === 'at_risk',
-    touch: a.last_touch_kind === 'autopilot' ? 'Autopilot · today' : a.last_touch_kind ? `${TOUCH(a.last_touch_kind)} · ${ago(a.last_touch_at)}` : '—',
+    touch: a.last_touch_kind === 'autopilot' ? 'Autopilot · today' : a.last_touch_kind ? `${TOUCH(a.last_touch_kind)} · ${ago(a.last_touch_at)}` : 'n/a',
   };
 }
 
@@ -182,10 +182,10 @@ router.get('/api/sites', (req, res) => {
         id: s.id,
         name: s.name || '(unnamed site)',
         address: s.address || '',
-        account: acc?.name || '—',
+        account: acc?.name || 'n/a',
         accountId: s.account_id,
         system: s.system_type || '',
-        next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : '—',
+        next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : 'n/a',
       };
     });
     return res.json({
@@ -206,8 +206,8 @@ router.get('/api/sites', (req, res) => {
   const sites = rows.map((s) => {
     const acc = s.account_id ? (nameOf.get(s.account_id) as { name: string } | undefined) : undefined;
     return {
-      id: s.id, name: s.name || '(unnamed site)', address: s.address || '', account: acc?.name || '—',
-      accountId: s.account_id, system: s.system_type || '', next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : '—',
+      id: s.id, name: s.name || '(unnamed site)', address: s.address || '', account: acc?.name || 'n/a',
+      accountId: s.account_id, system: s.system_type || '', next: s.next_service_at ? 'Due ' + fmtDate(s.next_service_at) : 'n/a',
     };
   });
   res.json({ sites, counts: { all: rows.length, linked: rows.length, addressed: 0 }, total: rows.length, page: 1, pages: 1, showing: sites.length, live: false });
@@ -235,9 +235,9 @@ router.get('/api/jobs', (req, res) => {
     const jobs = result.rows.map((j) => {
       const a = j.account_id ? (nameOf.get(j.account_id) as { name: string } | undefined) : undefined;
       return {
-        id: j.id, number: j.number || '—', kind: j.kind || '', status: j.status || '',
-        account: a?.name || '—', accountId: j.account_id,
-        scheduled: j.scheduled_at ? fmtDate(j.scheduled_at) : '—',
+        id: j.id, number: j.number || 'n/a', kind: j.kind || '', status: j.status || '',
+        account: a?.name || 'n/a', accountId: j.account_id,
+        scheduled: j.scheduled_at ? fmtDate(j.scheduled_at) : 'n/a',
         completed: j.completed_at ? fmtDate(j.completed_at) : '',
       };
     });
@@ -272,8 +272,8 @@ router.get('/api/quotes', (req, res) => {
     const quotes = result.rows.map((q) => {
       const a = q.account_id ? (nameOf.get(q.account_id) as { name: string } | undefined) : undefined;
       return {
-        id: q.id, number: q.number || '—', title: q.title || '', amount: money(q.amount_cents || 0),
-        status: q.stage || '', account: a?.name || '—', accountId: q.account_id,
+        id: q.id, number: q.number || 'n/a', title: q.title || '', amount: money(q.amount_cents || 0),
+        status: q.stage || '', account: a?.name || 'n/a', accountId: q.account_id,
       };
     });
     return res.json({
@@ -352,7 +352,7 @@ router.get('/api/accounts/:id', (req, res) => {
   const stats = {
     lifetime: money(a.lifetime_cents),
     balance: money(a.balance_cents),
-    avgDaysToPay: a.avg_days_to_pay ?? '—',
+    avgDaysToPay: a.avg_days_to_pay ?? 'n/a',
     openDeficiencies: 6,
     quotedNotWon: money(quotedNotWon),
     reviews: '4.9 ★',
@@ -449,8 +449,8 @@ router.get('/api/pipeline', (_req, res) => {
     stats = {
       open: money(openCents),
       aging: rows.filter((q) => mapQuoteStage(q.stage) === 'quoted').length,
-      winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) + '%' : '—',
-      fromDeficiencies: '—',
+      winRate: won + lost > 0 ? Math.round((won / (won + lost)) * 100) + '%' : 'n/a',
+      fromDeficiencies: 'n/a',
     };
   } else {
     stats = { open: '$412,300', aging: 11, winRate: '38%', fromDeficiencies: '$96,400' };
