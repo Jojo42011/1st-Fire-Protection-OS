@@ -21,6 +21,14 @@
   .emp .r{color:var(--ink-2);font-size:12.5px;margin-top:6px;line-height:1.55}
   .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
   .legend span{display:inline-flex;align-items:center;gap:7px} .legend .d{width:8px;height:8px;border-radius:50%}
+  .adset{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:20px 22px;margin-top:12px;max-width:720px}
+  .adset .why{color:var(--ink-2);font-size:12.5px;line-height:1.6;margin:0 0 16px}
+  .adset .fld{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+  .adset label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+  .adset .hint{font-size:11.5px;color:var(--ink-3);line-height:1.5}
+  .adset input{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--s2);border:1px solid var(--hair-2);border-radius:9px;padding:9px 11px;outline:none}
+  .adset input:focus{border-color:var(--red)}
+  .adset .row{display:flex;align-items:center;gap:12px;margin-top:4px}
 </style>
   <script src="/count.js" defer></script>
   <script src="/motion.js" defer></script>
@@ -41,12 +49,58 @@
     <span><span class="d" style="background:var(--muted)"></span>Planned · roadmap</span>
   </div>
 
+  <div class="section-title">New-hire Active Directory</div>
+  <div class="adset">
+    <p class="why">We run hybrid identity: accounts are created in on-prem AD and sync up to Entra through Azure AD Connect. When you provision a hire from Onboarding, the OS generates a PowerShell script (New-ADUser plus the group adds) that IT runs on a domain controller. These three values fill in that script.</p>
+    <div class="fld">
+      <label for="ad_ou">Target OU (distinguished name)</label>
+      <input id="ad_ou" type="text" placeholder="OU=New Hires,OU=Users,DC=1stfp,DC=local" spellcheck="false" autocomplete="off" />
+      <span class="hint">Where new hires are created. Until this is set, generated scripts carry a placeholder and a warning.</span>
+    </div>
+    <div class="fld">
+      <label for="ad_domain">UPN domain</label>
+      <input id="ad_domain" type="text" placeholder="1stfpservices.com" spellcheck="false" autocomplete="off" />
+      <span class="hint">The sign-in suffix. Accounts are named first.last@ this domain.</span>
+    </div>
+    <div class="fld">
+      <label for="ad_sku">Default license SKU (optional)</label>
+      <input id="ad_sku" type="text" placeholder="e.g. SPE_E3" spellcheck="false" autocomplete="off" />
+      <span class="hint">Named in the script's licensing note. Assignment happens cloud-side after the account syncs to Entra.</span>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="ad_save">Save</button>
+      <span id="ad_status" class="pill gray" style="display:none"></span>
+    </div>
+  </div>
+
   <div class="section-title">The Team</div>
   <div class="team" id="team"></div>
 
   <div id="catalog"></div>
 
 <script>
+// ── New-hire AD settings (target OU / UPN domain / default license SKU) ──
+(function(){
+  var ou=document.getElementById('ad_ou'), dom=document.getElementById('ad_domain'), sku=document.getElementById('ad_sku');
+  var save=document.getElementById('ad_save'), status=document.getElementById('ad_status');
+  function show(msg,cls){ status.className='pill '+(cls||'gray'); status.textContent=msg; status.style.display=''; }
+  fetch('/api/onboarding/ad-settings').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok) return; var s=d.settings||{};
+    ou.value=s.targetOu||''; dom.value=s.upnDomain||''; sku.value=s.licenseSku||'';
+    if(!s.targetOu) show('OU not set','amber');
+  }).catch(function(){});
+  save.addEventListener('click',function(){
+    save.disabled=true; show('Saving…','gray');
+    fetch('/api/onboarding/ad-settings',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({targetOu:ou.value.trim(),upnDomain:dom.value.trim(),licenseSku:sku.value.trim()})})
+      .then(function(r){return r.json();}).then(function(d){
+        save.disabled=false;
+        if(!d||!d.ok){ show('Save failed','red'); return; }
+        var s=d.settings||{}; ou.value=s.targetOu||''; dom.value=s.upnDomain||''; sku.value=s.licenseSku||'';
+        show(s.targetOu?'Saved':'Saved · OU still needed', s.targetOu?'green':'amber');
+      }).catch(function(){ save.disabled=false; show('Save failed','red'); });
+  });
+})();
 function pill(status){
   if(status==='connected')return '<span class="pill green">Connected</span>';
   if(status==='available')return '<span class="pill red">Available</span>';
