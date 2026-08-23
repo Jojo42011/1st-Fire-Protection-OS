@@ -124,7 +124,7 @@
     display:flex;flex-direction:column;gap:1px}
   .nav-fly:hover .flyout,.nav-fly.open .flyout{opacity:1;visibility:visible;transform:none}
   .flyout-h{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:6px 11px 7px}
-  @media (max-width:900px){ .flyout{position:static;box-shadow:none;border:0;border-radius:0;padding:0 0 0 12px;min-width:0;
+  @media (max-width:900px), (pointer:coarse){ .flyout{position:static;box-shadow:none;border:0;border-radius:0;padding:0 0 0 12px;min-width:0;
     opacity:1;visibility:hidden;height:0;overflow:hidden;transform:none;transition:none}
     .nav-fly.open .flyout{visibility:visible;height:auto} .flyout-h{display:none} }
 
@@ -247,7 +247,7 @@
   .backdrop{position:fixed;inset:0;z-index:15;background:rgba(21,26,45,.4);opacity:0;pointer-events:none;
     transition:opacity .3s;display:none}
 
-  @media (max-width:900px){
+  @media (max-width:900px), (pointer:coarse){
     /* sidebar becomes an overlay drawer; the content no longer shifts */
     .side{position:fixed;top:0;left:0;bottom:0;height:100dvh;width:min(84vw,290px);margin-left:0;opacity:1;
       transform:translateX(0);transition:transform .34s cubic-bezier(.4,0,.2,1);box-shadow:var(--sh-lift)}
@@ -506,7 +506,10 @@ var app=document.getElementById('app'), nav=document.getElementById('nav'), fram
 /* group label per screen key (for the header breadcrumb) */
 var GROUP_LABEL={};
 NAV.forEach(function(g){ (g.items||[]).forEach(function(k){ GROUP_LABEL[k]=g.group||''; }); });
-var mq=window.matchMedia('(max-width:900px)');
+// Touch tablets (iPad, incl. landscape wider than 900px) must use the flow layout too: iOS Safari
+// will not scroll a fixed-height iframe's overflow, so we size each iframe to its content and let the
+// document scroll. Trigger on a coarse pointer as well as the narrow-width breakpoint.
+var mq=window.matchMedia('(max-width:900px), (pointer:coarse)');
 function isMobile(){return mq.matches;}
 var current=HOME;
 
