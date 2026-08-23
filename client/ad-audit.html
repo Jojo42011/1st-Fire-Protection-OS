@@ -92,6 +92,17 @@
         <span></span>
       </div>
       <div id="driftResult" class="note" style="margin-top:10px">Compares each location group's members against their BambooHR home office and flags mismatches. Function groups (HR, Accounting, ...) are ignored automatically.</div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="subh" style="margin-top:0">Pilot: create one on-prem group from the cleaned list</div>
+        <div class="offrow" style="grid-template-columns:auto auto auto auto 1fr;max-width:640px">
+          <span class="on">Group</span>
+          <input id="pilotGroup" type="text" value="SG-SP-Waco" style="font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 9px;width:150px">
+          <span class="on">Suffix</span>
+          <input id="pilotSuffix" type="text" value="-AD" style="font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:6px 9px;width:60px">
+          <button class="os-btn primary" id="pilotGen">Generate</button>
+        </div>
+        <div id="pilotResult" class="note" style="margin-top:10px">Creates &lt;Group&gt;&lt;Suffix&gt; seeded only with members whose home office matches, drift and disabled accounts are dropped and listed.</div>
+      </div>
     </div>
   </details>
   <div id="body"></div>
@@ -305,6 +316,31 @@ function downloadDriftCsv(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
 }
 
+/* ---------- pilot group script (cleaned home-office seed) ---------- */
+function genPilot(){
+  var group=(document.getElementById('pilotGroup').value||'').trim();
+  var suffix=(document.getElementById('pilotSuffix').value||'-AD').trim();
+  var out=document.getElementById('pilotResult'), btn=document.getElementById('pilotGen');
+  if(!group){ out.textContent='Enter a group name.'; return; }
+  btn.disabled=true; btn.textContent='Generating…'; out.textContent='Resolving members against home office…';
+  fetch('/api/ad-audit/pilot-script?group='+encodeURIComponent(group)+'&suffix='+encodeURIComponent(suffix)).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Generate';
+    if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not generate.'; return; }
+    var dropList=(d.dropped||[]).map(function(x){return '<div style="font-size:11.5px;color:var(--muted)">'+esc(x.name||x.upn||'?')+' — '+esc(x.reason||'')+'</div>';}).join('');
+    var keepList=(d.kept||[]).map(function(x){return '<div style="font-size:11.5px;color:var(--ink-2)">'+esc(x.name||x.upn||'?')+'</div>';}).join('');
+    out.innerHTML='<div style="margin-bottom:8px"><b>'+esc(d.newName)+'</b> — keeps <b>'+(d.kept||[]).length+'</b>, drops <b>'+(d.dropped||[]).length+'</b> '+
+      '<button class="os-btn primary" id="pilotDl" style="margin-left:8px">Download .ps1</button></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">'+
+      '<div><div class="subh" style="margin:0 0 4px">Keep ('+(d.kept||[]).length+')</div>'+(keepList||'<div class="note">none</div>')+'</div>'+
+      '<div><div class="subh" style="margin:0 0 4px">Drop ('+(d.dropped||[]).length+')</div>'+(dropList||'<div class="note">none</div>')+'</div></div>';
+    document.getElementById('pilotDl').addEventListener('click',function(){
+      var blob=new Blob([d.script||''],{type:'text/plain'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=d.filename||'pilot.ps1';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+    });
+  }).catch(function(){ btn.disabled=false; btn.textContent='Generate'; out.textContent='Could not reach the service.'; });
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
@@ -312,6 +348,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('spgCsv').addEventListener('click',downloadSpCsv);
   document.getElementById('driftLoad').addEventListener('click',loadDrift);
   document.getElementById('driftCsv').addEventListener('click',downloadDriftCsv);
+  document.getElementById('pilotGen').addEventListener('click',genPilot);
   loadSettings();
   load();
 });

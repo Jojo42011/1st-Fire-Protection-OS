@@ -118,3 +118,78 @@ export async function computeOfficeDrift(prefix = 'SG-SP-'): Promise<{
   };
   return { ok: true, findings, locationGroups, counts, diagnostics };
 }
+
+/* ─────────────────────────── pilot group script ───────────────────────────
+ * Generate a PowerShell script that creates ONE on-prem security group for a location, seeded only
+ * with members whose BambooHR home office matches that location (the "cleaned" list): drift members
+ * and disabled accounts are dropped and reported, not carried over. Uses a name suffix so the new
+ * group does not collide with the existing cloud-only group of the same name. */
+
+export interface PilotMember { name: string | null; upn: string | null; homeOffice?: string | null; reason?: string }
+export interface PilotScript {
+  ok: boolean; error?: string;
+  newName?: string;
+  script?: string;
+  filename?: string;
+  kept?: PilotMember[];
+  dropped?: PilotMember[];
+}
+
+export async function buildPilotGroupScript(groupName: string, suffix = '-AD', prefix = 'SG-SP-'): Promise<PilotScript> {
+  if (!groupName) return { ok: false, error: 'no group name given' };
+  const res = await listGroupsWithMembers(prefix);
+  if (!res.ok) return { ok: false, error: res.error };
+  const g = res.groups.find((x) => x.name.toLowerCase() === groupName.toLowerCase());
+  if (!g) return { ok: false, error: `group ${groupName} not found` };
+
+  const location = g.name.replace(new RegExp(`^${prefix}`, 'i'), '');
+  const locNorm = norm(location);
+  const idx = buildEmployeeIndex();
+
+  const kept: PilotMember[] = [];
+  const dropped: PilotMember[] = [];
+  for (const m of g.members) {
+    const emp = matchAdToEmployee({ upn: m.upn, email: m.upn }, idx);
+    if (m.enabled === false) { dropped.push({ name: m.name, upn: m.upn, reason: 'disabled account' }); continue; }
+    if (!emp) { dropped.push({ name: m.name, upn: m.upn, reason: 'no employee record (service/shared mailbox?)' }); continue; }
+    if (!emp.office) { dropped.push({ name: m.name, upn: m.upn, reason: 'no home office on file' }); continue; }
+    if (!officeMatches(norm(emp.office), locNorm)) { dropped.push({ name: m.name, upn: m.upn, homeOffice: emp.office, reason: `home office is ${emp.office}` }); continue; }
+    kept.push({ name: m.name, upn: m.upn, homeOffice: emp.office });
+  }
+
+  const newName = `${g.name}${suffix}`;
+  const psq = (s: string) => `'${String(s).replace(/'/g, "''")}'`;
+  const L: string[] = [];
+  L.push('<#');
+  L.push(`  Pilot: create ${newName} on-prem, seeded from the CLEANED home-office list for ${location}.`);
+  L.push('  Only members whose BambooHR home office matches this location are added; drift members and');
+  L.push('  disabled accounts were dropped (listed below). The name carries a suffix so it does not');
+  L.push('  collide with the existing cloud-only group. After it syncs to Entra, add it to the folder in');
+  L.push('  SharePoint alongside the old group, confirm access, then swap and remove the old group.');
+  L.push('#>');
+  L.push('[CmdletBinding()]');
+  L.push("param([string]$GroupOU = 'OU=SharePoint Access,OU=Groups,OU=1FP,DC=corp,DC=local')   # <-- SET the real OU");
+  L.push("$ErrorActionPreference='Stop'");
+  L.push('Import-Module ActiveDirectory');
+  L.push('');
+  L.push(`$name = ${psq(newName)}`);
+  L.push('$g = Get-ADGroup -Filter "Name -eq \'$name\'" -ErrorAction SilentlyContinue');
+  L.push('if (-not $g) { $g = New-ADGroup -Name $name -SamAccountName $name -GroupScope Global -GroupCategory Security -Path $GroupOU -PassThru; Write-Host "created $name" } else { Write-Host "exists $name" }');
+  L.push('function Add-ByUpn($upn){');
+  L.push('  $u = Get-ADUser -Filter "UserPrincipalName -eq \'$upn\'" -ErrorAction SilentlyContinue');
+  L.push('  if (-not $u) { Write-Warning "  no on-prem user for $upn (skipped)"; return }');
+  L.push("  try { Add-ADGroupMember -Identity $g -Members $u -ErrorAction Stop } catch { if ($_ -notmatch 'already a member') { Write-Warning \"  add $upn failed: $($_.Exception.Message)\" } }");
+  L.push('}');
+  L.push('');
+  L.push(`# ---- ${kept.length} member(s) whose home office is ${location} ----`);
+  for (const k of kept) L.push(`Add-ByUpn ${psq(k.upn || '')}   # ${k.name || ''}`);
+  L.push('');
+  if (dropped.length) {
+    L.push(`# ---- Dropped ${dropped.length} (NOT added). Re-add explicitly if any is a real exception: ----`);
+    for (const d of dropped) L.push(`#   ${d.name || d.upn || '?'}  (${d.reason})`);
+    L.push('');
+  }
+  L.push(`Write-Host 'Done. Force a sync: Start-ADSyncSyncCycle -PolicyType Delta (on the AAD Connect server).'`);
+
+  return { ok: true, newName, script: L.join('\n'), filename: `pilot-${newName}.ps1`, kept, dropped };
+}

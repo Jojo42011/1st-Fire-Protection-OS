@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, AdUserIn } from '../services/adAudit';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
-import { computeOfficeDrift } from '../services/groupOfficeDrift';
+import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
 
 /**
  * On-prem AD agent endpoints (P1: read-only inventory) + the audit dashboard read.
@@ -87,6 +87,15 @@ router.get('/api/ad-audit/sp-groups', async (req, res) => {
 router.get('/api/ad-audit/office-drift', async (req, res) => {
   const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
   const out = await computeOfficeDrift(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Generate a pilot on-prem group script for one location group, seeded from the cleaned home-office
+ *  list (members whose Bamboo office matches; drift + disabled dropped). Suffixed to avoid collision. */
+router.get('/api/ad-audit/pilot-script', async (req, res) => {
+  const group = String(req.query.group || '').slice(0, 128);
+  const suffix = String(req.query.suffix || '-AD').slice(0, 16);
+  const out = await buildPilotGroupScript(group, suffix);
   res.status(out.ok ? 200 : 400).json(out);
 });
 
