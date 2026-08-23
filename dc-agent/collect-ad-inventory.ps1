@@ -109,9 +109,9 @@ $payload = [pscustomobject]@{
 }
 $json = $payload | ConvertTo-Json -Depth 6 -Compress
 
-Write-Host "Posting $(@($users).Count) users..."
+Write-Host "Posting $(@($users).Count) users and $(@($ous).Count) OUs..."
 $resp = Invoke-RestMethod -Method Post -Uri "$base/api/ad-agent/inventory" -Headers $headers -ContentType 'application/json' -Body $json
-Write-Host "Done. Server stored $($resp.stored) users and $($resp.groups) group memberships."
+Write-Host "Done. Server stored $($resp.stored) users, $($resp.groups) group memberships, $($resp.ous) OUs."
 
 # ---- Process write jobs from the OS (create users, etc.) ----------------------
 # The run account needs rights to create users in the target OU and modify the mapped groups. A

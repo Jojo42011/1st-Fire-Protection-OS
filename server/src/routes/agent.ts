@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { timingSafeEqual } from 'crypto';
-import { ingestInventory, auditReport, AdUserIn } from '../services/adAudit';
+import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/adAudit';
+import { getDb } from '../db/index';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -37,6 +38,14 @@ router.use('/api/ad-agent', requireAgentToken);
 /** Liveness + auth check the DC agent calls to confirm it can reach and authenticate to the OS. */
 router.get('/api/ad-agent/ping', (_req, res) => {
   res.json({ ok: true, serverTime: new Date().toISOString() });
+});
+
+/** Mirror counts, so the agent (or an operator with the token) can verify what the last post stored:
+ *  how many users, group memberships and OUs the server currently holds, plus the last-sync record. */
+router.get('/api/ad-agent/mirror', (_req, res) => {
+  const db = getDb();
+  const c = (t: string) => (db.prepare(`SELECT COUNT(*) AS c FROM ${t}`).get() as { c: number }).c;
+  res.json({ ok: true, users: c('ad_users'), groupMemberships: c('ad_user_groups'), ous: c('ad_ous'), lastSync: lastSync() });
 });
 
 /** Receive a full AD snapshot from the DC agent and replace the mirror. Read-only on AD's side. */
