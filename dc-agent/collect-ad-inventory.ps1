@@ -95,9 +95,17 @@ $users = foreach ($u in $adUsers) {
   }
 }
 
+# Every OU object, so the OS sees the full structure including empty OUs.
+$ous = @()
+try {
+  $ous = Get-ADOrganizationalUnit -Filter * -Properties Name |
+         ForEach-Object { [pscustomobject]@{ dn = $_.DistinguishedName; name = $_.Name } }
+} catch { Write-Warning "OU enumeration failed: $($_.Exception.Message)" }
+
 $payload = [pscustomobject]@{
   collectedAt = (Get-Date).ToUniversalTime().ToString('o')
   users       = @($users)
+  ous         = @($ous)
 }
 $json = $payload | ConvertTo-Json -Depth 6 -Compress
 

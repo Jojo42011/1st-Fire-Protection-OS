@@ -38,8 +38,10 @@ const s = (v: unknown): string | null => {
   return t ? t : null;
 };
 
+export interface AdOuIn { dn: string; name?: string }
+
 /** Replace the whole AD mirror with a fresh snapshot, in one transaction. */
-export function ingestInventory(users: AdUserIn[], collectedAt?: string): { stored: number; groups: number } {
+export function ingestInventory(users: AdUserIn[], collectedAt?: string, ous?: AdOuIn[]): { stored: number; groups: number; ous: number } {
   const db = getDb();
   const insUser = db.prepare(
     `INSERT OR REPLACE INTO ad_users
@@ -49,10 +51,17 @@ export function ingestInventory(users: AdUserIn[], collectedAt?: string): { stor
        @email,@enabled,@ou,@dn,@when_created,@last_logon,datetime('now'))`
   );
   const insGroup = db.prepare(`INSERT INTO ad_user_groups (object_guid, sam, group_name, group_dn) VALUES (?,?,?,?)`);
-  let groupCount = 0;
+  const insOu = db.prepare(`INSERT OR REPLACE INTO ad_ous (dn, name, synced_at) VALUES (?, ?, datetime('now'))`);
+  let groupCount = 0, ouCount = 0;
   const run = db.transaction((rows: AdUserIn[]) => {
     db.prepare(`DELETE FROM ad_users`).run();
     db.prepare(`DELETE FROM ad_user_groups`).run();
+    // Only replace the OU mirror when the agent actually sent OUs, so an older agent (no OUs in its
+    // payload) does not wipe a good OU list.
+    if (Array.isArray(ous) && ous.length) {
+      db.prepare(`DELETE FROM ad_ous`).run();
+      for (const o of ous) { const dn = s(o && o.dn); if (!dn) continue; insOu.run(dn, s(o.name)); ouCount++; }
+    }
     for (const u of rows) {
       if (!u || !u.objectGuid) continue;
       insUser.run({
@@ -83,8 +92,9 @@ export function ingestInventory(users: AdUserIn[], collectedAt?: string): { stor
   });
   run(users);
   const stored = users.filter((u) => u && u.objectGuid).length;
-  setState(K_LAST_SYNC, JSON.stringify({ at: new Date().toISOString(), collectedAt: collectedAt || null, users: stored, groups: groupCount }));
-  return { stored, groups: groupCount };
+  const ouTotal = (db.prepare(`SELECT COUNT(*) AS c FROM ad_ous`).get() as { c: number }).c;
+  setState(K_LAST_SYNC, JSON.stringify({ at: new Date().toISOString(), collectedAt: collectedAt || null, users: stored, groups: groupCount, ous: ouTotal }));
+  return { stored, groups: groupCount, ous: ouCount };
 }
 
 export function lastSync(): { at: string; collectedAt: string | null; users: number; groups: number } | null {
@@ -97,36 +107,43 @@ export function lastSync(): { at: string; collectedAt: string | null; users: num
 
 export interface OuNode { ou: string; label: string; users: number; enabled: number; children: OuNode[] }
 
-/** Build a nested OU tree with per-container user counts from the mirrored users. */
+// Split an OU DN into its ordered path from the top: DC parts dropped, OU parts reversed so the
+// top-level container is first. "OU=Sales,OU=Users,DC=x,DC=y" -> ["Users","Sales"].
+function ouPathOf(dn: string): string[] {
+  const parts = dn.split(',').map((p) => p.trim());
+  return parts.filter((p) => /^OU=/i.test(p)).map((p) => p.slice(3)).reverse();
+}
+
+/** Build a nested OU tree with per-container user counts. Structure comes from the full OU list when
+ *  the agent has posted it (so empty OUs show); otherwise it falls back to OUs that contain users. */
 export function ouTree(): OuNode[] {
   const db = getDb();
-  const rows = db.prepare(`SELECT ou, enabled FROM ad_users WHERE ou IS NOT NULL`).all() as { ou: string; enabled: number }[];
+  const ouDns = (db.prepare(`SELECT dn FROM ad_ous`).all() as { dn: string }[]).map((r) => r.dn);
+  const userRows = db.prepare(`SELECT ou, enabled FROM ad_users WHERE ou IS NOT NULL`).all() as { ou: string; enabled: number }[];
   const roots: OuNode[] = [];
   const index = new Map<string, OuNode>();
 
-  // Split an OU DN into its ordered path from the top: DC parts dropped, OU parts reversed so the
-  // top-level container is first. "OU=Sales,OU=Users,DC=x,DC=y" -> ["Users","Sales"].
-  const pathOf = (dn: string): string[] => {
-    const parts = dn.split(',').map((p) => p.trim());
-    const ous = parts.filter((p) => /^OU=/i.test(p)).map((p) => p.slice(3));
-    return ous.reverse();
-  };
-
-  for (const r of rows) {
-    const segs = pathOf(r.ou);
-    if (!segs.length) continue;
-    let level = roots;
-    let keyAcc = '';
+  const ensure = (segs: string[]): void => {
+    let level = roots, keyAcc = '';
     for (const seg of segs) {
       keyAcc = keyAcc ? `${keyAcc}/${seg}` : seg;
       let node = index.get(keyAcc);
-      if (!node) {
-        node = { ou: keyAcc, label: seg, users: 0, enabled: 0, children: [] };
-        index.set(keyAcc, node);
-        level.push(node);
-      }
-      node.users += 1;
-      if (r.enabled) node.enabled += 1;
+      if (!node) { node = { ou: keyAcc, label: seg, users: 0, enabled: 0, children: [] }; index.set(keyAcc, node); level.push(node); }
+      level = node.children;
+    }
+  };
+  // Structure: every OU (incl. empty) when available, else only OUs users live in.
+  const structure = ouDns.length ? ouDns : [...new Set(userRows.map((r) => r.ou))];
+  for (const dn of structure) { const segs = ouPathOf(dn); if (segs.length) ensure(segs); }
+  // Counts: walk each user's OU path, creating any missing node, incrementing every ancestor.
+  for (const r of userRows) {
+    const segs = ouPathOf(r.ou);
+    let level = roots, keyAcc = '';
+    for (const seg of segs) {
+      keyAcc = keyAcc ? `${keyAcc}/${seg}` : seg;
+      let node = index.get(keyAcc);
+      if (!node) { node = { ou: keyAcc, label: seg, users: 0, enabled: 0, children: [] }; index.set(keyAcc, node); level.push(node); }
+      node.users += 1; if (r.enabled) node.enabled += 1;
       level = node.children;
     }
   }
@@ -135,17 +152,17 @@ export function ouTree(): OuNode[] {
   return roots;
 }
 
-/** Distinct OU distinguished names from the mirror, each with a readable top-down label and a user
- *  count, for the provisioning-settings dropdowns. Sorted by label. */
+/** Every OU distinguished name, each with a readable top-down label and a user count, for the
+ *  provisioning-settings dropdowns. Includes empty OUs once the agent posts the OU list. */
 export function adOuOptions(): { dn: string; label: string; users: number }[] {
   const db = getDb();
-  const rows = db.prepare(`SELECT ou, COUNT(*) AS c FROM ad_users WHERE ou IS NOT NULL AND ou != '' GROUP BY ou`).all() as { ou: string; c: number }[];
-  const label = (dn: string): string => {
-    const ous = dn.split(',').map((p) => p.trim()).filter((p) => /^OU=/i.test(p)).map((p) => p.slice(3));
-    return ous.reverse().join(' / ') || dn;
-  };
-  return rows
-    .map((r) => ({ dn: r.ou, label: label(r.ou), users: r.c }))
+  const label = (dn: string): string => ouPathOf(dn).join(' / ') || dn;
+  const counts = new Map<string, number>();
+  for (const r of db.prepare(`SELECT ou, COUNT(*) AS c FROM ad_users WHERE ou IS NOT NULL AND ou != '' GROUP BY ou`).all() as { ou: string; c: number }[]) counts.set(r.ou, r.c);
+  const ouDns = (db.prepare(`SELECT dn FROM ad_ous`).all() as { dn: string }[]).map((r) => r.dn);
+  const dns = ouDns.length ? ouDns : [...counts.keys()];
+  return dns
+    .map((dn) => ({ dn, label: label(dn), users: counts.get(dn) || 0 }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 

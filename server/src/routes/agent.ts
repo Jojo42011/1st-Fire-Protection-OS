@@ -45,7 +45,8 @@ router.post('/api/ad-agent/inventory', (req, res) => {
   const users: AdUserIn[] = Array.isArray(b.users) ? b.users : [];
   if (!users.length) return res.status(400).json({ ok: false, error: 'no users in payload' });
   try {
-    const out = ingestInventory(users, typeof b.collectedAt === 'string' ? b.collectedAt : undefined);
+    const ous = Array.isArray(b.ous) ? b.ous : undefined;
+    const out = ingestInventory(users, typeof b.collectedAt === 'string' ? b.collectedAt : undefined, ous);
     res.json({ ok: true, ...out });
   } catch (err) {
     res.status(500).json({ ok: false, error: (err as Error).message });

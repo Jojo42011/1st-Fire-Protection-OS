@@ -1387,6 +1387,14 @@ export function initDb(): void {
       group_dn     TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_ad_user_groups_guid ON ad_user_groups(object_guid);
+
+    -- Every OU object, so the OS knows the full structure including empty OUs (the user-derived tree
+    -- only sees OUs that contain someone). Posted by the agent from Get-ADOrganizationalUnit.
+    CREATE TABLE IF NOT EXISTS ad_ous (
+      dn         TEXT PRIMARY KEY,
+      name       TEXT,
+      synced_at  TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Offboarding: the account/mailbox lifecycle after a termination. One request per departing person
