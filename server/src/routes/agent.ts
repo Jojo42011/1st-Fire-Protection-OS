@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, AdUserIn } from '../services/adAudit';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
+import { computeOfficeDrift } from '../services/groupOfficeDrift';
 
 /**
  * On-prem AD agent endpoints (P1: read-only inventory) + the audit dashboard read.
@@ -79,6 +80,13 @@ router.get('/api/ad-audit/status', (_req, res) => {
 router.get('/api/ad-audit/sp-groups', async (req, res) => {
   const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
   const out = await listGroupsWithMembers(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Location group vs BambooHR home office: flags anyone in a location group that is not their office. */
+router.get('/api/ad-audit/office-drift', async (req, res) => {
+  const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
+  const out = await computeOfficeDrift(prefix);
   res.status(out.ok ? 200 : 400).json(out);
 });
 

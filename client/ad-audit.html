@@ -83,6 +83,17 @@
       <div id="spgResult" class="note" style="margin-top:10px">Loads each matching security group and its members from Entra. Needs the Graph GroupMember.Read.All permission.</div>
     </div>
   </details>
+  <details id="drift" class="adset">
+    <summary>Group vs home-office drift (who's in the wrong location group)</summary>
+    <div id="driftBody" class="adsetBody">
+      <div class="offrow" style="grid-template-columns:auto auto 1fr;max-width:520px">
+        <button class="os-btn primary" id="driftLoad">Run</button>
+        <button class="os-btn" id="driftCsv" disabled>Download CSV</button>
+        <span></span>
+      </div>
+      <div id="driftResult" class="note" style="margin-top:10px">Compares each location group's members against their BambooHR home office and flags mismatches. Function groups (HR, Accounting, ...) are ignored automatically.</div>
+    </div>
+  </details>
   <div id="body"></div>
 </div>
 
@@ -249,11 +260,46 @@ function downloadSpCsv(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
 }
 
+/* ---------- group vs home-office drift ---------- */
+var DRIFT=[];
+var DSTAT={office_mismatch:['Wrong office','bad'],disabled_in_group:['Disabled, still in group','warn'],no_home_office:['No home office on file','neutral'],no_employee:['No employee record','neutral']};
+function loadDrift(){
+  var out=document.getElementById('driftResult'), btn=document.getElementById('driftLoad');
+  btn.disabled=true; btn.textContent='Running…'; out.textContent='Pulling membership and matching to BambooHR…';
+  fetch('/api/ad-audit/office-drift').then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Run';
+    if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not run.'; return; }
+    DRIFT=d.findings||[];
+    var c=d.counts||{};
+    if(!DRIFT.length){ out.innerHTML='<span style="color:var(--good,#12805C)">No drift: every location group member matches their home office.</span> '+(d.locationGroups||[]).length+' location groups checked.'; document.getElementById('driftCsv').disabled=true; return; }
+    var rows=DRIFT.map(function(f){
+      var s=DSTAT[f.status]||[f.status,'neutral'];
+      return '<tr><td>'+OS.pill(s[0],s[1])+'</td>'+
+        '<td><div class="who">'+esc(f.person||f.upn||'?')+'</div><div class="sub2 mono">'+esc(f.upn||'')+'</div></td>'+
+        '<td class="mono">'+esc(f.group)+'</td>'+
+        '<td>'+esc(f.groupOffice||'')+'</td>'+
+        '<td>'+esc(f.homeOffice||'-')+'</td></tr>';
+    }).join('');
+    out.innerHTML='<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">'+(c.office_mismatch||0)+' wrong-office · '+(c.disabled_in_group||0)+' disabled-in-group · '+(c.no_employee||0)+' no-match · '+(d.locationGroups||[]).length+' location groups</div>'+
+      '<div class="card" style="overflow-x:auto"><table><thead><tr><th>Flag</th><th>Person</th><th>Group</th><th>Group office</th><th>Home office (Bamboo)</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    document.getElementById('driftCsv').disabled=false;
+  }).catch(function(){ btn.disabled=false; btn.textContent='Run'; out.textContent='Could not reach the drift service.'; });
+}
+function downloadDriftCsv(){
+  var lines=[['Flag','Person','UPN','Group','GroupOffice','HomeOffice','Enabled'].join(',')];
+  DRIFT.forEach(function(f){ lines.push([(DSTAT[f.status]||[f.status])[0],f.person,f.upn,f.group,f.groupOffice,f.homeOffice,f.enabled].map(csvCell).join(',')); });
+  var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='group-office-drift.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
   document.getElementById('spgLoad').addEventListener('click',loadSpGroups);
   document.getElementById('spgCsv').addEventListener('click',downloadSpCsv);
+  document.getElementById('driftLoad').addEventListener('click',loadDrift);
+  document.getElementById('driftCsv').addEventListener('click',downloadDriftCsv);
   loadSettings();
   load();
 });
