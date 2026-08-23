@@ -270,8 +270,20 @@ function loadDrift(){
     btn.disabled=false; btn.textContent='Run';
     if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not run.'; return; }
     DRIFT=d.findings||[];
-    var c=d.counts||{};
-    if(!DRIFT.length){ out.innerHTML='<span style="color:var(--good,#12805C)">No drift: every location group member matches their home office.</span> '+(d.locationGroups||[]).length+' location groups checked.'; document.getElementById('driftCsv').disabled=true; return; }
+    var c=d.counts||{}; var dg=d.diagnostics||{};
+    if(!DRIFT.length){
+      document.getElementById('driftCsv').disabled=true;
+      if(dg.locationGroups>0){ out.innerHTML='<span style="color:var(--good,#12805C)">No drift: every location group member matches their home office.</span> '+dg.locationGroups+' location groups checked, '+(dg.membersChecked||0)+' members.'; return; }
+      // No location groups detected: show why, so the naming mismatch is visible.
+      out.innerHTML='<div style="color:var(--critical,#8C1D18);font-weight:600;margin-bottom:6px">No location groups were detected, so nothing was checked.</div>'+
+        '<div style="font-size:12px;color:var(--muted);line-height:1.7">'+
+        'Groups found: '+(dg.groups||0)+' · employees with a home office: '+(dg.employeesWithOffice||0)+'/'+(dg.employeesTotal||0)+'<br>'+
+        'A group is treated as a location group only when its name matches a real BambooHR office. Check whether these line up:<br>'+
+        '<b>Offices on the roster:</b> '+esc((dg.distinctOffices||[]).join('  ·  ')||'(none)')+'<br>'+
+        '<b>Groups seen:</b> '+esc((dg.nonLocationGroups||[]).join('  ·  ')||'(none)')+
+        '</div>';
+      return;
+    }
     var rows=DRIFT.map(function(f){
       var s=DSTAT[f.status]||[f.status,'neutral'];
       return '<tr><td>'+OS.pill(s[0],s[1])+'</td>'+
