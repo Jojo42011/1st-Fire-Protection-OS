@@ -40,6 +40,19 @@ router.get('/api/ad-agent/ping', (_req, res) => {
   res.json({ ok: true, serverTime: new Date().toISOString() });
 });
 
+/** Current headcount by BambooHR office, as counts and percentages of the company. Token-gated so it
+ *  can be read for reporting; returns no PII, only office labels and counts. */
+router.get('/api/ad-agent/headcount', (_req, res) => {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT COALESCE(NULLIF(TRIM(office), ''), '(no office set)') AS office, COUNT(*) AS c
+       FROM employees WHERE employment_status NOT IN ('terminated', 'prehire')
+      GROUP BY office ORDER BY c DESC`
+  ).all() as { office: string; c: number }[];
+  const total = rows.reduce((s, r) => s + r.c, 0);
+  res.json({ ok: true, total, offices: rows.map((r) => ({ office: r.office, count: r.c, pct: total ? Math.round((r.c / total) * 1000) / 10 : 0 })) });
+});
+
 /** Mirror counts, so the agent (or an operator with the token) can verify what the last post stored:
  *  how many users, group memberships and OUs the server currently holds, plus the last-sync record. */
 router.get('/api/ad-agent/mirror', (_req, res) => {
