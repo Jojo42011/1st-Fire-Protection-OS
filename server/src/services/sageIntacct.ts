@@ -101,3 +101,61 @@ export async function testConnection(): Promise<{ ok: boolean; detail: string }>
     return { ok: false, detail: (err as Error).message };
   }
 }
+
+/* ─────────────────────────── read-only queries (scaffold) ───────────────────────────
+ * readByQuery + a tolerant parser for Intacct's XML records, so the OS can pull data once a
+ * developer-license sender ID + web-services user are provisioned (set the INTACCT_* env vars).
+ * Read-only: readByQuery is a GET-like function, never blocked by the write gate. Untested against
+ * the live gateway until real credentials exist. */
+
+/** Parse the record blocks out of a readByQuery response into flat objects (leaf tag -> text). */
+function parseRecords(xml: string, object: string): Record<string, string>[] {
+  const dataM = /<data[^>]*>([\s\S]*?)<\/data>/i.exec(xml);
+  if (!dataM) return [];
+  const inner = dataM[1];
+  // The record element is the object name Intacct echoes back (case can vary); detect the first child.
+  const tagM = new RegExp(`<(${object}|${object.toLowerCase()}|[A-Za-z0-9_]+)>`, 'i').exec(inner);
+  const tag = tagM ? tagM[1] : object;
+  const recRe = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  const out: Record<string, string>[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = recRe.exec(inner))) {
+    const rec: Record<string, string> = {};
+    const leafRe = /<([A-Za-z0-9_]+)>([^<]*)<\/\1>/g;
+    let f: RegExpExecArray | null;
+    while ((f = leafRe.exec(m[1]))) if (!(f[1] in rec)) rec[f[1]] = f[2];
+    out.push(rec);
+  }
+  return out;
+}
+
+/** Run a readByQuery and return parsed records. Bounded to one page (pagesize) for now. */
+export async function intacctReadByQuery(object: string, fields: string[], query = '', pagesize = 1000): Promise<Record<string, string>[]> {
+  const inner =
+    `<readByQuery><object>${xmlEscape(object)}</object>` +
+    `<fields>${xmlEscape(fields.join(','))}</fields>` +
+    `<query>${xmlEscape(query)}</query>` +
+    `<pagesize>${pagesize}</pagesize></readByQuery>`;
+  const xml = await intacctCall('readByQuery', inner);
+  return parseRecords(xml, object);
+}
+
+export interface SageUser { loginId: string | null; name: string | null; email: string | null; type: string | null; status: string | null }
+
+/** Pull the Sage Intacct user list (for the license-reclaim report). Keyless-safe. */
+export async function listSageUsers(): Promise<{ ok: boolean; error?: string; users: SageUser[] }> {
+  if (!intacctConfigured()) return { ok: false, error: 'Sage Intacct is not connected', users: [] };
+  try {
+    const rows = await intacctReadByQuery('USERINFO', ['RECORDNO', 'LOGINID', 'USERTYPE', 'STATUS', 'CONTACTINFO.EMAIL1', 'CONTACTINFO.CONTACTNAME']);
+    const users = rows.map((r) => ({
+      loginId: r.LOGINID || null,
+      name: r.CONTACTNAME || null,
+      email: r.EMAIL1 || null,
+      type: r.USERTYPE || null,
+      status: r.STATUS || null,
+    }));
+    return { ok: true, users };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message, users: [] };
+  }
+}

@@ -67,6 +67,7 @@ import sharepoint from './routes/sharepoint';
 import google from './routes/google';
 import adAgent from './routes/agent';
 import offboarding from './routes/offboarding';
+import sage from './routes/sage';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
 import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
@@ -160,6 +161,7 @@ app.use(sharepoint);
 app.use(google);
 app.use(adAgent);
 app.use(offboarding);
+app.use(sage);
 
 // ---- client pages (same-origin iframes so postMessage nav + persistent audio work) ----
 //
