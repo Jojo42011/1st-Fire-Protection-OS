@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/adAudit';
 import { getDb } from '../db/index';
 import { activeRoster } from '../services/peopleRoster';
+import { syncIdentitiesFromM365 } from '../people/service';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -39,6 +40,13 @@ router.use('/api/ad-agent', requireAgentToken);
 /** Liveness + auth check the DC agent calls to confirm it can reach and authenticate to the OS. */
 router.get('/api/ad-agent/ping', (_req, res) => {
   res.json({ ok: true, serverTime: new Date().toISOString() });
+});
+
+/** Trigger the Microsoft 365 identity reconcile (stamp each employee's UPN/work email from Entra).
+ *  Token-gated so it can be run for maintenance; the same operation as the People-screen button. */
+router.post('/api/ad-agent/match-identities', async (_req, res) => {
+  const out = await syncIdentitiesFromM365('agent-token');
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Active-employee roster for reporting: name, position, office, work email only (standard directory
