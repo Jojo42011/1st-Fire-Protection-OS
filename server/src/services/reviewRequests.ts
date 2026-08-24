@@ -270,13 +270,22 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
   return { sent, capped: rows.length >= room, remaining: remainingToday() };
 }
 
-/** Render a sample of the exact customer email (for a test send / preview). */
+/** Render a sample of the exact customer email (for a test send / preview). When the named office is
+ *  mapped, the preview uses that office's REAL Google link and phone, so the button in the preview
+ *  goes where a real send would (no misleading placeholder). */
 export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
+  const name = officeName || '1st Fire Protection Houston';
+  let review_url = 'https://g.page/r/Cd6k5KxBJuA9EBM/review';
+  let target_phone: string | null = null;
+  try {
+    const t = getDb().prepare(`SELECT review_url, phone FROM review_targets WHERE lower(office_name) = lower(?) AND review_url IS NOT NULL`).get(name) as { review_url: string; phone: string | null } | undefined;
+    if (t) { review_url = t.review_url; target_phone = t.phone; }
+  } catch { /* fall back to placeholder */ }
   return buildMessage({
     id: 0, number: null, kind: null, completed_at: null,
-    office_id: null, office_name: officeName || '1st Fire Protection Houston', office_phone: '2813334444', target_phone: null,
+    office_id: null, office_name: name, office_phone: '2813334444', target_phone,
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
-    account_name: null, review_url: 'https://g.page/r/Cd6k5KxBJuA9EBM/review',
+    account_name: null, review_url,
   });
 }
 
