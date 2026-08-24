@@ -668,6 +668,8 @@ function activate(key,announce){
     if(ni)ni.classList.toggle('on',k===key);
   });
   current=key;
+  // Keep the URL in sync with the active screen so a browser reload restores it (no history spam).
+  try{ history.replaceState(null, '', key===HOME ? location.pathname : (location.pathname + '?tab=' + encodeURIComponent(key))); }catch(_){}
   var grp=GROUP_LABEL[key]||'';
   // Mark the active flyout row (secondary-tier destinations live inside a flyout, not an inline row).
   Array.prototype.forEach.call(nav.querySelectorAll('.nav-flyrow'), function(fr){
