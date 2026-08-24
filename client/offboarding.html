@@ -64,7 +64,9 @@ var SEV={critical:'bad',high:'bad',medium:'warn'};
 var STAGE={s1:'Day 0 · lock down',s2:'Stop paying',s3:'Cut the forward',s4:'Retire'};
 var TAB='board', OPEN=null, POLICY={forwardDays:90,retainDays:180};
 
-function setTab(t){TAB=t;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t);});render();}
+function setTab(t){TAB=t;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t);});render();
+  try{history.replaceState(null,'','#'+t);}catch(_){} try{parent.postMessage({type:'fp-subtab',tab:t},'*');}catch(_){}
+}
 
 /* ---------- board ---------- */
 function render(){
@@ -197,6 +199,10 @@ function renderNew(){
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){setTimeout(arguments.callee,50);return;}
   document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener('click',function(){setTab(b.getAttribute('data-tab'));});});
+  // Restore the sub-tab from the hash the shell loaded us with (e.g. #backlog).
+  var h=(location.hash||'').replace(/^#/,'');
+  if(h==='board'||h==='backlog'||h==='new') TAB=h;
+  document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===TAB);});
   render();
 });
 </script>

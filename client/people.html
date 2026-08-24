@@ -186,7 +186,10 @@ function renderGate(){
 function signIn(){ try{ (window.top||window).location.href='/api/people/auth/login'; }catch(_){ window.location.href='/api/people/auth/login'; } }
 function signOut(){ j('/api/people/auth/logout',{method:'POST'}).then(function(){location.reload();}); }
 
-function go(k){ cur=k; renderStrip(STRIP_VIEWS[k]?k:''); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v); }
+function go(k){ cur=k; renderStrip(STRIP_VIEWS[k]?k:''); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v);
+  // Tell the shell which in-page sub-tab is active so a browser reload restores it.
+  if(STRIP_VIEWS[k]){ try{history.replaceState(null,'','#'+k);}catch(_){} try{parent.postMessage({type:'fp-subtab',tab:k},'*');}catch(_){} }
+}
 // Strip navigation: active in-page tab is inert; My tasks / Approvals leave via OS.go; Onboarding
 // opens its own view; Role templates opens a drawer; the rest render in-page.
 document.getElementById('pstrip').addEventListener('click',function(e){

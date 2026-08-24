@@ -512,6 +512,19 @@ NAV.forEach(function(g){ (g.items||[]).forEach(function(k){ GROUP_LABEL[k]=g.gro
 var mq=window.matchMedia('(max-width:900px), (pointer:coarse)');
 function isMobile(){return mq.matches;}
 var current=HOME;
+// Remembered sub-tab per screen (e.g. people -> employees), so a reload restores the exact view.
+var subByScreen={};
+// Keep the URL in sync with the active screen + its sub-tab so a browser reload restores it (no
+// history spam). Home clears the query.
+function syncUrl(){
+  try{
+    var qs = current===HOME ? '' : ('?tab='+encodeURIComponent(current));
+    if(current!==HOME && subByScreen[current]) qs += '&sub='+encodeURIComponent(subByScreen[current]);
+    history.replaceState(null, '', location.pathname + qs);
+  }catch(_){}
+}
+// Which screen's frame sent a postMessage (same-origin).
+function frameKeyFor(win){ for(var i=0;i<KEYS.length;i++){ var f=frameEl(KEYS[i]); if(f&&f.contentWindow===win) return KEYS[i]; } return null; }
 
 /* build one iframe per screen; only the home frame gets its src eagerly */
 frames.innerHTML=KEYS.map(function(k){
@@ -661,15 +674,16 @@ function activate(key,announce){
   if(!SCREENS[key])return;
   // Never open an area this role does not include, even via ?tab= or the command palette.
   if(!allowedScreen(key)){ key = firstAllowed(); if(!key) return; }
-  var f=frameEl(key); if(f&&!f.src)f.src=f.getAttribute('data-src');
+  // Open the frame; if we have a remembered sub-tab for this screen, load it at that sub-tab (the
+  // child reads its location.hash on init).
+  var f=frameEl(key); if(f&&!f.src){ var ds=f.getAttribute('data-src'); if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]); f.src=ds; }
   KEYS.forEach(function(k){
     frameEl(k).classList.toggle('on',k===key);
     var ni=nav.querySelector('.nav-item[data-key="'+k+'"]');
     if(ni)ni.classList.toggle('on',k===key);
   });
   current=key;
-  // Keep the URL in sync with the active screen so a browser reload restores it (no history spam).
-  try{ history.replaceState(null, '', key===HOME ? location.pathname : (location.pathname + '?tab=' + encodeURIComponent(key))); }catch(_){}
+  syncUrl();
   var grp=GROUP_LABEL[key]||'';
   // Mark the active flyout row (secondary-tier destinations live inside a flyout, not an inline row).
   Array.prototype.forEach.call(nav.querySelectorAll('.nav-flyrow'), function(fr){
@@ -721,6 +735,8 @@ window.addEventListener('message',function(e){var d=e.data||{};
     if(d.param&&SCREENS[nk]){var nf=frameEl(nk);if(nf){nf.src=SCREENS[nk].src+(SCREENS[nk].src.indexOf('?')>=0?'&':'?')+d.param;}}
     activate(nk,true);
   }
+  // A screen tells the shell which of its sub-tabs is active, so a reload restores it.
+  if(d.type==='fp-subtab'&&d.tab){ var sk=frameKeyFor(e.source); if(sk){ subByScreen[sk]=String(d.tab); if(sk===current) syncUrl(); } }
   if(d.type==='counts-changed'){refreshCounts();}
   if(d.type==='roster-changed'){location.replace(location.pathname+'?tab='+encodeURIComponent(current));}
   // A screen (e.g. Exceptions drill-down) asks to scope the whole app to one office.
@@ -896,8 +912,9 @@ function refreshCounts(){
 refreshCounts();
 
 /* ---- deep link + public API ---- */
-var q=new URLSearchParams(location.search).get('tab');
-if(q&&SCREENS[q]&&q!==HOME){activate(q);}else{activate(HOME);}
+var _params=new URLSearchParams(location.search);
+var q=_params.get('tab'), qsub=_params.get('sub');
+if(q&&SCREENS[q]&&q!==HOME){ if(qsub) subByScreen[q]=qsub; activate(q); } else { activate(HOME); }
 window.AppShell={open:function(k){activate(k,true);},collapse:setCollapsed,screens:SCREENS};
 window.signOut=function(){try{fetch('/api/logout',{method:'POST'}).then(function(){location.href='/login';}).catch(function(){location.href='/login';});}catch(e){location.href='/login';}};
 
