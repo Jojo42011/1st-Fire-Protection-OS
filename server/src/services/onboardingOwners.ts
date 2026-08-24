@@ -28,6 +28,7 @@ const DEFAULT_EMAIL: Partial<Record<Owner, string>> = {
   sandi: 'hr@1stfpservices.com',
   it: 'support@liontechlabs.com',
   rebecca: 'rebecca.koen@1stfpservices.com',
+  denise: 'safety@1stfpservices.com',
 };
 
 const K_EMAILS = 'onboarding_owner_emails';
@@ -106,4 +107,42 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
     if (out.ok) sent++;
   }
   return { sent };
+}
+
+/* ─────────────────────────── manual per-lane email (generate + send) ─────────────────────────── */
+import { getDb } from '../db/index';
+
+export interface OwnerEmailPreview { to: string | null; subject: string; html: string; text: string; count: number; ownerLabel: string }
+
+/** Build the email for one owner lane of a request: recipient, subject, HTML and a plain-text body
+ *  (for copy/paste), so it can be previewed and sent, or sent by hand from your own mailbox. */
+export function ownerEmailPreview(requestId: number, owner: Owner, base: string): OwnerEmailPreview | null {
+  const db = getDb();
+  const request = db.prepare(`SELECT id, name FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string } | undefined;
+  if (!request) return null;
+  const items = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = ? ORDER BY id`).all(requestId, owner) as OnboardingItem[];
+  const ownerLabel = (items[0] && items[0].owner_label) || owner;
+  const to = ownerEmailMap()[owner] || null;
+  const subject = `Onboarding tasks for ${request.name}: ${ownerLabel}`;
+  const boardUrl = `${base}/onboarding`;
+  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl) : '';
+  const text = [
+    `Onboarding for ${request.name}: ${ownerLabel}`, '',
+    ...items.map((it) => `- ${it.label}${it.detail ? ` (${it.detail})` : ''}`),
+    '', `Open the board: ${boardUrl}`,
+  ].join('\n');
+  return { to, subject, html, text, count: items.length, ownerLabel };
+}
+
+/** Send one owner lane's email now, via the OS mailbox. Keyless-safe. */
+export async function sendOwnerEmailNow(requestId: number, owner: Owner, base: string): Promise<{ ok: boolean; to?: string; error?: string }> {
+  const p = ownerEmailPreview(requestId, owner, base);
+  if (!p) return { ok: false, error: 'request not found' };
+  if (!p.count) return { ok: false, error: 'no tasks in this lane' };
+  if (!p.to) return { ok: false, error: `No routing address set for ${p.ownerLabel}. Set one in the owner-email settings.` };
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 mail is not connected.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding.' };
+  const out = await sendMail(p.to, p.subject, p.html, { from: sender.address, fromName: sender.name });
+  return out.ok ? { ok: true, to: p.to } : { ok: false, error: out.error };
 }

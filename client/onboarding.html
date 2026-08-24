@@ -494,7 +494,8 @@ function openReq(id){
     var req=d.request, ru=d.rollup;
     var groups=(d.groups||[]).map(function(g){
       var items=g.items.map(itemRow).join('');
-      return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span>'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+'</div>'+items+'</div>';
+      var emailBtn=g.items.length?'<button class="il-btn" data-emailowner="'+esc(g.owner)+'" style="margin-left:8px">Email</button>':'';
+      return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span><span style="display:flex;align-items:center;gap:8px">'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+emailBtn+'</span></div>'+items+'</div>';
     }).join('');
     // Offer AD account provisioning while the request is still open. We run hybrid identity (on-prem
     // AD synced to Entra), so the OS generates a New-ADUser + Add-ADGroupMember script IT runs on a
@@ -607,12 +608,48 @@ function itemRow(it){
     '<div class="ax">'+st+act+'</div></div>';
 }
 document.getElementById('detail').addEventListener('click',function(e){
+  var eb=e.target.closest('[data-emailowner]');
+  if(eb){ openOwnerEmail(OPEN_ID, eb.getAttribute('data-emailowner')); return; }
   var b=e.target.closest('[data-item]'); if(!b) return;
   var id=b.getAttribute('data-item'), verb=b.getAttribute('data-verb');
   b.disabled=true; b.textContent='…';
   fetch('/api/onboarding/items/'+id+'/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
     .then(function(r){return r.json();}).then(function(){ OS.toast('Item '+(verb==='complete'?'completed':verb==='approve'?'approved':'rejected')+'.'); loadBoard(); });
 });
+// Generate/preview the email for one owner lane: shows To/Subject/Body to copy or open in your mail
+// app, plus a Send now (via the OS mailbox).
+function openOwnerEmail(id,owner){
+  fetch('/api/onboarding/'+id+'/owner-email/'+encodeURIComponent(owner)).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not build the email.','bad'); return; }
+    var to=d.to||'', mailto='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(d.subject)+'&body='+encodeURIComponent(d.text);
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px';
+    ov.innerHTML='<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;max-width:640px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border)"><div style="font-weight:600;font-size:14px">Email: '+esc(d.ownerLabel)+' ('+d.count+' task'+(d.count===1?'':'s')+')</div><button class="os-btn" id="oeClose">Close</button></div>'+
+      '<div style="padding:14px 18px;overflow:auto">'+
+        '<div style="font-size:12px;color:var(--muted)">To</div><div class="mono" style="margin-bottom:8px">'+(to?esc(to):'<span style="color:var(--critical,#8C1D18)">no address set for this lane</span>')+'</div>'+
+        '<div style="font-size:12px;color:var(--muted)">Subject</div><div style="margin-bottom:8px">'+esc(d.subject)+'</div>'+
+        '<div style="font-size:12px;color:var(--muted)">Body</div><pre id="oeBody" style="white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:11px;margin:4px 0 0">'+esc(d.text)+'</pre>'+
+      '</div>'+
+      '<div style="display:flex;gap:9px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--border);flex-wrap:wrap">'+
+        '<button class="os-btn" id="oeCopy">Copy body</button>'+
+        (to?'<a class="os-btn" href="'+mailto+'">Open in mail app</a>':'')+
+        (to?'<button class="os-btn primary" id="oeSend">Send now</button>':'')+
+      '</div></div>';
+    document.body.appendChild(ov);
+    function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+    ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+    ov.querySelector('#oeClose').addEventListener('click',close);
+    ov.querySelector('#oeCopy').addEventListener('click',function(){ if(navigator.clipboard){navigator.clipboard.writeText(d.text).then(function(){OS.toast('Body copied.');},function(){OS.toast('Copy failed.','bad');});} });
+    var sb=ov.querySelector('#oeSend');
+    if(sb) sb.addEventListener('click',function(){ sb.disabled=true; sb.textContent='Sending…';
+      fetch('/api/onboarding/'+id+'/owner-email/'+encodeURIComponent(owner)+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+        if(res&&res.ok){ OS.toast('Sent to '+res.to+'.'); close(); }
+        else { OS.toast((res&&res.error)||'Could not send.','bad'); sb.disabled=false; sb.textContent='Send now'; }
+      }).catch(function(){ OS.toast('Could not send.','bad'); sb.disabled=false; sb.textContent='Send now'; });
+    });
+  }).catch(function(){ OS.toast('Could not reach the server.','bad'); });
+}
 
 /* ─────────────── full onboarding request form (preserves POST /api/onboarding) ─────────────── */
 function renderForm(){

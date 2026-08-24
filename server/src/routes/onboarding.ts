@@ -33,7 +33,7 @@ import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings 
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
-import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail } from '../services/onboardingOwners';
+import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow } from '../services/onboardingOwners';
 import { currentUser } from '../people/authz';
 
 const router = Router();
@@ -77,6 +77,26 @@ router.post('/api/onboarding', (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** Generate the email for one owner lane of a request (recipient, subject, HTML + plain-text body),
+ *  so it can be previewed, copied, and sent by hand, or sent now via the OS. Role-scoped. */
+router.get('/api/onboarding/:id(\\d+)/owner-email/:owner', (req, res) => {
+  const owner = req.params.owner as any;
+  const vis = visibleOwners(currentUser(req));
+  if (vis && !vis.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  const out = ownerEmailPreview(Number(req.params.id), owner, base);
+  if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
+  res.json({ ok: true, ...out });
+});
+router.post('/api/onboarding/:id(\\d+)/owner-email/:owner/send', async (req, res) => {
+  const owner = req.params.owner as any;
+  const vis = visibleOwners(currentUser(req));
+  if (vis && !vis.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
+  const base = `${req.protocol}://${req.get('host')}`;
+  const out = await sendOwnerEmailNow(Number(req.params.id), owner, base);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** The owner->email routing map (HR, IT, accounting, ...) so a People admin can view and edit it. */
