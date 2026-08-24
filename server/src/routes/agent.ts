@@ -45,17 +45,31 @@ router.get('/api/ad-agent/ping', (_req, res) => {
 router.get('/api/ad-agent/roster', (_req, res) => {
   const db = getDb();
   const rows = db.prepare(
-    `SELECT legal_first_name, legal_last_name, preferred_name, public_job_title, job_position, office, work_email
+    `SELECT legal_first_name, legal_last_name, preferred_name, upn, public_job_title, job_position, office, work_email
        FROM employees WHERE employment_status NOT IN ('terminated', 'prehire')
       ORDER BY office, legal_last_name, legal_first_name`
   ).all() as any[];
-  const roster = rows.map((r) => ({
-    name: (r.preferred_name && r.legal_last_name ? `${r.preferred_name} ${r.legal_last_name}` : (r.preferred_name || `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim())) || null,
-    position: r.public_job_title || r.job_position || null,
-    office: r.office || null,
-    email: r.work_email || null,
-  }));
-  res.json({ ok: true, count: roster.length, roster });
+  // Backfill missing emails from the AD mirror (matched by name), for staff whose account exists but
+  // whose Bamboo record was never stamped.
+  const nrm = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const adByName = new Map<string, string>();
+  for (const a of db.prepare(`SELECT display_name, given_name, surname, upn, email FROM ad_users WHERE enabled = 1`).all() as any[]) {
+    const mail = a.email || a.upn;
+    if (!mail) continue;
+    if (a.given_name && a.surname) adByName.set(nrm(a.given_name + a.surname), mail);
+    if (a.display_name) adByName.set(nrm(a.display_name), mail);
+  }
+  const roster = rows.map((r) => {
+    let email = r.work_email || r.upn || null;
+    if (!email) email = adByName.get(nrm(`${r.legal_first_name || ''}${r.legal_last_name || ''}`)) || (r.preferred_name ? adByName.get(nrm(`${r.preferred_name}${r.legal_last_name || ''}`)) : undefined) || null;
+    return {
+      name: (r.preferred_name && r.legal_last_name ? `${r.preferred_name} ${r.legal_last_name}` : (r.preferred_name || `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim())) || null,
+      position: r.public_job_title || r.job_position || null,
+      office: r.office || null,
+      email,
+    };
+  });
+  res.json({ ok: true, count: roster.length, withEmail: roster.filter((x) => x.email).length, roster });
 });
 
 /** Current headcount by BambooHR office, as counts and percentages of the company. Token-gated so it
