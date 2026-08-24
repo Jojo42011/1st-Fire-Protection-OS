@@ -9,7 +9,8 @@ import { resolveToken, markOpened, submitIntake, boundHire } from '../services/i
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
-import { computerTierList, DOCK_PRICE } from '../services/onboardingAgent';
+import { computerTierList, DOCK_PRICE, getRequest } from '../services/onboardingAgent';
+import { notifyOwners } from '../services/onboardingOwners';
 import { sendMail, mailCredsPresent } from '../services/msGraphMail';
 import { senderFor } from '../services/mailSenders';
 import { intakeSubmittedHtml } from '../services/onboardingEmail';
@@ -65,7 +66,10 @@ router.post('/api/intake/:token', async (req, res) => {
   }
   // Heads-up to the onboarding mailbox so the owning teams know a request is waiting. Keyless-safe:
   // a no-op when mail is not connected, and never blocks or fails the submission for the manager.
-  void notifyOnboardingTeams(out, link.ok ? link.link : null, `${req.protocol}://${req.get('host')}`).catch(() => {});
+  const base = `${req.protocol}://${req.get('host')}`;
+  void notifyOnboardingTeams(out, link.ok ? link.link : null, base).catch(() => {});
+  // Route each owner lane's tasks to its address (hr@, IT MSP, accounting). Best-effort, keyless-safe.
+  if (out.request_id) { const r = getRequest(out.request_id); if (r) void notifyOwners(r.request, r.groups.flatMap((g) => g.items), base).catch(() => {}); }
   res.json({ ok: true, request_id: out.request_id, teams: out.teams });
 });
 

@@ -33,6 +33,8 @@ import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings 
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
+import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail } from '../services/onboardingOwners';
+import { currentUser } from '../people/authz';
 
 const router = Router();
 
@@ -64,14 +66,25 @@ router.get('/api/onboarding', (_req, res) => {
   res.json({ requests: listRequests(), options: getFormOptions() });
 });
 
-/** Create a new onboarding request and auto-route it into gated items. */
+/** Create a new onboarding request and auto-route it into gated items. Emails each owner lane's tasks
+ *  to its routed address (hr@, IT MSP, accounting), best-effort. */
 router.post('/api/onboarding', (req, res) => {
   try {
     const out = createRequest(req.body || {});
     res.json({ ok: true, request: out.request, items: out.items });
+    const base = `${req.protocol}://${req.get('host')}`;
+    void notifyOwners(out.request, out.items, base).catch(() => {});
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** The owner->email routing map (HR, IT, accounting, ...) so a People admin can view and edit it. */
+router.get('/api/onboarding/owner-emails', (_req, res) => res.json({ ok: true, emails: ownerEmailMap() }));
+router.put('/api/onboarding/owner-emails', (req, res) => {
+  const b = req.body || {};
+  if (!b.owner) return res.status(400).json({ ok: false, error: 'owner required' });
+  res.json({ ok: true, emails: setOwnerEmail(b.owner, b.email ?? null) });
 });
 
 /** Discard an onboarding request so it drops off the board (reversible; row kept). */
@@ -79,11 +92,23 @@ router.post('/api/onboarding/:id(\\d+)/discard', (req, res) => {
   res.json({ ok: discardRequest(Number(req.params.id), actor(req)) });
 });
 
-/** One request: the record + its items grouped by owner + the rollup. (id is numeric so the
- *  /api/onboarding/intake-links routes below are not captured here.) */
+/** One request: the record + its items grouped by owner + the rollup. Owner lanes are filtered to
+ *  the ones the viewer's role may see (HR sees HR lanes, not IT/accounting/owner approvals); People
+ *  admins and executive approvers see all, and legacy shared-password sessions are unchanged. */
 router.get('/api/onboarding/:id(\\d+)', (req, res) => {
   const out = getRequest(Number(req.params.id));
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
+  const vis = visibleOwners(currentUser(req));
+  if (vis) {
+    out.groups = out.groups.filter((g) => vis.has(g.owner as any));
+    // Recompute the rollup from only the lanes this viewer can see, so counts match what they see.
+    const items = out.groups.flatMap((g) => g.items);
+    const total = items.length;
+    const done = items.filter((i) => i.status === 'done' || i.status === 'approved').length;
+    const settled = items.filter((i) => i.status !== 'pending').length;
+    const pendingApprovals = items.filter((i) => i.kind === 'approval' && i.status === 'pending').length;
+    out.rollup = { total, settled, done, pending: total - settled, pendingApprovals, progress: total ? Math.round((done / total) * 100) : 0 };
+  }
   res.json({ ok: true, ...out });
 });
 
