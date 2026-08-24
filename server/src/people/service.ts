@@ -304,10 +304,14 @@ export function computeReadiness(workflow_id: number): { overall: string; catego
 export function overview(): any {
   const db = getDb();
   const n = (sql: string, ...a: any[]) => (db.prepare(sql).get(...a) as { c: number }).c;
+  // Onboarding / offboarding count the request boards (what the tabs actually show), not the employee
+  // lifecycle status, so the KPI and tab badge match the board when you click through.
+  const onboardOpen = () => { try { return n(`SELECT COUNT(*) AS c FROM onboarding_requests WHERE status IS NULL OR status NOT IN ('complete','discarded')`); } catch { return 0; } };
+  const offboardOpen = () => { try { return n(`SELECT COUNT(*) AS c FROM offboarding_requests WHERE status NOT IN ('complete','cancelled')`); } catch { return 0; } };
   return {
-    onboarding: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'onboarding'`),
+    onboarding: onboardOpen(),
     active: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'active'`),
-    offboarding: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status IN ('notice','offboarding')`),
+    offboarding: offboardOpen(),
     terminated: n(`SELECT COUNT(*) AS c FROM employees WHERE employment_status = 'terminated'`),
     openTasks: n(`SELECT COUNT(*) AS c FROM people_tasks WHERE status IN ('pending','ready','in_progress')`),
     awaitingApproval: n(`SELECT COUNT(*) AS c FROM people_tasks WHERE status = 'awaiting_approval'`),
