@@ -10,6 +10,7 @@ import {
   computerTierList,
   DOCK_PRICE,
   provisionRequestGroups,
+  discardRequest,
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
@@ -71,6 +72,11 @@ router.post('/api/onboarding', (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** Discard an onboarding request so it drops off the board (reversible; row kept). */
+router.post('/api/onboarding/:id(\\d+)/discard', (req, res) => {
+  res.json({ ok: discardRequest(Number(req.params.id), actor(req)) });
 });
 
 /** One request: the record + its items grouped by owner + the rollup. (id is numeric so the

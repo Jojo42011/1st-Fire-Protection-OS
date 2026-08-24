@@ -504,8 +504,15 @@ function openReq(id){
     var provBtn=canProv?'<button class="os-btn" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run by hand">Script instead</button>':'';
     document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
       '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
-      '<div style="display:flex;gap:9px">'+createBtn+provBtn+'<button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
+      '<div style="display:flex;gap:9px">'+createBtn+provBtn+'<button class="os-btn" id="discardReq" title="Remove this request from the board">Discard</button><button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
     document.getElementById('closeReq').addEventListener('click',closeReq);
+    document.getElementById('discardReq').addEventListener('click',function(){
+      if(!confirm('Discard '+(req.name||'this onboarding')+'? It drops off the board (this does not delete the person from BambooHR or AD).')) return;
+      fetch('/api/onboarding/'+id+'/discard',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+        if(res&&res.ok){ OS.toast('Onboarding discarded.'); closeReq(); loadBoard(); }
+        else OS.toast('Could not discard.','bad');
+      }).catch(function(){ OS.toast('Could not reach the server.','bad'); });
+    });
     var pv=document.getElementById('provisionReq');
     if(pv) pv.addEventListener('click',function(){
       pv.disabled=true; pv.textContent='Generating…';

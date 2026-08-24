@@ -467,11 +467,19 @@ function rollupFor(items: OnboardingItem[]): RequestRollup {
   };
 }
 
-/** Every request with a progress rollup, newest first (the board). */
+/** Every request with a progress rollup, newest first (the board). Discarded requests are hidden. */
 export function listRequests(): (any & { rollup: RequestRollup })[] {
   const db = getDb();
-  const requests = db.prepare(`SELECT * FROM onboarding_requests ORDER BY id DESC`).all() as any[];
+  const requests = db.prepare(`SELECT * FROM onboarding_requests WHERE status IS NULL OR status != 'discarded' ORDER BY id DESC`).all() as any[];
   return requests.map((r) => ({ ...r, rollup: rollupFor(itemsFor(r.id)) }));
+}
+
+/** Discard an onboarding request: mark it discarded so it drops off the board. Reversible (the row and
+ *  its items are kept); use for test entries or a hire who never actually started. */
+export function discardRequest(id: number, _actor: string): boolean {
+  const db = getDb();
+  const r = db.prepare(`UPDATE onboarding_requests SET status = 'discarded' WHERE id = ? AND (status IS NULL OR status != 'discarded')`).run(id);
+  return r.changes > 0;
 }
 
 /* ─────────────────────────── decisions (the human gate) ─────────────────────────── */
