@@ -4,7 +4,7 @@ import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/ad
 import { getDb } from '../db/index';
 import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
-import { discoverOffices as discoverReviewOffices } from '../services/reviewRequests';
+import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode } from '../services/reviewRequests';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -54,6 +54,27 @@ router.post('/api/ad-agent/match-identities', async (_req, res) => {
 router.get('/api/ad-agent/review-targets', (_req, res) => {
   try { res.json({ ok: true, offices: discoverReviewOffices() }); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Map an office to a Google review link (token-gated write). Body: { office_id, office_name?, link, phone? }. */
+router.post('/api/ad-agent/review-target', (req, res) => {
+  const b = req.body || {};
+  const officeId = String(b.office_id || '').trim();
+  const link = String(b.link || '').trim();
+  if (!officeId || !link) return res.status(400).json({ ok: false, error: 'office_id and link are required' });
+  try {
+    const t = setReviewTarget(officeId, b.office_name != null ? String(b.office_name) : null, link, b.phone != null ? String(b.phone) : null);
+    res.json({ ok: true, target: t });
+  } catch (e) { res.status(400).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Read or set the review send mode ('hold' | 'auto'). GET returns current; POST { mode } sets it. */
+router.get('/api/ad-agent/review-mode', (_req, res) => { res.json({ ok: true, mode: getReviewMode() }); });
+router.post('/api/ad-agent/review-mode', (req, res) => {
+  const mode = String((req.body || {}).mode || '').trim();
+  if (mode !== 'hold' && mode !== 'auto') return res.status(400).json({ ok: false, error: "mode must be 'hold' or 'auto'" });
+  setReviewMode(mode);
+  res.json({ ok: true, mode: getReviewMode() });
 });
 
 /** Active-employee roster for reporting: name, position, office, work email only (standard directory
