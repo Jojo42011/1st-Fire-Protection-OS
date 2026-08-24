@@ -40,6 +40,24 @@ router.get('/api/ad-agent/ping', (_req, res) => {
   res.json({ ok: true, serverTime: new Date().toISOString() });
 });
 
+/** Active-employee roster for reporting: name, position, office, work email only (standard directory
+ *  fields, no pay/personal contact). Token-gated. */
+router.get('/api/ad-agent/roster', (_req, res) => {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT legal_first_name, legal_last_name, preferred_name, public_job_title, job_position, office, work_email
+       FROM employees WHERE employment_status NOT IN ('terminated', 'prehire')
+      ORDER BY office, legal_last_name, legal_first_name`
+  ).all() as any[];
+  const roster = rows.map((r) => ({
+    name: (r.preferred_name && r.legal_last_name ? `${r.preferred_name} ${r.legal_last_name}` : (r.preferred_name || `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim())) || null,
+    position: r.public_job_title || r.job_position || null,
+    office: r.office || null,
+    email: r.work_email || null,
+  }));
+  res.json({ ok: true, count: roster.length, roster });
+});
+
 /** Current headcount by BambooHR office, as counts and percentages of the company. Token-gated so it
  *  can be read for reporting; returns no PII, only office labels and counts. */
 router.get('/api/ad-agent/headcount', (_req, res) => {
