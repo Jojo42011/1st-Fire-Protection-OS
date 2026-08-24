@@ -17,6 +17,7 @@ import { importComputers } from '../services/rmmImport';
 import * as sw from '../services/softwareLicenses';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
+import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || 'system';
@@ -98,6 +99,19 @@ router.delete('/api/onboarding-catalog/:id', requirePeople('people_admin', 'it',
 /* ─────────────────────────── employees ─────────────────────────── */
 router.get('/api/people/employees', requirePeople(), (req, res) => {
   res.json({ employees: svc.listEmployees({ status: req.query.status as string, office: req.query.office as string, q: req.query.q as string }) });
+});
+
+/** Download the active-employee roster (name, position, office, email) as CSV. */
+router.get('/api/people/roster-export', requirePeople(), (_req, res) => {
+  const csv = rosterCsv();
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="active-employees.csv"');
+  res.send(csv);
+});
+
+/** BambooHR data-gap report: active employees missing office / position / a stamped email. */
+router.get('/api/people/data-gaps', requirePeople(), (_req, res) => {
+  res.json({ ok: true, ...employeeDataGaps() });
 });
 router.get('/api/people/employees/:id', requirePeople(), (req, res) => {
   const detail = svc.getEmployeeDetail(Number(req.params.id), { includeComp: canViewCompensation((req as any).user) });

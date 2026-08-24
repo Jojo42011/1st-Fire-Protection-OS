@@ -272,7 +272,9 @@ VIEWS.employees=function(v){
     var idBtn=canEditAccess()?'<button class="btn btn-sm" id="idSync" onclick="syncIdentities()">Match identities from Microsoft 365</button>':'';
     var syncAllBtn=canEditAccess()?'<button class="btn btn-sm" id="syncAll" onclick="syncAllAccess()">Sync all access from Microsoft 365</button>':'';
     var resolveBtn=canEditAccess()?'<button class="btn btn-sm" id="resolveUn" onclick="resolveUnmatched()">Resolve unmatched</button>':'';
-    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+importBtn+idBtn+resolveBtn+syncAllBtn+'</div></div>';
+    var exportBtn='<button class="btn btn-sm" onclick="exportRoster()">Export roster</button>';
+    var gapsBtn='<button class="btn btn-sm" onclick="showDataGaps()">Data gaps</button>';
+    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+exportBtn+gapsBtn+importBtn+idBtn+resolveBtn+syncAllBtn+'</div></div>';
     // Filter bar: office, status, and a free-text search. Offices come from the roster itself.
     var offices=[]; EMPLOYEES.forEach(function(e){ if(e.office && offices.indexOf(e.office)<0) offices.push(e.office); }); offices.sort();
     var statuses=[]; EMPLOYEES.forEach(function(e){ if(e.employment_status && statuses.indexOf(e.employment_status)<0) statuses.push(e.employment_status); });
@@ -292,6 +294,34 @@ VIEWS.employees=function(v){
     resumeSyncAll();
   });
 };
+function exportRoster(){
+  fetch('/api/people/roster-export').then(function(r){return r.blob();}).then(function(blob){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='active-employees.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+  }).catch(function(){ alert('Could not export the roster.'); });
+}
+var GAP_LABEL={no_office:'No office',no_position:'No position',account_no_email:'Account exists, email not stamped',no_mailbox:'No mailbox (field staff)'};
+function showDataGaps(){
+  fetch('/api/people/data-gaps').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ alert('Could not load data gaps.'); return; }
+    var c=d.counts||{};
+    var summary=Object.keys(GAP_LABEL).filter(function(k){return c[k];}).map(function(k){return '<span style="margin-right:14px">'+esc(GAP_LABEL[k])+': <b>'+c[k]+'</b></span>';}).join('');
+    var rows=(d.findings||[]).map(function(f){
+      var tags=f.gaps.map(function(g){var actionable=g!=='no_mailbox';return '<span style="font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:5px;margin-right:5px;background:'+(actionable?'var(--warn-bg,#F6EEDD)':'var(--fill,#eee)')+';color:'+(actionable?'var(--warn,#A56A12)':'var(--muted)')+'">'+esc(GAP_LABEL[g]||g)+'</span>';}).join('');
+      return '<tr><td style="font-weight:600">'+esc(f.name||'')+'</td><td>'+esc(f.office||'-')+'</td><td>'+esc(f.position||'-')+'</td><td>'+tags+'</td></tr>';
+    }).join('');
+    var ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(16,24,40,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px';
+    ov.innerHTML='<div style="background:var(--panel,#fff);border:1px solid var(--border,#ddd);border-radius:12px;max-width:820px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border,#eee)"><div><div style="font-weight:700;font-size:15px">BambooHR data gaps</div><div style="font-size:12px;color:var(--muted)">'+(d.findings||[]).length+' of '+d.total+' active employees have at least one gap.</div></div><button class="btn btn-sm" id="gapClose">Close</button></div>'+
+      '<div style="padding:12px 18px;font-size:12.5px;color:var(--ink-2,#444)">'+(summary||'No gaps.')+'</div>'+
+      '<div style="overflow:auto;padding:0 18px 16px"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--muted)"><th style="padding:8px 6px">Name</th><th style="padding:8px 6px">Office</th><th style="padding:8px 6px">Position</th><th style="padding:8px 6px">Gaps</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    document.body.appendChild(ov);
+    function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+    ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+    ov.querySelector('#gapClose').addEventListener('click',close);
+  }).catch(function(){ alert('Could not load data gaps.'); });
+}
 function importBamboo(){
   var btn=document.getElementById('bhImport'), msg=document.getElementById('bhMsg');
   if(btn){btn.disabled=true;btn.textContent='Importing…';}
