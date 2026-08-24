@@ -4,6 +4,7 @@ import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/ad
 import { getDb } from '../db/index';
 import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
+import { discoverOffices as discoverReviewOffices } from '../services/reviewRequests';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -47,6 +48,12 @@ router.get('/api/ad-agent/ping', (_req, res) => {
 router.post('/api/ad-agent/match-identities', async (_req, res) => {
   const out = await syncIdentitiesFromM365('agent-token');
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Review-request targets: which offices have a Google review link mapped + active (reporting). */
+router.get('/api/ad-agent/review-targets', (_req, res) => {
+  try { res.json({ ok: true, offices: discoverReviewOffices() }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Active-employee roster for reporting: name, position, office, work email only (standard directory
