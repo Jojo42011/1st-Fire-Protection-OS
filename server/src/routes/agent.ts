@@ -111,6 +111,16 @@ router.get('/api/ad-agent/google-probe', async (_req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
+/** Release all held review requests to 'approved' so the scheduled auto-drain sends them at the
+ *  daily cap. Token-gated mutation; returns how many were promoted. */
+router.post('/api/ad-agent/review-approve-held', (_req, res) => {
+  try {
+    const db = getDb();
+    const info = db.prepare(`UPDATE review_requests SET status='approved' WHERE source='servicetrade' AND status='held'`).run();
+    res.json({ ok: true, promoted: info.changes });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
 /** Review queue counts by status + daily drain (reporting), to explain the held/approved backlog. */
 router.get('/api/ad-agent/review-queue-stats', (_req, res) => {
   try {
