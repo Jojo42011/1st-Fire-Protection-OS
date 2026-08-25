@@ -6,6 +6,7 @@ import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
+import { connectionInfo as googleConnInfo } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -76,6 +77,18 @@ router.post('/api/ad-agent/review-mode', (req, res) => {
   if (mode !== 'hold' && mode !== 'auto') return res.status(400).json({ ok: false, error: "mode must be 'hold' or 'auto'" });
   setReviewMode(mode);
   res.json({ ok: true, mode: getReviewMode() });
+});
+
+/** Google Business Profile diagnostic: connection state + how many reviews are stored (reporting). */
+router.get('/api/ad-agent/google-status', (_req, res) => {
+  try {
+    const db = getDb();
+    const info = googleConnInfo();
+    const reviews = (db.prepare(`SELECT COUNT(*) AS c FROM reviews WHERE source='google'`).get() as { c: number }).c;
+    const locations = (db.prepare(`SELECT COUNT(DISTINCT location) AS c FROM reviews WHERE source='google' AND location IS NOT NULL`).get() as { c: number }).c;
+    const last = (db.prepare(`SELECT MAX(received_at) AS m FROM reviews WHERE source='google'`).get() as { m: string | null }).m;
+    res.json({ ok: true, ...info, reviewsStored: reviews, locations, latestReviewAt: last });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Before/after reputation + request-volume report (reporting read). ?days=N window. */

@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { connectionInfo } from './googleBusiness';
 
 /**
  * Reputation impact + request volume, before vs after, per office and company-wide.
@@ -50,7 +51,9 @@ export interface ReviewImpactReport {
   ok: true;
   days: number;
   since: string;           // ISO date the window starts
-  googleConnected: boolean;
+  googleConnected: boolean; // real OAuth connection state (not "do we have reviews")
+  googleConfigured: boolean; // OAuth client credentials present on the server
+  reviewsSynced: number;    // how many Google reviews are stored (0 = connected but nothing pulled yet)
   company: {
     reviewsBefore: number; reviewsNow: number;
     avgBefore: number | null; avgNow: number | null;
@@ -136,11 +139,14 @@ export function reviewImpactReport(days = 90): ReviewImpactReport {
     // Show the busiest first: most reviews, then most sent.
     .sort((x, y) => y.reviewsNow - x.reviewsNow || y.sentAllTime - x.sentAllTime);
 
+  const conn = (() => { try { return connectionInfo(); } catch { return { configured: false, connected: false }; } })();
   return {
     ok: true,
     days: d,
     since,
-    googleConnected: reviews.length > 0,
+    googleConnected: !!conn.connected,
+    googleConfigured: !!conn.configured,
+    reviewsSynced: reviews.length,
     company: {
       reviewsBefore: company.beforeCount,
       reviewsNow: company.nowCount,

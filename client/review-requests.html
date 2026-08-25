@@ -201,6 +201,7 @@ function loadImpact(){
     var c=d.company;
     var note=document.getElementById('impact-note');
     if(!d.googleConnected){note.innerHTML='<span style="color:var(--amber-ink)">Connect Google Business Profile to populate ratings. Volume (requests sent) is live.</span>';}
+    else if(!d.reviewsSynced){note.innerHTML='<span style="color:var(--amber-ink)">Google connected · no reviews synced yet. Ratings appear after the next sync (runs every 30 min), or trigger one on the Reviews screen.</span>';}
     else{note.textContent='before = start of window · now = today';}
     document.getElementById('impact-tiles').innerHTML=[
       riTile('Average rating',c.avgBefore,c.avgNow,true,c.avgNow==null?'no Google reviews yet':'across all offices'),
