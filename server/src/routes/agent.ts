@@ -4,7 +4,7 @@ import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/ad
 import { getDb } from '../db/index';
 import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
-import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode } from '../services/reviewRequests';
+import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode, rerenderQueued } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -109,6 +109,12 @@ router.get('/api/ad-agent/google-probe', async (_req, res) => {
     }
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Re-render queued review requests so older jobs use the follow-up wording. Token-gated. */
+router.post('/api/ad-agent/review-rerender', (_req, res) => {
+  try { res.json({ ok: true, ...rerenderQueued() }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Release all held review requests to 'approved' so the scheduled auto-drain sends them at the

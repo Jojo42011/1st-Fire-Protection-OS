@@ -188,7 +188,26 @@ function formatPhone(raw: string | null): string | null {
   return raw.trim(); // already formatted or unusual, leave as-is
 }
 
-function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
+// A job completed more than this many days ago gets the "checking in on past work" wording instead
+// of "your recent service", so the ask reads right for an older job.
+const FOLLOWUP_AFTER_DAYS = 60;
+
+/** Days since a job completed, or null when the completion date is missing/unparseable. */
+function jobAgeDays(completedAt: string | null): number | null {
+  if (!completedAt) return null;
+  const t = Date.parse(completedAt);
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / (24 * 60 * 60 * 1000));
+}
+
+/** Which wording a job should use: 'recent' for fresh jobs, 'followup' for older ones. */
+export function messageVariant(job: { completed_at: string | null }): 'recent' | 'followup' {
+  const age = jobAgeDays(job.completed_at);
+  return age != null && age > FOLLOWUP_AFTER_DAYS ? 'followup' : 'recent';
+}
+
+/** The "recent service" ask (default, for fresh jobs). */
+function buildRecentMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
   const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
   const office = officeDisplay(job.office_name);
   const city = office.replace(new RegExp(REVIEW_BRAND.name, 'i'), '').replace(/1st\s*FP/i, '').trim(); // "Houston", ...
@@ -217,6 +236,42 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
     logoUrl: brandLogoUrl(),
   });
   return { subject, body, html, fromName: office };
+}
+
+/** The "checking in on past work" ask, for older jobs: leads with concerns, then the review. */
+function buildFollowupMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
+  const first = (job.contact_name || '').split(/\s+/)[0] || 'there';
+  const office = officeDisplay(job.office_name);
+  const city = office.replace(new RegExp(REVIEW_BRAND.name, 'i'), '').replace(/1st\s*FP/i, '').trim();
+  const phone = formatPhone(job.target_phone || job.office_phone);
+  const subject = `Following up on your service with ${office}`;
+  const sign = `${office}${phone ? `\n${phone}` : ''} · ${REVIEW_BRAND.site}`;
+  const body =
+    `Hi ${first},\n\n` +
+    `We're checking in with customers we've worked with to make sure everything from your ${office} service is still in good shape and you don't have any outstanding concerns. If anything needs another look, just reply to this email and we will take care of it.\n\n` +
+    `If everything has been working well, a quick Google review would mean a lot to us and helps other Texas businesses find a team they can trust. It opens Google and takes about a minute:\n${job.review_url || ''}\n\n` +
+    `Thank you for trusting ${REVIEW_BRAND.name},\n${sign}`;
+
+  const html = renderEmail({
+    eyebrow: city || null,
+    body:
+      p(`Hi ${escapeHtml(first)},`) +
+      p(`We're checking in with customers we've worked with to make sure everything from your ${escapeHtml(office)} service is still in good shape and you don't have any outstanding concerns. If anything needs another look, just reply to this email and we will take care of it.`) +
+      p(`If everything has been working well, a quick Google review would mean a lot to us and helps other Texas businesses find a team they can trust.`, true),
+    cta: { label: 'Leave a Google review', url: job.review_url || '#' },
+    note: 'The button opens Google and takes about a minute. Have a concern instead? Just reply to this email and we will make it right.',
+    footerName: office,
+    footerMeta: [phone, REVIEW_BRAND.site].filter(Boolean).join(' · '),
+    credentials: 'SCTRCA · MBE · SBE · HUB',
+    reason: "You're receiving this because we've completed service at your property.",
+    logoUrl: brandLogoUrl(),
+  });
+  return { subject, body, html, fromName: office };
+}
+
+/** Pick the wording by job age: fresh jobs get "recent service", older jobs get the follow-up. */
+function buildMessage(job: JobForReview): { subject: string; body: string; html: string; fromName: string } {
+  return messageVariant(job) === 'followup' ? buildFollowupMessage(job) : buildRecentMessage(job);
 }
 
 /**
@@ -281,7 +336,7 @@ export async function sendPending(onlyApproved = false): Promise<{ sent: number;
 /** Render a sample of the exact customer email (for a test send / preview). When the named office is
  *  mapped, the preview uses that office's REAL Google link and phone, so the button in the preview
  *  goes where a real send would (no misleading placeholder). */
-export function renderSample(officeName?: string): { subject: string; body: string; html: string; fromName: string } {
+export function renderSample(officeName?: string, variant: 'recent' | 'followup' = 'recent'): { subject: string; body: string; html: string; fromName: string } {
   const name = officeName || '1st Fire Protection Houston';
   let review_url = 'https://g.page/r/Cd6k5KxBJuA9EBM/review';
   let target_phone: string | null = null;
@@ -289,8 +344,10 @@ export function renderSample(officeName?: string): { subject: string; body: stri
     const t = getDb().prepare(`SELECT review_url, phone FROM review_targets WHERE lower(office_name) = lower(?) AND review_url IS NOT NULL`).get(name) as { review_url: string; phone: string | null } | undefined;
     if (t) { review_url = t.review_url; target_phone = t.phone; }
   } catch { /* fall back to placeholder */ }
+  // Date the sample so it lands in the chosen variant (older than the follow-up threshold, or fresh).
+  const completed_at = new Date(Date.now() - (variant === 'followup' ? (FOLLOWUP_AFTER_DAYS + 30) : 3) * 24 * 60 * 60 * 1000).toISOString();
   return buildMessage({
-    id: 0, number: null, kind: null, completed_at: null,
+    id: 0, number: null, kind: null, completed_at,
     office_id: null, office_name: name, office_phone: '2813334444', target_phone,
     contact_name: 'Sample Customer', contact_email: null, contact_phone: null,
     account_name: null, review_url,
@@ -343,6 +400,38 @@ export function reviewRequestQueue(): any[] {
     .prepare(`SELECT ${cols} FROM review_requests WHERE source = 'servicetrade' AND status = 'sent' ORDER BY sent_at DESC LIMIT 50`)
     .all();
   return [...pending, ...sent];
+}
+
+/**
+ * Re-render queued (held/approved) requests so each uses the wording that fits its job's age. An
+ * older job flips from "your recent service" to the follow-up ask. Reconstructs the job from crm_jobs
+ * by job_id (same joins as pendingReviewJobs) and rewrites subject/body/html in place. Idempotent:
+ * re-running produces the same text. Returns how many rows changed, split by variant.
+ */
+export function rerenderQueued(): { updated: number; followup: number; recent: number; scanned: number } {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT rr.id AS rr_id, rr.subject AS old_subject, rr.body AS old_body,
+              j.id, j.number, j.kind, j.completed_at, j.office_id, j.office_name, j.office_phone,
+              t.phone AS target_phone, j.contact_name, j.contact_email, j.contact_phone,
+              a.name AS account_name, COALESCE(t.review_url, rr.review_url) AS review_url
+         FROM review_requests rr
+         JOIN crm_jobs j ON j.id = rr.job_id
+         LEFT JOIN review_targets t ON t.office_id = j.office_id
+         LEFT JOIN accounts a ON a.id = j.account_id
+        WHERE rr.source = 'servicetrade' AND rr.status IN ('held','approved')`
+    )
+    .all() as (JobForReview & { rr_id: number; old_subject: string | null; old_body: string | null })[];
+  const upd = db.prepare(`UPDATE review_requests SET subject = ?, body = ?, html = ? WHERE id = ?`);
+  let updated = 0, followup = 0, recent = 0;
+  for (const r of rows) {
+    const variant = messageVariant(r);
+    if (variant === 'followup') followup++; else recent++;
+    const m = buildMessage(r);
+    if (m.subject !== r.old_subject || m.body !== r.old_body) { upd.run(m.subject, m.body, m.html, r.rr_id); updated++; }
+  }
+  return { updated, followup, recent, scanned: rows.length };
 }
 
 /** Summary for the screen header. */
