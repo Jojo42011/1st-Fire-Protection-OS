@@ -20,6 +20,19 @@
   .rr-mode{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .embed .hub-intro{display:none!important}
   .embed .screen{padding-top:4px}
+  .ri-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 16px 4px}
+  @media (max-width:820px){.ri-tiles{grid-template-columns:repeat(2,1fr)}}
+  .ri-tile{border:1px solid var(--divider);border-radius:12px;padding:12px 14px;background:var(--bg)}
+  .ri-tile .lab{font-weight:700;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .ri-tile .ba{display:flex;align-items:baseline;gap:8px;margin-top:7px}
+  .ri-tile .before{font-weight:600;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .ri-tile .arrow{color:var(--faint);font-size:13px}
+  .ri-tile .now{font-weight:800;font-size:22px;color:var(--ink);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .ri-tile .sub{font-weight:500;font-size:11px;color:var(--muted);margin-top:5px}
+  .ri-up{color:var(--green)} .ri-down{color:var(--money)} .ri-flat{color:var(--faint)}
+  .ri-ba{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ri-ba .b{color:var(--muted)} .ri-ba .n{color:var(--ink);font-weight:700}
+  .ri-dim{color:var(--faint)}
 </style>
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 </head>
@@ -39,6 +52,27 @@
   </div>
 
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
+
+  <!-- reputation impact + volume, before vs after -->
+  <div class="card card-clip" style="margin-top:14px">
+    <div class="card-head">
+      <h2>Reputation impact &amp; volume</h2>
+      <span id="impact-note" style="font-weight:500;font-size:12px;color:var(--muted)"></span>
+      <span style="flex:1"></span>
+      <span style="font-weight:600;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-right:2px">Window</span>
+      <select id="impact-days" class="rr-in" style="width:auto;min-width:120px" onchange="loadImpact()">
+        <option value="30">Last 30 days</option>
+        <option value="90" selected>Last 90 days</option>
+        <option value="180">Last 180 days</option>
+        <option value="365">Last 12 months</option>
+      </select>
+    </div>
+    <div id="impact-tiles" class="ri-tiles"></div>
+    <table style="margin-top:4px">
+      <thead><tr><th>Office</th><th class="right">Reviews before → now</th><th class="right">Rating before → now</th><th class="right">Landed (window)</th><th class="right">Requests sent</th></tr></thead>
+      <tbody id="impact-rows"></tbody>
+    </table>
+  </div>
 
   <!-- office → Google link mapping -->
   <div class="card card-clip" style="margin-top:6px">
@@ -140,6 +174,53 @@ function load(){
   });
 }
 
+// ---- reputation impact + volume ----
+function fmtStars(v){return v==null?'—':(Math.round(v*10)/10).toFixed(1);}
+function deltaBadge(before,now,decimals){
+  if(before==null||now==null)return '';
+  var d=now-before; if(Math.abs(d)<(decimals?0.05:0.5))return '<span class="ri-flat"> ±0</span>';
+  var cls=d>0?'ri-up':'ri-down'; var sign=d>0?'+':'';
+  return '<span class="'+cls+'"> '+sign+(decimals?d.toFixed(1):Math.round(d))+'</span>';
+}
+function baCell(before,now,decimals){
+  var b=decimals?fmtStars(before):(before==null?'—':before);
+  var n=decimals?fmtStars(now):(now==null?'—':now);
+  return '<span class="ri-ba"><span class="b">'+b+'</span> <span class="ri-dim">→</span> <span class="n">'+n+'</span>'+deltaBadge(before,now,decimals)+'</span>';
+}
+function riTile(lab,before,now,decimals,sub){
+  var b=decimals?fmtStars(before):(before==null?'0':before);
+  var n=decimals?fmtStars(now):(now==null?'0':now);
+  return '<div class="ri-tile"><div class="lab">'+lab+'</div>'+
+    '<div class="ba"><span class="before">'+b+'</span><span class="arrow">→</span><span class="now">'+n+'</span>'+deltaBadge(before,now,decimals)+'</div>'+
+    '<div class="sub">'+esc(sub)+'</div></div>';
+}
+function loadImpact(){
+  var days=document.getElementById('impact-days').value;
+  fetch('/api/reviews/impact?days='+days).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok)return;
+    var c=d.company;
+    var note=document.getElementById('impact-note');
+    if(!d.googleConnected){note.innerHTML='<span style="color:var(--amber-ink)">Connect Google Business Profile to populate ratings. Volume (requests sent) is live.</span>';}
+    else{note.textContent='before = start of window · now = today';}
+    document.getElementById('impact-tiles').innerHTML=[
+      riTile('Average rating',c.avgBefore,c.avgNow,true,c.avgNow==null?'no Google reviews yet':'across all offices'),
+      riTile('Total reviews',c.reviewsBefore,c.reviewsNow,false,'Google reviews on file'),
+      '<div class="ri-tile"><div class="lab">Landed this window</div><div class="ba"><span class="now">'+c.landed+'</span></div><div class="sub">'+(c.landedAvg!=null?('new reviews · '+fmtStars(c.landedAvg)+'★ avg'):'new Google reviews')+'</div></div>',
+      '<div class="ri-tile"><div class="lab">Requests sent</div><div class="ba"><span class="now">'+c.sentWindow+'</span><span class="sub" style="margin:0 0 0 2px">/ '+c.sentAllTime+' all-time</span></div><div class="sub">in this window</div></div>'
+    ].join('');
+    var rows=(d.offices||[]).filter(function(o){return o.reviewsNow>0||o.sentAllTime>0;});
+    document.getElementById('impact-rows').innerHTML= rows.length? rows.map(function(o){
+      return '<tr>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(o.label)+'</td>'+
+        '<td class="right">'+baCell(o.reviewsBefore,o.reviewsNow,false)+'</td>'+
+        '<td class="right">'+baCell(o.avgBefore,o.avgNow,true)+'</td>'+
+        '<td class="right num">'+(o.landed?('<b>'+o.landed+'</b>'+(o.landedAvg!=null?' <span class="ri-dim">'+fmtStars(o.landedAvg)+'★</span>':'')):'<span class="ri-dim">0</span>')+'</td>'+
+        '<td class="right num">'+o.sentWindow+' <span class="ri-dim">/ '+o.sentAllTime+'</span></td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="5" class="empty">No reputation or volume data yet for this window.</td></tr>';
+  });
+}
+
 function saveLink(officeId,btn){
   var v=document.getElementById('lnk-'+officeId).value.trim();
   var ph=document.getElementById('ph-'+officeId).value.trim();
@@ -169,6 +250,7 @@ function sendAll(btn){
   });
 }
 load();
+loadImpact();
 </script>
 </body>
 </html>

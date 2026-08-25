@@ -8,8 +8,15 @@ import {
   runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest, sendPending,
 } from '../services/reviewRequests';
 import { pullCompletedJobs } from '../services/servicetradeSync';
+import { reviewImpactReport } from '../services/reviewImpact';
 
 const router = Router();
+
+/** Before/after reputation impact + request volume over a window (default 90 days). */
+router.get('/api/reviews/impact', (req, res) => {
+  const days = parseInt(String(req.query.days || '90'), 10);
+  res.json(reviewImpactReport(Number.isFinite(days) ? days : 90));
+});
 
 /* ---------- Google review requests, routed per office (live ServiceTrade) ---------- */
 

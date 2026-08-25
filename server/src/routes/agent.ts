@@ -5,6 +5,7 @@ import { getDb } from '../db/index';
 import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode } from '../services/reviewRequests';
+import { reviewImpactReport } from '../services/reviewImpact';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -75,6 +76,13 @@ router.post('/api/ad-agent/review-mode', (req, res) => {
   if (mode !== 'hold' && mode !== 'auto') return res.status(400).json({ ok: false, error: "mode must be 'hold' or 'auto'" });
   setReviewMode(mode);
   res.json({ ok: true, mode: getReviewMode() });
+});
+
+/** Before/after reputation + request-volume report (reporting read). ?days=N window. */
+router.get('/api/ad-agent/review-impact', (req, res) => {
+  const days = parseInt(String(req.query.days || '90'), 10);
+  try { res.json(reviewImpactReport(Number.isFinite(days) ? days : 90)); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Active-employee roster for reporting: name, position, office, work email only (standard directory
