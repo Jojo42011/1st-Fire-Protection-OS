@@ -240,7 +240,7 @@ document.getElementById('queue').addEventListener('click',function(e){
 // These two legacy workflows are served as their own pages (no separate shell tab), so open them
 // in place, the same views the old hub embedded. The left-nav "Reviews" returns here.
 document.getElementById('requests').addEventListener('click',function(){ try{location.href='/review-requests';}catch(_){} });
-document.getElementById('reputation').addEventListener('click',function(){ try{location.href='/review-requests#impact';}catch(_){} });
+document.getElementById('reputation').addEventListener('click',function(){ try{location.href='/reviews';}catch(_){} });
 
 OS.ready(function(){
   load();

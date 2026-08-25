@@ -702,6 +702,25 @@ nav.addEventListener('click',function(e){
   Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); });
 });
 
+/* Breadcrumb click: reload the current screen's frame to its home (its data-src). A screen can drill
+   its own iframe to a sub-page (e.g. Reviews → Review requests) via location.href, which leaves no way
+   back; clicking either breadcrumb part returns to that screen's landing page. */
+function resetFrameToHome(key){
+  var f=frameEl(key); if(!f) return;
+  var ds=f.getAttribute('data-src'); if(!ds) return;
+  if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]);
+  f.src=ds; // reload (a fresh navigation, even if the src string is unchanged)
+}
+(function wireCrumb(){
+  [crumbGroupEl,crumbPageEl].forEach(function(el){
+    if(!el) return;
+    el.style.cursor='pointer';
+    el.setAttribute('role','link'); el.setAttribute('tabindex','0');
+    el.addEventListener('click',function(){ if(current) resetFrameToHome(current); });
+    el.addEventListener('keydown',function(ev){ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); if(current) resetFrameToHome(current); } });
+  });
+})();
+
 /* ---- collapse / rail (desktop) / mobile drawer ----
    Mobile: the sidebar is a drawer that slides fully off (.collapsed) with a Menu pill to reopen.
    Desktop: collapsing shrinks the sidebar to a 56px glyph-only rail (.rail) instead of hiding it;
