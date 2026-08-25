@@ -54,7 +54,7 @@
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
 
   <!-- reputation impact + volume, before vs after -->
-  <div class="card card-clip" style="margin-top:14px">
+  <div class="card card-clip" id="impact" style="margin-top:14px;scroll-margin-top:12px">
     <div class="card-head">
       <h2>Reputation impact &amp; volume</h2>
       <span id="impact-note" style="font-weight:500;font-size:12px;color:var(--muted)"></span>
@@ -219,6 +219,8 @@ function loadImpact(){
         '<td class="right num">'+o.sentWindow+' <span class="ri-dim">/ '+o.sentAllTime+'</span></td>'+
       '</tr>';
     }).join('') : '<tr><td colspan="5" class="empty">No reputation or volume data yet for this window.</td></tr>';
+    // If we arrived via "Full reputation view" (#impact), bring the section into view once (after render).
+    if(!window.__impactScrolled && /(^|#)impact$/.test(location.hash)){ window.__impactScrolled=true; try{ document.getElementById('impact').scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){} }
   });
 }
 
