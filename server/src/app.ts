@@ -105,6 +105,21 @@ if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 
+// ---- canonical host redirect ----
+// Once a branded domain is configured (PUBLIC_BASE_URL), browser page loads that arrive on the raw
+// *.fly.dev host are bounced to the branded domain so the address bar shows os.1stfpservices.com.
+// Scoped to GET navigations only: /api/* is never redirected, so the Fly health check (/api/health)
+// and the token-gated agent endpoints keep answering on the fly.dev host.
+const CANONICAL = (() => { try { return process.env.PUBLIC_BASE_URL ? new URL(process.env.PUBLIC_BASE_URL) : null; } catch { return null; } })();
+app.use((req, res, next) => {
+  if (!CANONICAL || req.method !== 'GET' || req.path.startsWith('/api/')) return next();
+  const host = String(req.headers.host || '').toLowerCase();
+  if (host && host !== CANONICAL.host && host.endsWith('.fly.dev')) {
+    return res.redirect(302, CANONICAL.origin + req.originalUrl);
+  }
+  next();
+});
+
 // ---- password gate (enforced only when APP_PASSWORD is set) ----
 app.use(gate);
 app.get('/login', (_req, res) => (authRequired() ? res.sendFile(path.join(CLIENT_DIR, 'login.html')) : res.redirect('/')));
