@@ -30,6 +30,9 @@ export interface EmailShellOptions {
   credentials?: string | null;
   /** Required. Why this person received this email. */
   reason: string;
+  /** Absolute https URL to the brand logo. When set, the header renders as a centered logo banner
+   *  (customer-facing mail); when omitted, the header keeps the compact "1" tile + wordmark. */
+  logoUrl?: string | null;
 }
 
 const INK = '#101828';
@@ -97,6 +100,31 @@ export function renderEmail(o: EmailShellOptions): string {
     ? `<div style="font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:${GOLD};margin-top:16px;">${escapeHtml(o.credentials)}</div>`
     : '';
 
+  // Header: a centered logo banner when a logo URL is supplied (customer-facing mail), else the
+  // compact "1" tile + wordmark. The banner uses alt text so it still identifies the sender when a
+  // mail client blocks images by default.
+  const sublineText = o.eyebrow ? `1st Fire Protection · ${escapeHtml(o.eyebrow)}` : '1st Fire Protection';
+  const header = o.logoUrl
+    ? `<tr><td class="pad" style="padding:36px 48px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td align="center" style="padding:0 0 2px;"><img src="${escapeAttr(o.logoUrl)}" height="112" alt="1st Fire Protection" style="display:block;height:112px;width:auto;margin:0 auto;border:0;"></td>
+        </tr></table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td align="center" style="font-family:${FONT};font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};padding-top:8px;">${sublineText}</td>
+        </tr></table>
+      </td></tr>`
+    : `<tr><td class="pad" style="padding:44px 48px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td width="26" style="width:26px;padding-right:11px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td width="26" height="26" align="center" valign="middle" bgcolor="${INK}" style="width:26px;height:26px;border-radius:6px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;line-height:26px;">1</td>
+            </tr></table>
+          </td>
+          <td style="font-family:${FONT};font-size:14.5px;font-weight:600;color:${INK};">1st Fire Protection</td>
+          ${eyebrow}
+        </tr></table>
+      </td></tr>`;
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -116,17 +144,7 @@ export function renderEmail(o: EmailShellOptions): string {
 <tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;">
 
-  <tr><td class="pad" style="padding:44px 48px 0;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td width="26" style="width:26px;padding-right:11px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-          <td width="26" height="26" align="center" valign="middle" bgcolor="${INK}" style="width:26px;height:26px;border-radius:6px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;line-height:26px;">1</td>
-        </tr></table>
-      </td>
-      <td style="font-family:${FONT};font-size:14.5px;font-weight:600;color:${INK};">1st Fire Protection</td>
-      ${eyebrow}
-    </tr></table>
-  </td></tr>
+  ${header}
 
   <tr><td class="pad" style="padding:22px 48px 0;">${rule()}</td></tr>
 

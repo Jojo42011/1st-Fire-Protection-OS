@@ -165,6 +165,13 @@ const REVIEW_BRAND = {
   site: '1stfpservices.com',
 };
 
+/** Absolute URL to the brand logo for the email banner. Mail is sent server-side (no request in
+ *  scope), so the public base must come from config; falls back to the known production host. */
+function brandLogoUrl(): string {
+  const base = (process.env.PUBLIC_BASE_URL || 'https://first-fp-os.fly.dev').replace(/\/$/, '');
+  return `${base}/brand/logo-email.png`;
+}
+
 /** Friendly, recognizable office name for the From line + signature ("1st Fire Protection Houston"). */
 export function officeDisplay(officeName: string | null): string {
   if (!officeName) return REVIEW_BRAND.name;
@@ -207,6 +214,7 @@ function buildMessage(job: JobForReview): { subject: string; body: string; html:
     footerMeta: [phone, REVIEW_BRAND.site].filter(Boolean).join(' · '),
     credentials: 'SCTRCA · MBE · SBE · HUB',
     reason: "You're receiving this because we recently completed service at your property.",
+    logoUrl: brandLogoUrl(),
   });
   return { subject, body, html, fromName: office };
 }
