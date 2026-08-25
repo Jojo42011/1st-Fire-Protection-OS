@@ -6,7 +6,7 @@ import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
-import { connectionInfo as googleConnInfo } from '../services/googleBusiness';
+import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
@@ -88,6 +88,26 @@ router.get('/api/ad-agent/google-status', (_req, res) => {
     const locations = (db.prepare(`SELECT COUNT(DISTINCT location) AS c FROM reviews WHERE source='google' AND location IS NOT NULL`).get() as { c: number }).c;
     const last = (db.prepare(`SELECT MAX(received_at) AS m FROM reviews WHERE source='google'`).get() as { m: string | null }).m;
     res.json({ ok: true, ...info, reviewsStored: reviews, locations, latestReviewAt: last });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Google probe: surface what the Business Profile API returns (accounts + locations + raw errors)
+ *  so a "0 locations" sync can be diagnosed (wrong account vs. API access vs. no listings). */
+router.get('/api/ad-agent/google-probe', async (_req, res) => {
+  try {
+    const token = await googleAccessToken();
+    if (!token) return res.json({ ok: false, error: 'no access token (not connected or refresh failed)' });
+    const accts = await googleListAccounts(token);
+    const out: any = { ok: true, accounts: accts };
+    if (accts.ok && accts.accounts.length) {
+      out.locationsByAccount = [];
+      for (const a of accts.accounts) {
+        // eslint-disable-next-line no-await-in-loop
+        const locs = await googleListLocations(token, a.name);
+        out.locationsByAccount.push({ account: a.name, accountName: a.accountName, ok: locs.ok, error: locs.error, count: locs.ok ? locs.locations.length : 0, titles: locs.ok ? locs.locations.map((l) => l.title).slice(0, 30) : [] });
+      }
+    }
+    res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
