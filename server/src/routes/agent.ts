@@ -111,6 +111,17 @@ router.get('/api/ad-agent/google-probe', async (_req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
+/** Review queue counts by status + daily drain (reporting), to explain the held/approved backlog. */
+router.get('/api/ad-agent/review-queue-stats', (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(`SELECT status, COUNT(*) AS c FROM review_requests WHERE source='servicetrade' GROUP BY status`).all() as { status: string; c: number }[];
+    const byStatus: Record<string, number> = {};
+    for (const r of rows) byStatus[r.status] = r.c;
+    res.json({ ok: true, byStatus, mode: getReviewMode() });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
 /** Before/after reputation + request-volume report (reporting read). ?days=N window. */
 router.get('/api/ad-agent/review-impact', (req, res) => {
   const days = parseInt(String(req.query.days || '90'), 10);

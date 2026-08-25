@@ -327,13 +327,22 @@ export async function sendReviewRequest(id: number): Promise<{ ok: boolean; stat
   return { ok: false, status: 'approved', error: res.error };
 }
 
+/**
+ * The queue the Reviews screen renders. Held/approved items are the actionable work, so ALL of them
+ * are returned (a single LIMIT 200 over held+approved+sent used to truncate the list well below the
+ * real held count, and sent rows could even crowd out held ones). Sent items are only a recent log,
+ * so those stay capped.
+ */
 export function reviewRequestQueue(): any[] {
-  return getDb()
-    .prepare(
-      `SELECT id, customer, office_name, review_url, recipient_email, channel, status, subject, body, sent_at, error, created_at
-         FROM review_requests WHERE source = 'servicetrade' ORDER BY created_at DESC LIMIT 200`
-    )
+  const db = getDb();
+  const cols = `id, customer, office_name, review_url, recipient_email, channel, status, subject, body, sent_at, error, created_at`;
+  const pending = db
+    .prepare(`SELECT ${cols} FROM review_requests WHERE source = 'servicetrade' AND status IN ('held','approved') ORDER BY created_at DESC`)
     .all();
+  const sent = db
+    .prepare(`SELECT ${cols} FROM review_requests WHERE source = 'servicetrade' AND status = 'sent' ORDER BY sent_at DESC LIMIT 50`)
+    .all();
+  return [...pending, ...sent];
 }
 
 /** Summary for the screen header. */
