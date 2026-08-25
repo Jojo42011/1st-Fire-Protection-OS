@@ -136,6 +136,18 @@ if (-not $Ping) {
                 -DisplayName $p.displayName -SamAccountName $p.sam -UserPrincipalName $p.upn `
                 -EmailAddress $p.email -Path $p.ou -AccountPassword $sec `
                 -ChangePasswordAtLogon $true -Enabled $true
+              # BambooHR directory attributes (role, mobile, department, office, company). Only the
+              # ones that were sent are written; -Office maps to physicalDeliveryOfficeName in AD.
+              $set = @{}
+              if ($p.title)      { $set['Title']      = [string]$p.title }
+              if ($p.mobile)     { $set['MobilePhone']= [string]$p.mobile }
+              if ($p.department) { $set['Department']  = [string]$p.department }
+              if ($p.office)     { $set['Office']      = [string]$p.office }
+              if ($p.company)    { $set['Company']     = [string]$p.company }
+              if ($set.Count -gt 0) {
+                try { Set-ADUser -Identity $p.sam @set -ErrorAction Stop }
+                catch { Write-Warning "Attribute set failed for $($p.sam): $($_.Exception.Message)" }
+              }
               $added = @()
               foreach ($g in @($p.securityGroups)) {
                 try { Add-ADGroupMember -Identity $g -Members $p.sam -ErrorAction Stop; $added += $g }

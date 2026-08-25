@@ -250,6 +250,12 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
     changePasswordAtLogon: true,
     securityGroups: plan.securityGroups,
     licenseSku: plan.licenseSku, // the default SKU to assign cloud-side once the account syncs
+    // BambooHR directory attributes, set on the new account (role, mobile, department, office).
+    title: plan.title,
+    mobile: plan.mobile,
+    department: plan.department,
+    office: plan.office,
+    company: plan.company,
   };
   const job = enqueue('ad_create_user', payload, { type: 'onboarding_request', id }, actor(req));
   res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: plan.securityGroups, warnings: plan.warnings });

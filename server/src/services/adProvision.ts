@@ -152,6 +152,13 @@ export interface ProvisionPlan {
   sharepointGroups: string[];
   licenseSku: string | null;
   warnings: string[];
+  // Directory attributes carried from BambooHR, written on create so AD (and Entra, after sync)
+  // shows the role, mobile, department and office without a manual touch-up.
+  title: string | null;
+  mobile: string | null;
+  department: string | null;
+  office: string | null;
+  company: string | null;
 }
 
 /**
@@ -162,21 +169,27 @@ export interface ProvisionPlan {
 export function buildProvisionPlan(requestId: number): ProvisionPlan {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
-  const empty: ProvisionPlan = { ok: false, first: '', last: '', displayName: '', sam: '', upn: '', ou: '', ouIsPlaceholder: true, password: '', securityGroups: [], sharepointGroups: [], licenseSku: null, warnings: [] };
+  const empty: ProvisionPlan = { ok: false, first: '', last: '', displayName: '', sam: '', upn: '', ou: '', ouIsPlaceholder: true, password: '', securityGroups: [], sharepointGroups: [], licenseSku: null, warnings: [], title: null, mobile: null, department: null, office: null, company: null };
   if (!request) return { ...empty, error: 'request not found' };
 
   const settings = getAdSettings();
   const warnings: string[] = [];
 
-  // Name + office + department: prefer the bound BambooHR record; fall back to parsing the typed name.
+  // Name + office + department + role/mobile: prefer the bound BambooHR record; fall back to the typed name.
   let first = '', last = '', office: string | null = null, department: string | null = null;
+  let title: string | null = null, mobile: string | null = null;
   if (request.employee_id) {
-    const e = db.prepare(`SELECT legal_first_name, legal_last_name, office, department FROM employees WHERE id = ?`).get(request.employee_id) as
-      | { legal_first_name: string | null; legal_last_name: string | null; office: string | null; department: string | null }
+    const e = db.prepare(`SELECT legal_first_name, legal_last_name, office, department, job_position, public_job_title, personal_phone FROM employees WHERE id = ?`).get(request.employee_id) as
+      | { legal_first_name: string | null; legal_last_name: string | null; office: string | null; department: string | null; job_position: string | null; public_job_title: string | null; personal_phone: string | null }
       | undefined;
-    if (e) { first = e.legal_first_name || ''; last = e.legal_last_name || ''; office = e.office || null; department = e.department || null; }
+    if (e) {
+      first = e.legal_first_name || ''; last = e.legal_last_name || ''; office = e.office || null; department = e.department || null;
+      title = e.job_position || e.public_job_title || null;
+      mobile = e.personal_phone || null;
+    }
   }
   if (!office) office = request.office || null;
+  if (!title) title = request.job_position || null;
   if (!first && !last) { const s = splitName(request.name); first = s.first; last = s.last; }
 
   const fSan = sanitize(first);
@@ -220,6 +233,11 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
     sharepointGroups,
     licenseSku: settings.licenseSku,
     warnings,
+    title: title || null,
+    mobile: mobile || null,
+    department: department || null,
+    office: office || null,
+    company: '1st Fire Protection',
   };
 }
 
@@ -231,7 +249,7 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
 export function buildProvisionScript(requestId: number): ProvisionScript {
   const plan = buildProvisionPlan(requestId);
   if (!plan.ok) return { ok: false, error: plan.error };
-  const { first, last, sam, upn, ou, ouIsPlaceholder, password: pw, securityGroups, sharepointGroups, displayName, licenseSku, warnings } = plan;
+  const { first, last, sam, upn, ou, ouIsPlaceholder, password: pw, securityGroups, sharepointGroups, displayName, licenseSku, warnings, title, mobile, department, office, company } = plan;
 
   // Confirm each security group name is one we recognise from the catalog, so a typo shows up.
   const knownGroups = new Set(catalogByKind('printer').map((p) => p.group_name).filter(Boolean) as string[]);
@@ -274,6 +292,20 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   lines.push('  -ChangePasswordAtLogon $true `');
   lines.push('  -Enabled $true');
   lines.push('');
+
+  // BambooHR directory attributes (role, mobile, department, office, company). Only the ones present
+  // are written; -Office maps to physicalDeliveryOfficeName in AD.
+  const attrs: string[] = [];
+  if (title) attrs.push(`-Title ${psq(title)}`);
+  if (mobile) attrs.push(`-MobilePhone ${psq(mobile)}`);
+  if (department) attrs.push(`-Department ${psq(department)}`);
+  if (office) attrs.push(`-Office ${psq(office)}`);
+  if (company) attrs.push(`-Company ${psq(company)}`);
+  if (attrs.length) {
+    lines.push('# ---- Directory attributes from BambooHR ----');
+    lines.push(`Set-ADUser -Identity $Sam ${attrs.join(' ')}`);
+    lines.push('');
+  }
 
   if (securityGroups.length) {
     lines.push('# ---- On-prem AD security groups (sync up to Entra via Azure AD Connect) ----');
