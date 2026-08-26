@@ -164,8 +164,10 @@ export async function spDirectShares(
           if (isFolder && cov.foldersScanned + queue.length < caps.maxFolders) queue.push({ id: it.id, path: childPath });
         }
         url = j['@odata.nextLink'] || null;
+        // Report after each page (the runner throttles the actual DB write), so a huge folder still
+        // shows live progress instead of sitting at zero until it finishes paginating.
+        if (onProgress) onProgress({ foldersScanned: cov.foldersScanned, itemsSeen: cov.itemsSeen, sharedItems: cov.sharedItems });
       }
-      if (onProgress && cov.foldersScanned % 15 === 0) onProgress({ foldersScanned: cov.foldersScanned, itemsSeen: cov.itemsSeen, sharedItems: cov.sharedItems });
     }
   }
 
