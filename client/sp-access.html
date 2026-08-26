@@ -244,8 +244,7 @@ function removeAllFlagged(btn){
 // ---- direct file shares ----
 function dsFlagTag(f){
   if(!f)return '<span class="sub-off">ok</span>';
-  if(/anonymous/i.test(f))return '<span class="tag crit">'+esc(f)+'</span>';
-  if(/not active|org-wide/i.test(f))return '<span class="tag crit">'+esc(f)+'</span>';
+  if(/anonymous|not active|org-wide|disabled/i.test(f))return '<span class="tag crit">'+esc(f)+'</span>';
   if(/bamboo/i.test(f))return '<span class="tag warn">verify</span>';
   return '<span class="tag warn">'+esc(f)+'</span>';
 }

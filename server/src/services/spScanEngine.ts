@@ -88,6 +88,24 @@ export async function stepScan(id: number): Promise<{ ok: boolean; status: strin
   for (const e of idx.all) { const nm = norm([e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ')); if (nm) byName.set(nm, e); }
   const matchPrincipal = (email: string | null, dn: string | null): EmpRow | undefined =>
     matchAdToEmployee({ upn: email, email }, idx) || (norm(dn) ? byName.get(norm(dn)) : undefined);
+  // The on-prem AD mirror carries the enabled flag, so a grantee who is not in the HR roster can
+  // still be recognised as a disabled (former) account instead of an unknown "verify".
+  const adByKey = new Map<string, boolean>();
+  const adByName = new Map<string, boolean>();
+  try {
+    const adRows = db.prepare(`SELECT email, upn, sam, display_name, enabled FROM ad_users`).all() as { email: string | null; upn: string | null; sam: string | null; display_name: string | null; enabled: number }[];
+    for (const a of adRows) {
+      const en = a.enabled !== 0;
+      for (const k of [a.email, a.upn, a.sam]) { const nk = norm(k); if (nk && !adByKey.has(nk)) adByKey.set(nk, en); }
+      const nm = norm(a.display_name); if (nm && !adByName.has(nm)) adByName.set(nm, en);
+    }
+  } catch { /* no AD mirror yet */ }
+  /** true = matches a disabled AD account, false = enabled AD account, null = no AD match. */
+  const adEnabledState = (email: string | null, dn: string | null): boolean | null => {
+    const k = norm(email); if (k && adByKey.has(k)) return adByKey.get(k)!;
+    const n = norm(dn); if (n && adByName.has(n)) return adByName.get(n)!;
+    return null;
+  };
   const isSiteGroup = (dn: string, email: string | null) =>
     /(owners|members|visitors)$/i.test(dn) || /^everyone/i.test(dn) || /company administrator/i.test(dn) || !email;
 
@@ -134,8 +152,12 @@ export async function stepScan(id: number): Promise<{ ok: boolean; status: strin
                 const emp = matchPrincipal(email, dn);
                 const matched = !!emp;
                 let flag: string | null = null;
-                if (!matched) flag = 'Not in BambooHR';
-                else if (emp && ['terminated', 'prehire', 'inactive'].includes(norm(emp.employment_status))) flag = `Not active (${emp.employment_status})`;
+                if (emp && ['terminated', 'prehire', 'inactive'].includes(norm(emp.employment_status))) flag = `Not active (${emp.employment_status})`;
+                else if (!matched) {
+                  // Not in the HR roster: distinguish a disabled former account from an unknown one.
+                  const ad = adEnabledState(email, dn);
+                  flag = ad === false ? 'Disabled account' : 'Not in BambooHR';
+                }
                 insertShare.run(id, JSON.stringify({ driveId: cur.driveId, itemId: it.id, permId: p.id, path: cur.path, item: it.name, itemType: isFolder ? 'folder' : 'file', grantType: 'user', grantedTo: dn || email, email, roles, linkScope: null, matched, status: emp ? emp.employment_status : null, flag }));
               }
             }
