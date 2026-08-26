@@ -92,6 +92,7 @@
       <h2>Move cloud groups into AD</h2>
       <span id="mig-note" style="font-weight:500;font-size:12px;color:var(--muted)">SG-SP groups made in Entra by mistake, rebuilt on-prem in your SharePoint OU with the same members.</span>
       <span style="flex:1"></span>
+      <button class="btn" id="mig-rename" onclick="renameCloud(this)" title="Rename the cloud-only SG-SP groups to SG-SP-…-CLOUD so the on-prem copies can take the clean names">Park cloud groups (-CLOUD)</button>
       <button class="btn" id="mig-load" onclick="loadMigration(this)">Build script</button>
     </div>
     <div style="padding:8px 16px 2px" class="sub-off">Target OU: <input id="mig-ou" class="rr-in" style="width:auto;min-width:420px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:11px" value="OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com" /></div>
@@ -595,6 +596,17 @@ function loadMigration(btn){
 function copyMigScript(btn){
   var t=document.getElementById('mig-script').textContent;
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
+}
+function renameCloud(btn){
+  if(!confirm('Rename every cloud-only SG-SP group to "…-CLOUD"?\n\nThis frees the clean names for the on-prem copies. It changes only the display name, not access. Synced groups are left alone.'))return;
+  btn.disabled=true;btn.textContent='Renaming…';
+  fetch('/api/ad-audit/sp-rename-cloud',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({suffix:'-CLOUD'})})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;btn.textContent='Park cloud groups (-CLOUD)';
+      if(!d||!d.ok){alert('Rename failed: '+((d&&d.error)||'unknown'));return;}
+      alert('Renamed '+d.renamed.length+' group(s) to -CLOUD.'+(d.skipped.length?(' Skipped '+d.skipped.length+' (synced or already suffixed).'):''));
+      load(); // refresh the audit so badges/state update
+    }).catch(function(){btn.disabled=false;btn.textContent='Park cloud groups (-CLOUD)';alert('Request failed.');});
 }
 load();
 loadLatestScan();

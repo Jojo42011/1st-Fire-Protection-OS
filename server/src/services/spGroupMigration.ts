@@ -1,4 +1,27 @@
-import { listGroupsWithMembers } from './msGraphGroups';
+import { listGroupsWithMembers, updateGroupDisplayName } from './msGraphGroups';
+
+/** Park every cloud-only SG-SP group under a suffix (default "-CLOUD") so the on-prem copies can take
+ *  the clean names. Only touches cloud-only groups; synced ones and already-suffixed ones are skipped.
+ *  Renaming changes only the displayName, not the object id, so current SharePoint access is intact. */
+export async function renameCloudSpGroups(suffix: string): Promise<{
+  ok: boolean; error?: string; suffix: string;
+  renamed: { from: string; to: string }[]; skipped: { name: string; why: string }[];
+}> {
+  const sfx = suffix || '-CLOUD';
+  const res = await listGroupsWithMembers('SG-SP');
+  if (!res.ok) return { ok: false, error: res.error || 'could not read groups', suffix: sfx, renamed: [], skipped: [] };
+  const renamed: { from: string; to: string }[] = [];
+  const skipped: { name: string; why: string }[] = [];
+  for (const g of res.groups) {
+    if (g.syncedFromAD) { skipped.push({ name: g.name, why: 'already synced from AD' }); continue; }
+    if (g.name.toLowerCase().endsWith(sfx.toLowerCase())) { skipped.push({ name: g.name, why: 'already suffixed' }); continue; }
+    const to = g.name + sfx;
+    // eslint-disable-next-line no-await-in-loop
+    const r = await updateGroupDisplayName(g.id, to);
+    if (r.ok) renamed.push({ from: g.name, to }); else skipped.push({ name: g.name, why: r.error || 'rename failed' });
+  }
+  return { ok: true, suffix: sfx, renamed, skipped };
+}
 
 /**
  * Recreate the cloud-only SharePoint security groups (SG-SP-*) as on-prem AD groups.
@@ -63,14 +86,16 @@ export async function buildOnPremGroupPlan(ou: string): Promise<MigrationPlan> {
   lines.push('');
 
   for (const g of cloud) {
+    // If the cloud copy was parked under a suffix (e.g. "-CLOUD"), the on-prem group takes the clean name.
+    const cleanName = g.name.replace(/-CLOUD$/i, '');
     const users = g.members.filter((m) => m.type === 'user' || m.type === 'unknown');
     const withSam = users.filter((m) => m.sam);
     const noSam = users.filter((m) => !m.sam).map((m) => m.name || m.upn || '(unknown)');
-    groups.push({ name: g.name, members: users.length, resolved: withSam.length, unresolved: noSam });
+    groups.push({ name: cleanName, members: users.length, resolved: withSam.length, unresolved: noSam });
 
-    const sam = samFor(g.name, usedSam);
-    lines.push(`# ---- ${g.name}  (${withSam.length} of ${users.length} members resolved) ----`);
-    lines.push(`New-ADGroup -Name "${ps(g.name)}" -SamAccountName "${ps(sam)}" -DisplayName "${ps(g.name)}" -GroupScope Global -GroupCategory Security -Path $ou -ErrorAction Stop`);
+    const sam = samFor(cleanName, usedSam);
+    lines.push(`# ---- ${cleanName}  (${withSam.length} of ${users.length} members resolved) ----`);
+    lines.push(`New-ADGroup -Name "${ps(cleanName)}" -SamAccountName "${ps(sam)}" -DisplayName "${ps(cleanName)}" -GroupScope Global -GroupCategory Security -Path $ou -ErrorAction Stop`);
     if (withSam.length) {
       const sams = withSam.map((m) => `"${ps(m.sam as string)}"`).join(',');
       lines.push(`Add-ADGroupMember -Identity "${ps(sam)}" -Members ${sams}`);

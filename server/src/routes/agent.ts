@@ -10,7 +10,7 @@ import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
-import { buildOnPremGroupPlan } from '../services/spGroupMigration';
+import { buildOnPremGroupPlan, renameCloudSpGroups } from '../services/spGroupMigration';
 import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -393,6 +393,15 @@ router.get('/api/ad-audit/sp-onprem-plan', async (req, res) => {
 router.get('/api/ad-agent/sp-onprem-plan', async (req, res) => {
   const ou = String(req.query.ou || DEFAULT_SP_OU);
   const out = await buildOnPremGroupPlan(ou);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Park the cloud-only SG-SP groups under a suffix so the on-prem copies can take the clean names. */
+router.post('/api/ad-audit/sp-rename-cloud', async (req, res) => {
+  const out = await renameCloudSpGroups(String((req.body && req.body.suffix) || '-CLOUD'));
+  res.status(out.ok ? 200 : 400).json(out);
+});
+router.post('/api/ad-agent/sp-rename-cloud', async (req, res) => {
+  const out = await renameCloudSpGroups(String((req.body && req.body.suffix) || '-CLOUD'));
   res.status(out.ok ? 200 : 400).json(out);
 });
 

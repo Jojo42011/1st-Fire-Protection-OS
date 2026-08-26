@@ -121,6 +121,20 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
   }
 }
 
+/** Rename a group (its displayName). Used to park the cloud-only SG-SP groups under a suffix so the
+ *  on-prem copies can take the clean names. The object id is unchanged, so existing access is intact. */
+export async function updateGroupDisplayName(id: string, displayName: string): Promise<{ ok: boolean; error?: string }> {
+  const token = await graphToken();
+  if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
+  const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${id}`, {
+    method: 'PATCH',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ displayName }),
+  });
+  if (!res.ok) return { ok: false, error: `${res.status}: ${(await res.text()).slice(0, 180)}` };
+  return { ok: true };
+}
+
 /** Look up a security group's object id by display name (when only the name is known). During the
  *  cloud->on-prem migration a cloud copy and a synced copy can briefly share a name; prefer the
  *  on-prem-synced group so grants land on the one that will survive. */
