@@ -93,6 +93,20 @@ router.get('/api/ad-agent/google-status', (_req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
+/** Decode the Graph app-only token's `roles` claim to see exactly which application permissions are
+ *  granted (so we know if the app can write group membership / SharePoint permissions). Read-only. */
+router.get('/api/ad-agent/graph-perms', async (_req, res) => {
+  try {
+    const { graphToken } = await import('../services/licenseSources');
+    const tok = await graphToken();
+    if (!tok) return res.json({ ok: false, error: 'no Graph token (not configured)' });
+    const parts = String(tok).split('.');
+    if (parts.length < 2) return res.json({ ok: false, error: 'unexpected token format' });
+    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    res.json({ ok: true, roles: payload.roles || [], appId: payload.appid || payload.azp || null, tenant: payload.tid || null });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
 /** SharePoint access audit: SG-SP-* groups + members joined to title/office, with drift flags. */
 router.get('/api/ad-agent/sp-access-audit', async (req, res) => {
   const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
