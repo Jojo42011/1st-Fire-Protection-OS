@@ -40,6 +40,9 @@ async function resolveSiteId(siteUrl: string, token: string): Promise<string> {
 }
 
 export interface DirectShare {
+  driveId: string;          // ids needed to revoke the grant
+  itemId: string;
+  permId: string;
   path: string;             // folder path of the item
   item: string;             // item name
   itemType: 'file' | 'folder';
@@ -113,7 +116,7 @@ export async function spDirectShares(
         const roles = Array.isArray(p.roles) ? p.roles.join('/') : '';
         if (p.link) {
           const scope = p.link.scope || 'users';
-          shares.push({ path, item: name, itemType, webUrl, grantType: 'link', grantedTo: `${scope} link`, email: null, roles, linkScope: scope, matched: false, status: null, enabled: null, flag: scope === 'anonymous' ? 'Anonymous link' : (scope === 'organization' ? 'Org-wide link' : 'Sharing link') });
+          shares.push({ driveId, itemId, permId: p.id, path, item: name, itemType, webUrl, grantType: 'link', grantedTo: `${scope} link`, email: null, roles, linkScope: scope, matched: false, status: null, enabled: null, flag: scope === 'anonymous' ? 'Anonymous link' : (scope === 'organization' ? 'Org-wide link' : 'Sharing link') });
           continue;
         }
         // direct principal grant(s): grantedToV2 (single) and grantedToIdentitiesV2 (multi)
@@ -129,7 +132,7 @@ export async function spDirectShares(
           let flag: string | null = null;
           if (!matched) flag = 'Not in BambooHR';
           else if (emp && ['terminated', 'prehire', 'inactive'].includes(norm(emp.employment_status))) flag = `Not active (${emp.employment_status})`;
-          shares.push({ path, item: name, itemType, webUrl, grantType: 'user', grantedTo: dn || email, email, roles, linkScope: null, matched, status: emp ? emp.employment_status : null, enabled: null, flag });
+          shares.push({ driveId, itemId, permId: p.id, path, item: name, itemType, webUrl, grantType: 'user', grantedTo: dn || email, email, roles, linkScope: null, matched, status: emp ? emp.employment_status : null, enabled: null, flag });
         }
       }
       purl = pj['@odata.nextLink'] || null;
@@ -182,4 +185,15 @@ export async function spDirectShares(
     summary: { shares: shares.length, userShares, linkShares, disabled, nonEmployee, anonymousLinks: anon },
     shares,
   };
+}
+
+/** Revoke one direct-share permission on a SharePoint item (Sites.ReadWrite.All). */
+export async function removeSharePermission(driveId: string, itemId: string, permId: string): Promise<{ ok: boolean; error?: string }> {
+  const token = await graphToken();
+  if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
+  const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/permissions/${permId}`, {
+    method: 'DELETE', headers: { authorization: `Bearer ${token}` },
+  });
+  if (res.ok || res.status === 204) return { ok: true };
+  return { ok: false, error: `graph delete ${res.status}: ${(await res.text()).slice(0, 180)}` };
 }

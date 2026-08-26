@@ -56,6 +56,22 @@
     <div style="font-weight:800;font-size:14px;color:var(--ink);padding:2px 2px 6px">All groups &amp; members</div>
     <div id="groups"></div>
   </div>
+
+  <!-- direct file shares (outside the groups) -->
+  <div class="card card-clip" style="margin-top:20px">
+    <div class="card-head">
+      <h2>Direct file shares</h2>
+      <span id="ds-note" style="font-weight:500;font-size:12px;color:var(--muted)">Files &amp; folders shared to a person or link, bypassing the groups.</span>
+      <span style="flex:1"></span>
+      <input id="ds-site" class="rr-in" style="width:auto;min-width:280px;padding:7px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="https://1stfp.sharepoint.com/sites/Shared/" />
+      <button class="btn-primary" id="ds-scan" onclick="scanDirect(this)">Scan</button>
+    </div>
+    <div id="ds-cov" style="padding:0 16px;font-size:12px;color:var(--muted)"></div>
+    <table>
+      <thead><tr><th>Shared with</th><th>Access</th><th>Item</th><th>Flag</th><th></th></tr></thead>
+      <tbody id="ds-rows"><tr><td colspan="5" class="empty">Click Scan to audit direct shares on this site.</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -139,6 +155,48 @@ function removeAllFlagged(btn){
     else{alert('Failed: '+(res.error||'unknown'));}
     load();
   }).catch(function(){btn.disabled=false;btn.textContent='Remove all flagged';});
+}
+// ---- direct file shares ----
+function dsFlagTag(f){
+  if(!f)return '<span class="sub-off">ok</span>';
+  if(/anonymous/i.test(f))return '<span class="tag crit">'+esc(f)+'</span>';
+  if(/not active|org-wide/i.test(f))return '<span class="tag crit">'+esc(f)+'</span>';
+  if(/bamboo/i.test(f))return '<span class="tag warn">verify</span>';
+  return '<span class="tag warn">'+esc(f)+'</span>';
+}
+function scanDirect(btn){
+  var site=document.getElementById('ds-site').value.trim();
+  if(!site){alert('Enter a SharePoint site URL.');return;}
+  btn.disabled=true;btn.textContent='Scanning…';
+  document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scanning live via Microsoft Graph… (large sites are sampled; this can take a minute)</td></tr>';
+  document.getElementById('ds-cov').textContent='';
+  fetch('/api/ad-audit/sp-direct-shares?max=140&site='+encodeURIComponent(site)).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false;btn.textContent='Scan';
+    if(!d||!d.ok){document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">'+esc((d&&d.error)||'Scan failed.')+'</td></tr>';return;}
+    var c=d.coverage,s=d.summary;
+    document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(sample: site is large, not fully covered)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
+    var rows=(d.shares||[]);
+    // flagged first (already sorted server-side)
+    document.getElementById('ds-rows').innerHTML= rows.length? rows.map(function(x){
+      var loc=x.grantType==='link';
+      return '<tr>'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
+        '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
+        '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
+        '<td>'+dsFlagTag(x.flag)+'</td>'+
+        '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item})+',this)\'>Remove</button></td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="5" class="empty">No direct shares found in the scanned area.</td></tr>';
+  }).catch(function(){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Request failed (the scan may have timed out on a very large site).</td></tr>';});
+}
+function unshare(x,btn){
+  if(!confirm('Remove '+(x.who||'this grant')+' from "'+x.item+'"?'))return;
+  btn.disabled=true;btn.textContent='Removing…';
+  fetch('/api/ad-audit/sp-unshare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(res.ok){btn.textContent='Removed';btn.disabled=true;btn.closest('tr').style.opacity=.5;}
+      else{btn.disabled=false;btn.textContent='Remove';alert('Failed: '+(res.error||'unknown'));}
+    }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
 }
 load();
 </script>

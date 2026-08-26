@@ -8,7 +8,7 @@ import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget,
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
-import { spDirectShares } from '../services/spDirectShares';
+import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers, removeUserFromGroup } from '../services/msGraphGroups';
@@ -308,6 +308,17 @@ router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {
   const max = parseInt(String(req.query.max || ''), 10);
   const caps = Number.isFinite(max) && max > 0 ? { maxFolders: max, maxPermChecks: max } : undefined;
   const out = await spDirectShares(site, caps);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Revoke one direct-share permission on a SharePoint item. Body: { driveId, itemId, permId }. */
+router.post('/api/ad-audit/sp-unshare', async (req, res) => {
+  const b = req.body || {};
+  const driveId = String(b.driveId || '').trim();
+  const itemId = String(b.itemId || '').trim();
+  const permId = String(b.permId || '').trim();
+  if (!driveId || !itemId || !permId) return res.status(400).json({ ok: false, error: 'driveId, itemId and permId are required' });
+  const out = await removeSharePermission(driveId, itemId, permId);
   res.status(out.ok ? 200 : 400).json(out);
 });
 
