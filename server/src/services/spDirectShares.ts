@@ -60,7 +60,7 @@ export interface DirectShareReport {
   site: string;
   siteId: string;
   generatedAt: string;
-  coverage: { drives: number; foldersScanned: number; itemsSeen: number; sharedItems: number; capped: boolean };
+  coverage: { drives: number; foldersScanned: number; itemsSeen: number; sharedItems: number; siteGroupGrants: number; capped: boolean };
   summary: { shares: number; userShares: number; linkShares: number; disabled: number; nonEmployee: number; anonymousLinks: number };
   shares: DirectShare[];
 }
@@ -77,11 +77,28 @@ export async function spDirectShares(
   try { siteId = await resolveSiteId(siteUrl, tk); } catch (e) { return { ok: false, error: `could not resolve site: ${(e as Error).message}` }; }
 
   const idx = buildEmployeeIndex();
+  // Name-fallback index: many employees have no work email stamped yet, so email match alone marks
+  // real staff as "not in Bamboo". Match on normalized full name as a backstop.
+  const byName = new Map<string, typeof idx.all[number]>();
+  for (const emp of idx.all) {
+    const nm = norm([emp.legal_first_name, emp.legal_last_name].filter(Boolean).join(' '));
+    if (nm) byName.set(nm, emp);
+  }
+  const matchPrincipal = (email: string | null, displayName: string | null) => {
+    const byId = matchAdToEmployee({ upn: email, email }, idx);
+    if (byId) return byId;
+    const nm = norm(displayName);
+    return nm ? byName.get(nm) : undefined;
+  };
+  // The site's own permission groups and well-known principals are not "shares to a person".
+  const isSiteGroup = (dn: string, email: string | null) =>
+    /(owners|members|visitors)$/i.test(dn) || /^everyone/i.test(dn) || /company administrator/i.test(dn) || !email;
+
   const drives = await gget(`https://graph.microsoft.com/v1.0/sites/${siteId}/drives?$select=id,name`, tk);
   const driveList: { id: string; name: string }[] = (drives.value || []).map((d: any) => ({ id: d.id, name: d.name }));
 
   const shares: DirectShare[] = [];
-  const cov = { drives: driveList.length, foldersScanned: 0, itemsSeen: 0, sharedItems: 0, capped: false };
+  const cov = { drives: driveList.length, foldersScanned: 0, itemsSeen: 0, sharedItems: 0, siteGroupGrants: 0, capped: false };
 
   const SELECT = '$select=id,name,webUrl,folder,file,shared,parentReference&$top=200';
 
@@ -105,12 +122,14 @@ export async function spDirectShares(
           const user = gp.user || gp.siteUser;
           if (!user) continue; // group grants handled by the group audit; skip
           const email = user.email || user.userPrincipalName || (gp.siteUser && gp.siteUser.email) || null;
-          const emp = matchAdToEmployee({ upn: email, email }, idx);
+          const dn = user.displayName || '';
+          if (isSiteGroup(dn, email)) { cov.siteGroupGrants++; continue; } // the site's own Owners/Members/Visitors
+          const emp = matchPrincipal(email, dn);
           const matched = !!emp;
           let flag: string | null = null;
           if (!matched) flag = 'Not in BambooHR';
           else if (emp && ['terminated', 'prehire', 'inactive'].includes(norm(emp.employment_status))) flag = `Not active (${emp.employment_status})`;
-          shares.push({ path, item: name, itemType, webUrl, grantType: 'user', grantedTo: user.displayName || email, email, roles, linkScope: null, matched, status: emp ? emp.employment_status : null, enabled: null, flag });
+          shares.push({ path, item: name, itemType, webUrl, grantType: 'user', grantedTo: dn || email, email, roles, linkScope: null, matched, status: emp ? emp.employment_status : null, enabled: null, flag });
         }
       }
       purl = pj['@odata.nextLink'] || null;
