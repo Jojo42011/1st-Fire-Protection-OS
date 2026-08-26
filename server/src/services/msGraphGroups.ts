@@ -121,19 +121,24 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
   }
 }
 
-/** Look up a security group's object id by display name (when only the name is known). */
+/** Look up a security group's object id by display name (when only the name is known). During the
+ *  cloud->on-prem migration a cloud copy and a synced copy can briefly share a name; prefer the
+ *  on-prem-synced group so grants land on the one that will survive. */
 export async function findGroupIdByName(name: string): Promise<string | null> {
   if (!graphConfigured()) return null;
   try {
     const token = await graphToken();
     if (!token) return null;
     const res = await fetch(
-      `https://graph.microsoft.com/v1.0/groups?$filter=${encodeURIComponent(`displayName eq '${name.replace(/'/g, "''")}'`)}&$select=id&$top=1`,
+      `https://graph.microsoft.com/v1.0/groups?$filter=${encodeURIComponent(`displayName eq '${name.replace(/'/g, "''")}'`)}&$select=id,onPremisesSyncEnabled&$top=10`,
       { headers: { authorization: `Bearer ${token}` } }
     );
     if (!res.ok) return null;
-    const j = (await res.json()) as { value?: { id: string }[] };
-    return j.value && j.value[0] ? j.value[0].id : null;
+    const j = (await res.json()) as { value?: { id: string; onPremisesSyncEnabled?: boolean }[] };
+    const rows = j.value || [];
+    if (!rows.length) return null;
+    const synced = rows.find((r) => r.onPremisesSyncEnabled);
+    return (synced || rows[0]).id;
   } catch {
     return null;
   }
