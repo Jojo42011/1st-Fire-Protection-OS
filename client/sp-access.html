@@ -85,6 +85,19 @@
       <tbody id="ds-rows"><tr><td colspan="6" class="empty">Click Scan to audit direct shares on this site.</td></tr></tbody>
     </table>
   </div>
+
+  <!-- convert folders from direct shares to a security group -->
+  <div class="card card-clip" id="cv-card" style="margin-top:20px;display:none">
+    <div class="card-head">
+      <h2>Convert folders to group access</h2>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">Replace a folder's ad-hoc shares with one security group. Active staff move into the group, links and former staff are revoked.</span>
+    </div>
+    <div style="padding:6px 16px 2px" class="sub-off">Folders below have direct shares. Edit the group name if you like, then Convert. New groups are created automatically when none exists.</div>
+    <table>
+      <thead><tr><th>Folder</th><th>Security group</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
+      <tbody id="cv-rows"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
@@ -266,6 +279,7 @@ function renderShares(d){
   document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(capped)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
   document.getElementById('ds-filter').style.display=DS_ALL_SHARES.length?'flex':'none';
   renderShareRows();
+  renderConvertPanel();
 }
 function renderShareRows(){
   var all=DS_ALL_SHARES;
@@ -362,6 +376,97 @@ function unshare(x,btn){
       if(res.ok){btn.textContent='Removed';btn.disabled=true;btn.closest('tr').style.opacity=.5;}
       else{btn.disabled=false;btn.textContent='Remove';alert('Failed: '+(res.error||'unknown'));}
     }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
+}
+// ---- convert folders from direct shares to a security group ----
+var CONVERT_PLANS=[];
+// Suggest an SG-SP group name from a folder name: strip company prefixes, keep the distinctive token.
+function suggestGroup(folderName){
+  var n=(folderName||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,'').replace(/[\/\\]/g,' ').trim();
+  n=n.replace(/\b(shared|documents|folder|files|general)\b/gi,'').trim();
+  var tok=(n.split(/[\s_\-]+/).filter(Boolean)[0]||folderName||'Folder').replace(/[^a-z0-9]/gi,'');
+  tok=tok.charAt(0).toUpperCase()+tok.slice(1);
+  return 'SG-SP-'+(tok||'Folder');
+}
+function groupExists(name){
+  var lc=(name||'').toLowerCase();
+  return !!(AUDIT&&AUDIT.groups||[]).some(function(g){return (g.group||'').toLowerCase()===lc;});
+}
+// Build one convert plan per folder that carries direct shares.
+function buildConvertPlans(){
+  var byFolder={};
+  (DS_ALL_SHARES||[]).forEach(function(x){
+    if(x.itemType!=='folder')return;             // convert operates on folders, not individual files
+    var key=x.driveId+'|'+x.itemId;
+    if(!byFolder[key])byFolder[key]={driveId:x.driveId,itemId:x.itemId,item:x.item,path:x.path,shares:[]};
+    byFolder[key].shares.push(x);
+  });
+  return Object.keys(byFolder).map(function(k){
+    var f=byFolder[k];
+    var addUpns=[], removePermIds=[], keep=[];
+    f.shares.forEach(function(x){
+      var keepThis = x.grantType==='user' && x.flag && /bamboo/i.test(x.flag); // "verify" grants left for manual review
+      if(x.grantType==='user' && !x.flag && x.email){ addUpns.push(x.email); }   // active employee -> into the group
+      if(keepThis){ keep.push(x); } else { removePermIds.push(x.permId); }
+    });
+    // de-dupe emails
+    addUpns=addUpns.filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+    return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,
+      group:suggestGroup(f.item),exists:false,addUpns:addUpns,removePermIds:removePermIds,keep:keep.length};
+  }).sort(function(a,b){return (b.addUpns.length+b.removePermIds.length)-(a.addUpns.length+a.removePermIds.length);});
+}
+function renderConvertPanel(){
+  CONVERT_PLANS=buildConvertPlans();
+  var card=document.getElementById('cv-card');
+  if(!CONVERT_PLANS.length){card.style.display='none';return;}
+  card.style.display='';
+  document.getElementById('cv-rows').innerHTML=CONVERT_PLANS.map(function(p,i){
+    p.exists=groupExists(p.group);
+    var badge=p.exists?'<span class="tag loc">exists</span>':'<span class="tag warn">new</span>';
+    return '<tr id="cv-tr-'+i+'">'+
+      '<td style="font-weight:600;color:var(--ink)">'+esc(p.item)+'<div class="sub-off">'+esc(p.path)+'</div></td>'+
+      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(p.group)+'" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
+      '<td class="right" style="font-weight:600">'+p.addUpns.length+'</td>'+
+      '<td class="right" style="font-weight:600;color:'+(p.removePermIds.length?'var(--money)':'var(--muted)')+'">'+p.removePermIds.length+'</td>'+
+      '<td class="right">'+(p.keep?'<span class="tag warn">'+p.keep+'</span>':'<span class="sub-off">0</span>')+'</td>'+
+      '<td class="right"><button class="btn btn-sm btn-primary" onclick="applyConvert('+i+',this)">Convert</button></td>'+
+    '</tr>';
+  }).join('');
+}
+function onCvName(i){
+  var v=document.getElementById('cv-name-'+i).value.trim();
+  CONVERT_PLANS[i].group=v;
+  var badge=groupExists(v)?'<span class="tag loc">exists</span>':'<span class="tag warn">new</span>';
+  var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=badge;
+}
+function applyConvert(i,btn){
+  var p=CONVERT_PLANS[i];
+  var name=document.getElementById('cv-name-'+i).value.trim();
+  if(!name){alert('Enter a group name.');return;}
+  var exists=groupExists(name);
+  var msg='Convert "'+p.item+'" to group access?\n\n'+
+    'Group: '+name+(exists?' (existing)':' (will be created)')+'\n'+
+    'Move '+p.addUpns.length+' active staff into the group\n'+
+    'Revoke '+p.removePermIds.length+' direct share(s)'+(p.keep?'\nKeep '+p.keep+' grant(s) needing manual review':'')+
+    '\n\nChanges apply live in Entra and SharePoint.';
+  if(!confirm(msg))return;
+  btn.disabled=true;btn.textContent='Converting…';
+  fetch('/api/ad-audit/sp-convert-folder',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({driveId:p.driveId,itemId:p.itemId,groupName:name,createGroup:!exists,addUpns:p.addUpns,removePermIds:p.removePermIds})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(res.ok||res.granted){
+        // Group is granted, so access is safe. ok=false here just means a member add or revoke had issues.
+        btn.textContent='Done';btn.disabled=true;
+        var tr=document.getElementById('cv-tr-'+i);
+        var partial=!res.ok&&res.failures&&res.failures.length;
+        if(tr){tr.style.background=partial?'var(--amber-bg)':'var(--green-bg)';
+          tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">'+(res.created?'Created group, ':'')+'moved '+res.added+', revoked '+res.removed+(partial?', '+res.failures.length+' issue(s)':'')+'</span>';}
+        if(partial)console.warn('Convert issues on '+p.item+':',res.failures);
+      }else{
+        btn.disabled=false;btn.textContent='Convert';
+        alert('Convert failed: '+((res.error||(res.failures&&res.failures.join('; ')))||'unknown'));
+        if(res&&res.failures&&res.failures.length)console.warn('Convert issues:',res.failures);
+      }
+    }).catch(function(){btn.disabled=false;btn.textContent='Convert';alert('Request failed.');});
 }
 load();
 loadLatestScan();

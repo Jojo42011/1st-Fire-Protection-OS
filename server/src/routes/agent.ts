@@ -9,6 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
+import { convertFolder } from '../services/spFolderConvert';
 import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -361,6 +362,20 @@ router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {
   const caps = Number.isFinite(max) && max > 0 ? { maxFolders: max, maxPermChecks: max } : undefined;
   const out = await spDirectShares(site, caps);
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Convert a folder to group-based access: ensure/create a group, grant it, add active members,
+ *  and revoke the given direct shares. Body: { driveId, itemId, groupName, createGroup, addUpns, removePermIds }. */
+router.post('/api/ad-audit/sp-convert-folder', async (req, res) => {
+  const b = req.body || {};
+  const out = await convertFolder({
+    driveId: String(b.driveId || ''), itemId: String(b.itemId || ''), groupName: String(b.groupName || '').trim(),
+    createGroup: !!b.createGroup,
+    addUpns: Array.isArray(b.addUpns) ? b.addUpns.map((u: any) => String(u)) : [],
+    removePermIds: Array.isArray(b.removePermIds) ? b.removePermIds.map((p: any) => String(p)) : [],
+    role: b.role ? String(b.role) : 'write',
+  });
+  res.status(out.ok || out.granted ? 200 : 400).json(out);
 });
 
 /** Revoke one direct-share permission on a SharePoint item. Body: { driveId, itemId, permId }. */
