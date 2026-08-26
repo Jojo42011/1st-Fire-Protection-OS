@@ -8,6 +8,7 @@ import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget,
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
+import { spDirectShares } from '../services/spDirectShares';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers, removeUserFromGroup } from '../services/msGraphGroups';
@@ -105,6 +106,17 @@ router.get('/api/ad-agent/graph-perms', async (_req, res) => {
     const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
     res.json({ ok: true, roles: payload.roles || [], appId: payload.appid || payload.azp || null, tenant: payload.tid || null });
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Direct-share audit for one SharePoint site (token-gated test): files/folders shared to a person
+ *  or via a link, outside the SG-SP groups. ?site=https://host/sites/Name&max=NNN */
+router.get('/api/ad-agent/sp-direct-shares', async (req, res) => {
+  const site = String(req.query.site || '').slice(0, 300);
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const max = parseInt(String(req.query.max || ''), 10);
+  const caps = Number.isFinite(max) && max > 0 ? { maxFolders: max, maxPermChecks: max } : undefined;
+  try { res.json(await spDirectShares(site, caps)); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** SharePoint access audit: SG-SP-* groups + members joined to title/office, with drift flags. */
@@ -286,6 +298,16 @@ router.get('/api/ad-audit/pilot-script', async (req, res) => {
 router.get('/api/ad-audit/sp-access', async (req, res) => {
   const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
   const out = await spAccessAudit(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Direct-share audit for one site (session-gated, for the SharePoint access screen). */
+router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {
+  const site = String(req.query.site || '').slice(0, 300);
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const max = parseInt(String(req.query.max || ''), 10);
+  const caps = Number.isFinite(max) && max > 0 ? { maxFolders: max, maxPermChecks: max } : undefined;
+  const out = await spDirectShares(site, caps);
   res.status(out.ok ? 200 : 400).json(out);
 });
 
