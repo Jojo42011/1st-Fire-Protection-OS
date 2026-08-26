@@ -6,6 +6,7 @@ import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode, rerenderQueued } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
+import { buildProvisionPlan } from '../services/adProvision';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
@@ -89,6 +90,27 @@ router.get('/api/ad-agent/google-status', (_req, res) => {
     const last = (db.prepare(`SELECT MAX(received_at) AS m FROM reviews WHERE source='google'`).get() as { m: string | null }).m;
     res.json({ ok: true, ...info, reviewsStored: reviews, locations, latestReviewAt: last });
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Open onboarding requests (id, name, office, whether bound to a BambooHR employee). Reporting read. */
+router.get('/api/ad-agent/onboarding-requests', (_req, res) => {
+  try {
+    const db = getDb();
+    const rows = db.prepare(
+      `SELECT id, name, office, job_position, employee_id, status, created_at
+         FROM onboarding_requests WHERE status NOT IN ('discarded') ORDER BY id DESC LIMIT 50`
+    ).all();
+    res.json({ ok: true, requests: rows });
+  } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Dry-run the AD provisioning plan for one onboarding request (read-only, no job enqueued): resolved
+ *  OU, UPN, the BambooHR attributes that will be written, security groups, and any warnings. */
+router.get('/api/ad-agent/provision-plan', (req, res) => {
+  const id = parseInt(String(req.query.id || ''), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'id required' });
+  try { res.json({ ok: true, plan: buildProvisionPlan(id) }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Google probe: surface what the Business Profile API returns (accounts + locations + raw errors)
