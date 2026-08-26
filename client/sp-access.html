@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SharePoint access · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<style>
+  .screen{max-width:none}
+  .embed .hub-intro{display:none!important}
+  .embed .screen{padding-top:4px}
+  .sp-note{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;padding:10px 14px;margin:10px 0 4px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
+  .tag{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 6px;border-radius:5px;white-space:nowrap}
+  .tag.crit{background:var(--money-bg,#FBEBE9);color:var(--money)}
+  .tag.warn{background:var(--amber-bg);color:var(--amber-ink)}
+  .tag.loc{background:var(--indigo-bg);color:var(--indigo-deep)}
+  .tag.gray{background:var(--fill);color:var(--muted)}
+  .reason{font-weight:500;font-size:12px;color:var(--money)}
+  .chips{display:flex;flex-wrap:wrap;gap:4px}
+  .chip{font-size:11px;font-weight:500;padding:2px 7px;border-radius:20px;background:var(--fill);color:var(--ink-3);border:1px solid var(--divider)}
+  .sub-off{color:var(--faint);font-weight:500;font-size:11px}
+  details.grp{border:1px solid var(--divider);border-radius:10px;margin-top:8px;background:var(--bg)}
+  details.grp>summary{cursor:pointer;padding:11px 14px;font-weight:700;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px;list-style:none}
+  details.grp>summary::-webkit-details-marker{display:none}
+  details.grp[open]>summary{border-bottom:1px solid var(--divider)}
+</style>
+<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
+</head>
+<body>
+<div class="screen">
+  <div class="hub-intro">
+    <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Access governance · Entra × BambooHR</p>
+    <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">SharePoint access</h1>
+    <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:74ch">Every <b>SG-SP</b> security group and who is in it, matched to the BambooHR roster. Remove disabled accounts, former staff, and non-employees, one click or all at once. Changes apply live in Entra.</p>
+  </div>
+
+  <div class="kpis" id="kpis" style="margin-top:14px"></div>
+
+  <div class="card card-clip" style="margin-top:12px">
+    <div class="card-head">
+      <h2>Cleanup queue</h2>
+      <span id="flag-count" style="font-weight:500;font-size:12px;color:var(--muted)">-</span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="load()">Refresh</button>
+      <button class="btn-primary" id="removeAll" onclick="removeAllFlagged(this)">Remove all flagged</button>
+    </div>
+    <table>
+      <thead><tr><th>Person</th><th>Title</th><th>Home office</th><th>Group</th><th>Reason</th><th></th></tr></thead>
+      <tbody id="flag-rows"></tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:16px">
+    <div style="font-weight:800;font-size:14px;color:var(--ink);padding:2px 2px 6px">All groups &amp; members</div>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<script>
+function esc(t){return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function kpi(l,v,s,hot){return '<div class="kpi"><div class="top"><div class="lab">'+l+'</div></div><div class="val'+(hot?' accent':'')+'">'+v+'</div><div class="sub">'+esc(s)+'</div></div>';}
+var AUDIT=null;
+var INACTIVE={terminated:1,prehire:1,inactive:1,offboarding:1};
+function memberReason(m){
+  if(m.enabled===false)return 'Disabled account';
+  if(!m.matched)return 'Not in BambooHR';
+  if(m.status&&INACTIVE[String(m.status).toLowerCase()])return 'Not active ('+m.status+')';
+  return '';
+}
+
+function load(){
+  document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">Loading live from Entra…</td></tr>';
+  fetch('/api/ad-audit/sp-access').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">'+esc((d&&d.error)||'Could not read groups. Is Microsoft Graph connected?')+'</td></tr>';return;}
+    AUDIT=d; var s=d.summary;
+    document.getElementById('kpis').innerHTML=[
+      kpi('Disabled with access',s.disabledWithAccess,'former staff not removed',s.disabledWithAccess>0),
+      kpi('No employee match',s.unmatchedMembers,'external / service / stale',false),
+      kpi('Outside home office',s.locationMismatches,'location drift',false),
+      kpi('Groups',s.groups,s.locationGroups+' location · '+s.functionGroups+' function',false)
+    ].join('');
+
+    // cleanup queue = every flagged membership
+    var flagged=[];
+    (d.groups||[]).forEach(function(g){(g.members||[]).forEach(function(m){var r=memberReason(m);if(r&&m.upn)flagged.push({group:g.group,m:m,reason:r});});});
+    document.getElementById('flag-count').textContent=flagged.length+' membership(s) to remove';
+    document.getElementById('removeAll').style.display=flagged.length?'':'none';
+    document.getElementById('flag-rows').innerHTML= flagged.length? flagged.map(function(f){
+      var m=f.m; var rid='rm-'+btoa(f.group+'|'+m.upn).replace(/[^a-z0-9]/gi,'');
+      return '<tr id="'+rid+'">'+
+        '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'<div class="sub-off">'+esc(m.upn||'')+'</div></td>'+
+        '<td>'+esc(m.title||'—')+'</td>'+
+        '<td>'+esc(m.office||'—')+'</td>'+
+        '<td><span class="chip">'+esc(f.group)+'</span></td>'+
+        '<td><span class="reason">'+esc(f.reason)+'</span></td>'+
+        '<td class="right"><button class="btn btn-sm" onclick="removeOne(\''+esc(f.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button></td>'+
+      '</tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Nothing to clean up. Every member is an active, matched employee.</td></tr>';
+
+    // full groups view
+    document.getElementById('groups').innerHTML=(d.groups||[]).map(function(g){
+      var typeTag=g.isLocation?'<span class="tag loc">location</span>':'<span class="tag gray">function</span>';
+      var synced=g.syncedFromAD?'<span class="tag" style="background:var(--green-bg);color:var(--green)">on-prem</span>':'<span class="tag warn">cloud only</span>';
+      var rows=(g.members||[]).map(function(m){
+        var r=memberReason(m);
+        return '<tr>'+
+          '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'</td>'+
+          '<td>'+esc(m.title||'—')+'</td>'+
+          '<td>'+esc(m.office||'—')+'</td>'+
+          '<td>'+(m.enabled===false?'<span class="tag crit">disabled</span>':(m.matched?'':'<span class="tag warn">no HR match</span>'))+(m.locationMismatch?' <span class="tag warn">off-office</span>':'')+(r?' <span class="reason">'+esc(r)+'</span>':'')+'</td>'+
+          '<td class="right">'+(m.upn?'<button class="btn btn-sm" onclick="removeOne(\''+esc(g.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button>':'')+'</td>'+
+        '</tr>';
+      }).join('');
+      return '<details class="grp"><summary>'+esc(g.group)+' '+typeTag+' '+synced+'<span style="flex:1"></span><span class="sub-off">'+g.memberCount+' member(s)</span></summary>'+
+        '<table><thead><tr><th>Member</th><th>Title</th><th>Office</th><th>Flags</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></details>';
+    }).join('');
+  }).catch(function(){document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">Request failed.</td></tr>';});
+}
+
+function removeOne(group,upn,btn){
+  if(!confirm('Remove '+upn+' from '+group+'?'))return;
+  btn.disabled=true;btn.textContent='Removing…';
+  fetch('/api/ad-audit/sp-remove',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({group:group,upn:upn})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(res.ok){btn.textContent='Removed';btn.classList.add('btn-ok');setTimeout(load,600);}
+      else{btn.disabled=false;btn.textContent='Remove';alert('Failed: '+(res.error||'unknown'));}
+    }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
+}
+
+function removeAllFlagged(btn){
+  var n=document.getElementById('flag-count').textContent;
+  if(!confirm('Remove ALL flagged memberships? ('+n+')\nThis removes disabled, terminated, and non-employee accounts from every SG-SP group. Changes apply live in Entra.'))return;
+  btn.disabled=true;btn.textContent='Removing…';
+  fetch('/api/ad-audit/sp-remove-flagged',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    btn.disabled=false;btn.textContent='Remove all flagged';
+    if(res.ok){alert('Removed '+res.removed+' of '+res.attempted+(res.failed?('. '+res.failed+' failed (see console).'):'.'));if(res.failures&&res.failures.length)console.warn('Failures:',res.failures);}
+    else{alert('Failed: '+(res.error||'unknown'));}
+    load();
+  }).catch(function(){btn.disabled=false;btn.textContent='Remove all flagged';});
+}
+load();
+</script>
+</body>
+</html>

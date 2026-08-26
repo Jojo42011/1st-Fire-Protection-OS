@@ -91,6 +91,23 @@ export interface SpAccessAudit {
   people: AuditPerson[];
 }
 
+/** The removals implied by the audit: every membership held by a disabled, non-employee, or
+ *  no-longer-active account. Same definition the cleanup screen and the removal script use. */
+export function flaggedRemovals(audit: SpAccessAudit): { group: string; upn: string; name: string | null; reason: string }[] {
+  const INACTIVE = new Set(['terminated', 'prehire', 'inactive', 'offboarding']);
+  const out: { group: string; upn: string; name: string | null; reason: string }[] = [];
+  for (const g of audit.groups) {
+    for (const m of g.members) {
+      let reason = '';
+      if (m.enabled === false) reason = 'Disabled account';
+      else if (!m.matched) reason = 'Not in BambooHR';
+      else if (m.status && INACTIVE.has(m.status.toLowerCase())) reason = `Not active (${m.status})`;
+      if (reason && m.upn) out.push({ group: g.group, upn: m.upn, name: m.name, reason });
+    }
+  }
+  return out;
+}
+
 export async function spAccessAudit(prefix = 'SG-SP-', generatedAt = new Date().toISOString()): Promise<{ ok: false; error: string } | SpAccessAudit> {
   const res = await listGroupsWithMembers(prefix);
   if (!res.ok) return { ok: false, error: res.error || 'could not read groups' };

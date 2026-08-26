@@ -242,6 +242,7 @@ app.get('/roster', page('roster.html'));
 app.get('/department', page('department.html'));
 app.get('/agent', page('agent.html'));
 app.get('/ad-audit', page('ad-audit.html'));
+app.get('/sp-access', page('sp-access.html'));
 app.get('/offboarding', page('offboarding.html'));
 app.get('/integrations', page('integrations.html'));
 app.get('/licenses', page('licenses.html'));

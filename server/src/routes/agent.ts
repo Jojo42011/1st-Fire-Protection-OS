@@ -7,10 +7,10 @@ import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode, rerenderQueued } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
-import { spAccessAudit } from '../services/spAccessAudit';
+import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
-import { listGroupsWithMembers } from '../services/msGraphGroups';
+import { listGroupsWithMembers, removeUserFromGroup } from '../services/msGraphGroups';
 import { computeOfficeDrift, buildPilotGroupScript } from '../services/groupOfficeDrift';
 
 /**
@@ -278,6 +278,40 @@ router.get('/api/ad-audit/pilot-script', async (req, res) => {
   const suffix = String(req.query.suffix || '-AD').slice(0, 16);
   const out = await buildPilotGroupScript(group, suffix);
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/* ─────────── SharePoint access governance (session-gated: audit + in-app removal) ─────────── */
+
+/** The full SharePoint access audit (groups × members × title/office, with drift flags). */
+router.get('/api/ad-audit/sp-access', async (req, res) => {
+  const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
+  const out = await spAccessAudit(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Remove one person from one SharePoint (SG-SP) group. Body: { group, upn }. */
+router.post('/api/ad-audit/sp-remove', async (req, res) => {
+  const b = req.body || {};
+  const group = String(b.group || '').trim();
+  const upn = String(b.upn || '').trim();
+  if (!group || !upn) return res.status(400).json({ ok: false, error: 'group and upn are required' });
+  const out = await removeUserFromGroup(upn, { groupName: group });
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Remove every flagged membership (disabled / not-in-Bamboo / not-active) across all SG-SP groups.
+ *  Recomputes the audit fresh so it acts on current state; returns a per-removal result. */
+router.post('/api/ad-audit/sp-remove-flagged', async (_req, res) => {
+  const audit = await spAccessAudit();
+  if (!audit.ok) return res.status(400).json(audit);
+  const targets = flaggedRemovals(audit);
+  let removed = 0; const failures: { group: string; name: string | null; error?: string }[] = [];
+  for (const t of targets) {
+    // eslint-disable-next-line no-await-in-loop
+    const out = await removeUserFromGroup(t.upn, { groupName: t.group });
+    if (out.ok) removed++; else failures.push({ group: t.group, name: t.name, error: out.error });
+  }
+  res.json({ ok: true, attempted: targets.length, removed, failed: failures.length, failures: failures.slice(0, 25) });
 });
 
 export default router;
