@@ -404,13 +404,18 @@ function spGroups(){return ((AUDIT&&AUDIT.groups)||[]).map(function(g){return g.
 // "contains" so a short key like "hr" can't swallow unrelated folders.
 function matchExisting(fkey){
   if(!fkey)return null;
-  var best=null,bestLen=0;
+  // Exact name wins outright. Otherwise match only when the group name is a PREFIX of the folder
+  // (folder is a more specific child, e.g. "AustinExternalFiles" -> SG-SP-Austin), longest prefix wins.
+  // Never match when the group is longer than the folder (that pulled plain "Austin" into
+  // "AustinSprinklerDesign").
+  var exact=null, best=null, bestLen=0;
   spGroups().forEach(function(g){
     var gk=nameKey(g.replace(/^sg-?sp-?/i,''));
     if(!gk)return;
-    if(fkey===gk||fkey.indexOf(gk)===0||gk.indexOf(fkey)===0){ if(gk.length>bestLen){best=g;bestLen=gk.length;} }
+    if(fkey===gk){ exact=g; return; }
+    if(fkey.indexOf(gk)===0 && gk.length>bestLen){ best=g; bestLen=gk.length; }
   });
-  return best;
+  return exact||best;
 }
 // Propose a clean new group name from a folder: combine the words (CamelCase), e.g. "San Antonio" -> SG-SP-SanAntonio.
 function suggestNew(name){
