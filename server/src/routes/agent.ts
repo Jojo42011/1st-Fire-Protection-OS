@@ -136,7 +136,18 @@ router.post('/api/ad-agent/sp-scan/:id(\\d+)/step', async (req, res) => {
 router.get('/api/ad-agent/sp-scan/:id(\\d+)', (req, res) => {
   const row = getScan(Number(req.params.id));
   if (!row) return res.status(404).json({ ok: false, error: 'scan not found' });
-  const { shares, ...rest } = row; // omit the big shares array in the token view
+  if (String(req.query.shares || '') === '1') return res.json({ ok: true, scan: row });
+  const { shares, ...rest } = row; // omit the big shares array in the token view by default
+  res.json({ ok: true, scan: rest });
+});
+// Latest completed scan for a site (headless diagnostics). ?shares=1 includes the full shares array.
+router.get('/api/ad-agent/sp-scan-latest', (req, res) => {
+  const site = String(req.query.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const row = latestScan(site);
+  if (!row) return res.json({ ok: true, scan: null });
+  if (String(req.query.shares || '') === '1') return res.json({ ok: true, scan: row });
+  const { shares, ...rest } = row;
   res.json({ ok: true, scan: rest });
 });
 
