@@ -201,6 +201,7 @@ export interface EmpRow {
   personal_phone: string | null;
   manager: string | null;
   office: string | null;
+  department: string | null;
 }
 
 const norm = (v: string | null | undefined): string => (v || '').trim().toLowerCase();
@@ -213,7 +214,7 @@ export function buildEmployeeIndex(): EmployeeIndex {
   const db = getDb();
   const all = db.prepare(
     `SELECT id, legal_first_name, legal_last_name, work_email, upn, ad_username, employment_status,
-            job_position, public_job_title, personal_phone, manager, office FROM employees`
+            job_position, public_job_title, personal_phone, manager, office, department FROM employees`
   ).all() as EmpRow[];
   const byUpn = new Map<string, EmpRow>();
   const bySam = new Map<string, EmpRow>();

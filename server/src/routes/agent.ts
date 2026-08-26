@@ -7,6 +7,7 @@ import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode, rerenderQueued } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
+import { spAccessAudit } from '../services/spAccessAudit';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers } from '../services/msGraphGroups';
@@ -90,6 +91,13 @@ router.get('/api/ad-agent/google-status', (_req, res) => {
     const last = (db.prepare(`SELECT MAX(received_at) AS m FROM reviews WHERE source='google'`).get() as { m: string | null }).m;
     res.json({ ok: true, ...info, reviewsStored: reviews, locations, latestReviewAt: last });
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** SharePoint access audit: SG-SP-* groups + members joined to title/office, with drift flags. */
+router.get('/api/ad-agent/sp-access-audit', async (req, res) => {
+  const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
+  try { res.json(await spAccessAudit(prefix)); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
 /** Open onboarding requests (id, name, office, whether bound to a BambooHR employee). Reporting read. */
