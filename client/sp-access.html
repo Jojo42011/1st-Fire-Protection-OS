@@ -75,6 +75,11 @@
       <button class="btn-primary" id="ds-scan" onclick="scanDirect(this)">Scan</button>
     </div>
     <div id="ds-cov" style="padding:0 16px;font-size:12px;color:var(--muted)"></div>
+    <div id="ds-filter" style="padding:8px 16px 4px;display:none;gap:8px;align-items:center">
+      <button class="btn btn-sm" id="ds-f-flagged" onclick="setDsFilter(true)">Flagged only</button>
+      <button class="btn btn-sm" id="ds-f-all" onclick="setDsFilter(false)">All</button>
+      <span class="sub-off" style="margin-left:4px">flagged = terminated staff, org-wide/anonymous links, and no-roster-match</span>
+    </div>
     <table>
       <thead><tr><th style="width:28px"><input type="checkbox" id="ds-all" onclick="toggleAllShares(this)" /></th><th>Shared with</th><th>Access</th><th>Item</th><th>Flag</th><th></th></tr></thead>
       <tbody id="ds-rows"><tr><td colspan="6" class="empty">Click Scan to audit direct shares on this site.</td></tr></tbody>
@@ -244,25 +249,38 @@ function dsFlagTag(f){
   if(/bamboo/i.test(f))return '<span class="tag warn">verify</span>';
   return '<span class="tag warn">'+esc(f)+'</span>';
 }
-var DS_POLL=null;
+var DS_POLL=null, DS_ALL_SHARES=[], DS_FLAGGED_ONLY=true;
+function dsRowHtml(x){
+  var meta=JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item});
+  return '<tr class="ds-row">'+
+    '<td><input type="checkbox" class="ds-cb" data-drive="'+esc(x.driveId)+'" data-item="'+esc(x.itemId)+'" data-perm="'+esc(x.permId)+'" onclick="updateDsSelCount()" /></td>'+
+    '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
+    '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
+    '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
+    '<td>'+dsFlagTag(x.flag)+'</td>'+
+    '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+meta+',this)\'>Remove</button></td>'+
+  '</tr>';
+}
 function renderShares(d){
+  DS_ALL_SHARES=d.shares||[];
   var c=d.coverage,s=d.summary;
   document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(capped)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
-  var rows=(d.shares||[]);
+  document.getElementById('ds-filter').style.display=DS_ALL_SHARES.length?'flex':'none';
+  renderShareRows();
+}
+function renderShareRows(){
+  var all=DS_ALL_SHARES;
+  var flagged=all.filter(function(x){return x.flag;});
+  var rows=DS_FLAGGED_ONLY?flagged:all;
+  var fb=document.getElementById('ds-f-flagged'), ab=document.getElementById('ds-f-all');
+  if(fb){fb.textContent='Flagged only ('+flagged.length+')';fb.classList.toggle('btn-primary',DS_FLAGGED_ONLY);}
+  if(ab){ab.textContent='All ('+all.length+')';ab.classList.toggle('btn-primary',!DS_FLAGGED_ONLY);}
   var da=document.getElementById('ds-all');if(da)da.checked=false;
-  document.getElementById('ds-rows').innerHTML= rows.length? rows.map(function(x){
-    var meta=JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item});
-    return '<tr class="ds-row">'+
-      '<td><input type="checkbox" class="ds-cb" data-drive="'+esc(x.driveId)+'" data-item="'+esc(x.itemId)+'" data-perm="'+esc(x.permId)+'" onclick="updateDsSelCount()" /></td>'+
-      '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
-      '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
-      '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
-      '<td>'+dsFlagTag(x.flag)+'</td>'+
-      '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+meta+',this)\'>Remove</button></td>'+
-    '</tr>';
-  }).join('') : '<tr><td colspan="6" class="empty">No direct shares found.</td></tr>';
+  document.getElementById('ds-rows').innerHTML= rows.length? rows.map(dsRowHtml).join('') :
+    '<tr><td colspan="6" class="empty">'+(DS_FLAGGED_ONLY?'No flagged shares. Click “All” to see every direct share.':'No direct shares found.')+'</td></tr>';
   updateDsSelCount();
 }
+function setDsFilter(flaggedOnly){DS_FLAGGED_ONLY=flaggedOnly;renderShareRows();}
 function selectedDsRows(){return Array.prototype.slice.call(document.querySelectorAll('.ds-cb:checked'));}
 function updateDsSelCount(){
   var n=selectedDsRows().length;
