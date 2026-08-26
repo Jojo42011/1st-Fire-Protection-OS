@@ -256,6 +256,23 @@ router.get('/api/ad-agent/headcount', (_req, res) => {
   res.json({ ok: true, total, offices: rows.map((r) => ({ office: r.office, count: r.c, pct: total ? Math.round((r.c / total) * 1000) / 10 : 0 })) });
 });
 
+/** Active employees matching a department/title query, with their BambooHR cell number. Token-gated
+ *  (returns PII: names + phone), for ad-hoc roster pulls. */
+router.get('/api/ad-agent/dept-roster', (req, res) => {
+  const q = '%' + String(req.query.q || '').toLowerCase().trim() + '%';
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT COALESCE(NULLIF(TRIM(preferred_name), ''), legal_first_name) AS first,
+            legal_last_name AS last, department, office, job_position AS title,
+            personal_phone AS phone, work_email AS email
+       FROM employees
+      WHERE employment_status NOT IN ('terminated', 'prehire')
+        AND (lower(COALESCE(department, '')) LIKE ? OR lower(COALESCE(job_position, '')) LIKE ?)
+      ORDER BY last, first`
+  ).all(q, q) as any[];
+  res.json({ ok: true, count: rows.length, people: rows });
+});
+
 /** Mirror counts, so the agent (or an operator with the token) can verify what the last post stored:
  *  how many users, group memberships and OUs the server currently holds, plus the last-sync record. */
 router.get('/api/ad-agent/mirror', (_req, res) => {
