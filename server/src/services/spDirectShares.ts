@@ -72,6 +72,7 @@ export async function spDirectShares(
   siteUrl: string,
   caps: WalkCaps = { maxFolders: 600, maxPermChecks: 1500 },
   generatedAt = new Date().toISOString(),
+  onProgress?: (cov: { foldersScanned: number; itemsSeen: number; sharedItems: number }) => void,
 ): Promise<{ ok: false; error: string } | DirectShareReport> {
   const token = await graphToken();
   if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
@@ -164,6 +165,7 @@ export async function spDirectShares(
         }
         url = j['@odata.nextLink'] || null;
       }
+      if (onProgress && cov.foldersScanned % 15 === 0) onProgress({ foldersScanned: cov.foldersScanned, itemsSeen: cov.itemsSeen, sharedItems: cov.sharedItems });
     }
   }
 

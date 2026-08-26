@@ -1468,6 +1468,18 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_dc_jobs_status ON dc_jobs(status);
     CREATE INDEX IF NOT EXISTS idx_dc_jobs_ref ON dc_jobs(ref_type, ref_id);
+
+    CREATE TABLE IF NOT EXISTS sp_scans (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      site          TEXT NOT NULL,               -- the SharePoint site URL scanned
+      status        TEXT NOT NULL DEFAULT 'running', -- running | done | error
+      started_at    TEXT DEFAULT (datetime('now')),
+      finished_at   TEXT,
+      progress_json TEXT,                         -- live coverage while running
+      result_json   TEXT,                         -- full DirectShareReport when done
+      error         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_sp_scans_site ON sp_scans(site, id);
   `);
 
   // Entra license assignment queue (cloud-side, after AD Connect sync). When a hire's on-prem account

@@ -9,6 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
+import { startScan, getScan, latestScan } from '../services/spScanRunner';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers, removeUserFromGroup } from '../services/msGraphGroups';
@@ -117,6 +118,19 @@ router.get('/api/ad-agent/sp-direct-shares', async (req, res) => {
   const caps = Number.isFinite(max) && max > 0 ? { maxFolders: max, maxPermChecks: max } : undefined;
   try { res.json(await spDirectShares(site, caps)); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Token-gated background-scan controls (for testing the full-coverage walk). */
+router.post('/api/ad-agent/sp-scan/start', (req, res) => {
+  const site = String((req.body || {}).site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  res.json({ ok: true, ...startScan(site) });
+});
+router.get('/api/ad-agent/sp-scan/:id(\\d+)', (req, res) => {
+  const row = getScan(Number(req.params.id));
+  if (!row) return res.status(404).json({ ok: false, error: 'scan not found' });
+  const { result, ...rest } = row;
+  res.json({ ok: true, scan: { ...rest, summary: result ? result.summary : null, coverage: result ? result.coverage : row.progress } });
 });
 
 /** SharePoint access audit: SG-SP-* groups + members joined to title/office, with drift flags. */
@@ -299,6 +313,28 @@ router.get('/api/ad-audit/sp-access', async (req, res) => {
   const prefix = String(req.query.prefix || 'SG-SP-').slice(0, 64);
   const out = await spAccessAudit(prefix);
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Start a full-coverage background direct-share scan for a site. Body: { site }. Returns { id }. */
+router.post('/api/ad-audit/sp-scan/start', (req, res) => {
+  const site = String((req.body || {}).site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  try { res.json({ ok: true, ...startScan(site) }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Poll a background scan by id: status + live progress, and the full result once done. */
+router.get('/api/ad-audit/sp-scan/:id(\\d+)', (req, res) => {
+  const row = getScan(Number(req.params.id));
+  if (!row) return res.status(404).json({ ok: false, error: 'scan not found' });
+  res.json({ ok: true, scan: row });
+});
+
+/** The most recent completed scan for a site (to show on load). ?site=... */
+router.get('/api/ad-audit/sp-scan-latest', (req, res) => {
+  const site = String(req.query.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  res.json({ ok: true, scan: latestScan(site) });
 });
 
 /** Direct-share audit for one site (session-gated, for the SharePoint access screen). */

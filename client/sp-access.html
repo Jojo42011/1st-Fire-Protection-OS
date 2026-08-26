@@ -164,30 +164,55 @@ function dsFlagTag(f){
   if(/bamboo/i.test(f))return '<span class="tag warn">verify</span>';
   return '<span class="tag warn">'+esc(f)+'</span>';
 }
+var DS_POLL=null;
+function renderShares(d){
+  var c=d.coverage,s=d.summary;
+  document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(capped)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
+  var rows=(d.shares||[]);
+  document.getElementById('ds-rows').innerHTML= rows.length? rows.map(function(x){
+    return '<tr>'+
+      '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
+      '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
+      '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
+      '<td>'+dsFlagTag(x.flag)+'</td>'+
+      '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item})+',this)\'>Remove</button></td>'+
+    '</tr>';
+  }).join('') : '<tr><td colspan="5" class="empty">No direct shares found.</td></tr>';
+}
 function scanDirect(btn){
   var site=document.getElementById('ds-site').value.trim();
   if(!site){alert('Enter a SharePoint site URL.');return;}
+  if(DS_POLL){clearInterval(DS_POLL);DS_POLL=null;}
   btn.disabled=true;btn.textContent='Scanning…';
-  document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scanning live via Microsoft Graph… (large sites are sampled; this can take a minute)</td></tr>';
   document.getElementById('ds-cov').textContent='';
-  fetch('/api/ad-audit/sp-direct-shares?max=140&site='+encodeURIComponent(site)).then(function(r){return r.json();}).then(function(d){
-    btn.disabled=false;btn.textContent='Scan';
-    if(!d||!d.ok){document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">'+esc((d&&d.error)||'Scan failed.')+'</td></tr>';return;}
-    var c=d.coverage,s=d.summary;
-    document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(sample: site is large, not fully covered)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
-    var rows=(d.shares||[]);
-    // flagged first (already sorted server-side)
-    document.getElementById('ds-rows').innerHTML= rows.length? rows.map(function(x){
-      var loc=x.grantType==='link';
-      return '<tr>'+
-        '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
-        '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
-        '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
-        '<td>'+dsFlagTag(x.flag)+'</td>'+
-        '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item})+',this)\'>Remove</button></td>'+
-      '</tr>';
-    }).join('') : '<tr><td colspan="5" class="empty">No direct shares found in the scanned area.</td></tr>';
-  }).catch(function(){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Request failed (the scan may have timed out on a very large site).</td></tr>';});
+  document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Starting full-coverage scan…</td></tr>';
+  fetch('/api/ad-audit/sp-scan/start',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({site:site})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(!res.ok){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">'+esc(res.error||'Could not start scan.')+'</td></tr>';return;}
+      pollScan(res.id,btn);
+    }).catch(function(){btn.disabled=false;btn.textContent='Scan';});
+}
+function pollScan(id,btn){
+  DS_POLL=setInterval(function(){
+    fetch('/api/ad-audit/sp-scan/'+id).then(function(r){return r.json();}).then(function(res){
+      if(!res.ok){return;}
+      var sc=res.scan;
+      if(sc.status==='running'){
+        var p=sc.progress||{};
+        document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scanning… '+(p.foldersScanned||0)+' folders, '+(p.sharedItems||0)+' shared items found so far. (Runs in the background; you can leave this open.)</td></tr>';
+      } else {
+        clearInterval(DS_POLL);DS_POLL=null;btn.disabled=false;btn.textContent='Rescan';
+        if(sc.status==='error'){document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scan failed: '+esc(sc.error||'unknown')+'</td></tr>';return;}
+        renderShares(sc.result);
+      }
+    }).catch(function(){});
+  },2500);
+}
+function loadLatestScan(){
+  var site=document.getElementById('ds-site').value.trim();
+  fetch('/api/ad-audit/sp-scan-latest?site='+encodeURIComponent(site)).then(function(r){return r.json();}).then(function(res){
+    if(res.ok&&res.scan&&res.scan.result){document.getElementById('ds-scan').textContent='Rescan';renderShares(res.scan.result);var d=(res.scan.finished_at||'').replace('T',' ').slice(0,16);if(d)document.getElementById('ds-note').textContent='Last full scan: '+d+' UTC. Rescan for current state.';}
+  }).catch(function(){});
 }
 function unshare(x,btn){
   if(!confirm('Remove '+(x.who||'this grant')+' from "'+x.item+'"?'))return;
@@ -199,6 +224,7 @@ function unshare(x,btn){
     }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
 }
 load();
+loadLatestScan();
 </script>
 </body>
 </html>
