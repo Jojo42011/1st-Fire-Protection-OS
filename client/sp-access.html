@@ -44,10 +44,11 @@
       <span id="flag-count" style="font-weight:500;font-size:12px;color:var(--muted)">-</span>
       <span style="flex:1"></span>
       <button class="btn" onclick="load()">Refresh</button>
+      <button class="btn" id="removeSel" onclick="removeSelected(this)" style="display:none">Remove selected (<span id="sel-n">0</span>)</button>
       <button class="btn-primary" id="removeAll" onclick="removeAllFlagged(this)">Remove all flagged</button>
     </div>
     <table>
-      <thead><tr><th>Person</th><th>Title</th><th>Home office</th><th>Group</th><th>Reason</th><th></th></tr></thead>
+      <thead><tr><th style="width:28px"><input type="checkbox" id="flag-all" onclick="toggleAllFlagged(this)" /></th><th>Person</th><th>Title</th><th>Home office</th><th>Group</th><th>Reason</th><th></th></tr></thead>
       <tbody id="flag-rows"></tbody>
     </table>
   </div>
@@ -64,12 +65,13 @@
       <span id="ds-note" style="font-weight:500;font-size:12px;color:var(--muted)">Files &amp; folders shared to a person or link, bypassing the groups.</span>
       <span style="flex:1"></span>
       <input id="ds-site" class="rr-in" style="width:auto;min-width:280px;padding:7px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="https://1stfp.sharepoint.com/sites/Shared/" />
+      <button class="btn" id="ds-removeSel" onclick="removeSelectedShares(this)" style="display:none">Remove selected (<span id="ds-sel-n">0</span>)</button>
       <button class="btn-primary" id="ds-scan" onclick="scanDirect(this)">Scan</button>
     </div>
     <div id="ds-cov" style="padding:0 16px;font-size:12px;color:var(--muted)"></div>
     <table>
-      <thead><tr><th>Shared with</th><th>Access</th><th>Item</th><th>Flag</th><th></th></tr></thead>
-      <tbody id="ds-rows"><tr><td colspan="5" class="empty">Click Scan to audit direct shares on this site.</td></tr></tbody>
+      <thead><tr><th style="width:28px"><input type="checkbox" id="ds-all" onclick="toggleAllShares(this)" /></th><th>Shared with</th><th>Access</th><th>Item</th><th>Flag</th><th></th></tr></thead>
+      <tbody id="ds-rows"><tr><td colspan="6" class="empty">Click Scan to audit direct shares on this site.</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -103,9 +105,11 @@ function load(){
     (d.groups||[]).forEach(function(g){(g.members||[]).forEach(function(m){var r=memberReason(m);if(r&&m.upn)flagged.push({group:g.group,m:m,reason:r});});});
     document.getElementById('flag-count').textContent=flagged.length+' membership(s) to remove';
     document.getElementById('removeAll').style.display=flagged.length?'':'none';
+    document.getElementById('flag-all').checked=false;
     document.getElementById('flag-rows').innerHTML= flagged.length? flagged.map(function(f){
-      var m=f.m; var rid='rm-'+btoa(f.group+'|'+m.upn).replace(/[^a-z0-9]/gi,'');
-      return '<tr id="'+rid+'">'+
+      var m=f.m;
+      return '<tr class="flag-row">'+
+        '<td><input type="checkbox" class="flag-cb" data-group="'+esc(f.group)+'" data-upn="'+esc(m.upn)+'" onclick="updateSelCount()" /></td>'+
         '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'<div class="sub-off">'+esc(m.upn||'')+'</div></td>'+
         '<td>'+esc(m.title||'—')+'</td>'+
         '<td>'+esc(m.office||'—')+'</td>'+
@@ -113,7 +117,8 @@ function load(){
         '<td><span class="reason">'+esc(f.reason)+'</span></td>'+
         '<td class="right"><button class="btn btn-sm" onclick="removeOne(\''+esc(f.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button></td>'+
       '</tr>';
-    }).join('') : '<tr><td colspan="6" class="empty">Nothing to clean up. Every member is an active, matched employee.</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">Nothing to clean up. Every member is an active, matched employee.</td></tr>';
+    updateSelCount();
 
     // full groups view
     document.getElementById('groups').innerHTML=(d.groups||[]).map(function(g){
@@ -135,14 +140,50 @@ function load(){
   }).catch(function(){document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">Request failed.</td></tr>';});
 }
 
+// Remove one membership and update just its row - no full-page reload.
+function removeMembership(group,upn){
+  return fetch('/api/ad-audit/sp-remove',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({group:group,upn:upn})}).then(function(r){return r.json();});
+}
 function removeOne(group,upn,btn){
   if(!confirm('Remove '+upn+' from '+group+'?'))return;
   btn.disabled=true;btn.textContent='Removing…';
-  fetch('/api/ad-audit/sp-remove',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({group:group,upn:upn})})
-    .then(function(r){return r.json();}).then(function(res){
-      if(res.ok){btn.textContent='Removed';btn.classList.add('btn-ok');setTimeout(load,600);}
-      else{btn.disabled=false;btn.textContent='Remove';alert('Failed: '+(res.error||'unknown'));}
-    }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
+  removeMembership(group,upn).then(function(res){
+    if(res.ok){var tr=btn.closest('tr');if(tr){tr.remove();}refreshFlagHeader();}
+    else{btn.disabled=false;btn.textContent='Remove';alert('Failed: '+(res.error||'unknown'));}
+  }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
+}
+function selectedFlagRows(){return Array.prototype.slice.call(document.querySelectorAll('.flag-cb:checked'));}
+function updateSelCount(){
+  var n=selectedFlagRows().length;
+  document.getElementById('sel-n').textContent=n;
+  document.getElementById('removeSel').style.display=n?'':'none';
+}
+function toggleAllFlagged(box){
+  Array.prototype.slice.call(document.querySelectorAll('.flag-cb')).forEach(function(cb){cb.checked=box.checked;});
+  updateSelCount();
+}
+function refreshFlagHeader(){
+  // recount remaining rows without refetching
+  var rows=document.querySelectorAll('#flag-rows .flag-row');
+  document.getElementById('flag-count').textContent=rows.length+' membership(s) to remove';
+  if(!rows.length){document.getElementById('flag-rows').innerHTML='<tr><td colspan="7" class="empty">Nothing left in the cleanup queue.</td></tr>';document.getElementById('removeAll').style.display='none';}
+  updateSelCount();
+}
+function removeSelected(btn){
+  var picks=selectedFlagRows();
+  if(!picks.length)return;
+  if(!confirm('Remove '+picks.length+' selected membership(s)? Changes apply live in Entra.'))return;
+  btn.disabled=true;var orig=btn.innerHTML;btn.textContent='Removing…';
+  var i=0,failed=0;
+  (function next(){
+    if(i>=picks.length){btn.disabled=false;btn.innerHTML=orig;refreshFlagHeader();if(failed)alert(failed+' removal(s) failed.');return;}
+    var cb=picks[i++];
+    removeMembership(cb.getAttribute('data-group'),cb.getAttribute('data-upn')).then(function(res){
+      var tr=cb.closest('tr');
+      if(res&&res.ok){if(tr)tr.remove();}else{failed++;if(tr)tr.style.background='var(--money-bg,#FBEBE9)';cb.checked=false;}
+      next();
+    }).catch(function(){failed++;next();});
+  })();
 }
 
 function removeAllFlagged(btn){
@@ -169,15 +210,48 @@ function renderShares(d){
   var c=d.coverage,s=d.summary;
   document.getElementById('ds-cov').innerHTML='Scanned '+c.sharedItems+' shared item(s) in '+c.foldersScanned+' folder(s)'+(c.capped?' <b style="color:var(--amber-ink)">(capped)</b>':' (full site)')+' · '+s.shares+' direct grant(s): '+s.userShares+' user, '+s.linkShares+' link · '+c.siteGroupGrants+' site-group grants ignored.';
   var rows=(d.shares||[]);
+  var da=document.getElementById('ds-all');if(da)da.checked=false;
   document.getElementById('ds-rows').innerHTML= rows.length? rows.map(function(x){
-    return '<tr>'+
+    var meta=JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item});
+    return '<tr class="ds-row">'+
+      '<td><input type="checkbox" class="ds-cb" data-drive="'+esc(x.driveId)+'" data-item="'+esc(x.itemId)+'" data-perm="'+esc(x.permId)+'" onclick="updateDsSelCount()" /></td>'+
       '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
       '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
       '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
       '<td>'+dsFlagTag(x.flag)+'</td>'+
-      '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item})+',this)\'>Remove</button></td>'+
+      '<td class="right"><button class="btn btn-sm" onclick=\'unshare('+meta+',this)\'>Remove</button></td>'+
     '</tr>';
-  }).join('') : '<tr><td colspan="5" class="empty">No direct shares found.</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">No direct shares found.</td></tr>';
+  updateDsSelCount();
+}
+function selectedDsRows(){return Array.prototype.slice.call(document.querySelectorAll('.ds-cb:checked'));}
+function updateDsSelCount(){
+  var n=selectedDsRows().length;
+  document.getElementById('ds-sel-n').textContent=n;
+  document.getElementById('ds-removeSel').style.display=n?'':'none';
+}
+function toggleAllShares(box){
+  Array.prototype.slice.call(document.querySelectorAll('.ds-cb')).forEach(function(cb){cb.checked=box.checked;});
+  updateDsSelCount();
+}
+function removeShare(driveId,itemId,permId){
+  return fetch('/api/ad-audit/sp-unshare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({driveId:driveId,itemId:itemId,permId:permId})}).then(function(r){return r.json();});
+}
+function removeSelectedShares(btn){
+  var picks=selectedDsRows();
+  if(!picks.length)return;
+  if(!confirm('Revoke '+picks.length+' selected share(s)? Changes apply live in SharePoint.'))return;
+  btn.disabled=true;var orig=btn.innerHTML;btn.textContent='Removing…';
+  var i=0,failed=0;
+  (function next(){
+    if(i>=picks.length){btn.disabled=false;btn.innerHTML=orig;updateDsSelCount();if(failed)alert(failed+' revoke(s) failed.');return;}
+    var cb=picks[i++];
+    removeShare(cb.getAttribute('data-drive'),cb.getAttribute('data-item'),cb.getAttribute('data-perm')).then(function(res){
+      var tr=cb.closest('tr');
+      if(res&&res.ok){if(tr){tr.style.opacity=.4;}cb.checked=false;cb.disabled=true;}else{failed++;}
+      next();
+    }).catch(function(){failed++;next();});
+  })();
 }
 function scanDirect(btn){
   var site=document.getElementById('ds-site').value.trim();
