@@ -100,7 +100,7 @@
         <button class="btn btn-sm" onclick="copyAdScript(this)">Copy script</button>
       </div>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Existing groups convert now; edit a name to map a folder set onto a different group.</div>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Existing groups convert now; edit a name to map a folder set onto a different group. <b>Move in</b> = active staff added to the group. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group) — the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
     <table>
       <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
@@ -175,6 +175,8 @@ function load(){
         toolbar+
         '<table><thead><tr><th style="width:28px"><input type="checkbox" onclick="toggleGrpAll(\''+gid+'\',this)" /></th><th>Member</th><th>Title</th><th>Office</th><th>Flags</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></details>';
     }).join('');
+    // group audit is now loaded; if a scan already rendered, redraw the convert panel so it can match existing groups
+    if(DS_ALL_SHARES&&DS_ALL_SHARES.length)renderConvertPanel();
   }).catch(function(){document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">Request failed.</td></tr>';});
 }
 
@@ -390,19 +392,32 @@ function unshare(x,btn){
 // Azure AD Connect, so this tool never creates cloud groups. It maps folders to EXISTING SG-SP
 // groups (grant + move members + revoke), and lists any that still need creating in AD.
 var CONVERT_GROUPS=[];
-// Pull the distinctive office/team token out of a folder name (drop the company prefix and generic words).
-function officeToken(folderName){
-  var n=(folderName||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,'').replace(/[\/\\]/g,' ').trim();
-  n=n.replace(/\b(shared|documents?|folder|files?|general|admin|main)\b/gi,'').trim();
-  return (n.split(/[\s_\-]+/).filter(Boolean)[0]||'').replace(/[^a-z0-9]/gi,'');
+// Reduce a folder or group name to a comparable key: drop the company prefix and generic words,
+// then remove spaces/punctuation so "San Antonio" and "SG-SP-SanAntonio" line up as "sanantonio".
+function nameKey(s){
+  var n=(s||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,' ').replace(/[\/\\]/g,' ');
+  n=n.replace(/\b(shared|documents?|folder|files?|general)\b/gi,' ');
+  return n.replace(/[^a-z0-9]/gi,'').toLowerCase();
 }
-function existingGroupFor(token){
-  if(!token)return null;
-  var lc=token.toLowerCase(), groups=(AUDIT&&AUDIT.groups)||[];
-  var hit=groups.filter(function(g){return (g.group||'').toLowerCase()==='sg-sp-'+lc;})[0];
-  if(hit)return hit.group;
-  hit=groups.filter(function(g){return /^sg-sp/i.test(g.group||'')&&(g.group||'').toLowerCase().indexOf(lc)>=0;})[0];
-  return hit?hit.group:null;
+function spGroups(){return ((AUDIT&&AUDIT.groups)||[]).map(function(g){return g.group;}).filter(function(n){return /^sg-sp/i.test(n||'');});}
+// Match a folder key to an existing SG-SP group by name (exact or prefix, longest match wins). No loose
+// "contains" so a short key like "hr" can't swallow unrelated folders.
+function matchExisting(fkey){
+  if(!fkey)return null;
+  var best=null,bestLen=0;
+  spGroups().forEach(function(g){
+    var gk=nameKey(g.replace(/^sg-?sp-?/i,''));
+    if(!gk)return;
+    if(fkey===gk||fkey.indexOf(gk)===0||gk.indexOf(fkey)===0){ if(gk.length>bestLen){best=g;bestLen=gk.length;} }
+  });
+  return best;
+}
+// Propose a clean new group name from a folder: combine the words (CamelCase), e.g. "San Antonio" -> SG-SP-SanAntonio.
+function suggestNew(name){
+  var n=(name||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,' ').replace(/[\/\\]/g,' ');
+  n=n.replace(/\b(shared|documents?|folder|files?|general)\b/gi,' ');
+  var tok=n.split(/[^a-z0-9]+/i).filter(Boolean).map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join('');
+  return tok?('SG-SP-'+tok.slice(0,40)):'';
 }
 function groupExists(name){
   var lc=(name||'').toLowerCase();
@@ -424,23 +439,25 @@ function buildConvertGroups(){
       if(x.grantType==='user'&&!x.flag&&x.email)addUpns.push(x.email);   // active employee -> into the group
       if(keepThis)keep++; else removePermIds.push(x.permId);
     });
-    // office token from the folder, falling back to its top path segment
-    var token=officeToken(f.item)||officeToken((f.path||'').split('/').filter(Boolean)[0]||'');
-    var existing=existingGroupFor(token);
-    // fall back to the folder's own name so distinct folders never collapse into one generic group
-    var fallback='SG-SP-'+(token?token.charAt(0).toUpperCase()+token.slice(1):(f.item||'Folder').replace(/[^a-z0-9]/gi,'').slice(0,24)||'Folder');
-    return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,
-      addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:existing||fallback,exists:!!existing};
+    // full path to the folder itself (records store the PARENT path + the folder name)
+    var full=((f.path==='/'?'':(f.path||''))+'/'+(f.item||'')).replace(/\/+/g,'/');
+    // match to an existing group by the folder's own name, then by its parent office folder
+    var fkey=nameKey(f.item), pkey=nameKey((f.path||'').split('/').filter(Boolean).pop()||'');
+    var existing=matchExisting(fkey)||matchExisting(pkey);
+    var group=existing||suggestNew(f.item)||suggestNew((f.path||'').split('/').filter(Boolean).pop()||'')||'';
+    return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,full:full,
+      addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:group,exists:!!existing};
   });
   var byGroup={};
   folders.forEach(function(fo){
-    var key=fo.group.toLowerCase();
-    if(!byGroup[key])byGroup[key]={group:fo.group,exists:fo.exists,folders:[],addUpns:[]};
+    var key=fo.group?fo.group.toLowerCase():'__unassigned';
+    if(!byGroup[key])byGroup[key]={group:fo.group,exists:fo.exists,unassigned:!fo.group,folders:[],addUpns:[]};
     byGroup[key].folders.push(fo);
     fo.addUpns.forEach(function(u){if(byGroup[key].addUpns.indexOf(u)<0)byGroup[key].addUpns.push(u);});
   });
   return Object.keys(byGroup).map(function(k){return byGroup[k];}).sort(function(a,b){
-    if(a.exists!==b.exists)return a.exists?-1:1;          // convertible (existing) first
+    if(a.unassigned!==b.unassigned)return a.unassigned?1:-1;  // "pick a group" last
+    if(a.exists!==b.exists)return a.exists?-1:1;              // convertible (existing) first
     return b.folders.length-a.folders.length;
   });
 }
@@ -454,24 +471,24 @@ function renderConvertPanel(){
   var card=document.getElementById('cv-card');
   if(!CONVERT_GROUPS.length){card.style.display='none';return;}
   card.style.display='';
-  // AD-needed notice + New-ADGroup script for groups that don't exist yet
-  var need=CONVERT_GROUPS.filter(function(g){return !g.exists;});
+  // AD-needed notice + New-ADGroup script for named groups that don't exist yet
+  var need=CONVERT_GROUPS.filter(function(g){return g.group&&!g.exists;});
   var adBox=document.getElementById('cv-adneed');
   if(need.length){
     adBox.style.display='';
     document.getElementById('cv-adscript').textContent=
       '# Set $ou to your SharePoint-groups OU, then run. Groups sync up to Entra on the next AD Connect cycle.\n'+
-      '$ou = "OU=SharePoint,OU=Groups,DC=example,DC=local"\n'+
+      '$ou = "OU=SharePoint,OU=Security Groups,OU=1FP,DC=ad,DC=1stfpservices,DC=com"\n'+
       need.map(function(g){
         return 'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou';
       }).join('\n');
   } else adBox.style.display='none';
   document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
     var t=cvTotals(g);
-    var badge=g.exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>';
-    var folderList=g.folders.map(function(f){return esc(f.path||f.item);}).join('<br>');
+    var badge=g.unassigned?'<span class="tag gray">pick a group</span>':(g.exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>');
+    var folderList=g.folders.map(function(f){return esc(f.full||f.item);}).join('<br>');
     return '<tr id="cv-tr-'+i+'" style="vertical-align:top">'+
-      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group)+'" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
+      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group||'')+'" placeholder="SG-SP-…" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
       '<td><span style="font-weight:600;color:var(--ink)">'+g.folders.length+' folder'+(g.folders.length>1?'s':'')+'</span><div class="sub-off" style="margin-top:2px;line-height:1.5">'+folderList+'</div></td>'+
       '<td class="right" style="font-weight:600">'+t.move+'</td>'+
       '<td class="right" style="font-weight:600;color:'+(t.revoke?'var(--money)':'var(--muted)')+'">'+t.revoke+'</td>'+
