@@ -9,7 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
-import { startScan, getScan, latestScan } from '../services/spScanRunner';
+import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
 import { listGroupsWithMembers, removeUserFromGroup } from '../services/msGraphGroups';
@@ -120,17 +120,21 @@ router.get('/api/ad-agent/sp-direct-shares', async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
-/** Token-gated background-scan controls (for testing the full-coverage walk). */
-router.post('/api/ad-agent/sp-scan/start', (req, res) => {
+/** Token-gated resumable-scan controls (for testing the full-coverage walk). */
+router.post('/api/ad-agent/sp-scan/start', async (req, res) => {
   const site = String((req.body || {}).site || '').trim();
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
-  res.json({ ok: true, ...startScan(site) });
+  const out = await startScan(site);
+  res.status(out.error ? 400 : 200).json({ ok: !out.error, ...out });
+});
+router.post('/api/ad-agent/sp-scan/:id(\\d+)/step', async (req, res) => {
+  res.json(await stepScan(Number(req.params.id)));
 });
 router.get('/api/ad-agent/sp-scan/:id(\\d+)', (req, res) => {
   const row = getScan(Number(req.params.id));
   if (!row) return res.status(404).json({ ok: false, error: 'scan not found' });
-  const { result, ...rest } = row;
-  res.json({ ok: true, scan: { ...rest, summary: result ? result.summary : null, coverage: result ? result.coverage : row.progress } });
+  const { shares, ...rest } = row; // omit the big shares array in the token view
+  res.json({ ok: true, scan: rest });
 });
 
 /** SharePoint access audit: SG-SP-* groups + members joined to title/office, with drift flags. */
@@ -315,15 +319,22 @@ router.get('/api/ad-audit/sp-access', async (req, res) => {
   res.status(out.ok ? 200 : 400).json(out);
 });
 
-/** Start a full-coverage background direct-share scan for a site. Body: { site }. Returns { id }. */
-router.post('/api/ad-audit/sp-scan/start', (req, res) => {
+/** Start a resumable full-coverage direct-share scan for a site. Body: { site }. Returns { id }. */
+router.post('/api/ad-audit/sp-scan/start', async (req, res) => {
   const site = String((req.body || {}).site || '').trim();
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
-  try { res.json({ ok: true, ...startScan(site) }); }
-  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+  const out = await startScan(site);
+  if (out.error) return res.status(400).json({ ok: false, error: out.error });
+  res.json({ ok: true, id: out.id });
 });
 
-/** Poll a background scan by id: status + live progress, and the full result once done. */
+/** Advance one scan by a short batch (the client calls this repeatedly). Resumes from saved state. */
+router.post('/api/ad-audit/sp-scan/:id(\\d+)/step', async (req, res) => {
+  const out = await stepScan(Number(req.params.id));
+  res.json(out);
+});
+
+/** Poll a scan by id: status + live progress, and the full result once done. */
 router.get('/api/ad-audit/sp-scan/:id(\\d+)', (req, res) => {
   const row = getScan(Number(req.params.id));
   if (!row) return res.status(404).json({ ok: false, error: 'scan not found' });

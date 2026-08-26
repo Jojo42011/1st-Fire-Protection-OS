@@ -253,39 +253,47 @@ function removeSelectedShares(btn){
     }).catch(function(){failed++;next();});
   })();
 }
+var DS_STEPPING=false;
 function scanDirect(btn){
   var site=document.getElementById('ds-site').value.trim();
   if(!site){alert('Enter a SharePoint site URL.');return;}
-  if(DS_POLL){clearInterval(DS_POLL);DS_POLL=null;}
   btn.disabled=true;btn.textContent='Scanning…';
   document.getElementById('ds-cov').textContent='';
-  document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Starting full-coverage scan…</td></tr>';
+  document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">Starting scan…</td></tr>';
   fetch('/api/ad-audit/sp-scan/start',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({site:site})})
     .then(function(r){return r.json();}).then(function(res){
-      if(!res.ok){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">'+esc(res.error||'Could not start scan.')+'</td></tr>';return;}
-      pollScan(res.id,btn);
+      if(!res.ok){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">'+esc(res.error||'Could not start scan.')+'</td></tr>';return;}
+      DS_STEPPING=true;stepScan(res.id,btn,0);
     }).catch(function(){btn.disabled=false;btn.textContent='Scan';});
 }
-function pollScan(id,btn){
-  DS_POLL=setInterval(function(){
-    fetch('/api/ad-audit/sp-scan/'+id).then(function(r){return r.json();}).then(function(res){
-      if(!res.ok){return;}
-      var sc=res.scan;
-      if(sc.status==='running'){
-        var p=sc.progress||{};
-        document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scanning… '+(p.foldersScanned||0)+' folders, '+(p.sharedItems||0)+' shared items found so far. (Runs in the background; you can leave this open.)</td></tr>';
-      } else {
-        clearInterval(DS_POLL);DS_POLL=null;btn.disabled=false;btn.textContent='Rescan';
-        if(sc.status==='error'){document.getElementById('ds-rows').innerHTML='<tr><td colspan="5" class="empty">Scan failed: '+esc(sc.error||'unknown')+'</td></tr>';return;}
-        renderShares(sc.result);
-      }
-    }).catch(function(){});
-  },2500);
+// Drive the resumable scan by calling /step repeatedly. Each step is short; a failed step is retried
+// (the scan state lives in the DB), so a server restart never loses the scan.
+function stepScan(id,btn,retries){
+  if(!DS_STEPPING)return;
+  fetch('/api/ad-audit/sp-scan/'+id+'/step',{method:'POST'}).then(function(r){return r.json();}).then(function(res){
+    if(res.status==='done'){
+      DS_STEPPING=false;btn.disabled=false;btn.textContent='Rescan';
+      fetch('/api/ad-audit/sp-scan/'+id).then(function(r){return r.json();}).then(function(g){if(g.ok&&g.scan)renderShares(g.scan);});
+      return;
+    }
+    if(res.status==='error'&&!res.error){
+      DS_STEPPING=false;btn.disabled=false;btn.textContent='Rescan';
+      document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">Scan failed.</td></tr>';return;
+    }
+    var p=res.progress||{};
+    document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">Scanning… '+(p.foldersScanned||0)+' folders, '+(p.sharedItems||0)+' shared items so far. Keep this tab open.</td></tr>';
+    // res.error present = a transient step error; retry a few times before giving up.
+    var wait=res.error?Math.min(4000,600*(retries+1)):150;
+    setTimeout(function(){stepScan(id,btn,res.error?retries+1:0);},wait);
+  }).catch(function(){
+    if(retries>6){DS_STEPPING=false;btn.disabled=false;btn.textContent='Rescan';return;}
+    setTimeout(function(){stepScan(id,btn,retries+1);},1500);
+  });
 }
 function loadLatestScan(){
   var site=document.getElementById('ds-site').value.trim();
   fetch('/api/ad-audit/sp-scan-latest?site='+encodeURIComponent(site)).then(function(r){return r.json();}).then(function(res){
-    if(res.ok&&res.scan&&res.scan.result){document.getElementById('ds-scan').textContent='Rescan';renderShares(res.scan.result);var d=(res.scan.finished_at||'').replace('T',' ').slice(0,16);if(d)document.getElementById('ds-note').textContent='Last full scan: '+d+' UTC. Rescan for current state.';}
+    if(res.ok&&res.scan&&res.scan.shares){document.getElementById('ds-scan').textContent='Rescan';renderShares(res.scan);var d=(res.scan.finished_at||'').replace('T',' ').slice(0,16);if(d)document.getElementById('ds-note').textContent='Last full scan: '+d+' UTC. Rescan for current state.';}
   }).catch(function(){});
 }
 function unshare(x,btn){

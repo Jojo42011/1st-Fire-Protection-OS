@@ -1476,11 +1476,21 @@ export function initDb(): void {
       started_at    TEXT DEFAULT (datetime('now')),
       finished_at   TEXT,
       progress_json TEXT,                         -- live coverage while running
-      result_json   TEXT,                         -- full DirectShareReport when done
+      state_json    TEXT,                         -- resumable walk state (queue, cursor, drives)
+      result_json   TEXT,                         -- summary when done
       error         TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_sp_scans_site ON sp_scans(site, id);
+
+    -- Found direct shares, streamed in as the resumable scan progresses (avoids a huge blob per step).
+    CREATE TABLE IF NOT EXISTS sp_scan_shares (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      scan_id    INTEGER NOT NULL,
+      data_json  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sp_scan_shares_scan ON sp_scan_shares(scan_id);
   `);
+  addColumn('sp_scans', 'state_json', 'TEXT');
 
   // Entra license assignment queue (cloud-side, after AD Connect sync). When a hire's on-prem account
   // is created it does not exist in Entra yet, so license assignment is queued and retried by the OS
