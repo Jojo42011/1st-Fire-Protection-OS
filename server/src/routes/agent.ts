@@ -122,9 +122,11 @@ router.get('/api/ad-agent/sp-direct-shares', async (req, res) => {
 
 /** Token-gated resumable-scan controls (for testing the full-coverage walk). */
 router.post('/api/ad-agent/sp-scan/start', async (req, res) => {
-  const site = String((req.body || {}).site || '').trim();
+  const b = req.body || {};
+  const site = String(b.site || '').trim();
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
-  const out = await startScan(site);
+  const md = b.maxDepth === null || b.maxDepth === undefined ? null : parseInt(String(b.maxDepth), 10);
+  const out = await startScan(site, Number.isFinite(md as number) ? (md as number) : null);
   res.status(out.error ? 400 : 200).json({ ok: !out.error, ...out });
 });
 router.post('/api/ad-agent/sp-scan/:id(\\d+)/step', async (req, res) => {
@@ -319,11 +321,14 @@ router.get('/api/ad-audit/sp-access', async (req, res) => {
   res.status(out.ok ? 200 : 400).json(out);
 });
 
-/** Start a resumable full-coverage direct-share scan for a site. Body: { site }. Returns { id }. */
+/** Start a resumable direct-share scan for a site. Body: { site, maxDepth? }. Returns { id }.
+ *  maxDepth caps how many folder levels below the root to descend (null/absent = whole tree). */
 router.post('/api/ad-audit/sp-scan/start', async (req, res) => {
-  const site = String((req.body || {}).site || '').trim();
+  const b = req.body || {};
+  const site = String(b.site || '').trim();
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
-  const out = await startScan(site);
+  const md = b.maxDepth === null || b.maxDepth === undefined ? null : parseInt(String(b.maxDepth), 10);
+  const out = await startScan(site, Number.isFinite(md as number) ? (md as number) : null);
   if (out.error) return res.status(400).json({ ok: false, error: out.error });
   res.json({ ok: true, id: out.id });
 });

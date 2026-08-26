@@ -64,7 +64,13 @@
       <h2>Direct file shares</h2>
       <span id="ds-note" style="font-weight:500;font-size:12px;color:var(--muted)">Files &amp; folders shared to a person or link, bypassing the groups.</span>
       <span style="flex:1"></span>
-      <input id="ds-site" class="rr-in" style="width:auto;min-width:280px;padding:7px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="https://1stfp.sharepoint.com/sites/Shared/" />
+      <input id="ds-site" class="rr-in" style="width:auto;min-width:260px;padding:7px 10px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="https://1stfp.sharepoint.com/sites/Shared/" />
+      <select id="ds-depth" class="rr-in" title="How many folder levels deep to scan" style="width:auto;padding:7px 8px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px">
+        <option value="1">1 level</option>
+        <option value="2" selected>2 levels</option>
+        <option value="3">3 levels</option>
+        <option value="">All levels</option>
+      </select>
       <button class="btn" id="ds-removeSel" onclick="removeSelectedShares(this)" style="display:none">Remove selected (<span id="ds-sel-n">0</span>)</button>
       <button class="btn-primary" id="ds-scan" onclick="scanDirect(this)">Scan</button>
     </div>
@@ -260,7 +266,9 @@ function scanDirect(btn){
   btn.disabled=true;btn.textContent='Scanning…';
   document.getElementById('ds-cov').textContent='';
   document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">Starting scan…</td></tr>';
-  fetch('/api/ad-audit/sp-scan/start',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({site:site})})
+  var depthSel=document.getElementById('ds-depth').value;
+  var maxDepth=depthSel===''?null:parseInt(depthSel,10);
+  fetch('/api/ad-audit/sp-scan/start',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({site:site,maxDepth:maxDepth})})
     .then(function(r){return r.json();}).then(function(res){
       if(!res.ok){btn.disabled=false;btn.textContent='Scan';document.getElementById('ds-rows').innerHTML='<tr><td colspan="6" class="empty">'+esc(res.error||'Could not start scan.')+'</td></tr>';return;}
       DS_STEPPING=true;stepScan(res.id,btn,0);

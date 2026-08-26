@@ -35,15 +35,19 @@ async function gget(url: string, token: string): Promise<any> {
 interface WalkState {
   siteId: string;
   drives: { id: string; name: string }[];
-  queue: { driveId: string; id: string; path: string }[];
-  current: { driveId: string; id: string; path: string; nextLink: string | null } | null;
+  queue: { driveId: string; id: string; path: string; depth: number }[];
+  current: { driveId: string; id: string; path: string; depth: number; nextLink: string | null } | null;
   cov: { foldersScanned: number; itemsSeen: number; sharedItems: number; siteGroupGrants: number };
+  // How many folder levels below the drive root to descend. null = unlimited (whole tree). A drive
+  // root is depth 0, its immediate subfolders are depth 1, and so on. Older scans have no maxDepth,
+  // which reads as unlimited, so they keep their original behavior on resume.
+  maxDepth?: number | null;
 }
 
 function parse<T>(s: string | null, fallback: T): T { if (!s) return fallback; try { return JSON.parse(s) as T; } catch { return fallback; } }
 
 /** Create a scan row, resolve the site + its drives, and seed the folder queue. Returns the id. */
-export async function startScan(site: string): Promise<{ id?: number; error?: string }> {
+export async function startScan(site: string, maxDepth: number | null = null): Promise<{ id?: number; error?: string }> {
   const db = getDb();
   const token = await graphToken();
   if (!token) return { error: 'Microsoft Graph is not connected' };
@@ -55,9 +59,10 @@ export async function startScan(site: string): Promise<{ id?: number; error?: st
     const drives = (dv.value || []).map((d: any) => ({ id: d.id, name: d.name }));
     const state: WalkState = {
       siteId: s.id, drives,
-      queue: drives.map((d: { id: string; name: string }) => ({ driveId: d.id, id: 'root', path: `/${d.name}` })),
+      queue: drives.map((d: { id: string; name: string }) => ({ driveId: d.id, id: 'root', path: `/${d.name}`, depth: 0 })),
       current: null,
       cov: { foldersScanned: 0, itemsSeen: 0, sharedItems: 0, siteGroupGrants: 0 },
+      maxDepth: (typeof maxDepth === 'number' && maxDepth >= 0) ? maxDepth : null,
     };
     const info = db.prepare(`INSERT INTO sp_scans (site, status, state_json, progress_json) VALUES (?, 'running', ?, ?)`)
       .run(site, JSON.stringify(state), JSON.stringify(state.cov));
@@ -136,7 +141,13 @@ export async function stepScan(id: number): Promise<{ ok: boolean; status: strin
             }
           } catch { /* skip item on permission error */ }
         }
-        if (isFolder) state.queue.push({ driveId: cur.driveId, id: it.id, path: `${cur.path}/${it.name}` });
+        if (isFolder) {
+          const childDepth = (cur.depth ?? 0) + 1;
+          // Descend only within the depth cap; null/undefined maxDepth = unlimited (old behavior).
+          if (state.maxDepth == null || childDepth <= state.maxDepth) {
+            state.queue.push({ driveId: cur.driveId, id: it.id, path: `${cur.path}/${it.name}`, depth: childDepth });
+          }
+        }
       }
       cur.nextLink = page['@odata.nextLink'] || null;
       if (!cur.nextLink) { state.cov.foldersScanned++; state.current = null; }
