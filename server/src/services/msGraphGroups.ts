@@ -80,7 +80,7 @@ export async function listUserGroups(upn: string): Promise<{ ok: boolean; error?
   }
 }
 
-export interface GroupMember { name: string | null; upn: string | null; type: string; enabled: boolean | null }
+export interface GroupMember { name: string | null; upn: string | null; sam: string | null; type: string; enabled: boolean | null }
 export interface GroupWithMembers { id: string; name: string; kind: string; syncedFromAD: boolean; members: GroupMember[] }
 
 /**
@@ -99,7 +99,7 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
     const out: GroupWithMembers[] = [];
     for (const g of groupRows) {
       // eslint-disable-next-line no-await-in-loop
-      const members = await collect(`https://graph.microsoft.com/v1.0/groups/${g.id}/members?$select=id,displayName,userPrincipalName,accountEnabled&$top=999`);
+      const members = await collect(`https://graph.microsoft.com/v1.0/groups/${g.id}/members?$select=id,displayName,userPrincipalName,accountEnabled,onPremisesSamAccountName&$top=999`);
       const cls = classifyGroup(g);
       out.push({
         id: g.id,
@@ -109,6 +109,7 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
         members: members.map((m) => ({
           name: m.displayName || null,
           upn: m.userPrincipalName || null,
+          sam: m.onPremisesSamAccountName || null,
           type: String(m['@odata.type'] || '').replace('#microsoft.graph.', '') || 'unknown',
           enabled: typeof m.accountEnabled === 'boolean' ? m.accountEnabled : null,
         })),

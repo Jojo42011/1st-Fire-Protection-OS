@@ -10,6 +10,7 @@ import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
+import { buildOnPremGroupPlan } from '../services/spGroupMigration';
 import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -363,6 +364,19 @@ router.get('/api/ad-audit/sp-scan-latest', (req, res) => {
   const site = String(req.query.site || '').trim();
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
   res.json({ ok: true, scan: latestScan(site) });
+});
+
+const DEFAULT_SP_OU = 'OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com';
+/** Generate the PowerShell to recreate cloud-only SG-SP groups on-prem in the SharePoint OU. */
+router.get('/api/ad-audit/sp-onprem-plan', async (req, res) => {
+  const ou = String(req.query.ou || DEFAULT_SP_OU);
+  const out = await buildOnPremGroupPlan(ou);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+router.get('/api/ad-agent/sp-onprem-plan', async (req, res) => {
+  const ou = String(req.query.ou || DEFAULT_SP_OU);
+  const out = await buildOnPremGroupPlan(ou);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Direct-share audit for one site (session-gated, for the SharePoint access screen). */

@@ -86,6 +86,18 @@
     </table>
   </div>
 
+  <!-- migrate cloud-only SG-SP groups to on-prem AD -->
+  <div class="card card-clip" id="mig-card" style="margin-top:20px">
+    <div class="card-head">
+      <h2>Move cloud groups into AD</h2>
+      <span id="mig-note" style="font-weight:500;font-size:12px;color:var(--muted)">SG-SP groups made in Entra by mistake, rebuilt on-prem in your SharePoint OU with the same members.</span>
+      <span style="flex:1"></span>
+      <button class="btn" id="mig-load" onclick="loadMigration(this)">Build script</button>
+    </div>
+    <div style="padding:8px 16px 2px" class="sub-off">Target OU: <input id="mig-ou" class="rr-in" style="width:auto;min-width:420px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:11px" value="OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com" /></div>
+    <div id="mig-body" style="padding:4px 16px 14px"></div>
+  </div>
+
   <!-- convert folders from direct shares to a security group -->
   <div class="card card-clip" id="cv-card" style="margin-top:20px;display:none">
     <div class="card-head">
@@ -100,7 +112,7 @@
         <button class="btn btn-sm" onclick="copyAdScript(this)">Copy script</button>
       </div>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Existing groups convert now; edit a name to map a folder set onto a different group. <b>Move in</b> = active staff added to the group. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group) — the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert; a cloud-only group (<b>in Entra, not AD</b>) must be migrated first with the card above. <b>Move in</b> = active staff added to the group. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group): the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
     <table>
       <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
@@ -399,9 +411,9 @@ function nameKey(s){
   n=n.replace(/\b(shared|documents?|folder|files?|general)\b/gi,' ');
   return n.replace(/[^a-z0-9]/gi,'').toLowerCase();
 }
-function spGroups(){return ((AUDIT&&AUDIT.groups)||[]).map(function(g){return g.group;}).filter(function(n){return /^sg-sp/i.test(n||'');});}
+function spGroups(){return ((AUDIT&&AUDIT.groups)||[]).filter(function(g){return /^sg-sp/i.test(g.group||'');}).map(function(g){return {name:g.group,synced:!!g.syncedFromAD};});}
 // Match a folder key to an existing SG-SP group by name (exact or prefix, longest match wins). No loose
-// "contains" so a short key like "hr" can't swallow unrelated folders.
+// "contains" so a short key like "hr" can't swallow unrelated folders. Returns {name,synced} or null.
 function matchExisting(fkey){
   if(!fkey)return null;
   // Exact name wins outright. Otherwise match only when the group name is a PREFIX of the folder
@@ -410,12 +422,18 @@ function matchExisting(fkey){
   // "AustinSprinklerDesign").
   var exact=null, best=null, bestLen=0;
   spGroups().forEach(function(g){
-    var gk=nameKey(g.replace(/^sg-?sp-?/i,''));
+    var gk=nameKey(g.name.replace(/^sg-?sp-?/i,''));
     if(!gk)return;
     if(fkey===gk){ exact=g; return; }
     if(fkey.indexOf(gk)===0 && gk.length>bestLen){ best=g; bestLen=gk.length; }
   });
   return exact||best;
+}
+// Existence + on-prem sync state for a typed group name.
+function groupInfo(name){
+  var lc=(name||'').toLowerCase();
+  var g=spGroups().filter(function(x){return x.name.toLowerCase()===lc;})[0];
+  return g?{exists:true,synced:g.synced}:{exists:false,synced:false};
 }
 // Propose a clean new group name from a folder: combine the words (CamelCase), e.g. "San Antonio" -> SG-SP-SanAntonio.
 function suggestNew(name){
@@ -449,20 +467,21 @@ function buildConvertGroups(){
     // match to an existing group by the folder's own name, then by its parent office folder
     var fkey=nameKey(f.item), pkey=nameKey((f.path||'').split('/').filter(Boolean).pop()||'');
     var existing=matchExisting(fkey)||matchExisting(pkey);
-    var group=existing||suggestNew(f.item)||suggestNew((f.path||'').split('/').filter(Boolean).pop()||'')||'';
+    var group=existing?existing.name:(suggestNew(f.item)||suggestNew((f.path||'').split('/').filter(Boolean).pop()||'')||'');
     return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,full:full,
-      addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:group,exists:!!existing};
+      addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:group,exists:!!existing,synced:existing?existing.synced:false};
   });
   var byGroup={};
   folders.forEach(function(fo){
     var key=fo.group?fo.group.toLowerCase():'__unassigned';
-    if(!byGroup[key])byGroup[key]={group:fo.group,exists:fo.exists,unassigned:!fo.group,folders:[],addUpns:[]};
+    if(!byGroup[key])byGroup[key]={group:fo.group,exists:fo.exists,synced:fo.synced,unassigned:!fo.group,folders:[],addUpns:[]};
     byGroup[key].folders.push(fo);
     fo.addUpns.forEach(function(u){if(byGroup[key].addUpns.indexOf(u)<0)byGroup[key].addUpns.push(u);});
   });
+  // rank: convertible (synced AD) first, then cloud-only, then create-new, then unassigned
+  function rank(g){return g.unassigned?3:(!g.exists?2:(!g.synced?1:0));}
   return Object.keys(byGroup).map(function(k){return byGroup[k];}).sort(function(a,b){
-    if(a.unassigned!==b.unassigned)return a.unassigned?1:-1;  // "pick a group" last
-    if(a.exists!==b.exists)return a.exists?-1:1;              // convertible (existing) first
+    if(rank(a)!==rank(b))return rank(a)-rank(b);
     return b.folders.length-a.folders.length;
   });
 }
@@ -490,31 +509,42 @@ function renderConvertPanel(){
   } else adBox.style.display='none';
   document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
     var t=cvTotals(g);
-    var badge=g.unassigned?'<span class="tag gray">pick a group</span>':(g.exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>');
     var folderList=g.folders.map(function(f){return esc(f.full||f.item);}).join('<br>');
     return '<tr id="cv-tr-'+i+'" style="vertical-align:top">'+
-      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group||'')+'" placeholder="SG-SP-…" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
+      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group||'')+'" placeholder="SG-SP-…" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+cvBadge(g)+'</span></td>'+
       '<td><span style="font-weight:600;color:var(--ink)">'+g.folders.length+' folder'+(g.folders.length>1?'s':'')+'</span><div class="sub-off" style="margin-top:2px;line-height:1.5">'+folderList+'</div></td>'+
       '<td class="right" style="font-weight:600">'+t.move+'</td>'+
       '<td class="right" style="font-weight:600;color:'+(t.revoke?'var(--money)':'var(--muted)')+'">'+t.revoke+'</td>'+
       '<td class="right">'+(t.keep?'<span class="tag warn">'+t.keep+'</span>':'<span class="sub-off">0</span>')+'</td>'+
-      '<td class="right"><button id="cv-btn-'+i+'" class="btn btn-sm btn-primary" onclick="applyConvert('+i+',this)"'+(g.exists?'':' disabled title="Create the group in AD first"')+'>Convert</button></td>'+
+      '<td class="right"><button id="cv-btn-'+i+'" class="btn btn-sm btn-primary" onclick="applyConvert('+i+',this)"'+(cvConvertible(g)?'':' disabled title="'+cvGateReason(g)+'"')+'>Convert</button></td>'+
     '</tr>';
   }).join('');
 }
+// A group is convertible only when it exists on-prem (synced from AD). Cloud-only groups must be
+// migrated to AD first (see the "Move cloud groups into AD" card).
+function cvConvertible(g){return !!(g.exists&&g.synced);}
+function cvGateReason(g){return g.unassigned?'Enter a group name':(!g.exists?'Create the group in AD first':(!g.synced?'This group is cloud-only. Migrate it to AD first.':''));}
+function cvBadge(g){
+  if(g.unassigned)return '<span class="tag gray">pick a group</span>';
+  if(!g.exists)return '<span class="tag warn">create in AD</span>';
+  if(!g.synced)return '<span class="tag" style="background:var(--indigo-bg);color:var(--indigo-deep)">in Entra, not AD</span>';
+  return '<span class="tag loc">in AD</span>';
+}
 function onCvName(i){
   var v=document.getElementById('cv-name-'+i).value.trim();
-  CONVERT_GROUPS[i].group=v;
-  var exists=groupExists(v); CONVERT_GROUPS[i].exists=exists;
-  var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>';
-  var btn=document.getElementById('cv-btn-'+i); if(btn){btn.disabled=!exists;btn.title=exists?'':'Create the group in AD first';}
+  var g=CONVERT_GROUPS[i]; g.group=v;
+  var info=groupInfo(v); g.exists=info.exists; g.synced=info.synced; g.unassigned=!v;
+  var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=cvBadge(g);
+  var btn=document.getElementById('cv-btn-'+i); if(btn){btn.disabled=!cvConvertible(g);btn.title=cvGateReason(g);}
 }
 // Convert every folder under this group: grant the group + move members + revoke the direct shares, folder by folder.
 function applyConvert(i,btn){
   var g=CONVERT_GROUPS[i];
   var name=document.getElementById('cv-name-'+i).value.trim();
   if(!name){alert('Enter a group name.');return;}
-  if(!groupExists(name)){alert('"'+name+'" is not in AD yet. Create it there and let it sync, then Convert.');return;}
+  var info=groupInfo(name);
+  if(!info.exists){alert('"'+name+'" is not in AD yet. Create it there and let it sync, then Convert.');return;}
+  if(!info.synced){alert('"'+name+'" is a cloud-only Entra group. Migrate it to on-prem AD first (use the "Move cloud groups into AD" card), let it sync, then Convert.');return;}
   var t=cvTotals(g);
   if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nMove '+t.move+' active staff into the group\nRevoke '+t.revoke+' direct share(s)'+(t.keep?'\nKeep '+t.keep+' grant(s) needing manual review':'')+'\n\nChanges apply live in Entra and SharePoint.'))return;
   btn.disabled=true;btn.textContent='Converting…';
@@ -540,6 +570,30 @@ function applyConvert(i,btn){
 }
 function copyAdScript(btn){
   var t=document.getElementById('cv-adscript').textContent;
+  if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
+}
+// ---- migrate cloud-only SG-SP groups to on-prem AD ----
+function loadMigration(btn){
+  var ou=document.getElementById('mig-ou').value.trim();
+  btn.disabled=true;btn.textContent='Building…';
+  document.getElementById('mig-body').innerHTML='<div class="sub-off">Reading Entra groups and resolving members…</div>';
+  fetch('/api/ad-audit/sp-onprem-plan?ou='+encodeURIComponent(ou)).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false;btn.textContent='Rebuild script';
+    if(!d||!d.ok){document.getElementById('mig-body').innerHTML='<div class="sub-off">'+esc((d&&d.error)||'Could not build the plan.')+'</div>';return;}
+    if(!d.cloudGroups){document.getElementById('mig-body').innerHTML='<div class="sub-off">No cloud-only SG-SP groups. Nothing to migrate.</div>';document.getElementById('mig-note').textContent='All SG-SP groups are already synced from AD.';return;}
+    var rows=(d.groups||[]).map(function(g){
+      var warn=g.unresolved&&g.unresolved.length?' <span class="tag warn" title="'+esc(g.unresolved.join(', '))+'">'+g.unresolved.length+' no on-prem account</span>':'';
+      return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(g.name)+'</td><td class="right">'+g.resolved+' / '+g.members+' members'+warn+'</td></tr>';
+    }).join('');
+    document.getElementById('mig-body').innerHTML=
+      '<div class="sp-note" style="display:block;margin:6px 0 10px"><b>'+d.cloudGroups+' cloud-only group(s) to rebuild.</b> Run the script on a domain controller, force an AD Connect delta sync, then re-point SharePoint at the synced groups (the Convert card) and delete the old cloud copies.</div>'+
+      '<table style="margin-bottom:10px"><thead><tr><th>Group</th><th class="right">Members resolved</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<pre id="mig-script" style="white-space:pre-wrap;background:var(--bg);border:1px solid var(--divider);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--ink);max-height:320px;overflow:auto">'+esc(d.script)+'</pre>'+
+      '<button class="btn btn-sm" style="margin-top:8px" onclick="copyMigScript(this)">Copy script</button>';
+  }).catch(function(){btn.disabled=false;btn.textContent='Build script';document.getElementById('mig-body').innerHTML='<div class="sub-off">Request failed.</div>';});
+}
+function copyMigScript(btn){
+  var t=document.getElementById('mig-script').textContent;
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
 }
 load();
