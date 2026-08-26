@@ -72,11 +72,12 @@ export async function spDirectShares(
 ): Promise<{ ok: false; error: string } | DirectShareReport> {
   const token = await graphToken();
   if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
+  const tk: string = token; // definite string for use inside nested closures
   let siteId: string;
-  try { siteId = await resolveSiteId(siteUrl, token); } catch (e) { return { ok: false, error: `could not resolve site: ${(e as Error).message}` }; }
+  try { siteId = await resolveSiteId(siteUrl, tk); } catch (e) { return { ok: false, error: `could not resolve site: ${(e as Error).message}` }; }
 
   const idx = buildEmployeeIndex();
-  const drives = await gget(`https://graph.microsoft.com/v1.0/sites/${siteId}/drives?$select=id,name`, token);
+  const drives = await gget(`https://graph.microsoft.com/v1.0/sites/${siteId}/drives?$select=id,name`, tk);
   const driveList: { id: string; name: string }[] = (drives.value || []).map((d: any) => ({ id: d.id, name: d.name }));
 
   const shares: DirectShare[] = [];
@@ -87,9 +88,9 @@ export async function spDirectShares(
   async function permsFor(driveId: string, itemId: string, path: string, name: string, itemType: 'file' | 'folder', webUrl: string | null): Promise<void> {
     let purl: string | null = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/permissions?$top=50`;
     while (purl) {
-      const cur: string = purl;
+      const cur = purl!;
       // eslint-disable-next-line no-await-in-loop
-      const pj: any = await gget(cur, token);
+      const pj: any = await gget(cur, tk);
       for (const p of pj.value || []) {
         if (p.inheritedFrom) continue; // inherited = from the site/library, not a direct share
         const roles = Array.isArray(p.roles) ? p.roles.join('/') : '';
@@ -125,9 +126,9 @@ export async function spDirectShares(
       cov.foldersScanned++;
       let url: string | null = `https://graph.microsoft.com/v1.0/drives/${drive.id}/items/${folder.id}/children?${SELECT}`;
       while (url) {
-        const cur: string = url;
+        const cur = url!;
         // eslint-disable-next-line no-await-in-loop
-        const j: any = await gget(cur, token);
+        const j: any = await gget(cur, tk);
         for (const it of j.value || []) {
           cov.itemsSeen++;
           const isFolder = !!it.folder;
