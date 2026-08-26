@@ -28,6 +28,20 @@ export interface MigrationPlan {
 
 const ps = (s: string) => String(s || '').replace(/`/g, '``').replace(/"/g, '`"');
 
+/** AD sAMAccountName is capped at 20 chars. Keep the full name as CN/DisplayName, but derive a
+ *  short, unique SAM when the group name is too long. */
+function samFor(name: string, used: Set<string>): string {
+  let sam = name.length <= 20 ? name : name.slice(0, 20);
+  if (used.has(sam.toLowerCase())) {
+    const stem = sam.slice(0, 17);
+    let n = 2;
+    while (used.has((stem + n).toLowerCase())) n++;
+    sam = stem + n;
+  }
+  used.add(sam.toLowerCase());
+  return sam;
+}
+
 export async function buildOnPremGroupPlan(ou: string): Promise<MigrationPlan> {
   const targetOu = (ou || '').trim();
   const res = await listGroupsWithMembers('SG-SP');
@@ -37,6 +51,7 @@ export async function buildOnPremGroupPlan(ou: string): Promise<MigrationPlan> {
   const cloud = res.groups.filter((g) => !g.syncedFromAD).sort((a, b) => a.name.localeCompare(b.name));
 
   const groups: MigrationGroup[] = [];
+  const usedSam = new Set<string>();
   const lines: string[] = [];
   lines.push('# Recreate cloud-only SharePoint security groups (SG-SP-*) as on-prem AD groups.');
   lines.push('# Review, then run on a domain controller. Members are matched by on-prem sAMAccountName.');
@@ -53,11 +68,12 @@ export async function buildOnPremGroupPlan(ou: string): Promise<MigrationPlan> {
     const noSam = users.filter((m) => !m.sam).map((m) => m.name || m.upn || '(unknown)');
     groups.push({ name: g.name, members: users.length, resolved: withSam.length, unresolved: noSam });
 
+    const sam = samFor(g.name, usedSam);
     lines.push(`# ---- ${g.name}  (${withSam.length} of ${users.length} members resolved) ----`);
-    lines.push(`New-ADGroup -Name "${ps(g.name)}" -SamAccountName "${ps(g.name)}" -GroupScope Global -GroupCategory Security -Path $ou -ErrorAction Stop`);
+    lines.push(`New-ADGroup -Name "${ps(g.name)}" -SamAccountName "${ps(sam)}" -DisplayName "${ps(g.name)}" -GroupScope Global -GroupCategory Security -Path $ou -ErrorAction Stop`);
     if (withSam.length) {
       const sams = withSam.map((m) => `"${ps(m.sam as string)}"`).join(',');
-      lines.push(`Add-ADGroupMember -Identity "${ps(g.name)}" -Members ${sams}`);
+      lines.push(`Add-ADGroupMember -Identity "${ps(sam)}" -Members ${sams}`);
     }
     if (noSam.length) {
       lines.push(`# No on-prem account for: ${noSam.map((n) => ps(n)).join(', ')}  (add by hand if they should be in the group)`);
