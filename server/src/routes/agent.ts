@@ -97,8 +97,11 @@ router.get('/api/ad-agent/onboarding-requests', (_req, res) => {
   try {
     const db = getDb();
     const rows = db.prepare(
-      `SELECT id, name, office, job_position, employee_id, status, created_at
-         FROM onboarding_requests WHERE status NOT IN ('discarded') ORDER BY id DESC LIMIT 50`
+      `SELECT r.id, r.name, r.job_position, r.employee_id, r.status, r.created_at,
+              e.office AS employee_office, e.department AS employee_department
+         FROM onboarding_requests r
+         LEFT JOIN employees e ON e.id = r.employee_id
+        WHERE r.status NOT IN ('discarded') ORDER BY r.id DESC LIMIT 50`
     ).all();
     res.json({ ok: true, requests: rows });
   } catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
