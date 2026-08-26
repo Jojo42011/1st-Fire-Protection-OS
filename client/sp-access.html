@@ -90,11 +90,19 @@
   <div class="card card-clip" id="cv-card" style="margin-top:20px;display:none">
     <div class="card-head">
       <h2>Convert folders to group access</h2>
-      <span style="font-weight:500;font-size:12px;color:var(--muted)">Replace a folder's ad-hoc shares with one security group. Active staff move into the group, links and former staff are revoked.</span>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">Put each office's shared folders behind one security group. Active staff move into the group, links and former staff are revoked.</span>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">Folders below have direct shares. Edit the group name if you like, then Convert. New groups are created automatically when none exists.</div>
+    <div id="cv-adneed" style="display:none;margin:10px 16px 2px">
+      <div class="sp-note" style="display:block">
+        <div style="font-weight:700">These groups don't exist yet. Create them in Active Directory first.</div>
+        <div style="margin-top:4px">Your SharePoint groups sync up from on-prem AD, so new ones have to be made there (not in the cloud) and let sync. Once they appear here, their rows turn convertible. Run this on a domain controller:</div>
+        <pre id="cv-adscript" style="white-space:pre-wrap;background:var(--bg);border:1px solid var(--divider);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;color:var(--ink);overflow:auto"></pre>
+        <button class="btn btn-sm" onclick="copyAdScript(this)">Copy script</button>
+      </div>
+    </div>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Existing groups convert now; edit a name to map a folder set onto a different group.</div>
     <table>
-      <thead><tr><th>Folder</th><th>Security group</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
+      <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
     </table>
   </div>
@@ -378,21 +386,30 @@ function unshare(x,btn){
     }).catch(function(){btn.disabled=false;btn.textContent='Remove';});
 }
 // ---- convert folders from direct shares to a security group ----
-var CONVERT_PLANS=[];
-// Suggest an SG-SP group name from a folder name: strip company prefixes, keep the distinctive token.
-function suggestGroup(folderName){
+// In this tenant AD is the source of truth: SharePoint security groups sync UP from on-prem via
+// Azure AD Connect, so this tool never creates cloud groups. It maps folders to EXISTING SG-SP
+// groups (grant + move members + revoke), and lists any that still need creating in AD.
+var CONVERT_GROUPS=[];
+// Pull the distinctive office/team token out of a folder name (drop the company prefix and generic words).
+function officeToken(folderName){
   var n=(folderName||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,'').replace(/[\/\\]/g,' ').trim();
-  n=n.replace(/\b(shared|documents|folder|files|general)\b/gi,'').trim();
-  var tok=(n.split(/[\s_\-]+/).filter(Boolean)[0]||folderName||'Folder').replace(/[^a-z0-9]/gi,'');
-  tok=tok.charAt(0).toUpperCase()+tok.slice(1);
-  return 'SG-SP-'+(tok||'Folder');
+  n=n.replace(/\b(shared|documents?|folder|files?|general|admin|main)\b/gi,'').trim();
+  return (n.split(/[\s_\-]+/).filter(Boolean)[0]||'').replace(/[^a-z0-9]/gi,'');
+}
+function existingGroupFor(token){
+  if(!token)return null;
+  var lc=token.toLowerCase(), groups=(AUDIT&&AUDIT.groups)||[];
+  var hit=groups.filter(function(g){return (g.group||'').toLowerCase()==='sg-sp-'+lc;})[0];
+  if(hit)return hit.group;
+  hit=groups.filter(function(g){return /^sg-sp/i.test(g.group||'')&&(g.group||'').toLowerCase().indexOf(lc)>=0;})[0];
+  return hit?hit.group:null;
 }
 function groupExists(name){
   var lc=(name||'').toLowerCase();
-  return !!(AUDIT&&AUDIT.groups||[]).some(function(g){return (g.group||'').toLowerCase()===lc;});
+  return !!((AUDIT&&AUDIT.groups)||[]).some(function(g){return (g.group||'').toLowerCase()===lc;});
 }
-// Build one convert plan per folder that carries direct shares.
-function buildConvertPlans(){
+// Group every directly-shared folder under one target security group (rolls an office's subfolders together).
+function buildConvertGroups(){
   var byFolder={};
   (DS_ALL_SHARES||[]).forEach(function(x){
     if(x.itemType!=='folder')return;             // convert operates on folders, not individual files
@@ -400,73 +417,108 @@ function buildConvertPlans(){
     if(!byFolder[key])byFolder[key]={driveId:x.driveId,itemId:x.itemId,item:x.item,path:x.path,shares:[]};
     byFolder[key].shares.push(x);
   });
-  return Object.keys(byFolder).map(function(k){
-    var f=byFolder[k];
-    var addUpns=[], removePermIds=[], keep=[];
+  var folders=Object.keys(byFolder).map(function(k){
+    var f=byFolder[k], addUpns=[], removePermIds=[], keep=0;
     f.shares.forEach(function(x){
-      var keepThis = x.grantType==='user' && x.flag && /bamboo/i.test(x.flag); // "verify" grants left for manual review
-      if(x.grantType==='user' && !x.flag && x.email){ addUpns.push(x.email); }   // active employee -> into the group
-      if(keepThis){ keep.push(x); } else { removePermIds.push(x.permId); }
+      var keepThis=x.grantType==='user'&&x.flag&&/bamboo/i.test(x.flag); // "verify" grants: leave for manual review
+      if(x.grantType==='user'&&!x.flag&&x.email)addUpns.push(x.email);   // active employee -> into the group
+      if(keepThis)keep++; else removePermIds.push(x.permId);
     });
-    // de-dupe emails
-    addUpns=addUpns.filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+    // office token from the folder, falling back to its top path segment
+    var token=officeToken(f.item)||officeToken((f.path||'').split('/').filter(Boolean)[0]||'');
+    var existing=existingGroupFor(token);
+    // fall back to the folder's own name so distinct folders never collapse into one generic group
+    var fallback='SG-SP-'+(token?token.charAt(0).toUpperCase()+token.slice(1):(f.item||'Folder').replace(/[^a-z0-9]/gi,'').slice(0,24)||'Folder');
     return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,
-      group:suggestGroup(f.item),exists:false,addUpns:addUpns,removePermIds:removePermIds,keep:keep.length};
-  }).sort(function(a,b){return (b.addUpns.length+b.removePermIds.length)-(a.addUpns.length+a.removePermIds.length);});
+      addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:existing||fallback,exists:!!existing};
+  });
+  var byGroup={};
+  folders.forEach(function(fo){
+    var key=fo.group.toLowerCase();
+    if(!byGroup[key])byGroup[key]={group:fo.group,exists:fo.exists,folders:[],addUpns:[]};
+    byGroup[key].folders.push(fo);
+    fo.addUpns.forEach(function(u){if(byGroup[key].addUpns.indexOf(u)<0)byGroup[key].addUpns.push(u);});
+  });
+  return Object.keys(byGroup).map(function(k){return byGroup[k];}).sort(function(a,b){
+    if(a.exists!==b.exists)return a.exists?-1:1;          // convertible (existing) first
+    return b.folders.length-a.folders.length;
+  });
+}
+function cvTotals(g){
+  var revoke=0,keep=0;
+  g.folders.forEach(function(f){revoke+=f.removePermIds.length;keep+=f.keep;});
+  return {move:g.addUpns.length,revoke:revoke,keep:keep};
 }
 function renderConvertPanel(){
-  CONVERT_PLANS=buildConvertPlans();
+  CONVERT_GROUPS=buildConvertGroups();
   var card=document.getElementById('cv-card');
-  if(!CONVERT_PLANS.length){card.style.display='none';return;}
+  if(!CONVERT_GROUPS.length){card.style.display='none';return;}
   card.style.display='';
-  document.getElementById('cv-rows').innerHTML=CONVERT_PLANS.map(function(p,i){
-    p.exists=groupExists(p.group);
-    var badge=p.exists?'<span class="tag loc">exists</span>':'<span class="tag warn">new</span>';
-    return '<tr id="cv-tr-'+i+'">'+
-      '<td style="font-weight:600;color:var(--ink)">'+esc(p.item)+'<div class="sub-off">'+esc(p.path)+'</div></td>'+
-      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(p.group)+'" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
-      '<td class="right" style="font-weight:600">'+p.addUpns.length+'</td>'+
-      '<td class="right" style="font-weight:600;color:'+(p.removePermIds.length?'var(--money)':'var(--muted)')+'">'+p.removePermIds.length+'</td>'+
-      '<td class="right">'+(p.keep?'<span class="tag warn">'+p.keep+'</span>':'<span class="sub-off">0</span>')+'</td>'+
-      '<td class="right"><button class="btn btn-sm btn-primary" onclick="applyConvert('+i+',this)">Convert</button></td>'+
+  // AD-needed notice + New-ADGroup script for groups that don't exist yet
+  var need=CONVERT_GROUPS.filter(function(g){return !g.exists;});
+  var adBox=document.getElementById('cv-adneed');
+  if(need.length){
+    adBox.style.display='';
+    document.getElementById('cv-adscript').textContent=
+      '# Set $ou to your SharePoint-groups OU, then run. Groups sync up to Entra on the next AD Connect cycle.\n'+
+      '$ou = "OU=SharePoint,OU=Groups,DC=example,DC=local"\n'+
+      need.map(function(g){
+        return 'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou';
+      }).join('\n');
+  } else adBox.style.display='none';
+  document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
+    var t=cvTotals(g);
+    var badge=g.exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>';
+    var folderList=g.folders.map(function(f){return esc(f.path||f.item);}).join('<br>');
+    return '<tr id="cv-tr-'+i+'" style="vertical-align:top">'+
+      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group)+'" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+badge+'</span></td>'+
+      '<td><span style="font-weight:600;color:var(--ink)">'+g.folders.length+' folder'+(g.folders.length>1?'s':'')+'</span><div class="sub-off" style="margin-top:2px;line-height:1.5">'+folderList+'</div></td>'+
+      '<td class="right" style="font-weight:600">'+t.move+'</td>'+
+      '<td class="right" style="font-weight:600;color:'+(t.revoke?'var(--money)':'var(--muted)')+'">'+t.revoke+'</td>'+
+      '<td class="right">'+(t.keep?'<span class="tag warn">'+t.keep+'</span>':'<span class="sub-off">0</span>')+'</td>'+
+      '<td class="right"><button id="cv-btn-'+i+'" class="btn btn-sm btn-primary" onclick="applyConvert('+i+',this)"'+(g.exists?'':' disabled title="Create the group in AD first"')+'>Convert</button></td>'+
     '</tr>';
   }).join('');
 }
 function onCvName(i){
   var v=document.getElementById('cv-name-'+i).value.trim();
-  CONVERT_PLANS[i].group=v;
-  var badge=groupExists(v)?'<span class="tag loc">exists</span>':'<span class="tag warn">new</span>';
-  var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=badge;
+  CONVERT_GROUPS[i].group=v;
+  var exists=groupExists(v); CONVERT_GROUPS[i].exists=exists;
+  var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=exists?'<span class="tag loc">in AD</span>':'<span class="tag warn">create in AD</span>';
+  var btn=document.getElementById('cv-btn-'+i); if(btn){btn.disabled=!exists;btn.title=exists?'':'Create the group in AD first';}
 }
+// Convert every folder under this group: grant the group + move members + revoke the direct shares, folder by folder.
 function applyConvert(i,btn){
-  var p=CONVERT_PLANS[i];
+  var g=CONVERT_GROUPS[i];
   var name=document.getElementById('cv-name-'+i).value.trim();
   if(!name){alert('Enter a group name.');return;}
-  var exists=groupExists(name);
-  var msg='Convert "'+p.item+'" to group access?\n\n'+
-    'Group: '+name+(exists?' (existing)':' (will be created)')+'\n'+
-    'Move '+p.addUpns.length+' active staff into the group\n'+
-    'Revoke '+p.removePermIds.length+' direct share(s)'+(p.keep?'\nKeep '+p.keep+' grant(s) needing manual review':'')+
-    '\n\nChanges apply live in Entra and SharePoint.';
-  if(!confirm(msg))return;
+  if(!groupExists(name)){alert('"'+name+'" is not in AD yet. Create it there and let it sync, then Convert.');return;}
+  var t=cvTotals(g);
+  if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nMove '+t.move+' active staff into the group\nRevoke '+t.revoke+' direct share(s)'+(t.keep?'\nKeep '+t.keep+' grant(s) needing manual review':'')+'\n\nChanges apply live in Entra and SharePoint.'))return;
   btn.disabled=true;btn.textContent='Converting…';
-  fetch('/api/ad-audit/sp-convert-folder',{method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({driveId:p.driveId,itemId:p.itemId,groupName:name,createGroup:!exists,addUpns:p.addUpns,removePermIds:p.removePermIds})})
-    .then(function(r){return r.json();}).then(function(res){
-      if(res.ok||res.granted){
-        // Group is granted, so access is safe. ok=false here just means a member add or revoke had issues.
-        btn.textContent='Done';btn.disabled=true;
-        var tr=document.getElementById('cv-tr-'+i);
-        var partial=!res.ok&&res.failures&&res.failures.length;
-        if(tr){tr.style.background=partial?'var(--amber-bg)':'var(--green-bg)';
-          tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">'+(res.created?'Created group, ':'')+'moved '+res.added+', revoked '+res.removed+(partial?', '+res.failures.length+' issue(s)':'')+'</span>';}
-        if(partial)console.warn('Convert issues on '+p.item+':',res.failures);
-      }else{
-        btn.disabled=false;btn.textContent='Convert';
-        alert('Convert failed: '+((res.error||(res.failures&&res.failures.join('; ')))||'unknown'));
-        if(res&&res.failures&&res.failures.length)console.warn('Convert issues:',res.failures);
-      }
-    }).catch(function(){btn.disabled=false;btn.textContent='Convert';alert('Request failed.');});
+  var j=0,added=0,removed=0,failures=[];
+  (function nextFolder(){
+    if(j>=g.folders.length){
+      var tr=document.getElementById('cv-tr-'+i), partial=failures.length>0;
+      btn.textContent='Done';
+      if(tr){tr.style.background=partial?'var(--amber-bg)':'var(--green-bg)';
+        tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">moved '+added+', revoked '+removed+(partial?', '+failures.length+' issue(s)':'')+'</span>';}
+      if(partial)console.warn('Convert issues on '+name+':',failures);
+      return;
+    }
+    var f=g.folders[j++];
+    fetch('/api/ad-audit/sp-convert-folder',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({driveId:f.driveId,itemId:f.itemId,groupName:name,createGroup:false,addUpns:f.addUpns,removePermIds:f.removePermIds})})
+      .then(function(r){return r.json();}).then(function(res){
+        if(res.granted){added+=res.added||0;removed+=res.removed||0;if(res.failures)failures=failures.concat(res.failures);}
+        else failures.push((f.path||f.item)+': '+(res.error||'grant failed'));
+        nextFolder();
+      }).catch(function(){failures.push((f.path||f.item)+': request failed');nextFolder();});
+  })();
+}
+function copyAdScript(btn){
+  var t=document.getElementById('cv-adscript').textContent;
+  if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
 }
 load();
 loadLatestScan();
