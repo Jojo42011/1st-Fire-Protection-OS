@@ -126,13 +126,15 @@ function load(){
     }).join('') : '<tr><td colspan="7" class="empty">Nothing to clean up. Every member is an active, matched employee.</td></tr>';
     updateSelCount();
 
-    // full groups view
+    // full groups view (with per-group multi-select removal)
     document.getElementById('groups').innerHTML=(d.groups||[]).map(function(g){
+      var gid=(g.group||'').replace(/[^a-z0-9]/gi,'');
       var typeTag=g.isLocation?'<span class="tag loc">location</span>':'<span class="tag gray">function</span>';
       var synced=g.syncedFromAD?'<span class="tag" style="background:var(--green-bg);color:var(--green)">on-prem</span>':'<span class="tag warn">cloud only</span>';
       var rows=(g.members||[]).map(function(m){
         var r=memberReason(m);
-        return '<tr>'+
+        return '<tr class="grp-row grp-row-'+gid+'">'+
+          '<td>'+(m.upn?'<input type="checkbox" class="grp-cb grp-cb-'+gid+'" data-group="'+esc(g.group)+'" data-upn="'+esc(m.upn)+'" onclick="updateGrpSel(\''+gid+'\')" />':'')+'</td>'+
           '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'</td>'+
           '<td>'+esc(m.title||'—')+'</td>'+
           '<td>'+esc(m.office||'—')+'</td>'+
@@ -140,8 +142,12 @@ function load(){
           '<td class="right">'+(m.upn?'<button class="btn btn-sm" onclick="removeOne(\''+esc(g.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button>':'')+'</td>'+
         '</tr>';
       }).join('');
+      var toolbar='<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--divider)">'+
+        '<button class="btn btn-sm" id="grpsel-'+gid+'" onclick="removeGrpSelected(\''+gid+'\',\''+esc(g.group)+'\',this)" style="display:none">Remove selected (<span id="grpseln-'+gid+'">0</span>)</button>'+
+        '<span class="sub-off">tick members, then Remove selected</span></div>';
       return '<details class="grp"><summary>'+esc(g.group)+' '+typeTag+' '+synced+'<span style="flex:1"></span><span class="sub-off">'+g.memberCount+' member(s)</span></summary>'+
-        '<table><thead><tr><th>Member</th><th>Title</th><th>Office</th><th>Flags</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></details>';
+        toolbar+
+        '<table><thead><tr><th style="width:28px"><input type="checkbox" onclick="toggleGrpAll(\''+gid+'\',this)" /></th><th>Member</th><th>Title</th><th>Office</th><th>Flags</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></details>';
     }).join('');
   }).catch(function(){document.getElementById('flag-rows').innerHTML='<tr><td colspan="6" class="empty">Request failed.</td></tr>';});
 }
@@ -175,6 +181,33 @@ function refreshFlagHeader(){
   if(!rows.length){document.getElementById('flag-rows').innerHTML='<tr><td colspan="7" class="empty">Nothing left in the cleanup queue.</td></tr>';document.getElementById('removeAll').style.display='none';}
   updateSelCount();
 }
+// ---- per-group multi-select in the "All groups & members" view ----
+function updateGrpSel(gid){
+  var n=document.querySelectorAll('.grp-cb-'+gid+':checked').length;
+  var span=document.getElementById('grpseln-'+gid); if(span)span.textContent=n;
+  var btn=document.getElementById('grpsel-'+gid); if(btn)btn.style.display=n?'':'none';
+}
+function toggleGrpAll(gid,box){
+  Array.prototype.slice.call(document.querySelectorAll('.grp-cb-'+gid)).forEach(function(cb){cb.checked=box.checked;});
+  updateGrpSel(gid);
+}
+function removeGrpSelected(gid,group,btn){
+  var picks=Array.prototype.slice.call(document.querySelectorAll('.grp-cb-'+gid+':checked'));
+  if(!picks.length)return;
+  if(!confirm('Remove '+picks.length+' selected member(s) from '+group+'? Changes apply live in Entra.'))return;
+  btn.disabled=true;var orig=btn.innerHTML;btn.textContent='Removing…';
+  var i=0,failed=0;
+  (function next(){
+    if(i>=picks.length){btn.disabled=false;btn.innerHTML=orig;updateGrpSel(gid);if(failed)alert(failed+' removal(s) failed.');return;}
+    var cb=picks[i++];
+    removeMembership(cb.getAttribute('data-group'),cb.getAttribute('data-upn')).then(function(res){
+      var tr=cb.closest('tr');
+      if(res&&res.ok){if(tr)tr.remove();}else{failed++;if(tr)tr.style.background='var(--money-bg,#FBEBE9)';cb.checked=false;}
+      next();
+    }).catch(function(){failed++;next();});
+  })();
+}
+
 function removeSelected(btn){
   var picks=selectedFlagRows();
   if(!picks.length)return;
