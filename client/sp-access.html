@@ -478,7 +478,7 @@ function renderConvertPanel(){
     adBox.style.display='';
     document.getElementById('cv-adscript').textContent=
       '# Set $ou to your SharePoint-groups OU, then run. Groups sync up to Entra on the next AD Connect cycle.\n'+
-      '$ou = "OU=SharePoint,OU=Security Groups,OU=1FP,DC=ad,DC=1stfpservices,DC=com"\n'+
+      '$ou = "OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com"\n'+
       need.map(function(g){
         return 'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou';
       }).join('\n');
