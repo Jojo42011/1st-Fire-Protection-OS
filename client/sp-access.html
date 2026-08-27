@@ -574,7 +574,7 @@ function applyConvert(i,btn){
   var t=cvTotals(g);
   if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nGrant the group to the folders and revoke '+t.revoke+' direct share(s): links, former staff, and people already in the group (they keep access through it).'+(t.move?'\n\n'+t.move+' person(s) with direct access are NOT in the group yet: their access is left alone. Add them in AD (groups + membership script) to fold them in.':'')+(t.keep?'\n\n'+t.keep+' unmatched grant(s) kept for review.':'')+'\n\nChanges apply live in SharePoint.'))return;
   btn.disabled=true;btn.textContent='Converting…';
-  var j=0,added=0,removed=0,onPrem=false,failures=[];
+  var j=0,added=0,removed=0,onPrem=false,failures=[],prunedPerms={};
   (function nextFolder(){
     if(j>=g.folders.length){
       var tr=document.getElementById('cv-tr-'+i), partial=failures.length>0;
@@ -583,6 +583,11 @@ function applyConvert(i,btn){
       if(tr){tr.style.background=partial?'var(--amber-bg)':'var(--green-bg)';
         tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">'+msg+'</span>';}
       if(partial)console.warn('Convert issues on '+name+':',failures);
+      // drop the revoked shares from the in-memory scan so the panel reflects the conversion now
+      // (the server pruned them from the stored scan too, so a reload stays correct).
+      if(Object.keys(prunedPerms).length){
+        DS_ALL_SHARES=DS_ALL_SHARES.filter(function(x){return !prunedPerms[x.driveId+'|'+x.itemId+'|'+x.permId];});
+      }
       return;
     }
     var f=g.folders[j++];
@@ -592,6 +597,7 @@ function applyConvert(i,btn){
         if(res.membersOnPrem)onPrem=true;
         if(res.granted){added+=res.added||0;removed+=res.removed||0;if(res.failures)failures=failures.concat(res.failures);}
         else failures.push((f.path||f.item)+': '+(res.error||'grant failed'));
+        (res.removedPermIds||[]).forEach(function(p){prunedPerms[f.driveId+'|'+f.itemId+'|'+p]=1;});
         nextFolder();
       }).catch(function(){failures.push((f.path||f.item)+': request failed');nextFolder();});
   })();

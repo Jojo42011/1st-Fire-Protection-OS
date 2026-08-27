@@ -50,6 +50,7 @@ export interface ConvertResult {
   granted: boolean;
   added: number;
   removed: number;
+  removedPermIds: string[]; // the direct-share permissions actually revoked (to prune the stored scan)
   membersOnPrem: boolean;   // group is synced from AD; membership was NOT touched here (managed on-prem)
   skippedAdds: number;      // members we did not add because the group is on-prem
   failures: string[];
@@ -59,7 +60,7 @@ export async function convertFolder(opts: {
   driveId: string; itemId: string; groupName: string; createGroup: boolean;
   addUpns: string[]; removePermIds: string[]; role?: string;
 }): Promise<ConvertResult> {
-  const out: ConvertResult = { ok: false, groupName: opts.groupName, created: false, granted: false, added: 0, removed: 0, membersOnPrem: false, skippedAdds: 0, failures: [] };
+  const out: ConvertResult = { ok: false, groupName: opts.groupName, created: false, granted: false, added: 0, removed: 0, removedPermIds: [], membersOnPrem: false, skippedAdds: 0, failures: [] };
   if (!opts.driveId || !opts.itemId || !opts.groupName) return { ...out, error: 'driveId, itemId and groupName are required' };
 
   // 1. Resolve or create the group.
@@ -106,7 +107,7 @@ export async function convertFolder(opts: {
       if (!permId) continue;
       // eslint-disable-next-line no-await-in-loop
       const r = await removeSharePermission(opts.driveId, opts.itemId, permId);
-      if (r.ok) out.removed++; else out.failures.push(`revoke ${permId}: ${r.error}`);
+      if (r.ok) { out.removed++; out.removedPermIds.push(permId); } else out.failures.push(`revoke ${permId}: ${r.error}`);
     }
   } else {
     out.failures.push('skipped revoking direct shares because the group grant failed (access preserved)');

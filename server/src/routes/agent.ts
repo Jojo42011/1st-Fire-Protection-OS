@@ -463,13 +463,27 @@ router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {
  *  and revoke the given direct shares. Body: { driveId, itemId, groupName, createGroup, addUpns, removePermIds }. */
 router.post('/api/ad-audit/sp-convert-folder', async (req, res) => {
   const b = req.body || {};
+  const driveId = String(b.driveId || '');
+  const itemId = String(b.itemId || '');
   const out = await convertFolder({
-    driveId: String(b.driveId || ''), itemId: String(b.itemId || ''), groupName: String(b.groupName || '').trim(),
+    driveId, itemId, groupName: String(b.groupName || '').trim(),
     createGroup: !!b.createGroup,
     addUpns: Array.isArray(b.addUpns) ? b.addUpns.map((u: any) => String(u)) : [],
     removePermIds: Array.isArray(b.removePermIds) ? b.removePermIds.map((p: any) => String(p)) : [],
     role: b.role ? String(b.role) : 'write',
   });
+  // Prune the revoked shares from stored scans so a reload reflects the conversion (the panel is
+  // built from the scan snapshot, not a live re-read).
+  if (out.removedPermIds.length) {
+    try {
+      const db = getDb();
+      const del = db.prepare(
+        `DELETE FROM sp_scan_shares WHERE json_extract(data_json,'$.driveId') = ? AND json_extract(data_json,'$.itemId') = ? AND json_extract(data_json,'$.permId') = ?`
+      );
+      const tx = db.transaction((ids: string[]) => { for (const p of ids) del.run(driveId, itemId, p); });
+      tx(out.removedPermIds);
+    } catch (e) { /* pruning is best-effort; a rescan still corrects the view */ }
+  }
   res.status(out.ok || out.granted ? 200 : 400).json(out);
 });
 
