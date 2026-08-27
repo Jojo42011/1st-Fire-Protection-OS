@@ -443,6 +443,12 @@ function suggestNew(name){
   var tok=n.split(/[^a-z0-9]+/i).filter(Boolean).map(function(w){return w.charAt(0).toUpperCase()+w.slice(1).toLowerCase();}).join('');
   return tok?('SG-SP-'+tok.slice(0,40)):'';
 }
+// AD sAMAccountName caps at 20 chars; keep the full name but derive a short unique SAM. `used` dedupes.
+function samForName(name,used){
+  var sam=name.length<=20?name:name.slice(0,20);
+  if(used[sam.toLowerCase()]){var stem=sam.slice(0,17),n=2;while(used[(stem+n).toLowerCase()])n++;sam=stem+n;}
+  used[sam.toLowerCase()]=1;return sam;
+}
 function groupExists(name){
   var lc=(name||'').toLowerCase();
   return !!((AUDIT&&AUDIT.groups)||[]).some(function(g){return (g.group||'').toLowerCase()===lc;});
@@ -479,9 +485,13 @@ function buildConvertGroups(){
     byGroup[key].folders.push(fo);
     fo.addUpns.forEach(function(u){if(byGroup[key].addUpns.indexOf(u)<0)byGroup[key].addUpns.push(u);});
   });
-  // rank: convertible (synced AD) first, then cloud-only, then create-new, then unassigned
-  function rank(g){return g.unassigned?3:(!g.exists?2:(!g.synced?1:0));}
-  return Object.keys(byGroup).map(function(k){return byGroup[k];}).sort(function(a,b){
+  var arr=Object.keys(byGroup).map(function(k){return byGroup[k];});
+  // "migrating" = the clean name isn't in Entra yet but a parked "<name>-CLOUD" copy is, i.e. it has been
+  // (or is being) recreated on-prem and is just waiting for AD Connect to sync it up.
+  arr.forEach(function(g){g.migrating=!!(g.group&&!g.exists&&groupInfo(g.group+'-CLOUD').exists);});
+  // rank: convertible (synced AD) first, then on-prem-syncing, then cloud-only, then create-new, then unassigned
+  function rank(g){return g.unassigned?4:(g.exists&&g.synced?0:(g.migrating?1:(g.exists?2:3)));}
+  return arr.sort(function(a,b){
     if(rank(a)!==rank(b))return rank(a)-rank(b);
     return b.folders.length-a.folders.length;
   });
@@ -496,16 +506,21 @@ function renderConvertPanel(){
   var card=document.getElementById('cv-card');
   if(!CONVERT_GROUPS.length){card.style.display='none';return;}
   card.style.display='';
-  // AD-needed notice + New-ADGroup script for named groups that don't exist yet
-  var need=CONVERT_GROUPS.filter(function(g){return g.group&&!g.exists;});
+  // AD-needed notice + New-ADGroup script for genuinely-new groups (exclude ones already recreated
+  // on-prem and just waiting to sync).
+  var need=CONVERT_GROUPS.filter(function(g){return g.group&&!g.exists&&!g.migrating;});
   var adBox=document.getElementById('cv-adneed');
   if(need.length){
     adBox.style.display='';
+    var usedSam={};
     document.getElementById('cv-adscript').textContent=
-      '# Set $ou to your SharePoint-groups OU, then run. Groups sync up to Entra on the next AD Connect cycle.\n'+
+      '# Create NEW SharePoint groups (folders with no existing group). Safe to re-run: skips any that\n'+
+      '# already exist. Set $ou first. Groups sync up to Entra on the next AD Connect cycle.\n'+
       '$ou = "OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com"\n'+
       need.map(function(g){
-        return 'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou';
+        var sam=samForName(g.group,usedSam);
+        return 'if (-not (Get-ADGroup -Filter "SamAccountName -eq \''+sam+'\'" -ErrorAction SilentlyContinue)) { '+
+          'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+sam+'" -DisplayName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou }';
       }).join('\n');
   } else adBox.style.display='none';
   document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
@@ -524,9 +539,10 @@ function renderConvertPanel(){
 // A group is convertible only when it exists on-prem (synced from AD). Cloud-only groups must be
 // migrated to AD first (see the "Move cloud groups into AD" card).
 function cvConvertible(g){return !!(g.exists&&g.synced);}
-function cvGateReason(g){return g.unassigned?'Enter a group name':(!g.exists?'Create the group in AD first':(!g.synced?'This group is cloud-only. Migrate it to AD first.':''));}
+function cvGateReason(g){return g.unassigned?'Enter a group name':(g.migrating?'Created on-prem, waiting for AD Connect to sync it up. Refresh after sync.':(!g.exists?'Create the group in AD first':(!g.synced?'This group is cloud-only. Migrate it to AD first.':'')));}
 function cvBadge(g){
   if(g.unassigned)return '<span class="tag gray">pick a group</span>';
+  if(g.migrating)return '<span class="tag" style="background:var(--indigo-bg);color:var(--indigo-deep)">on-prem, sync pending</span>';
   if(!g.exists)return '<span class="tag warn">create in AD</span>';
   if(!g.synced)return '<span class="tag" style="background:var(--indigo-bg);color:var(--indigo-deep)">in Entra, not AD</span>';
   return '<span class="tag loc">in AD</span>';
@@ -535,6 +551,7 @@ function onCvName(i){
   var v=document.getElementById('cv-name-'+i).value.trim();
   var g=CONVERT_GROUPS[i]; g.group=v;
   var info=groupInfo(v); g.exists=info.exists; g.synced=info.synced; g.unassigned=!v;
+  g.migrating=!!(v&&!info.exists&&groupInfo(v+'-CLOUD').exists);
   var el=document.getElementById('cv-badge-'+i); if(el)el.innerHTML=cvBadge(g);
   var btn=document.getElementById('cv-btn-'+i); if(btn){btn.disabled=!cvConvertible(g);btn.title=cvGateReason(g);}
 }
