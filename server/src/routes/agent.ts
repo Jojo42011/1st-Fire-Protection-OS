@@ -10,7 +10,7 @@ import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
-import { buildOnPremGroupPlan, renameCloudSpGroups } from '../services/spGroupMigration';
+import { buildOnPremGroupPlan, renameCloudSpGroups, buildGroupSetupScript } from '../services/spGroupMigration';
 import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -404,6 +404,40 @@ router.post('/api/ad-agent/sp-rename-cloud', async (req, res) => {
   const out = await renameCloudSpGroups(String((req.body && req.body.suffix) || '-CLOUD'));
   res.status(out.ok ? 200 : 400).json(out);
 });
+
+/** Build the on-prem PowerShell to create groups (as needed) and set their membership. Body:
+ *  { ou, groups: [{ name, create, upns: [...] }] }. Member emails/UPNs are resolved to on-prem SAMs
+ *  via the AD mirror. This is how membership is set for synced groups (Graph can't write it). */
+function groupSetupHandler(req: Request, res: Response): void {
+  const b = req.body || {};
+  const ou = String(b.ou || DEFAULT_SP_OU);
+  const groupsIn: any[] = Array.isArray(b.groups) ? b.groups : [];
+  const db = getDb();
+  const stmt = db.prepare(
+    `SELECT sam FROM ad_users WHERE sam IS NOT NULL AND sam != '' AND (lower(email) = lower(?) OR lower(upn) = lower(?)) LIMIT 1`
+  );
+  const groups = groupsIn
+    .map((g) => {
+      const name = String(g.name || '').trim();
+      const create = !!g.create;
+      const upns: string[] = Array.isArray(g.upns) ? g.upns.map((u: any) => String(u)) : [];
+      const members: string[] = [];
+      const unresolved: string[] = [];
+      const seen = new Set<string>();
+      for (const upn of upns) {
+        const row = stmt.get(upn, upn) as { sam: string } | undefined;
+        if (row && row.sam) {
+          if (!seen.has(row.sam.toLowerCase())) { seen.add(row.sam.toLowerCase()); members.push(row.sam); }
+        } else unresolved.push(upn);
+      }
+      return { name, create, members, unresolved };
+    })
+    .filter((g) => g.name);
+  const out = buildGroupSetupScript(ou, groups);
+  res.json({ ok: true, ou, ...out });
+}
+router.post('/api/ad-audit/sp-group-setup-script', groupSetupHandler);
+router.post('/api/ad-agent/sp-group-setup-script', groupSetupHandler);
 
 /** Direct-share audit for one site (session-gated, for the SharePoint access screen). */
 router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {

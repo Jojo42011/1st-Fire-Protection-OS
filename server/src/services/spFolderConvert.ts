@@ -1,5 +1,5 @@
 import { graphToken } from './licenseSources';
-import { findGroupIdByName, addUserToGroup } from './msGraphGroups';
+import { findGroupIdByName, addUserToGroup, isGroupOnPrem, groupHasMembers } from './msGraphGroups';
 import { removeSharePermission } from './spDirectShares';
 
 /**
@@ -50,6 +50,8 @@ export interface ConvertResult {
   granted: boolean;
   added: number;
   removed: number;
+  membersOnPrem: boolean;   // group is synced from AD; membership was NOT touched here (managed on-prem)
+  skippedAdds: number;      // members we did not add because the group is on-prem
   failures: string[];
 }
 
@@ -57,7 +59,7 @@ export async function convertFolder(opts: {
   driveId: string; itemId: string; groupName: string; createGroup: boolean;
   addUpns: string[]; removePermIds: string[]; role?: string;
 }): Promise<ConvertResult> {
-  const out: ConvertResult = { ok: false, groupName: opts.groupName, created: false, granted: false, added: 0, removed: 0, failures: [] };
+  const out: ConvertResult = { ok: false, groupName: opts.groupName, created: false, granted: false, added: 0, removed: 0, membersOnPrem: false, skippedAdds: 0, failures: [] };
   if (!opts.driveId || !opts.itemId || !opts.groupName) return { ...out, error: 'driveId, itemId and groupName are required' };
 
   // 1. Resolve or create the group.
@@ -75,16 +77,30 @@ export async function convertFolder(opts: {
   if (!g.ok) { out.failures.push(`grant: ${g.error}`); }
   else out.granted = true;
 
-  // 3. Add the active-employee grantees to the group (best-effort, deduped by the caller).
-  for (const upn of opts.addUpns || []) {
-    if (!upn) continue;
-    // eslint-disable-next-line no-await-in-loop
-    const a = await addUserToGroup(upn, { groupId });
-    if (a.ok || a.already) out.added++; else out.failures.push(`add ${upn}: ${a.error}`);
+  // 3. Add the active-employee grantees to the group. A group synced from on-prem AD has its
+  //    membership mastered on-prem: Graph cannot add members to it, so we skip the adds here and
+  //    the caller sets membership in AD instead (Add-ADGroupMember). Cloud-only groups still add here.
+  const onPrem = await isGroupOnPrem(groupId);
+  out.membersOnPrem = onPrem;
+  if (onPrem) {
+    out.skippedAdds = (opts.addUpns || []).filter(Boolean).length;
+  } else {
+    for (const upn of opts.addUpns || []) {
+      if (!upn) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const a = await addUserToGroup(upn, { groupId });
+      if (a.ok || a.already) out.added++; else out.failures.push(`add ${upn}: ${a.error}`);
+    }
   }
 
   // 4. Revoke the direct-share permissions we are replacing. Only do this once the group is granted,
-  //    so access is never dropped to zero.
+  //    so access is never dropped to zero. For an on-prem group, refuse to revoke if the group has
+  //    no members yet: membership is set in AD and had not synced, and revoking would strand people.
+  if (out.granted && onPrem && !(await groupHasMembers(groupId))) {
+    out.failures.push('did not revoke direct shares: this on-prem group has no members yet. Set membership in AD (Add-ADGroupMember) and let it sync, then convert.');
+    out.ok = false;
+    return out;
+  }
   if (out.granted) {
     for (const permId of opts.removePermIds || []) {
       if (!permId) continue;

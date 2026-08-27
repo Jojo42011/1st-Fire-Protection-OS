@@ -121,6 +121,31 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
   }
 }
 
+/** Whether a group is synced from on-prem AD (its membership is mastered on-prem and cannot be
+ *  changed through Graph). */
+export async function isGroupOnPrem(id: string): Promise<boolean> {
+  const token = await graphToken();
+  if (!token) return false;
+  const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${id}?$select=onPremisesSyncEnabled`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return false;
+  const j = (await res.json()) as { onPremisesSyncEnabled?: boolean };
+  return !!j.onPremisesSyncEnabled;
+}
+
+/** Whether a group currently has at least one member (reads are allowed even for synced groups). */
+export async function groupHasMembers(id: string): Promise<boolean> {
+  const token = await graphToken();
+  if (!token) return false;
+  const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${id}/members?$select=id&$top=1`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return false;
+  const j = (await res.json()) as { value?: unknown[] };
+  return Array.isArray(j.value) && j.value.length > 0;
+}
+
 /** Rename a group (its displayName). Used to park the cloud-only SG-SP groups under a suffix so the
  *  on-prem copies can take the clean names. The object id is unchanged, so existing access is intact. */
 export async function updateGroupDisplayName(id: string, displayName: string): Promise<{ ok: boolean; error?: string }> {

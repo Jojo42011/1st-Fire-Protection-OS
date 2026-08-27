@@ -107,13 +107,14 @@
     </div>
     <div id="cv-adneed" style="display:none;margin:10px 16px 2px">
       <div class="sp-note" style="display:block">
-        <div style="font-weight:700">These groups don't exist yet. Create them in Active Directory first.</div>
-        <div style="margin-top:4px">Your SharePoint groups sync up from on-prem AD, so new ones have to be made there (not in the cloud) and let sync. Once they appear here, their rows turn convertible. Run this on a domain controller:</div>
-        <pre id="cv-adscript" style="white-space:pre-wrap;background:var(--bg);border:1px solid var(--divider);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;color:var(--ink);overflow:auto"></pre>
-        <button class="btn btn-sm" onclick="copyAdScript(this)">Copy script</button>
+        <div style="font-weight:700">Some groups still need creating in AD, and every group's membership is set in AD.</div>
+        <div style="margin-top:4px">Your SharePoint groups sync up from on-prem AD, so both the groups and their membership are managed there, not in the cloud. This script creates the new groups and adds each group's "move in" people (resolved to their AD accounts). Run it on a domain controller, then force an AD Connect delta sync. Once synced, the rows turn convertible and Convert only grants the folders and clears the direct shares.</div>
+        <button class="btn btn-sm" style="margin-top:8px" onclick="buildSetupScript(this)">Build groups + membership script</button>
+        <pre id="cv-adscript" style="white-space:pre-wrap;background:var(--bg);border:1px solid var(--divider);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:11px;color:var(--ink);overflow:auto;display:none"></pre>
+        <button class="btn btn-sm" id="cv-adcopy" style="display:none" onclick="copyAdScript(this)">Copy script</button>
       </div>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert; a cloud-only group (<b>in Entra, not AD</b>) must be migrated first with the card above. <b>Move in</b> = active staff added to the group. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group): the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert; a cloud-only group (<b>in Entra, not AD</b>) must be migrated first with the card above. <b>Move in</b> = the people who should be group members; membership is set in AD (the script above), not by Convert, because a synced group's members are managed on-prem. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group): the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
     <table>
       <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
@@ -506,23 +507,12 @@ function renderConvertPanel(){
   var card=document.getElementById('cv-card');
   if(!CONVERT_GROUPS.length){card.style.display='none';return;}
   card.style.display='';
-  // AD-needed notice + New-ADGroup script for genuinely-new groups (exclude ones already recreated
-  // on-prem and just waiting to sync).
-  var need=CONVERT_GROUPS.filter(function(g){return g.group&&!g.exists&&!g.migrating;});
-  var adBox=document.getElementById('cv-adneed');
-  if(need.length){
-    adBox.style.display='';
-    var usedSam={};
-    document.getElementById('cv-adscript').textContent=
-      '# Create NEW SharePoint groups (folders with no existing group). Safe to re-run: skips any that\n'+
-      '# already exist. Set $ou first. Groups sync up to Entra on the next AD Connect cycle.\n'+
-      '$ou = "OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com"\n'+
-      need.map(function(g){
-        var sam=samForName(g.group,usedSam);
-        return 'if (-not (Get-ADGroup -Filter "SamAccountName -eq \''+sam+'\'" -ErrorAction SilentlyContinue)) { '+
-          'New-ADGroup -Name "'+g.group+'" -SamAccountName "'+sam+'" -DisplayName "'+g.group+'" -GroupScope Global -GroupCategory Security -Path $ou }';
-      }).join('\n');
-  } else adBox.style.display='none';
+  // Show the AD setup notice when any group still needs creating OR has people to move in (membership
+  // is set on-prem, so even a convertible group can need members added). The script is built on demand.
+  var needsSetup=CONVERT_GROUPS.some(function(g){return g.group&&((!g.exists&&!g.migrating)||g.addUpns.length);});
+  document.getElementById('cv-adneed').style.display=needsSetup?'':'none';
+  var pre=document.getElementById('cv-adscript'); if(pre){pre.style.display='none';pre.textContent='';}
+  var cpy=document.getElementById('cv-adcopy'); if(cpy)cpy.style.display='none';
   document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
     var t=cvTotals(g);
     var folderList=g.folders.map(function(f){return esc(f.full||f.item);}).join('<br>');
@@ -564,15 +554,16 @@ function applyConvert(i,btn){
   if(!info.exists){alert('"'+name+'" is not in AD yet. Create it there and let it sync, then Convert.');return;}
   if(!info.synced){alert('"'+name+'" is a cloud-only Entra group. Migrate it to on-prem AD first (use the "Move cloud groups into AD" card), let it sync, then Convert.');return;}
   var t=cvTotals(g);
-  if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nMove '+t.move+' active staff into the group\nRevoke '+t.revoke+' direct share(s)'+(t.keep?'\nKeep '+t.keep+' grant(s) needing manual review':'')+'\n\nChanges apply live in Entra and SharePoint.'))return;
+  if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nGrant the group and revoke '+t.revoke+' direct share(s)'+(t.keep?', keep '+t.keep+' for review':'')+'.\n\nMembership is managed in AD: make sure the '+t.move+' "move in" people are already in this group (run the groups + membership script and let it sync) so no one is stranded.\n\nChanges apply live in SharePoint.'))return;
   btn.disabled=true;btn.textContent='Converting…';
-  var j=0,added=0,removed=0,failures=[];
+  var j=0,added=0,removed=0,onPrem=false,failures=[];
   (function nextFolder(){
     if(j>=g.folders.length){
       var tr=document.getElementById('cv-tr-'+i), partial=failures.length>0;
       btn.textContent='Done';
+      var msg=(onPrem?'granted (members set in AD)':'moved '+added)+', revoked '+removed+(partial?', '+failures.length+' issue(s)':'');
       if(tr){tr.style.background=partial?'var(--amber-bg)':'var(--green-bg)';
-        tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">moved '+added+', revoked '+removed+(partial?', '+failures.length+' issue(s)':'')+'</span>';}
+        tr.querySelector('td:last-child').innerHTML='<span class="reason" style="color:'+(partial?'var(--amber-ink)':'var(--green)')+'">'+msg+'</span>';}
       if(partial)console.warn('Convert issues on '+name+':',failures);
       return;
     }
@@ -580,6 +571,7 @@ function applyConvert(i,btn){
     fetch('/api/ad-audit/sp-convert-folder',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({driveId:f.driveId,itemId:f.itemId,groupName:name,createGroup:false,addUpns:f.addUpns,removePermIds:f.removePermIds})})
       .then(function(r){return r.json();}).then(function(res){
+        if(res.membersOnPrem)onPrem=true;
         if(res.granted){added+=res.added||0;removed+=res.removed||0;if(res.failures)failures=failures.concat(res.failures);}
         else failures.push((f.path||f.item)+': '+(res.error||'grant failed'));
         nextFolder();
@@ -589,6 +581,22 @@ function applyConvert(i,btn){
 function copyAdScript(btn){
   var t=document.getElementById('cv-adscript').textContent;
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
+}
+// Ask the server to build the on-prem "create groups + set membership" script for the convert panel.
+// Members (the "move in" people) are resolved to their AD accounts server-side.
+function buildSetupScript(btn){
+  var ou=(document.getElementById('mig-ou')&&document.getElementById('mig-ou').value.trim())||'OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com';
+  var groups=CONVERT_GROUPS.filter(function(g){return g.group&&((!g.exists&&!g.migrating)||g.addUpns.length);})
+    .map(function(g){return {name:g.group,create:(!g.exists&&!g.migrating),upns:g.addUpns};});
+  if(!groups.length){alert('Nothing to set up.');return;}
+  btn.disabled=true;btn.textContent='Building…';
+  fetch('/api/ad-audit/sp-group-setup-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({ou:ou,groups:groups})})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;btn.textContent='Rebuild script';
+      if(!d||!d.ok){alert('Could not build the script: '+((d&&d.error)||'unknown'));return;}
+      var pre=document.getElementById('cv-adscript');pre.textContent=d.script;pre.style.display='';
+      document.getElementById('cv-adcopy').style.display='';
+    }).catch(function(){btn.disabled=false;btn.textContent='Build groups + membership script';alert('Request failed.');});
 }
 // ---- migrate cloud-only SG-SP groups to on-prem AD ----
 function loadMigration(btn){

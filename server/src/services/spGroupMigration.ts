@@ -51,6 +51,45 @@ export interface MigrationPlan {
 
 const ps = (s: string) => String(s || '').replace(/`/g, '``').replace(/"/g, '`"');
 
+/**
+ * Build the on-prem PowerShell that makes a set of SharePoint groups exist and contain the right
+ * people. For each group: create it (guarded, only when `create`) and add the given members by SAM.
+ * Idempotent and safe to re-run. Membership of a synced group is mastered on-prem, so this (not the
+ * app) is how members get set. `members[].sam` must already be resolved (from the AD mirror).
+ */
+export function buildGroupSetupScript(
+  ou: string,
+  groups: { name: string; create: boolean; members: string[]; unresolved: string[] }[],
+): { script: string; groups: { name: string; create: boolean; resolved: number; unresolved: string[] }[] } {
+  const usedSam = new Set<string>();
+  const summary: { name: string; create: boolean; resolved: number; unresolved: string[] }[] = [];
+  const lines: string[] = [];
+  lines.push('# Create SharePoint groups (as needed) and set their membership, on-prem.');
+  lines.push('# Run on a domain controller, then Start-ADSyncSyncCycle -PolicyType Delta on the AD Connect server.');
+  lines.push('# Idempotent: existing groups are skipped, and re-adding a member is a no-op.');
+  lines.push('');
+  lines.push(`$ou = "${ps(ou)}"`);
+  lines.push('');
+  for (const g of groups) {
+    const sam = samFor(g.name, usedSam);
+    lines.push(`# ---- ${g.name} ----`);
+    if (g.create) {
+      lines.push(`if (-not (Get-ADGroup -Filter "SamAccountName -eq '${ps(sam)}'" -ErrorAction SilentlyContinue)) { New-ADGroup -Name "${ps(g.name)}" -SamAccountName "${ps(sam)}" -DisplayName "${ps(g.name)}" -GroupScope Global -GroupCategory Security -Path $ou }`);
+    }
+    if (g.members.length) {
+      const sams = g.members.map((s) => `"${ps(s)}"`).join(',');
+      lines.push(`Add-ADGroupMember -Identity "${ps(sam)}" -Members ${sams} -ErrorAction SilentlyContinue`);
+    }
+    if (g.unresolved.length) {
+      lines.push(`# No on-prem account for: ${g.unresolved.map((n) => ps(n)).join(', ')}  (add by hand if they belong)`);
+    }
+    lines.push('');
+    summary.push({ name: g.name, create: g.create, resolved: g.members.length, unresolved: g.unresolved });
+  }
+  if (!groups.length) lines.push('# Nothing to set up.');
+  return { script: lines.join('\n'), groups: summary };
+}
+
 /** AD sAMAccountName is capped at 20 chars. Keep the full name as CN/DisplayName, but derive a
  *  short, unique SAM when the group name is too long. */
 function samFor(name: string, used: Set<string>): string {
