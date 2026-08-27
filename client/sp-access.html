@@ -115,7 +115,8 @@
         <button class="btn btn-sm" id="cv-adcopy" style="display:none" onclick="copyAdScript(this)">Copy script</button>
       </div>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert. <b>Add (AD)</b> = active people who have direct access but are <b>not</b> in the group yet; add them in AD with the script above (Convert leaves their access alone so no one is stranded). <b>Revoke</b> = direct shares Convert removes now: links, former staff, and people who are <b>already</b> in the group (they keep access through it). <b>Keep</b> = unmatched grants left for you to check by hand.</div>
+    <datalist id="cv-glist"></datalist>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert. Wrong match? Click the group box and pick your real group from the list. <b>Add (AD)</b> = active people who have direct access but are <b>not</b> in the group yet; add them in AD with the script above (Convert leaves their access alone so no one is stranded). <b>Revoke</b> = direct shares Convert removes now: links, former staff, and people who are <b>already</b> in the group (they keep access through it). <b>Keep</b> = unmatched grants left for you to check by hand.</div>
     <table>
       <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right" title="Active people with direct access who are not yet group members (add in AD)">Add (AD)</th><th style="text-align:right" title="Direct shares removed now: links, former staff, and people already in the group">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
@@ -528,11 +529,13 @@ function renderConvertPanel(){
   document.getElementById('cv-adneed').style.display=needsSetup?'':'none';
   var pre=document.getElementById('cv-adscript'); if(pre){pre.style.display='none';pre.textContent='';}
   var cpy=document.getElementById('cv-adcopy'); if(cpy)cpy.style.display='none';
+  // pick-list of the real SG-SP groups, so a mis-suggested name is one click to fix
+  var gl=document.getElementById('cv-glist'); if(gl)gl.innerHTML=spGroups().map(function(x){return '<option value="'+esc(x.name)+'">';}).join('');
   document.getElementById('cv-rows').innerHTML=CONVERT_GROUPS.map(function(g,i){
     var t=cvTotals(g);
     var folderList=g.folders.map(function(f){return esc(f.full||f.item);}).join('<br>');
     return '<tr id="cv-tr-'+i+'" style="vertical-align:top">'+
-      '<td><input id="cv-name-'+i+'" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group||'')+'" placeholder="SG-SP-…" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+cvBadge(g)+'</span></td>'+
+      '<td><input id="cv-name-'+i+'" list="cv-glist" class="rr-in" style="width:auto;min-width:180px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:12px" value="'+esc(g.group||'')+'" placeholder="SG-SP-…" oninput="onCvName('+i+')" /> <span id="cv-badge-'+i+'">'+cvBadge(g)+'</span></td>'+
       '<td><span style="font-weight:600;color:var(--ink)">'+g.folders.length+' folder'+(g.folders.length>1?'s':'')+'</span><div class="sub-off" style="margin-top:2px;line-height:1.5">'+folderList+'</div></td>'+
       '<td class="right" style="font-weight:600">'+t.move+'</td>'+
       '<td class="right" style="font-weight:600;color:'+(t.revoke?'var(--money)':'var(--muted)')+'">'+t.revoke+'</td>'+
