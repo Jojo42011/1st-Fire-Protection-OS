@@ -115,9 +115,9 @@
         <button class="btn btn-sm" id="cv-adcopy" style="display:none" onclick="copyAdScript(this)">Copy script</button>
       </div>
     </div>
-    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert; a cloud-only group (<b>in Entra, not AD</b>) must be migrated first with the card above. <b>Move in</b> = the people who should be group members; membership is set in AD (the script above), not by Convert, because a synced group's members are managed on-prem. <b>Revoke</b> = direct shares removed (org/anonymous links plus the individual grants now covered by the group): the active people among them keep access through the group, so this is not a count of people losing access. <b>Keep</b> = grants left for you to check by hand.</div>
+    <div style="padding:6px 16px 2px" class="sub-off">One row per security group. Only groups that exist on-prem (<b>in AD</b>) can convert. <b>Add (AD)</b> = active people who have direct access but are <b>not</b> in the group yet; add them in AD with the script above (Convert leaves their access alone so no one is stranded). <b>Revoke</b> = direct shares Convert removes now: links, former staff, and people who are <b>already</b> in the group (they keep access through it). <b>Keep</b> = unmatched grants left for you to check by hand.</div>
     <table>
-      <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right">Move in</th><th style="text-align:right">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
+      <thead><tr><th>Security group</th><th>Folders</th><th style="text-align:right" title="Active people with direct access who are not yet group members (add in AD)">Add (AD)</th><th style="text-align:right" title="Direct shares removed now: links, former staff, and people already in the group">Revoke</th><th style="text-align:right">Keep</th><th></th></tr></thead>
       <tbody id="cv-rows"></tbody>
     </table>
   </div>
@@ -438,6 +438,14 @@ function groupInfo(name){
   var g=spGroups().filter(function(x){return x.name.toLowerCase()===lc;})[0];
   return g?{exists:true,synced:g.synced}:{exists:false,synced:false};
 }
+// Lowercased set of a group's current member UPNs (from the live audit), for deciding whose direct
+// share is safe to revoke (they already have access through the group).
+function groupMembers(name){
+  var lc=(name||'').toLowerCase(), set={};
+  var g=((AUDIT&&AUDIT.groups)||[]).filter(function(x){return (x.group||'').toLowerCase()===lc;})[0];
+  if(g)(g.members||[]).forEach(function(m){if(m.upn)set[String(m.upn).toLowerCase()]=1;});
+  return set;
+}
 // Propose a clean new group name from a folder: combine the words (CamelCase), e.g. "San Antonio" -> SG-SP-SanAntonio.
 function suggestNew(name){
   var n=(name||'').replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi,' ').replace(/[\/\\]/g,' ');
@@ -465,18 +473,24 @@ function buildConvertGroups(){
     byFolder[key].shares.push(x);
   });
   var folders=Object.keys(byFolder).map(function(k){
-    var f=byFolder[k], addUpns=[], removePermIds=[], keep=0;
-    f.shares.forEach(function(x){
-      var keepThis=x.grantType==='user'&&x.flag&&/bamboo/i.test(x.flag); // "verify" grants: leave for manual review
-      if(x.grantType==='user'&&!x.flag&&x.email)addUpns.push(x.email);   // active employee -> into the group
-      if(keepThis)keep++; else removePermIds.push(x.permId);
-    });
+    var f=byFolder[k];
     // full path to the folder itself (records store the PARENT path + the folder name)
     var full=((f.path==='/'?'':(f.path||''))+'/'+(f.item||'')).replace(/\/+/g,'/');
     // match to an existing group by the folder's own name, then by its parent office folder
     var fkey=nameKey(f.item), pkey=nameKey((f.path||'').split('/').filter(Boolean).pop()||'');
     var existing=matchExisting(fkey)||matchExisting(pkey);
     var group=existing?existing.name:(suggestNew(f.item)||suggestNew((f.path||'').split('/').filter(Boolean).pop()||'')||'');
+    var members=existing?groupMembers(group):{};   // who is already in the target group
+    var addUpns=[], removePermIds=[], keep=0;
+    f.shares.forEach(function(x){
+      if(x.grantType!=='user'){ removePermIds.push(x.permId); return; }      // links: always revoke
+      if(x.flag&&/bamboo/i.test(x.flag)){ keep++; return; }                  // "verify": leave for review
+      if(x.flag){ removePermIds.push(x.permId); return; }                    // former/disabled/not-active: revoke
+      // active employee:
+      var em=(x.email||'').toLowerCase();
+      if(em&&members[em]){ removePermIds.push(x.permId); }                   // already a member -> safe to revoke
+      else if(x.email){ addUpns.push(x.email); }                             // not a member -> add in AD, keep their share
+    });
     return {driveId:f.driveId,itemId:f.itemId,item:f.item,path:f.path,full:full,
       addUpns:addUpns,removePermIds:removePermIds,keep:keep,group:group,exists:!!existing,synced:existing?existing.synced:false};
   });
@@ -555,7 +569,7 @@ function applyConvert(i,btn){
   if(!info.exists){alert('"'+name+'" is not in AD yet. Create it there and let it sync, then Convert.');return;}
   if(!info.synced){alert('"'+name+'" is a cloud-only Entra group. Migrate it to on-prem AD first (use the "Move cloud groups into AD" card), let it sync, then Convert.');return;}
   var t=cvTotals(g);
-  if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nGrant the group and revoke '+t.revoke+' direct share(s)'+(t.keep?', keep '+t.keep+' for review':'')+'.\n\nMembership is managed in AD: make sure the '+t.move+' "move in" people are already in this group (run the groups + membership script and let it sync) so no one is stranded.\n\nChanges apply live in SharePoint.'))return;
+  if(!confirm('Convert '+g.folders.length+' folder(s) to '+name+'?\n\nGrant the group to the folders and revoke '+t.revoke+' direct share(s): links, former staff, and people already in the group (they keep access through it).'+(t.move?'\n\n'+t.move+' person(s) with direct access are NOT in the group yet: their access is left alone. Add them in AD (groups + membership script) to fold them in.':'')+(t.keep?'\n\n'+t.keep+' unmatched grant(s) kept for review.':'')+'\n\nChanges apply live in SharePoint.'))return;
   btn.disabled=true;btn.textContent='Converting…';
   var j=0,added=0,removed=0,onPrem=false,failures=[];
   (function nextFolder(){
