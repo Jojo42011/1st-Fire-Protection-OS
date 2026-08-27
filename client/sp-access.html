@@ -94,6 +94,7 @@
       <span style="flex:1"></span>
       <button class="btn" id="mig-rename" onclick="renameCloud(this)" title="Rename the cloud-only SG-SP groups to SG-SP-…-CLOUD so the on-prem copies can take the clean names">Park cloud groups (-CLOUD)</button>
       <button class="btn" id="mig-load" onclick="loadMigration(this)">Build script</button>
+      <button class="btn" id="mig-delete" onclick="deleteCloud(this)" title="Delete the -CLOUD copies once the on-prem groups are synced. Only removes a copy whose clean on-prem group already exists.">Delete -CLOUD copies</button>
     </div>
     <div style="padding:8px 16px 2px" class="sub-off">Target OU: <input id="mig-ou" class="rr-in" style="width:auto;min-width:420px;padding:6px 9px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink);font-size:11px" value="OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com" /></div>
     <div id="mig-body" style="padding:4px 16px 14px"></div>
@@ -621,6 +622,18 @@ function loadMigration(btn){
 function copyMigScript(btn){
   var t=document.getElementById('mig-script').textContent;
   if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy script';},1500);});}
+}
+function deleteCloud(btn){
+  if(!confirm('Delete the parked "…-CLOUD" copies?\n\nOnly removes a cloud-only copy whose synced on-prem group already exists, so you never lose the last copy of a group. Do this after you have granted the on-prem groups to the folders.'))return;
+  btn.disabled=true;btn.textContent='Deleting…';
+  fetch('/api/ad-audit/sp-delete-cloud',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({suffix:'-CLOUD'})})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;btn.textContent='Delete -CLOUD copies';
+      if(!d||!d.ok){alert('Delete failed: '+((d&&d.error)||'unknown'));return;}
+      var kept=(d.skipped||[]).filter(function(s){return /not synced/.test(s.why);}).length;
+      alert('Deleted '+d.deleted.length+' -CLOUD copy(ies).'+(d.skipped.length?(' Kept '+d.skipped.length+(kept?' ('+kept+' whose on-prem group has not synced yet)':'')+'.'):''));
+      load();
+    }).catch(function(){btn.disabled=false;btn.textContent='Delete -CLOUD copies';alert('Request failed.');});
 }
 function renameCloud(btn){
   if(!confirm('Rename every cloud-only SG-SP group to "…-CLOUD"?\n\nThis frees the clean names for the on-prem copies. It changes only the display name, not access. Synced groups are left alone.'))return;

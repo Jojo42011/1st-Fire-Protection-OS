@@ -10,7 +10,7 @@ import { buildProvisionPlan } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
-import { buildOnPremGroupPlan, renameCloudSpGroups, buildGroupSetupScript } from '../services/spGroupMigration';
+import { buildOnPremGroupPlan, renameCloudSpGroups, buildGroupSetupScript, deleteCloudSpGroups } from '../services/spGroupMigration';
 import { startScan, stepScan, getScan, latestScan } from '../services/spScanEngine';
 import { connectionInfo as googleConnInfo, accessToken as googleAccessToken, listAccounts as googleListAccounts, listLocations as googleListLocations } from '../services/googleBusiness';
 import { claimPending, completeJob } from '../services/dcJobs';
@@ -438,6 +438,16 @@ function groupSetupHandler(req: Request, res: Response): void {
 }
 router.post('/api/ad-audit/sp-group-setup-script', groupSetupHandler);
 router.post('/api/ad-agent/sp-group-setup-script', groupSetupHandler);
+
+/** Delete the parked cloud-only "-CLOUD" SG-SP groups (only where the synced on-prem copy exists). */
+router.post('/api/ad-audit/sp-delete-cloud', async (req, res) => {
+  const out = await deleteCloudSpGroups(String((req.body && req.body.suffix) || '-CLOUD'));
+  res.status(out.ok ? 200 : 400).json(out);
+});
+router.post('/api/ad-agent/sp-delete-cloud', async (req, res) => {
+  const out = await deleteCloudSpGroups(String((req.body && req.body.suffix) || '-CLOUD'));
+  res.status(out.ok ? 200 : 400).json(out);
+});
 
 /** Direct-share audit for one site (session-gated, for the SharePoint access screen). */
 router.get('/api/ad-audit/sp-direct-shares', async (req, res) => {

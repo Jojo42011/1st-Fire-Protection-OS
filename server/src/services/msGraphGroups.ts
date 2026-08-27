@@ -121,6 +121,18 @@ export async function listGroupsWithMembers(prefix: string): Promise<{ ok: boole
   }
 }
 
+/** Delete a group by object id. Used only to remove the parked cloud-only "-CLOUD" copies. */
+export async function deleteGroup(id: string): Promise<{ ok: boolean; error?: string }> {
+  const token = await graphToken();
+  if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
+  const res = await fetch(`https://graph.microsoft.com/v1.0/groups/${id}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 204) return { ok: false, error: `${res.status}: ${(await res.text()).slice(0, 180)}` };
+  return { ok: true };
+}
+
 /** Whether a group is synced from on-prem AD (its membership is mastered on-prem and cannot be
  *  changed through Graph). */
 export async function isGroupOnPrem(id: string): Promise<boolean> {

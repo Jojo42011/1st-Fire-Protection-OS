@@ -1,4 +1,29 @@
-import { listGroupsWithMembers, updateGroupDisplayName } from './msGraphGroups';
+import { listGroupsWithMembers, updateGroupDisplayName, deleteGroup } from './msGraphGroups';
+
+/** Delete the parked cloud-only "<name>-CLOUD" SG-SP groups once the on-prem copies are live. Safety:
+ *  only deletes groups that are BOTH cloud-only (not synced) AND end with the suffix, and only when a
+ *  synced group with the clean name already exists (so we never delete the last copy of a group). */
+export async function deleteCloudSpGroups(suffix: string): Promise<{
+  ok: boolean; error?: string; suffix: string;
+  deleted: string[]; skipped: { name: string; why: string }[];
+}> {
+  const sfx = suffix || '-CLOUD';
+  const res = await listGroupsWithMembers('SG-SP');
+  if (!res.ok) return { ok: false, error: res.error || 'could not read groups', suffix: sfx, deleted: [], skipped: [] };
+  const syncedCleanNames = new Set(res.groups.filter((g) => g.syncedFromAD).map((g) => g.name.toLowerCase()));
+  const deleted: string[] = [];
+  const skipped: { name: string; why: string }[] = [];
+  for (const g of res.groups) {
+    if (!g.name.toLowerCase().endsWith(sfx.toLowerCase())) continue; // only the parked copies
+    if (g.syncedFromAD) { skipped.push({ name: g.name, why: 'synced from AD (not a cloud copy)' }); continue; }
+    const clean = g.name.slice(0, g.name.length - sfx.length);
+    if (!syncedCleanNames.has(clean.toLowerCase())) { skipped.push({ name: g.name, why: `on-prem "${clean}" not synced yet; keeping the copy` }); continue; }
+    // eslint-disable-next-line no-await-in-loop
+    const r = await deleteGroup(g.id);
+    if (r.ok) deleted.push(g.name); else skipped.push({ name: g.name, why: r.error || 'delete failed' });
+  }
+  return { ok: true, suffix: sfx, deleted, skipped };
+}
 
 /** Park every cloud-only SG-SP group under a suffix (default "-CLOUD") so the on-prem copies can take
  *  the clean names. Only touches cloud-only groups; synced ones and already-suffixed ones are skipped.
