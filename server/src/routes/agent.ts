@@ -309,6 +309,25 @@ router.get('/api/ad-agent/jobs', (_req, res) => {
   res.json({ ok: true, jobs: claimPending() });
 });
 
+/** Read-only audit of DC jobs (status, result, error, timings), newest first. ?ref=<id> filters to
+ *  one onboarding request. Lets an operator see whether a create-user job was queued, claimed, and
+ *  what the agent returned. */
+router.get('/api/ad-agent/jobs-audit', (req, res) => {
+  const db = getDb();
+  const ref = parseInt(String(req.query.ref || ''), 10);
+  const rows = (Number.isFinite(ref)
+    ? db.prepare(`SELECT * FROM dc_jobs WHERE ref_type = 'onboarding_request' AND ref_id = ? ORDER BY id DESC`).all(ref)
+    : db.prepare(`SELECT * FROM dc_jobs ORDER BY id DESC LIMIT 25`).all()) as any[];
+  const jobs = rows.map((r) => ({
+    id: r.id, kind: r.kind, status: r.status, error: r.error, attempts: r.attempts,
+    ref_type: r.ref_type, ref_id: r.ref_id, requested_by: r.requested_by,
+    created_at: r.created_at, claimed_at: r.claimed_at, finished_at: r.finished_at,
+    result: (() => { try { return r.result_json ? JSON.parse(r.result_json) : null; } catch { return r.result_json; } })(),
+    payloadSummary: (() => { try { const p = JSON.parse(r.payload_json || '{}'); return { sam: p.sam, upn: p.upn, ou: p.ou, securityGroups: p.securityGroups }; } catch { return null; } })(),
+  }));
+  res.json({ ok: true, count: jobs.length, jobs });
+});
+
 /** The DC agent reports the result of a job it ran. Success applies the job's side effects. */
 router.post('/api/ad-agent/jobs/:id(\\d+)/result', (req, res) => {
   const b = req.body || {};
