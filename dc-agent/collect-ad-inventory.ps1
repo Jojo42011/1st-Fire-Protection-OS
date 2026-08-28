@@ -148,6 +148,11 @@ if (-not $Ping) {
                 try { Set-ADUser -Identity $p.sam @set -ErrorAction Stop }
                 catch { Write-Warning "Attribute set failed for $($p.sam): $($_.Exception.Message)" }
               }
+              # Email routing for hybrid: -EmailAddress set `mail`; also stamp the primary SMTP in
+              # proxyAddresses and the alias in mailNickname so Exchange Online provisions the mailbox
+              # as name@1stfpservices.com (its primary reply address).
+              try { Set-ADUser -Identity $p.sam -Add @{ proxyAddresses = "SMTP:$($p.upn)" } -Replace @{ mailNickname = $p.sam } -ErrorAction Stop }
+              catch { Write-Warning "Mail attributes failed for $($p.sam): $($_.Exception.Message)" }
               $added = @()
               foreach ($g in @($p.securityGroups)) {
                 try { Add-ADGroupMember -Identity $g -Members $p.sam -ErrorAction Stop; $added += $g }

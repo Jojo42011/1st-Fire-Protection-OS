@@ -330,6 +330,13 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
     lines.push('');
   }
 
+  // Email routing for hybrid: New-ADUser -EmailAddress set `mail`; also stamp the primary SMTP in
+  // proxyAddresses and the alias in mailNickname so Exchange Online provisions the mailbox as
+  // name@1stfpservices.com (its primary reply address) rather than a default onmicrosoft.com one.
+  lines.push('# ---- Email (hybrid): primary SMTP + alias, so the mailbox provisions as name@' + (upn.split('@')[1] || DEFAULT_DOMAIN) + ' ----');
+  lines.push('Set-ADUser -Identity $Sam -Add @{ proxyAddresses = "SMTP:$Upn" } -Replace @{ mailNickname = $Sam }');
+  lines.push('');
+
   if (securityGroups.length) {
     lines.push('# ---- On-prem AD security groups (sync up to Entra via Azure AD Connect) ----');
     for (const g of securityGroups) {
