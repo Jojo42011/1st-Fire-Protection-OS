@@ -140,6 +140,7 @@ if (-not $Ping) {
               # ones that were sent are written; -Office maps to physicalDeliveryOfficeName in AD.
               $set = @{}
               if ($p.title)      { $set['Title']      = [string]$p.title }
+              if ($p.title)      { $set['Description'] = [string]$p.title }  # Description mirrors the job title
               if ($p.mobile)     { $set['MobilePhone']= [string]$p.mobile }
               if ($p.department) { $set['Department']  = [string]$p.department }
               if ($p.office)     { $set['Office']      = [string]$p.office }

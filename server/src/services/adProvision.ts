@@ -320,6 +320,7 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   // are written; -Office maps to physicalDeliveryOfficeName in AD.
   const attrs: string[] = [];
   if (title) attrs.push(`-Title ${psq(title)}`);
+  if (title) attrs.push(`-Description ${psq(title)}`); // Description mirrors the job title
   if (mobile) attrs.push(`-MobilePhone ${psq(mobile)}`);
   if (department) attrs.push(`-Department ${psq(department)}`);
   if (office) attrs.push(`-Office ${psq(office)}`);
