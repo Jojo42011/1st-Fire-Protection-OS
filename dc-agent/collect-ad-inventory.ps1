@@ -149,10 +149,11 @@ if (-not $Ping) {
                 catch { Write-Warning "Attribute set failed for $($p.sam): $($_.Exception.Message)" }
               }
               # Email routing for hybrid: -EmailAddress set `mail`; also stamp the primary SMTP in
-              # proxyAddresses and the alias in mailNickname so Exchange Online provisions the mailbox
-              # as name@1stfpservices.com (its primary reply address).
-              try { Set-ADUser -Identity $p.sam -Add @{ proxyAddresses = "SMTP:$($p.upn)" } -Replace @{ mailNickname = $p.sam } -ErrorAction Stop }
-              catch { Write-Warning "Mail attributes failed for $($p.sam): $($_.Exception.Message)" }
+              # proxyAddresses (a base-schema attribute) so Exchange Online provisions the mailbox as
+              # name@1stfpservices.com. mailNickname is intentionally omitted: it needs the Exchange
+              # schema extension, and EXO generates the alias itself.
+              try { Set-ADUser -Identity $p.sam -Add @{ proxyAddresses = "SMTP:$($p.upn)" } -ErrorAction Stop }
+              catch { Write-Warning "proxyAddresses set failed for $($p.sam): $($_.Exception.Message)" }
               $added = @()
               foreach ($g in @($p.securityGroups)) {
                 try { Add-ADGroupMember -Identity $g -Members $p.sam -ErrorAction Stop; $added += $g }

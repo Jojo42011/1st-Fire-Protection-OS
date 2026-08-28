@@ -331,10 +331,12 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   }
 
   // Email routing for hybrid: New-ADUser -EmailAddress set `mail`; also stamp the primary SMTP in
-  // proxyAddresses and the alias in mailNickname so Exchange Online provisions the mailbox as
-  // name@1stfpservices.com (its primary reply address) rather than a default onmicrosoft.com one.
-  lines.push('# ---- Email (hybrid): primary SMTP + alias, so the mailbox provisions as name@' + (upn.split('@')[1] || DEFAULT_DOMAIN) + ' ----');
-  lines.push('Set-ADUser -Identity $Sam -Add @{ proxyAddresses = "SMTP:$Upn" } -Replace @{ mailNickname = $Sam }');
+  // proxyAddresses (a base-schema attribute) so Exchange Online provisions the mailbox as
+  // name@1stfpservices.com (its primary reply address). mailNickname is deliberately NOT set: it is
+  // an Exchange-schema attribute that does not exist without the Exchange schema extension, and EXO
+  // generates the alias itself.
+  lines.push('# ---- Email (hybrid): primary SMTP, so the mailbox provisions as name@' + (upn.split('@')[1] || DEFAULT_DOMAIN) + ' ----');
+  lines.push('Set-ADUser -Identity $Sam -Add @{ proxyAddresses = "SMTP:$Upn" }');
   lines.push('');
 
   if (securityGroups.length) {
