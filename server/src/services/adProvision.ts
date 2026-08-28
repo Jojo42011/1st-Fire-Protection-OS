@@ -102,6 +102,24 @@ function sanitize(part: string): string {
     .trim();
 }
 
+/**
+ * Map an onboarding SharePoint-group label to its on-prem security group name. SharePoint access is
+ * now granted through synced SG-SP-* groups, so "Houston" -> "SG-SP-Houston" and "College Station"
+ * -> "SG-SP-CollegeStation". A label already in SG-SP form is kept as-is.
+ */
+function spSecurityGroup(label: string): string {
+  const raw = String(label || '').trim();
+  if (!raw) return '';
+  if (/^sg-?sp-/i.test(raw)) return raw;
+  const tok = raw
+    .replace(/1st\s*fire\s*protection|1st\s*fp|1stfp/gi, ' ')
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join('');
+  return tok ? `SG-SP-${tok}` : '';
+}
+
 /** Split a full name into first + last when the hire is not a bound BambooHR record. */
 function splitName(full: string): { first: string; last: string } {
   const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
@@ -215,7 +233,12 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
     let m = /^Add to security group:\s*(.+)$/.exec(it.label);
     if (m) { securityGroups.push(m[1].trim()); continue; }
     m = /^Add to SharePoint group:\s*(.+)$/.exec(it.label);
-    if (m) sharepointGroups.push(m[1].trim());
+    if (m) {
+      // SharePoint access is now an on-prem SG-SP security group; map the label and add it in AD.
+      const sp = spSecurityGroup(m[1]);
+      if (sp) sharepointGroups.push(sp);
+      else warnings.push(`Could not map SharePoint group "${m[1].trim()}" to an SG-SP name; add SharePoint access by hand.`);
+    }
   }
   const displayName = [first, last].filter(Boolean).join(' ') || request.name;
 
@@ -320,8 +343,8 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   }
 
   if (sharepointGroups.length) {
-    lines.push('# ---- SharePoint groups (set these in SharePoint, not in AD) ----');
-    for (const g of sharepointGroups) lines.push(`#   - ${g}`);
+    lines.push('# ---- SharePoint access (on-prem SG-SP groups, sync up to Entra) ----');
+    for (const g of sharepointGroups) lines.push(`Add-ADGroupMember -Identity ${psq(g)} -Members $Sam`);
     lines.push('');
   }
 

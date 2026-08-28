@@ -6,7 +6,7 @@ import { activeRoster } from '../services/peopleRoster';
 import { syncIdentitiesFromM365 } from '../people/service';
 import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget, setMode as setReviewMode, getMode as getReviewMode, rerenderQueued } from '../services/reviewRequests';
 import { reviewImpactReport } from '../services/reviewImpact';
-import { buildProvisionPlan } from '../services/adProvision';
+import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -180,6 +180,14 @@ router.get('/api/ad-agent/provision-plan', (req, res) => {
   const id = parseInt(String(req.query.id || ''), 10);
   if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'id required' });
   try { res.json({ ok: true, plan: buildProvisionPlan(id) }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Dry-run the generated New-ADUser provisioning script for one onboarding request (read-only). */
+router.get('/api/ad-agent/provision-script', (req, res) => {
+  const id = parseInt(String(req.query.id || ''), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'id required' });
+  try { res.json(buildProvisionScript(id)); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 

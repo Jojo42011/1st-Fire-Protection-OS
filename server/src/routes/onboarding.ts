@@ -238,6 +238,9 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
   const plan = buildProvisionPlan(id);
   if (!plan.ok) return res.status(404).json({ ok: false, error: plan.error || 'request not found' });
   if (plan.ouIsPlaceholder) return res.status(400).json({ ok: false, error: 'Set the target OU in Integrations before creating accounts on the DC.' });
+  // On-prem group memberships to set: printer/IT security groups plus the SharePoint SG-SP groups
+  // (SharePoint access is now granted through synced on-prem groups, added the same way).
+  const allGroups = Array.from(new Set([...plan.securityGroups, ...plan.sharepointGroups].filter(Boolean)));
   const payload = {
     first: plan.first,
     last: plan.last,
@@ -248,7 +251,8 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
     ou: plan.ou,
     password: plan.password,
     changePasswordAtLogon: true,
-    securityGroups: plan.securityGroups,
+    securityGroups: allGroups,
+    sharepointGroups: plan.sharepointGroups, // also passed separately for logging/visibility
     licenseSku: plan.licenseSku, // the default SKU to assign cloud-side once the account syncs
     // BambooHR directory attributes, set on the new account (role, mobile, department, office).
     title: plan.title,
@@ -258,7 +262,7 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
     company: plan.company,
   };
   const job = enqueue('ad_create_user', payload, { type: 'onboarding_request', id }, actor(req));
-  res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: plan.securityGroups, warnings: plan.warnings });
+  res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: allGroups, warnings: plan.warnings });
 });
 
 /** The latest DC create-user job for a request + the license-queue status, for the UI. */
