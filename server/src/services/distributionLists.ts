@@ -31,6 +31,10 @@ const psq = (s: string) => `'${String(s || '').replace(/'/g, "''")}'`;
 
 /** A friendly name + alias for an office string: drop "1st FP"/"LLC", use the (CODE) as the alias when
  *  present, else slug the name. */
+// Offices whose short code isn't in the BambooHR string but which already own their slug address in
+// Exchange (so we use their printer-group code instead of the slug).
+const ALIAS_OVERRIDE: Record<string, string> = { collegestation: 'cst', lubbock: 'lub' };
+
 function labelForOffice(office: string): { name: string; alias: string } {
   const codeM = /\(([A-Za-z0-9]+)\)\s*$/.exec(office);
   const code = codeM ? codeM[1].toLowerCase() : '';
@@ -42,7 +46,8 @@ function labelForOffice(office: string): { name: string; alias: string } {
     .replace(/[.,]\s*$/, '')
     .trim();
   if (!name) name = office.trim();
-  const alias = (code || name.replace(/[^a-z0-9]+/gi, '').toLowerCase()).slice(0, 40) || 'office';
+  let alias = (code || name.replace(/[^a-z0-9]+/gi, '').toLowerCase()).slice(0, 40) || 'office';
+  if (ALIAS_OVERRIDE[alias]) alias = ALIAS_OVERRIDE[alias];
   return { name, alias };
 }
 
@@ -134,13 +139,15 @@ export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
   dl.push('foreach ($o in $offices) {');
   dl.push(`  $filter = "Company -eq '${COMPANY}' -and Office -eq '$($o.Office.Replace("'","''"))' -and RecipientTypeDetails -eq 'UserMailbox'"`);
   dl.push('  $g = Get-DynamicDistributionGroup -Identity $o.Smtp -ErrorAction SilentlyContinue');
-  dl.push('  if ($g) {');
-  dl.push('    Set-DynamicDistributionGroup -Identity $g.Identity -DisplayName $o.Name -RecipientFilter $filter');
-  dl.push('    Write-Host "Updated $($o.Name)"');
-  dl.push('  } else {');
-  dl.push('    New-DynamicDistributionGroup -Name $o.Name -Alias $o.Alias -PrimarySmtpAddress $o.Smtp -RecipientFilter $filter');
-  dl.push('    Write-Host "Created $($o.Name)"');
-  dl.push('  }');
+  dl.push('  try {');
+  dl.push('    if ($g) {');
+  dl.push('      Set-DynamicDistributionGroup -Identity $g.Identity -DisplayName $o.Name -RecipientFilter $filter -ErrorAction Stop');
+  dl.push('      Write-Host "Updated $($o.Name)"');
+  dl.push('    } else {');
+  dl.push('      New-DynamicDistributionGroup -Name $o.Name -Alias $o.Alias -PrimarySmtpAddress $o.Smtp -RecipientFilter $filter -ErrorAction Stop | Out-Null');
+  dl.push('      Write-Host "Created $($o.Name)"');
+  dl.push('    }');
+  dl.push('  } catch { Write-Warning "FAILED $($o.Name): $($_.Exception.Message)" }');
   dl.push('}');
   dl.push('');
   dl.push('# ---- All Employees: retire the old static list and move allemployees@ onto the dynamic one ----');
