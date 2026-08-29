@@ -9,6 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
+import { findSiteGroupGrants, removeSiteGroupGrant } from '../services/spSiteGroupCleanup';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -183,6 +184,22 @@ router.get('/api/ad-agent/provision-plan', (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'id required' });
   try { res.json({ ok: true, plan: buildProvisionPlan(id) }); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Find classic SharePoint site-group grants (ACCT, SAFETY, "<office> employees", ...) on a site's
+ *  folders, excluding the default Owners/Members/Visitors. ?site=...&maxDepth=2 */
+router.get('/api/ad-agent/sp-sitegroups', async (req, res) => {
+  const site = String(req.query.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const md = req.query.maxDepth === '' || req.query.maxDepth === undefined ? 2 : parseInt(String(req.query.maxDepth), 10);
+  const out = await findSiteGroupGrants(site, Number.isFinite(md) ? md : null);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Remove one site-group grant. Body: { driveId, itemId, permId }. */
+router.post('/api/ad-agent/sp-sitegroup-remove', async (req, res) => {
+  const b = req.body || {};
+  const out = await removeSiteGroupGrant(String(b.driveId || ''), String(b.itemId || ''), String(b.permId || ''));
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Grant function groups to a site's top-level office folders. Body: { site, groups:[], folderTokens:[] }. */
