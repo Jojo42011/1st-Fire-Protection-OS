@@ -9,7 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
-import { findSiteGroupGrants, removeSiteGroupGrant } from '../services/spSiteGroupCleanup';
+import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern } from '../services/spSiteGroupCleanup';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -193,6 +193,16 @@ router.get('/api/ad-agent/sp-sitegroups', async (req, res) => {
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
   const md = req.query.maxDepth === '' || req.query.maxDepth === undefined ? 2 : parseInt(String(req.query.maxDepth), 10);
   const out = await findSiteGroupGrants(site, Number.isFinite(md) ? md : null);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Replace classic SharePoint site-group grants with the matching modern SG-SP group (grant then
+ *  remove). Body: { site, maxDepth?, dryRun? }. dryRun reports the mapping without changing anything. */
+router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
+  const b = req.body || {};
+  const site = String(b.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const md = b.maxDepth === null || b.maxDepth === undefined ? 2 : parseInt(String(b.maxDepth), 10);
+  const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
   res.status(out.ok ? 200 : 400).json(out);
 });
 /** Remove one site-group grant. Body: { driveId, itemId, permId }. */
