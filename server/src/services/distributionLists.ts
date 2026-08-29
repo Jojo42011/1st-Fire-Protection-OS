@@ -48,18 +48,37 @@ function labelForOffice(office: string): { name: string; alias: string } {
 
 export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
   const db = getDb();
-  // Active employees joined to their AD account (by work email / UPN / stamped sam), with the AD office.
-  const rows = db.prepare(
-    `SELECT e.legal_first_name AS first, e.legal_last_name AS last, e.work_email AS email,
-            TRIM(COALESCE(e.office, '')) AS bamboo_office,
-            a.sam AS sam, TRIM(COALESCE(a.office, '')) AS ad_office
-       FROM employees e
-       LEFT JOIN ad_users a
-         ON lower(a.email) = lower(e.work_email)
-         OR lower(a.upn)   = lower(e.work_email)
-         OR lower(a.sam)   = lower(e.ad_username)
-      WHERE e.employment_status NOT IN ('terminated', 'prehire')`
-  ).all() as { first: string; last: string; email: string; bamboo_office: string; sam: string | null; ad_office: string }[];
+  // Build lookup maps over enabled AD accounts, so each employee resolves to at most one account.
+  const adUsers = db.prepare(
+    `SELECT sam, upn, email, given_name, surname, TRIM(COALESCE(office,'')) AS office FROM ad_users WHERE enabled = 1 AND sam IS NOT NULL`
+  ).all() as { sam: string; upn: string | null; email: string | null; given_name: string | null; surname: string | null; office: string }[];
+  const byEmail = new Map<string, typeof adUsers[number]>();
+  const byUpn = new Map<string, typeof adUsers[number]>();
+  const bySam = new Map<string, typeof adUsers[number]>();
+  const byName = new Map<string, typeof adUsers[number]>();
+  const lc = (s: string | null | undefined) => String(s || '').toLowerCase().trim();
+  for (const a of adUsers) {
+    if (a.email) byEmail.set(lc(a.email), a);
+    if (a.upn) byUpn.set(lc(a.upn), a);
+    if (a.sam) bySam.set(lc(a.sam), a);
+    if (a.given_name && a.surname) byName.set(lc(a.given_name) + '|' + lc(a.surname), a);
+  }
+  const emps = db.prepare(
+    `SELECT legal_first_name AS first, legal_last_name AS last, work_email AS email, ad_username,
+            TRIM(COALESCE(office,'')) AS bamboo_office
+       FROM employees WHERE employment_status NOT IN ('terminated', 'prehire')`
+  ).all() as { first: string; last: string; email: string | null; ad_username: string | null; bamboo_office: string }[];
+  const usedSam = new Set<string>();
+  const rows = emps.map((e) => {
+    const hit =
+      (e.email && (byEmail.get(lc(e.email)) || byUpn.get(lc(e.email)))) ||
+      (e.ad_username && bySam.get(lc(e.ad_username))) ||
+      byName.get(lc(e.first) + '|' + lc(e.last)) || null;
+    // don't map two employees to the same account
+    const sam = hit && !usedSam.has(lc(hit.sam)) ? hit.sam : null;
+    if (sam) usedSam.add(lc(sam));
+    return { first: e.first, last: e.last, email: e.email || '', bamboo_office: e.bamboo_office, sam, ad_office: hit ? hit.office : '' };
+  });
 
   // Group by BambooHR office.
   const byOffice = new Map<string, { headcount: number; matched: number; needsBackfill: number; noAccount: string[] }>();
