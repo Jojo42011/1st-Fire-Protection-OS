@@ -92,6 +92,7 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   const map = ownerEmailMap();
   const byEmail = new Map<string, OnboardingItem[]>();
   for (const it of items) {
+    if (it.status !== 'pending') continue; // only notify about work still to do
     const email = map[it.owner as Owner];
     if (!email) continue;
     if (!byEmail.has(email)) byEmail.set(email, []);
@@ -120,8 +121,11 @@ export function ownerEmailPreview(requestId: number, owner: Owner, base: string)
   const db = getDb();
   const request = db.prepare(`SELECT id, name FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string } | undefined;
   if (!request) return null;
-  const items = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = ? ORDER BY id`).all(requestId, owner) as OnboardingItem[];
-  const ownerLabel = (items[0] && items[0].owner_label) || owner;
+  const allItems = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = ? ORDER BY id`).all(requestId, owner) as OnboardingItem[];
+  const ownerLabel = (allItems[0] && allItems[0].owner_label) || owner;
+  // Only email what's still to do: drop items already done or discarded, so the email reflects the
+  // live board and shrinks as tasks are completed.
+  const items = allItems.filter((it) => it.status === 'pending');
   const to = ownerEmailMap()[owner] || null;
   const subject = `Onboarding tasks for ${request.name}: ${ownerLabel}`;
   const boardUrl = `${base}/onboarding`;
