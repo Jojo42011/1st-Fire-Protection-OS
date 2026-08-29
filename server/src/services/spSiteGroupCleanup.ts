@@ -135,7 +135,9 @@ export async function replaceSiteGroupsWithModern(site: string, maxDepth: number
   for (const g of found.grants) {
     const tok = modernToken(g.groupName);
     const m = matchModern(tok);
-    const role = /owner/i.test(g.roles) ? 'owner' : (/restrictedview|read/i.test(g.roles) ? 'read' : 'write');
+    // The /invite API accepts only read/write. An old "owner" (full control) grant becomes write (edit);
+    // full control on a folder for a group is rare and can be re-set by hand if actually needed.
+    const role = /restrictedview|read/i.test(g.roles) && !/write|owner/i.test(g.roles) ? 'read' : 'write';
     const act: ReplaceResult['actions'][number] = { path: g.path, item: g.item, oldGroup: g.groupName, modern: m ? m.name : null, roles: g.roles };
     if (!m) { act.note = `no SG-SP match for "${g.groupName}"`; out.skipped++; out.actions.push(act); continue; }
     if (dryRun) { out.actions.push(act); continue; }
