@@ -76,6 +76,50 @@ export async function findSiteGroupGrants(site: string, maxDepth: number | null 
   }
 }
 
+export interface RootGrant { kind: 'group' | 'siteGroup' | 'user'; name: string; roles: string; permId: string; }
+export interface RootGrantsResult {
+  ok: boolean; error?: string;
+  drives: { driveId: string; drive: string; itemId: string; grants: RootGrant[] }[];
+}
+
+/**
+ * What a brand-new top-level folder inherits: the permissions on each drive's ROOT item. If the root
+ * carries a pile of SG-SP / site-group grants, every new folder created at the root inherits them.
+ * A clean root is just the default Owners/Members/Visitors, so a new folder comes up with only those
+ * (plus whoever created it). This is the shallow read that answers "why does a new folder get every
+ * group?" without crawling the whole tree.
+ */
+export async function getDriveRootGrants(site: string): Promise<RootGrantsResult> {
+  const token = await graphToken();
+  if (!token) return { ok: false, error: 'Microsoft Graph is not connected', drives: [] };
+  try {
+    const u = new URL(site);
+    const path = u.pathname.replace(/\/$/, '');
+    const s = await gget(`https://graph.microsoft.com/v1.0/sites/${u.host}:${path}?$select=id`, token);
+    const dv = await gget(`https://graph.microsoft.com/v1.0/sites/${s.id}/drives?$select=id,name`, token);
+    const drives: RootGrantsResult['drives'] = [];
+    for (const d of (dv.value || []) as { id: string; name: string }[]) {
+      // eslint-disable-next-line no-await-in-loop
+      const root = await gget(`https://graph.microsoft.com/v1.0/drives/${d.id}/root?$select=id`, token);
+      // eslint-disable-next-line no-await-in-loop
+      const perms = await gget(`https://graph.microsoft.com/v1.0/drives/${d.id}/items/${root.id}/permissions?$top=200`, token);
+      const grants: RootGrant[] = [];
+      for (const p of (perms.value || [])) {
+        const principals = [p.grantedToV2, ...(p.grantedToIdentitiesV2 || [])].filter(Boolean);
+        for (const gp of principals) {
+          if (gp.group) grants.push({ kind: 'group', name: gp.group.displayName || '(group)', roles: (p.roles || []).join('/'), permId: p.id });
+          else if (gp.siteGroup) grants.push({ kind: 'siteGroup', name: gp.siteGroup.displayName || '(site group)', roles: (p.roles || []).join('/'), permId: p.id });
+          else if (gp.user) grants.push({ kind: 'user', name: gp.user.displayName || '(user)', roles: (p.roles || []).join('/'), permId: p.id });
+        }
+      }
+      drives.push({ driveId: d.id, drive: d.name, itemId: root.id, grants });
+    }
+    return { ok: true, drives };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message, drives: [] };
+  }
+}
+
 // Old SharePoint group name -> modern SG-SP token. Most map by name; a couple of abbreviations need
 // an explicit alias.
 const ALIAS: Record<string, string> = { acct: 'accounting', mgmt: 'management' };

@@ -9,7 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
-import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern } from '../services/spSiteGroupCleanup';
+import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants } from '../services/spSiteGroupCleanup';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -203,6 +203,13 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
   const md = b.maxDepth === null || b.maxDepth === undefined ? 2 : parseInt(String(b.maxDepth), 10);
   const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** What a new top-level folder inherits: the permissions on each drive's root. ?site=... */
+router.get('/api/ad-agent/sp-root-grants', async (req, res) => {
+  const site = String(req.query.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const out = await getDriveRootGrants(site);
   res.status(out.ok ? 200 : 400).json(out);
 });
 /** Remove one site-group grant. Body: { driveId, itemId, permId }. */
