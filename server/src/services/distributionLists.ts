@@ -111,24 +111,49 @@ export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
   const backfillScript = bf.join('\n');
 
   // ---- DDG creation script (Exchange Online) ----
+  // Idempotent: renames/updates a list if one already carries the address, else creates it. Every list
+  // gets a uniform "<Office> - All Staff" display name so it never collides with an office Team/M365
+  // group of the bare name.
   const dl: string[] = [];
-  dl.push('# Create the office and All Employees distribution lists in Exchange Online. Run once.');
-  dl.push('# Dynamic groups evaluate their filter at send time, so they maintain themselves afterward.');
+  dl.push('# Create/refresh the office + All Employees distribution lists in Exchange Online. Safe to');
+  dl.push('# re-run. Dynamic groups evaluate their filter at send time, so they maintain themselves.');
+  dl.push('# NOTE: run the Office/Company backfill on the DC and sync FIRST, or these lists will only');
+  dl.push('# include people whose accounts already carry those attributes.');
   dl.push('Connect-ExchangeOnline');
   dl.push('');
-  dl.push('# ---- All employees ----');
-  dl.push(`New-DynamicDistributionGroup -Name "All Employees" -Alias "all-employees" -PrimarySmtpAddress "allemployees@${upnDomain}" -RecipientFilter "Company -eq '${COMPANY}' -and RecipientTypeDetails -eq 'UserMailbox'"`);
-  dl.push('');
-  dl.push('# ---- Per office ----');
-  const usedAlias = new Set<string>(['all-employees']);
+  dl.push('$offices = @(');
+  const usedAlias = new Set<string>(['allemployees']);
   for (const o of offices) {
     let { name, alias } = labelForOffice(o.office);
     while (usedAlias.has(alias)) alias = alias + 'x';
     usedAlias.add(alias);
-    const officeLit = o.office.replace(/'/g, "''");
-    dl.push(`# ${name}  (${o.headcount} active)`);
-    dl.push(`New-DynamicDistributionGroup -Name ${psq(name)} -Alias ${psq(alias)} -PrimarySmtpAddress "${alias}@${upnDomain}" -RecipientFilter "Company -eq '${COMPANY}' -and Office -eq '${officeLit}' -and RecipientTypeDetails -eq 'UserMailbox'"`);
+    dl.push(`  @{ Name = ${psq(name + ' - All Staff')}; Alias = ${psq(alias)}; Smtp = ${psq(alias + '@' + upnDomain)}; Office = ${psq(o.office)} }`);
   }
+  dl.push(')');
+  dl.push('');
+  dl.push('foreach ($o in $offices) {');
+  dl.push(`  $filter = "Company -eq '${COMPANY}' -and Office -eq '$($o.Office.Replace("'","''"))' -and RecipientTypeDetails -eq 'UserMailbox'"`);
+  dl.push('  $g = Get-DynamicDistributionGroup -Identity $o.Smtp -ErrorAction SilentlyContinue');
+  dl.push('  if ($g) {');
+  dl.push('    Set-DynamicDistributionGroup -Identity $g.Identity -DisplayName $o.Name -RecipientFilter $filter');
+  dl.push('    Write-Host "Updated $($o.Name)"');
+  dl.push('  } else {');
+  dl.push('    New-DynamicDistributionGroup -Name $o.Name -Alias $o.Alias -PrimarySmtpAddress $o.Smtp -RecipientFilter $filter');
+  dl.push('    Write-Host "Created $($o.Name)"');
+  dl.push('  }');
+  dl.push('}');
+  dl.push('');
+  dl.push('# ---- All Employees: retire the old static list and move allemployees@ onto the dynamic one ----');
+  dl.push(`$staticAll = Get-DistributionGroup -Identity "allemployees@${upnDomain}" -ErrorAction SilentlyContinue`);
+  dl.push('if ($staticAll) { Remove-DistributionGroup -Identity $staticAll.Identity -Confirm:$false; Write-Host "Removed static All Employees" }');
+  dl.push(`$dynAll = Get-DynamicDistributionGroup -Identity "allemployees-dyn@${upnDomain}" -ErrorAction SilentlyContinue`);
+  dl.push("if (-not $dynAll) { $dynAll = Get-DynamicDistributionGroup -ResultSize Unlimited | Where-Object { $_.DisplayName -like 'All Employees*' } | Select-Object -First 1 }");
+  dl.push('if ($dynAll) {');
+  dl.push(`  Set-DynamicDistributionGroup -Identity $dynAll.Identity -DisplayName "All Employees" -PrimarySmtpAddress "allemployees@${upnDomain}" -RecipientFilter "Company -eq '${COMPANY}' -and RecipientTypeDetails -eq 'UserMailbox'"`);
+  dl.push('  Write-Host "All Employees now at allemployees@ (dynamic)"');
+  dl.push('} else {');
+  dl.push(`  New-DynamicDistributionGroup -Name "All Employees" -Alias "allemployees" -PrimarySmtpAddress "allemployees@${upnDomain}" -RecipientFilter "Company -eq '${COMPANY}' -and RecipientTypeDetails -eq 'UserMailbox'"`);
+  dl.push('}');
   const ddgScript = dl.join('\n');
 
   return {
