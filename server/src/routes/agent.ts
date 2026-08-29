@@ -8,6 +8,7 @@ import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget,
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
+import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -182,6 +183,17 @@ router.get('/api/ad-agent/provision-plan', (req, res) => {
   if (!Number.isFinite(id)) return res.status(400).json({ ok: false, error: 'id required' });
   try { res.json({ ok: true, plan: buildProvisionPlan(id) }); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
+/** Grant function groups to a site's top-level office folders. Body: { site, groups:[], folderTokens:[] }. */
+router.post('/api/ad-agent/sp-grant-location-folders', async (req, res) => {
+  const b = req.body || {};
+  const site = String(b.site || '').trim();
+  const groups = Array.isArray(b.groups) ? b.groups.map((g: any) => String(g)) : [];
+  const tokens = Array.isArray(b.folderTokens) ? b.folderTokens.map((t: any) => String(t)) : [];
+  if (!site || !groups.length) return res.status(400).json({ ok: false, error: 'site and groups required' });
+  const out = await grantGroupsToTopFolders(site, groups, tokens);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Office + All-Employees distribution-list plan: the AD attribute backfill and the EXO
