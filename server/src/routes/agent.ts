@@ -12,6 +12,7 @@ import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants, getTopFolderGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
 import { reconcileBambooAd } from '../services/adBambooReconcile';
+import { createCampaign, sendBatch, sendTest, getCampaignStatus, listFailures } from '../services/emailCampaign';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -211,6 +212,35 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
  *  (enabled AD, terminated in Bamboo), no-Bamboo-match, and active-Bamboo-without-account. */
 router.get('/api/ad-agent/reconcile-bamboo-ad', (_req, res) => {
   res.json(reconcileBambooAd());
+});
+/** Bulk email (server-side, from a shared mailbox via app Mail.Send). Create a campaign with its
+ *  recipient list; then drive /send until done. Body: { from, subject, bodyHtml, saveToSent?, recipients:[{email,name}] } */
+router.post('/api/ad-agent/email-campaign/start', (req, res) => {
+  const b = req.body || {};
+  const out = createCampaign({
+    from: String(b.from || ''), subject: String(b.subject || ''), bodyHtml: String(b.bodyHtml || ''),
+    saveToSent: b.saveToSent, recipients: Array.isArray(b.recipients) ? b.recipients : [],
+  });
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Send ONE test message using the campaign's from/subject/body. Body: { to }. */
+router.post('/api/ad-agent/email-campaign/:id(\\d+)/test', async (req, res) => {
+  const out = await sendTest(parseInt(req.params.id, 10), String((req.body || {}).to || ''));
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Send a bounded batch of pending recipients. Body: { max?, delayMs?, retryFailed? }. Re-call until done. */
+router.post('/api/ad-agent/email-campaign/:id(\\d+)/send', async (req, res) => {
+  const b = req.body || {};
+  const out = await sendBatch(parseInt(req.params.id, 10), b.max ? parseInt(String(b.max), 10) : 12, b.delayMs ? parseInt(String(b.delayMs), 10) : 4000, !!b.retryFailed);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Campaign progress counts. */
+router.get('/api/ad-agent/email-campaign/:id(\\d+)', (req, res) => {
+  res.json(getCampaignStatus(parseInt(req.params.id, 10)));
+});
+/** Failed recipients + errors for a campaign. */
+router.get('/api/ad-agent/email-campaign/:id(\\d+)/failures', (req, res) => {
+  res.json({ ok: true, failures: listFailures(parseInt(req.params.id, 10)) });
 });
 /** Members of any group(s) by displayName prefix, from Entra via Graph. ?prefix=... Used to compare
  *  two groups' membership (e.g. SG-SP-AllStaff vs a redundant "All Users" group). */
