@@ -36,7 +36,29 @@ function ensureTables(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_email_recipients_campaign ON email_recipients(campaign_id, status);
   `);
+  // Optional inline logo (content-ID attachment), added after the fact so existing tables upgrade.
+  for (const col of ['logo_b64 TEXT', 'logo_cid TEXT', 'logo_name TEXT', 'logo_ctype TEXT']) {
+    try { db.exec(`ALTER TABLE email_campaigns ADD COLUMN ${col}`); } catch { /* already there */ }
+  }
   ensured = true;
+}
+
+/** Update a campaign's subject/body and optionally set an inline logo (content-ID attachment). */
+export function updateCampaignContent(id: number, opts: {
+  subject?: string; bodyHtml?: string;
+  logoBase64?: string; logoContentId?: string; logoName?: string; logoContentType?: string;
+}): { ok: boolean; error?: string } {
+  ensureTables();
+  const db = getDb();
+  const c = db.prepare(`SELECT id FROM email_campaigns WHERE id = ?`).get(id);
+  if (!c) return { ok: false, error: 'campaign not found' };
+  if (opts.subject !== undefined) db.prepare(`UPDATE email_campaigns SET subject = ? WHERE id = ?`).run(String(opts.subject), id);
+  if (opts.bodyHtml !== undefined) db.prepare(`UPDATE email_campaigns SET body_html = ? WHERE id = ?`).run(String(opts.bodyHtml), id);
+  if (opts.logoBase64 !== undefined) {
+    db.prepare(`UPDATE email_campaigns SET logo_b64 = ?, logo_cid = ?, logo_name = ?, logo_ctype = ? WHERE id = ?`)
+      .run(opts.logoBase64 || null, opts.logoContentId || 'companylogo', opts.logoName || 'logo.png', opts.logoContentType || 'image/png', id);
+  }
+  return { ok: true };
 }
 
 export interface CampaignStatus {
@@ -72,21 +94,31 @@ export function createCampaign(opts: {
   return { ok: true, id, count: clean.length };
 }
 
-async function graphSendMail(token: string, from: string, to: string, subject: string, bodyHtml: string, saveToSent: boolean): Promise<{ ok: boolean; error?: string }> {
+interface Logo { b64: string; cid: string; name: string; ctype: string }
+
+async function graphSendMail(token: string, from: string, to: string, subject: string, bodyHtml: string, saveToSent: boolean, logo?: Logo | null): Promise<{ ok: boolean; error?: string }> {
+  const message: any = {
+    subject,
+    body: { contentType: 'HTML', content: bodyHtml },
+    toRecipients: [{ emailAddress: { address: to } }],
+  };
+  if (logo && logo.b64) {
+    message.attachments = [{
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: logo.name, contentType: logo.ctype, isInline: true, contentId: logo.cid, contentBytes: logo.b64,
+    }];
+  }
   const res = await fetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(from)}/sendMail`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      message: {
-        subject,
-        body: { contentType: 'HTML', content: bodyHtml },
-        toRecipients: [{ emailAddress: { address: to } }],
-      },
-      saveToSentItems: saveToSent,
-    }),
+    body: JSON.stringify({ message, saveToSentItems: saveToSent }),
   });
   if (res.status === 202 || res.ok) return { ok: true };
   return { ok: false, error: `${res.status}: ${(await res.text()).slice(0, 200)}` };
+}
+
+function logoOf(c: any): Logo | null {
+  return c && c.logo_b64 ? { b64: c.logo_b64, cid: c.logo_cid || 'companylogo', name: c.logo_name || 'logo.png', ctype: c.logo_ctype || 'image/png' } : null;
 }
 
 export function getCampaignStatus(id: number): CampaignStatus {
@@ -115,7 +147,7 @@ export async function sendTest(id: number, to: string): Promise<{ ok: boolean; e
   if (!c) return { ok: false, error: 'campaign not found' };
   const token = await graphToken();
   if (!token) return { ok: false, error: 'Microsoft Graph is not connected' };
-  return graphSendMail(token, c.from_addr, String(to).trim(), c.subject, c.body_html, !!c.save_to_sent);
+  return graphSendMail(token, c.from_addr, String(to).trim(), c.subject, c.body_html, !!c.save_to_sent, logoOf(c));
 }
 
 export interface BatchResult { ok: boolean; error?: string; batchSent: number; batchFailed: number; status: CampaignStatus; }
@@ -140,11 +172,12 @@ export async function sendBatch(id: number, max = 12, delayMs = 4000, retryFaile
 
   const markSent = db.prepare(`UPDATE email_recipients SET status='sent', sent_at=datetime('now'), error=NULL WHERE id=?`);
   const markFail = db.prepare(`UPDATE email_recipients SET status='failed', error=? WHERE id=?`);
+  const logo = logoOf(c);
   let batchSent = 0, batchFailed = 0;
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     // eslint-disable-next-line no-await-in-loop
-    const out = await graphSendMail(token, c.from_addr, r.email, c.subject, c.body_html, !!c.save_to_sent);
+    const out = await graphSendMail(token, c.from_addr, r.email, c.subject, c.body_html, !!c.save_to_sent, logo);
     if (out.ok) { markSent.run(r.id); batchSent++; }
     else { markFail.run(out.error || 'send failed', r.id); batchFailed++; }
     // eslint-disable-next-line no-await-in-loop

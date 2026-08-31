@@ -12,7 +12,7 @@ import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants, getTopFolderGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
 import { reconcileBambooAd } from '../services/adBambooReconcile';
-import { createCampaign, sendBatch, sendTest, getCampaignStatus, listFailures } from '../services/emailCampaign';
+import { createCampaign, sendBatch, sendTest, getCampaignStatus, listFailures, updateCampaignContent } from '../services/emailCampaign';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -220,6 +220,16 @@ router.post('/api/ad-agent/email-campaign/start', (req, res) => {
   const out = createCampaign({
     from: String(b.from || ''), subject: String(b.subject || ''), bodyHtml: String(b.bodyHtml || ''),
     saveToSent: b.saveToSent, recipients: Array.isArray(b.recipients) ? b.recipients : [],
+  });
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Update a campaign's subject/body and optionally set an inline logo. Body:
+ *  { subject?, bodyHtml?, logoBase64?, logoContentId?, logoName?, logoContentType? }. */
+router.post('/api/ad-agent/email-campaign/:id(\\d+)/update', (req, res) => {
+  const b = req.body || {};
+  const out = updateCampaignContent(parseInt(req.params.id, 10), {
+    subject: b.subject, bodyHtml: b.bodyHtml,
+    logoBase64: b.logoBase64, logoContentId: b.logoContentId, logoName: b.logoName, logoContentType: b.logoContentType,
   });
   res.status(out.ok ? 200 : 400).json(out);
 });
