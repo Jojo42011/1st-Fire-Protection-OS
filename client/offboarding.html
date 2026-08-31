@@ -121,16 +121,24 @@ function openReq(id){
     document.getElementById('closeReq').addEventListener('click',function(){OPEN=null;document.getElementById('detail').innerHTML='';});
     document.getElementById('cancelReq').addEventListener('click',function(){if(!confirm('Cancel this offboarding request?'))return;fetch('/api/offboarding/'+id+'/cancel',{method:'POST'}).then(function(){OS.toast('Cancelled.');loadBoard();});});
     document.querySelectorAll('#detail [data-item]').forEach(function(b){b.addEventListener('click',function(){decide(Number(b.getAttribute('data-item')),b.getAttribute('data-verb'));});});
+    document.querySelectorAll('#detail [data-run]').forEach(function(b){b.addEventListener('click',function(){runOnDc(Number(b.getAttribute('data-run')),b);});});
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }
+var DC_ACTIONS={ad_disable:1,groups_remove:1,ad_delete:1}; // steps the DC agent can run
 function itemRow(it){
   var st,ax='';
+  var dc=DC_ACTIONS[it.action_code];
   if(it.status==='pending'){
     st=OS.pill(it.kind==='approval'?'Needs approval':'Pending',it.kind==='approval'?'warn':'neutral');
     if(it.kind==='approval') ax='<button class="btn2 primary" data-item="'+it.id+'" data-verb="approve">Approve</button><button class="btn2 bad" data-item="'+it.id+'" data-verb="reject">Reject</button>';
     else ax='<button class="btn2 primary" data-item="'+it.id+'" data-verb="complete">Done</button><button class="btn2" data-item="'+it.id+'" data-verb="skip">Skip</button>';
-  } else if(it.status==='done'||it.status==='approved'){st=OS.pill(it.status==='approved'?'Approved':'Done','good');}
+    // Task steps the DC can run get a "Run on DC" button. Delete is an approval: it only appears once approved.
+    if(dc && it.kind!=='approval') ax='<button class="btn2 primary" data-run="'+it.id+'">Run on DC</button>'+ax;
+  } else if(it.status==='approved'){
+    st=OS.pill('Approved','good');
+    if(dc) ax='<button class="btn2 bad" data-run="'+it.id+'">Run delete on DC</button>';
+  } else if(it.status==='done'){st=OS.pill('Done','good');}
   else if(it.status==='skipped'){st=OS.pill('Skipped','neutral');}
   else {st=OS.pill('Rejected','bad');}
   return '<div class="oi"><div><div class="lab">'+esc(it.label)+'</div>'+(it.detail?'<div class="dl">'+esc(it.detail)+'</div>':'')+
@@ -138,6 +146,15 @@ function itemRow(it){
     '<div class="ax">'+st+ax+'</div></div>';
 }
 function decide(id,verb){fetch('/api/offboarding/items/'+id+'/'+verb,{method:'POST'}).then(function(r){return r.json();}).then(function(){if(OPEN)openReq(OPEN);});}
+function runOnDc(id,btn){
+  if(!confirm('Queue this action for the domain controller to run?'))return;
+  btn.disabled=true; btn.textContent='Queuing…';
+  fetch('/api/offboarding/items/'+id+'/run-on-dc',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){OS.toast(d.error||'Could not queue.','bad');btn.disabled=false;btn.textContent='Run on DC';return;}
+    OS.toast('Queued on the DC. It runs on the next agent cycle (within ~15 min); the step flips to Done when it reports back.');
+    if(OPEN)openReq(OPEN);
+  }).catch(function(){btn.disabled=false;btn.textContent='Run on DC';OS.toast('Could not queue.','bad');});
+}
 
 /* ---------- backlog ---------- */
 function loadBacklog(){
@@ -175,24 +192,47 @@ function loadBacklog(){
 }
 
 /* ---------- new ---------- */
+var PEOPLE=[], MANAGERS=[];
 function renderNew(){
-  document.getElementById('view').innerHTML=
-    '<form class="of" id="newForm">'+
-    '<div class="fld"><label>Name</label><input type="text" name="name" required></div>'+
-    '<div class="fld"><label>UPN / work email</label><input type="email" name="upn" placeholder="first.last@1stfpservices.com"></div>'+
-    '<div class="fld"><label>Manager email (forward target)</label><input type="email" name="manager_email"></div>'+
-    '<div class="fld"><label>Office</label><input type="text" name="office"></div>'+
-    '<div class="fld"><label>Termination date</label><input type="date" name="termination_date"></div>'+
-    '<div class="fld"><label>Last working day</label><input type="date" name="last_working_date"></div>'+
-    '<div class="fld full"><label class="chk"><input type="checkbox" name="hold"> Keep the mailbox on hold at retention instead of deleting it</label></div>'+
-    '<div class="full"><button type="submit" class="os-btn primary">Start offboarding</button></div>'+
-    '</form>';
-  document.getElementById('newForm').addEventListener('submit',function(e){
-    e.preventDefault(); var f=e.target;
-    var body={name:f.name.value.trim(),upn:f.upn.value.trim()||undefined,manager_email:f.manager_email.value.trim()||undefined,office:f.office.value.trim()||undefined,termination_date:f.termination_date.value||undefined,last_working_date:f.last_working_date.value||undefined,mailbox_action:f.hold.checked?'hold':'delete'};
-    if(!body.name){OS.toast('Name is required.','bad');return;}
-    fetch('/api/offboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-      .then(function(r){return r.json();}).then(function(d){if(!d.ok){OS.toast(d.error||'Could not create.','bad');return;}OS.toast('Offboarding started.');setTab('board');});
+  document.getElementById('view').innerHTML='<div class="empty">Loading employees…</div>';
+  fetch('/api/offboarding/people').then(function(r){return r.json();}).then(function(d){
+    PEOPLE=d.employees||[]; MANAGERS=d.managers||[];
+    var empOpts='<option value="">Select an employee…</option>'+PEOPLE.map(function(p){
+      return '<option value="'+p.id+'">'+esc(p.name)+(p.office?(' — '+esc(p.office)):'')+'</option>';
+    }).join('');
+    // Managers dropdown: prefer email as the value (the forward target); keep name-only ones selectable.
+    var mgrOpts='<option value="">Select a manager…</option>'+MANAGERS.map(function(m){
+      return '<option value="'+esc(m.email||'')+'"'+(m.email?'':' disabled')+'>'+esc(m.name)+(m.email?'':' (no email on file)')+'</option>';
+    }).join('');
+    document.getElementById('view').innerHTML=
+      '<form class="of" id="newForm">'+
+      '<div class="fld full"><label>Employee</label><select name="employee" id="empSel" required>'+empOpts+'</select></div>'+
+      '<div class="fld"><label>UPN / work email</label><input type="email" name="upn" id="empUpn" placeholder="auto-filled" readonly></div>'+
+      '<div class="fld"><label>Office</label><input type="text" name="office" id="empOffice" placeholder="auto-filled" readonly></div>'+
+      '<div class="fld"><label>Manager (forward target)</label><select name="manager_email" id="mgrSel">'+mgrOpts+'</select><div class="sub2" id="mgrHint" style="margin-top:4px"></div></div>'+
+      '<div class="fld"><label>Last working day</label><input type="date" name="last_working_date"></div>'+
+      '<div class="fld"><label>Termination date</label><input type="date" name="termination_date"></div>'+
+      '<div class="fld full"><label class="chk"><input type="checkbox" name="hold"> Keep the mailbox on hold at retention instead of deleting it</label></div>'+
+      '<div class="full"><button type="submit" class="os-btn primary">Start offboarding</button></div>'+
+      '</form>';
+    var sel=document.getElementById('empSel');
+    sel.addEventListener('change',function(){
+      var p=PEOPLE.filter(function(x){return String(x.id)===sel.value;})[0]||{};
+      document.getElementById('empUpn').value=p.upn||p.work_email||'';
+      document.getElementById('empOffice').value=p.office||'';
+      var mgr=document.getElementById('mgrSel'), hint=document.getElementById('mgrHint');
+      // Pre-select the person's real manager.
+      if(p.manager_email){mgr.value=p.manager_email;}
+      else{mgr.value='';}
+      hint.textContent=p.manager?('Manager on file: '+p.manager+(p.manager_email?'':' — no email found, pick one above')):'';
+    });
+    document.getElementById('newForm').addEventListener('submit',function(e){
+      e.preventDefault(); var f=e.target;
+      if(!f.employee.value){OS.toast('Pick an employee.','bad');return;}
+      var body={employee_id:Number(f.employee.value),manager_email:f.manager_email.value||undefined,last_working_date:f.last_working_date.value||undefined,termination_date:f.termination_date.value||undefined,mailbox_action:f.hold.checked?'hold':'delete'};
+      fetch('/api/offboarding',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){return r.json();}).then(function(d){if(!d.ok){OS.toast(d.error||'Could not create.','bad');return;}OS.toast('Offboarding started.');setTab('board');});
+    });
   });
 }
 

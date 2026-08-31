@@ -113,6 +113,19 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
 /* ─────────────────────────── create / read ─────────────────────────── */
 export function createOffboarding(payload: OffboardingPayload): { request: any; items: any[] } {
   const db = getDb();
+  // When the picker passes an employee_id, fill any identity fields the caller left blank.
+  if (payload && payload.employee_id) {
+    const r = resolveOffboardingFromEmployee(Number(payload.employee_id));
+    payload = {
+      ...r, ...payload,
+      name: payload.name || r.name || '',
+      upn: payload.upn || r.upn,
+      sam: payload.sam || r.sam,
+      object_guid: payload.object_guid || r.object_guid,
+      office: payload.office || r.office,
+      manager_email: payload.manager_email || r.manager_email,
+    };
+  }
   if (!payload || !payload.name || !String(payload.name).trim()) throw new Error('name is required');
   const policy = getPolicy();
   const base = payload.last_working_date || payload.termination_date || today();
@@ -232,4 +245,140 @@ function recompute(requestId: number): void {
   const cur = db.prepare(`SELECT status FROM offboarding_requests WHERE id = ?`).get(requestId) as { status: string } | undefined;
   if (cur && cur.status === 'cancelled') return;
   db.prepare(`UPDATE offboarding_requests SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(pending.c === 0 ? 'complete' : 'open', requestId);
+}
+
+/* ─────────────────────────── people picker + manager auto-fill ─────────────────────────── */
+
+const lc = (s: string | null | undefined) => String(s || '').toLowerCase().trim();
+const empFullName = (e: any) => `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim();
+
+/** Name -> work email, over active employees, so a manager's display name (BambooHR stores the manager
+ *  as a name, not an address) can be resolved to an email for forwarding. */
+function nameToEmail(): Map<string, string> {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT legal_first_name, legal_last_name, preferred_name, entra_display_name, work_email
+       FROM employees WHERE work_email IS NOT NULL AND work_email != ''`
+  ).all() as any[];
+  const m = new Map<string, string>();
+  for (const r of rows) {
+    const email = r.work_email;
+    for (const n of [empFullName(r), `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim(), r.entra_display_name]) {
+      if (n) m.set(lc(n), email);
+    }
+  }
+  return m;
+}
+
+export interface PickEmployee {
+  id: number; name: string; work_email: string | null; upn: string | null; sam: string | null;
+  office: string | null; title: string | null; manager: string | null; manager_email: string | null;
+  object_guid: string | null; department: string | null; status: string;
+}
+
+/** Active (not terminated/prehire) employees for the offboarding picker, each with their manager
+ *  resolved to an email. */
+export function listActiveEmployeesForOffboarding(): PickEmployee[] {
+  const db = getDb();
+  const n2e = nameToEmail();
+  const rows = db.prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, work_email, upn,
+            ad_username, entra_object_id, office, department, public_job_title, job_position, manager, employment_status
+       FROM employees
+      WHERE employment_status NOT IN ('terminated','prehire')
+      ORDER BY legal_last_name, legal_first_name`
+  ).all() as any[];
+  return rows.map((e) => ({
+    id: e.id,
+    name: empFullName(e) || e.work_email || `#${e.id}`,
+    work_email: e.work_email || null,
+    upn: e.upn || null,
+    sam: e.ad_username || null,
+    office: e.office || null,
+    title: e.public_job_title || e.job_position || null,
+    manager: e.manager || null,
+    manager_email: e.manager ? (n2e.get(lc(e.manager)) || null) : null,
+    object_guid: e.entra_object_id || null,
+    department: e.department || null,
+    status: e.employment_status,
+  }));
+}
+
+/** Distinct managers among active employees, resolved to an email where possible, for the dropdown. */
+export function listManagers(): { name: string; email: string | null }[] {
+  const db = getDb();
+  const n2e = nameToEmail();
+  const rows = db.prepare(
+    `SELECT DISTINCT manager FROM employees
+      WHERE manager IS NOT NULL AND manager != '' AND employment_status NOT IN ('terminated','prehire')
+      ORDER BY manager`
+  ).all() as { manager: string }[];
+  return rows.map((r) => ({ name: r.manager, email: n2e.get(lc(r.manager)) || null }));
+}
+
+/** Fill in a departing person's identity from their employee row when the caller passes employee_id. */
+export function resolveOffboardingFromEmployee(employeeId: number): Partial<OffboardingPayload> {
+  const db = getDb();
+  const e = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(employeeId) as any;
+  if (!e) return {};
+  const n2e = nameToEmail();
+  // Prefer the AD mirror for sam/guid if the employee row is thin.
+  const ad = db.prepare(
+    `SELECT sam, upn, object_guid FROM ad_users WHERE (upn IS NOT NULL AND lower(upn)=lower(?)) OR (sam IS NOT NULL AND lower(sam)=lower(?)) LIMIT 1`
+  ).get(e.upn || e.work_email || '', e.ad_username || '') as any;
+  return {
+    employee_id: e.id,
+    name: empFullName(e),
+    upn: e.upn || (ad && ad.upn) || e.work_email || undefined,
+    sam: e.ad_username || (ad && ad.sam) || undefined,
+    object_guid: e.entra_object_id || (ad && ad.object_guid) || undefined,
+    office: e.office || undefined,
+    manager_email: e.manager ? (n2e.get(lc(e.manager)) || undefined) : undefined,
+  };
+}
+
+/* ─────────────────────────── DC-executable actions ─────────────────────────── */
+
+// Which checklist actions the DC agent can run on-prem, and the job kind each maps to.
+const AD_JOB_KIND: Record<string, string> = {
+  ad_disable: 'ad_disable_user',
+  groups_remove: 'ad_remove_groups',
+  ad_delete: 'ad_delete_user',
+};
+
+export function isDcExecutable(actionCode: string): boolean {
+  return !!AD_JOB_KIND[actionCode];
+}
+
+/** Build the DC agent job (kind + payload) for one offboarding item, or an error if it is not a
+ *  DC-executable action or the person cannot be resolved to a SAM. */
+export function buildItemJob(itemId: number): { ok: boolean; error?: string; kind?: string; payload?: any; requestId?: number } {
+  const db = getDb();
+  const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return { ok: false, error: 'item not found' };
+  const kind = AD_JOB_KIND[item.action_code];
+  if (!kind) return { ok: false, error: `"${item.action_code}" is not a DC-executable action (mailbox/cloud steps run elsewhere)` };
+  const req = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(item.request_id) as any;
+  if (!req) return { ok: false, error: 'request not found' };
+  // Resolve the SAM: request, else the AD mirror by upn/guid.
+  let sam = req.sam as string | null;
+  let upn = req.upn as string | null;
+  if (!sam) {
+    const ad = db.prepare(
+      `SELECT sam, upn FROM ad_users WHERE (object_guid IS NOT NULL AND object_guid = ?) OR (upn IS NOT NULL AND lower(upn)=lower(?)) LIMIT 1`
+    ).get(req.object_guid || '', req.upn || '') as any;
+    if (ad) { sam = sam || ad.sam; upn = upn || ad.upn; }
+  }
+  if (!sam) return { ok: false, error: 'no sAMAccountName on file for this person; set it on the request first' };
+  return { ok: true, kind, requestId: req.id, payload: { sam, upn, name: req.name, requestId: req.id } };
+}
+
+/** Called by the job queue when a DC offboarding job finishes: mark the linked item done. */
+export function applyOffboardingJobResult(itemId: number, _kind: string, _result: any): void {
+  const db = getDb();
+  const item = db.prepare(`SELECT status FROM offboarding_items WHERE id = ?`).get(itemId) as { status: string } | undefined;
+  if (!item || item.status !== 'pending') return;
+  db.prepare(`UPDATE offboarding_items SET status = 'done', decided_by = 'dc-agent', decided_at = datetime('now') WHERE id = ?`).run(itemId);
+  const reqRow = db.prepare(`SELECT request_id FROM offboarding_items WHERE id = ?`).get(itemId) as { request_id: number } | undefined;
+  if (reqRow) recompute(reqRow.request_id);
 }

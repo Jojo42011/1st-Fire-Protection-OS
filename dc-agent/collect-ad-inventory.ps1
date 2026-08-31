@@ -165,6 +165,47 @@ if (-not $Ping) {
               $ok = $true
             }
           }
+          'ad_disable_user' {
+            # Offboarding: disable the account and reset its password so cached creds / open sessions
+            # cannot re-authenticate.
+            $p = $job.payload
+            $u = Get-ADUser -Filter "SamAccountName -eq '$($p.sam)'" -ErrorAction SilentlyContinue
+            if (-not $u) { $err = "no account for $($p.sam)" }
+            else {
+              Disable-ADAccount -Identity $u -ErrorAction Stop
+              $rnd = -join ((48..57)+(65..90)+(97..122)+(33,35,36,37,38,42) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
+              Set-ADAccountPassword -Identity $u -Reset -NewPassword (ConvertTo-SecureString $rnd -AsPlainText -Force) -ErrorAction Stop
+              $result = @{ sam = $p.sam; disabled = $true; passwordReset = $true }
+              $ok = $true
+            }
+          }
+          'ad_remove_groups' {
+            # Offboarding: remove from every group. MemberOf excludes the primary group (Domain Users),
+            # so that one is left in place, which is correct.
+            $p = $job.payload
+            $u = Get-ADUser -Filter "SamAccountName -eq '$($p.sam)'" -Properties MemberOf -ErrorAction SilentlyContinue
+            if (-not $u) { $err = "no account for $($p.sam)" }
+            else {
+              $removed = @(); $failed = @()
+              foreach ($dn in @($u.MemberOf)) {
+                try { Remove-ADGroupMember -Identity $dn -Members $u -Confirm:$false -ErrorAction Stop; $removed += $dn }
+                catch { $failed += "$dn : $($_.Exception.Message)" }
+              }
+              $result = @{ sam = $p.sam; removed = $removed; removedCount = $removed.Count; failed = $failed }
+              $ok = $true
+            }
+          }
+          'ad_delete_user' {
+            # Offboarding retire: delete the AD object (hybrid sync then removes the synced identity).
+            $p = $job.payload
+            $u = Get-ADUser -Filter "SamAccountName -eq '$($p.sam)'" -ErrorAction SilentlyContinue
+            if (-not $u) { $result = @{ sam = $p.sam; note = 'already absent' }; $ok = $true }
+            else {
+              Remove-ADUser -Identity $u -Confirm:$false -ErrorAction Stop
+              $result = @{ sam = $p.sam; deleted = $true }
+              $ok = $true
+            }
+          }
           default { $err = "unknown job kind: $($job.kind)" }
         }
       } catch {

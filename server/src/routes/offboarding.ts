@@ -9,6 +9,9 @@ import {
   setPolicy,
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
+import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
+import { getDb } from '../db/index';
+import { enqueue, latestJobForRef } from '../services/dcJobs';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
@@ -26,6 +29,34 @@ router.post('/api/offboarding', (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** Active employees for the offboarding picker, each with manager resolved to an email. */
+router.get('/api/offboarding/people', (_req, res) => {
+  res.json({ ok: true, employees: listActiveEmployeesForOffboarding(), managers: listManagers() });
+});
+
+/** Enqueue a DC agent job for one offboarding item (disable / remove groups / hide GAL / delete).
+ *  Destructive deletes must be approved first. Returns the queued job. */
+router.post('/api/offboarding/items/:id(\\d+)/run-on-dc', (req, res) => {
+  const itemId = Number(req.params.id);
+  const db = getDb();
+  const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return res.status(404).json({ ok: false, error: 'item not found' });
+  if (!isDcExecutable(item.action_code)) return res.status(400).json({ ok: false, error: 'this step is not run on the DC (mailbox/cloud steps run elsewhere)' });
+  if (item.kind === 'approval' && item.status !== 'approved') {
+    return res.status(400).json({ ok: false, error: 'approve this step before running it on the DC' });
+  }
+  const built = buildItemJob(itemId);
+  if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
+  const job = enqueue(built.kind as any, built.payload, { type: 'offboarding_item', id: itemId }, actor(req));
+  res.json({ ok: true, job, kind: built.kind });
+});
+
+/** Latest DC job status for one offboarding item, for the UI to poll. */
+router.get('/api/offboarding/items/:id(\\d+)/job', (req, res) => {
+  const j = latestJobForRef('offboarding_item', Number(req.params.id));
+  res.json({ ok: true, job: j ? { id: j.id, kind: j.kind, status: j.status, error: j.error, finished_at: j.finished_at } : null });
 });
 
 /** The editable retention policy (forward + retain days). */

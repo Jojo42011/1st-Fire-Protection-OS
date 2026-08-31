@@ -1,5 +1,6 @@
 import { getDb } from '../db/index';
 import { applyCreateUserResult } from './onboardingAgent';
+import { applyOffboardingJobResult } from './offboardingAgent';
 import { enqueueLicense } from './entraLicensing';
 
 /**
@@ -13,7 +14,11 @@ import { enqueueLicense } from './entraLicensing';
 
 const STALE_MINUTES = 10; // a claimed job not finished within this is returned to the queue
 
-export type DcJobKind = 'ad_create_user';
+export type DcJobKind =
+  | 'ad_create_user'
+  | 'ad_disable_user'   // disable the account + reset the password (kills sign-in)
+  | 'ad_remove_groups'  // remove from every group except the primary (Domain Users)
+  | 'ad_delete_user';   // delete the AD object (retire); approval-gated before enqueue
 
 export interface EnqueueRef { type: string; id: number }
 
@@ -73,6 +78,11 @@ function dispatchSideEffects(job: any, result: any): void {
     const payload = safeParse(job.payload_json);
     const upn = result.upn || payload.upn;
     if (upn && payload.licenseSku) enqueueLicense(String(upn), String(payload.licenseSku), { type: 'onboarding_request', id: Number(job.ref_id) });
+  }
+  // Offboarding AD actions are reffed to the specific offboarding item; marking it done closes the
+  // matching checklist step when the DC reports success.
+  if (job.ref_type === 'offboarding_item' && job.ref_id && /^ad_(disable_user|remove_groups|delete_user)$/.test(job.kind)) {
+    applyOffboardingJobResult(Number(job.ref_id), job.kind, result);
   }
 }
 
