@@ -11,6 +11,7 @@ import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
+import { reconcileBambooAd } from '../services/adBambooReconcile';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -205,6 +206,11 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
   const md = b.maxDepth === null || b.maxDepth === undefined ? 2 : parseInt(String(b.maxDepth), 10);
   const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
   res.status(out.ok ? 200 : 400).json(out);
+});
+/** Reconcile enabled AD accounts against BambooHR (source of truth). Reports offboarding debt
+ *  (enabled AD, terminated in Bamboo), no-Bamboo-match, and active-Bamboo-without-account. */
+router.get('/api/ad-agent/reconcile-bamboo-ad', (_req, res) => {
+  res.json(reconcileBambooAd());
 });
 /** Members of any group(s) by displayName prefix, from Entra via Graph. ?prefix=... Used to compare
  *  two groups' membership (e.g. SG-SP-AllStaff vs a redundant "All Users" group). */
