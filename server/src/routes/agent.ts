@@ -9,7 +9,7 @@ import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
-import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants } from '../services/spSiteGroupCleanup';
+import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants, getTopFolderGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
 import { reconcileBambooAd } from '../services/adBambooReconcile';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
@@ -225,6 +225,13 @@ router.get('/api/ad-agent/group-members', async (req, res) => {
 router.get('/api/ad-agent/sp-allstaff-script', (req, res) => {
   const ou = req.query.ou ? String(req.query.ou) : undefined;
   const out = buildAllStaffGroupPlan(ou);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Per top-level folder: unique vs inherited, and who is granted (group/siteGroup/user). ?site=... */
+router.get('/api/ad-agent/sp-folder-grants', async (req, res) => {
+  const site = String(req.query.site || '').trim();
+  if (!site) return res.status(400).json({ ok: false, error: 'site required' });
+  const out = await getTopFolderGrants(site);
   res.status(out.ok ? 200 : 400).json(out);
 });
 /** What a new top-level folder inherits: the permissions on each drive's root. ?site=... */

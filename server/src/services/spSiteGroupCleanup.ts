@@ -120,6 +120,57 @@ export async function getDriveRootGrants(site: string): Promise<RootGrantsResult
   }
 }
 
+export interface FolderGrant { kind: 'group' | 'siteGroup' | 'user'; name: string; roles: string; inherited: boolean; }
+export interface TopFolderPerms {
+  ok: boolean; error?: string;
+  folders: { drive: string; folder: string; unique: boolean; grants: FolderGrant[] }[];
+}
+
+/**
+ * For every top-level folder in the site's drives, report whether it has UNIQUE permissions (broken
+ * inheritance) and exactly who is granted (groups, classic site groups, and individual people) with
+ * their role and whether that grant is inherited. This answers "is the Accounting folder actually
+ * granted to SG-SP-Accounting, and is it broken from the library root?" and shows which folders still
+ * inherit (so a root-level group like Shared Members can see them) versus which are locked to their
+ * own groups.
+ */
+export async function getTopFolderGrants(site: string): Promise<TopFolderPerms> {
+  const token = await graphToken();
+  if (!token) return { ok: false, error: 'Microsoft Graph is not connected', folders: [] };
+  try {
+    const u = new URL(site);
+    const path = u.pathname.replace(/\/$/, '');
+    const s = await gget(`https://graph.microsoft.com/v1.0/sites/${u.host}:${path}?$select=id`, token);
+    const dv = await gget(`https://graph.microsoft.com/v1.0/sites/${s.id}/drives?$select=id,name`, token);
+    const folders: TopFolderPerms['folders'] = [];
+    for (const d of (dv.value || []) as { id: string; name: string }[]) {
+      // eslint-disable-next-line no-await-in-loop
+      const kids = await gget(`https://graph.microsoft.com/v1.0/drives/${d.id}/root/children?$select=id,name,folder&$top=400`, token);
+      for (const it of (kids.value || [])) {
+        if (!it.folder) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const perms = await gget(`https://graph.microsoft.com/v1.0/drives/${d.id}/items/${it.id}/permissions?$top=200`, token);
+        const grants: FolderGrant[] = [];
+        let anyUnique = false;
+        for (const p of (perms.value || [])) {
+          const inherited = !!p.inheritedFrom;
+          if (!inherited) anyUnique = true;
+          const principals = [p.grantedToV2, ...(p.grantedToIdentitiesV2 || [])].filter(Boolean);
+          for (const gp of principals) {
+            if (gp.group) grants.push({ kind: 'group', name: gp.group.displayName || '(group)', roles: (p.roles || []).join('/'), inherited });
+            else if (gp.siteGroup) grants.push({ kind: 'siteGroup', name: gp.siteGroup.displayName || '(site group)', roles: (p.roles || []).join('/'), inherited });
+            else if (gp.user) grants.push({ kind: 'user', name: gp.user.displayName || '(user)', roles: (p.roles || []).join('/'), inherited });
+          }
+        }
+        folders.push({ drive: d.name, folder: it.name, unique: anyUnique, grants });
+      }
+    }
+    return { ok: true, folders };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message, folders: [] };
+  }
+}
+
 // Old SharePoint group name -> modern SG-SP token. Most map by name; a couple of abbreviations need
 // an explicit alias.
 const ALIAS: Record<string, string> = { acct: 'accounting', mgmt: 'management' };
