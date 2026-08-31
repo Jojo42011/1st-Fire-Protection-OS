@@ -267,15 +267,27 @@ function mgrEmail(n2e: Map<string, string>, name: string | null | undefined): st
  *  as a name, not an address) can be resolved to an email for forwarding. */
 function nameToEmail(): Map<string, string> {
   const db = getDb();
+  const m = new Map<string, string>();
+  // BambooHR employees first (their work email is the preferred forward target).
   const rows = db.prepare(
     `SELECT legal_first_name, legal_last_name, preferred_name, entra_display_name, work_email
        FROM employees WHERE work_email IS NOT NULL AND work_email != ''`
   ).all() as any[];
-  const m = new Map<string, string>();
   for (const r of rows) {
     const email = r.work_email;
     for (const n of [empFullName(r), `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim(), r.entra_display_name]) {
-      if (n) m.set(lc(n), email);
+      if (n && !m.has(lc(n))) m.set(lc(n), email);
+    }
+  }
+  // Fall back to the AD/Entra mirror for anyone the BambooHR table did not cover (email, else UPN).
+  const ad = db.prepare(
+    `SELECT display_name, given_name, surname, email, upn FROM ad_users WHERE enabled = 1`
+  ).all() as any[];
+  for (const a of ad) {
+    const addr = a.email || a.upn;
+    if (!addr) continue;
+    for (const n of [a.display_name, `${a.given_name || ''} ${a.surname || ''}`.trim()]) {
+      if (n && !m.has(lc(n))) m.set(lc(n), addr);
     }
   }
   return m;
