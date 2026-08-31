@@ -230,7 +230,9 @@ function renderNew(){
   document.getElementById('view').innerHTML='<div class="empty">Loading employees…</div>';
   fetch('/api/offboarding/people').then(function(r){return r.json();}).then(function(d){
     PEOPLE=d.employees||[];
-    var withEmail=PEOPLE.filter(function(p){return p.work_email;});
+    // Forward target can be ANY active employee with a usable address (work email, else UPN).
+    var emailOf=function(p){return p.work_email||p.upn||'';};
+    var withEmail=PEOPLE.filter(function(p){return emailOf(p);});
     var box='position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card,#fff);border:1px solid var(--divider,#ddd);border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.14)';
     document.getElementById('view').innerHTML=
       '<form class="of" id="newForm">'+
@@ -243,7 +245,7 @@ function renderNew(){
       '<div class="fld full"><label class="chk"><input type="checkbox" name="hold"> Keep the mailbox on hold at retention instead of deleting it</label></div>'+
       '<div class="full"><button type="submit" class="os-btn primary">Start offboarding</button></div>'+
       '</form>';
-    var mgrCombo=combo('mgrSearch','mgrEmail','mgrList',withEmail,function(p){return p.name;},function(p){return p.work_email;});
+    var mgrCombo=combo('mgrSearch','mgrEmail','mgrList',withEmail,function(p){return p.name+(p.office?(' — '+p.office):'');},function(p){return emailOf(p);});
     combo('empSearch','empId','empList',PEOPLE,function(p){return p.name+(p.office?(' — '+p.office):'');},function(p){return p.id;},function(p){
       document.getElementById('empUpn').value=p.upn||p.work_email||'';
       document.getElementById('empOffice').value=p.office||'';
