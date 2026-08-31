@@ -32,8 +32,12 @@ export function buildExchangeScript(requestId: number): ExchangeScript {
   L.push(`$Fwd = ${psq(fwd)}`);
   L.push('');
   L.push('# ============ Last working day ============');
-  L.push('# Hide from the global address list');
-  L.push('Set-Mailbox -Identity $U -HiddenFromAddressListsEnabled $true');
+  L.push('# Hide from the global address list. This mailbox is synced from on-prem AD, so Exchange Online');
+  L.push('# refuses HiddenFromAddressListsEnabled here; it must be set on-prem, and only if the AD Exchange');
+  L.push('# schema is present. On a domain controller (then Start-ADSyncSyncCycle -PolicyType Delta):');
+  L.push(`#   Set-ADUser -Identity ${r.sam ? psq(r.sam) : "<sam>"} -Replace @{ msExchHideFromAddressLists = $true }`);
+  L.push('# If that errors "attribute does not exist", the schema is not extended: skip GAL-hide. The');
+  L.push('# account is disabled now and drops off the GAL when it is deleted at retention.');
   L.push('');
   L.push(`# Forward new mail to the manager and keep a copy in the mailbox (until ${r.forward_until || 'the forward date'})`);
   L.push('if ($Fwd) { Set-Mailbox -Identity $U -ForwardingAddress $Fwd -DeliverToMailboxAndForward $true }');
