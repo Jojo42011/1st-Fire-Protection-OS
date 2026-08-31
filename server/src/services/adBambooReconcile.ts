@@ -51,9 +51,16 @@ export interface ReconRow { name: string; upn: string | null; sam: string | null
 export interface ReconResult {
   ok: boolean;
   counts: { enabledAd: number; activeBamboo: number; active: number; offboardingDebt: number; noBambooMatch: number; missingAccount: number };
+  activePairedSams: string[];
   offboardingDebt: ReconRow[];
   noBambooMatch: ReconRow[];
   missingAccount: ReconRow[];
+}
+
+/** The SAMs of enabled AD accounts that pair to an active BambooHR employee. This is the correct
+ *  membership for SG-SP-AllStaff (everyone employed who has an account), not raw AD-enabled. */
+export function activePairedAdSams(): string[] {
+  return reconcileBambooAd().activePairedSams;
 }
 
 export function reconcileBambooAd(): ReconResult {
@@ -112,6 +119,7 @@ export function reconcileBambooAd(): ReconResult {
 
   const offboardingDebt: ReconRow[] = [];
   const noBambooMatch: ReconRow[] = [];
+  const activePairedSams: string[] = [];
   const matchedEmp = new Set<typeof emps[number]>();
   let activeCount = 0;
   for (const u of adUsers) {
@@ -120,7 +128,7 @@ export function reconcileBambooAd(): ReconResult {
     const row: ReconRow = { name: u.dn || `${u.given || ''} ${u.surname || ''}`.trim(), upn: u.upn, sam: u.sam };
     if (!e) { noBambooMatch.push(row); continue; }
     matchedEmp.add(e);
-    if (isActive(e.status)) { activeCount++; continue; }
+    if (isActive(e.status)) { activeCount++; activePairedSams.push(u.sam); continue; }
     row.bambooStatus = e.status;
     row.bambooName = `${e.pref || e.lf || ''} ${e.ll || ''}`.trim();
     offboardingDebt.push(row);
@@ -145,6 +153,7 @@ export function reconcileBambooAd(): ReconResult {
       noBambooMatch: noBambooMatch.length,
       missingAccount: missingAccount.length,
     },
+    activePairedSams: activePairedSams.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())),
     offboardingDebt: offboardingDebt.sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     noBambooMatch: noBambooMatch.sort((a, b) => (a.name || '').localeCompare(b.name || '')),
     missingAccount: missingAccount.sort((a, b) => (a.name || '').localeCompare(b.name || '')),

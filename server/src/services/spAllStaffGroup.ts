@@ -1,4 +1,4 @@
-import { getDb } from '../db/index';
+import { reconcileBambooAd } from './adBambooReconcile';
 
 /**
  * SG-SP-AllStaff: a single security group holding every active employee, granted READ at the Shared
@@ -6,9 +6,10 @@ import { getDb } from '../db/index';
  * folders their location/function group grants them). This replaces the old pile of per-office
  * "<Office> employees" site groups that used to sit on the root: one clean group instead of fifteen.
  *
- * Membership is the same active-employee -> AD-account join the distribution-list plan uses, so the
- * group tracks real staff. New hires flow in because provisioning adds SG-SP-AllStaff to every new
- * account; this script re-syncs the existing population and is safe to re-run.
+ * Membership is the reconciled active-paired set (BambooHR is the source of truth for who is employed):
+ * enabled AD accounts that pair to an ACTIVE BambooHR person via smart name matching. Leavers whose
+ * account is still enabled are excluded. New hires flow in because provisioning adds SG-SP-AllStaff to
+ * every new account; this script re-syncs the existing population and is safe to re-run.
  */
 
 const DEFAULT_SP_OU = 'OU=SharePoint,OU=SECURITY,OU=GROUPS,OU=1FP,DC=ad,DC=1stfpservices,DC=com';
@@ -28,38 +29,12 @@ export interface AllStaffPlan {
 /** Resolve every active employee to at most one enabled AD account and return the SAM list + a
  *  create-and-populate PowerShell script for SG-SP-AllStaff. */
 export function buildAllStaffGroupPlan(ou = DEFAULT_SP_OU): AllStaffPlan {
-  const db = getDb();
-  const adUsers = db.prepare(
-    `SELECT sam, upn, email, given_name, surname FROM ad_users WHERE enabled = 1 AND sam IS NOT NULL AND sam != ''`
-  ).all() as { sam: string; upn: string | null; email: string | null; given_name: string | null; surname: string | null }[];
-  const byEmail = new Map<string, typeof adUsers[number]>();
-  const byUpn = new Map<string, typeof adUsers[number]>();
-  const bySam = new Map<string, typeof adUsers[number]>();
-  const byName = new Map<string, typeof adUsers[number]>();
-  const lc = (s: string | null | undefined) => String(s || '').toLowerCase().trim();
-  for (const a of adUsers) {
-    if (a.email) byEmail.set(lc(a.email), a);
-    if (a.upn) byUpn.set(lc(a.upn), a);
-    if (a.sam) bySam.set(lc(a.sam), a);
-    if (a.given_name && a.surname) byName.set(lc(a.given_name) + '|' + lc(a.surname), a);
-  }
-  const emps = db.prepare(
-    `SELECT legal_first_name AS first, legal_last_name AS last, work_email AS email, ad_username
-       FROM employees WHERE employment_status NOT IN ('terminated', 'prehire')`
-  ).all() as { first: string; last: string; email: string | null; ad_username: string | null }[];
-
-  const usedSam = new Set<string>();
-  const sams: string[] = [];
-  const noAccount: string[] = [];
-  for (const e of emps) {
-    const hit =
-      (e.email && (byEmail.get(lc(e.email)) || byUpn.get(lc(e.email)))) ||
-      (e.ad_username && bySam.get(lc(e.ad_username))) ||
-      byName.get(lc(e.first) + '|' + lc(e.last)) || null;
-    if (hit && !usedSam.has(lc(hit.sam))) { usedSam.add(lc(hit.sam)); sams.push(hit.sam); }
-    else if (!hit) noAccount.push(`${e.first || ''} ${e.last || ''}`.trim() || (e.email || ''));
-  }
-  sams.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  // Membership is the reconciled active-paired set: enabled AD accounts that pair to an ACTIVE
+  // BambooHR employee (BambooHR is the source of truth for who is employed). This excludes leavers
+  // whose account is still enabled, and uses smart name pairing (preferred name, nicknames, suffixes).
+  const result = reconcileBambooAd();
+  const sams = [...result.activePairedSams].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const noAccount = result.missingAccount.map((r) => r.name || r.upn || '').filter(Boolean);
 
   const L: string[] = [];
   L.push('# Create SG-SP-AllStaff (if needed) and set its membership to every active employee, on-prem.');
