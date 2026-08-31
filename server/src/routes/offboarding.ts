@@ -10,6 +10,7 @@ import {
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
+import { buildExchangeScript } from '../services/offboardingExchange';
 import { getDb } from '../db/index';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 
@@ -57,6 +58,12 @@ router.post('/api/offboarding/items/:id(\\d+)/run-on-dc', (req, res) => {
 router.get('/api/offboarding/items/:id(\\d+)/job', (req, res) => {
   const j = latestJobForRef('offboarding_item', Number(req.params.id));
   res.json({ ok: true, job: j ? { id: j.id, kind: j.kind, status: j.status, error: j.error, finished_at: j.finished_at } : null });
+});
+
+/** The Exchange Online offboarding script (mailbox/license/GAL/forwarding) for one request. */
+router.get('/api/offboarding/:id(\\d+)/exchange-script', (req, res) => {
+  const out = buildExchangeScript(Number(req.params.id));
+  res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** The editable retention policy (forward + retain days). */
