@@ -206,6 +206,14 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
   const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
   res.status(out.ok ? 200 : 400).json(out);
 });
+/** Members of any group(s) by displayName prefix, from Entra via Graph. ?prefix=... Used to compare
+ *  two groups' membership (e.g. SG-SP-AllStaff vs a redundant "All Users" group). */
+router.get('/api/ad-agent/group-members', async (req, res) => {
+  const prefix = String(req.query.prefix || '').slice(0, 64);
+  if (!prefix) return res.status(400).json({ ok: false, error: 'prefix required' });
+  const out = await listGroupsWithMembers(prefix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
 /** Create/populate SG-SP-AllStaff (all active employees) so everyone can traverse the Shared root.
  *  Returns an on-prem PowerShell script + member count. ?ou= overrides the default SharePoint OU. */
 router.get('/api/ad-agent/sp-allstaff-script', (req, res) => {
