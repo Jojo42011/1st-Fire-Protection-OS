@@ -240,6 +240,9 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
       else warnings.push(`Could not map SharePoint group "${m[1].trim()}" to an SG-SP name; add SharePoint access by hand.`);
     }
   }
+  // Everyone needs SG-SP-AllStaff: it grants read/traversal at the Shared drive root so the person can
+  // navigate the library (and OneDrive can walk down to the folders their location group grants them).
+  if (!sharepointGroups.some((g) => g.toLowerCase() === 'sg-sp-allstaff')) sharepointGroups.push('SG-SP-AllStaff');
   const displayName = [first, last].filter(Boolean).join(' ') || request.name;
 
   return {

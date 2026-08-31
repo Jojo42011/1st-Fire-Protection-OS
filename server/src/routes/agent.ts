@@ -10,6 +10,7 @@ import { buildProvisionPlan, buildProvisionScript } from '../services/adProvisio
 import { buildOfficeDlPlan } from '../services/distributionLists';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants } from '../services/spSiteGroupCleanup';
+import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
 import { convertFolder } from '../services/spFolderConvert';
@@ -203,6 +204,13 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
   const md = b.maxDepth === null || b.maxDepth === undefined ? 2 : parseInt(String(b.maxDepth), 10);
   const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Create/populate SG-SP-AllStaff (all active employees) so everyone can traverse the Shared root.
+ *  Returns an on-prem PowerShell script + member count. ?ou= overrides the default SharePoint OU. */
+router.get('/api/ad-agent/sp-allstaff-script', (req, res) => {
+  const ou = req.query.ou ? String(req.query.ou) : undefined;
+  const out = buildAllStaffGroupPlan(ou);
   res.status(out.ok ? 200 : 400).json(out);
 });
 /** What a new top-level folder inherits: the permissions on each drive's root. ?site=... */
