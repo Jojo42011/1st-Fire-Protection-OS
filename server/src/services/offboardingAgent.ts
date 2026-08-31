@@ -396,6 +396,20 @@ export function buildItemJob(itemId: number): { ok: boolean; error?: string; kin
   return { ok: true, kind, requestId: req.id, payload: { sam, upn, name: req.name, requestId: req.id } };
 }
 
+/** Mark one offboarding task done when the DC offboarding script reports it succeeded. Approvals are
+ *  refused (they must be approved in the app); a non-pending item is left as-is. */
+export function completeItemByScript(itemId: number): { ok: boolean; error?: string } {
+  const db = getDb();
+  const item = db.prepare(`SELECT request_id, status, kind FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return { ok: false, error: 'item not found' };
+  if (item.kind === 'approval') return { ok: false, error: 'approval item; approve it in the app' };
+  if (item.status === 'pending') {
+    db.prepare(`UPDATE offboarding_items SET status = 'done', decided_by = 'dc-script', decided_at = datetime('now') WHERE id = ?`).run(itemId);
+    recompute(item.request_id);
+  }
+  return { ok: true };
+}
+
 /** Called by the job queue when a DC offboarding job finishes: mark the linked item done. */
 export function applyOffboardingJobResult(itemId: number, _kind: string, _result: any): void {
   const db = getDb();

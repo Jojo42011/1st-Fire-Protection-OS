@@ -12,6 +12,7 @@ import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants, getTopFolderGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
 import { reconcileBambooAd } from '../services/adBambooReconcile';
+import { completeItemByScript } from '../services/offboardingAgent';
 import { createCampaign, sendBatch, sendTest, getCampaignStatus, listFailures, updateCampaignContent } from '../services/emailCampaign';
 import { spAccessAudit, flaggedRemovals } from '../services/spAccessAudit';
 import { spDirectShares, removeSharePermission } from '../services/spDirectShares';
@@ -206,6 +207,12 @@ router.post('/api/ad-agent/sp-sitegroup-replace', async (req, res) => {
   if (!site) return res.status(400).json({ ok: false, error: 'site required' });
   const md = b.maxDepth === null || b.maxDepth === undefined ? 2 : parseInt(String(b.maxDepth), 10);
   const out = await replaceSiteGroupsWithModern(site, Number.isFinite(md) ? md : null, !!b.dryRun);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+/** Mark one offboarding checklist task done, called by the DC offboarding script when a step
+ *  succeeds (agent-token gated). Approvals are refused. */
+router.post('/api/ad-agent/offboarding-item/:id(\\d+)/complete', (req, res) => {
+  const out = completeItemByScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
 /** Reconcile enabled AD accounts against BambooHR (source of truth). Reports offboarding debt

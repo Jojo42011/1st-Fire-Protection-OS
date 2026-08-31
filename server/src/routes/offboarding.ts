@@ -10,7 +10,7 @@ import {
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
-import { buildExchangeScript } from '../services/offboardingExchange';
+import { buildExchangeScript, buildDcOffboardingScript } from '../services/offboardingExchange';
 import { getDb } from '../db/index';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 
@@ -63,6 +63,13 @@ router.get('/api/offboarding/items/:id(\\d+)/job', (req, res) => {
 /** The Exchange Online offboarding script (mailbox/license/GAL/forwarding) for one request. */
 router.get('/api/offboarding/:id(\\d+)/exchange-script', (req, res) => {
   const out = buildExchangeScript(Number(req.params.id));
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** The all-in-one DC offboarding script: AD steps + mailbox steps, each reporting back so the app
+ *  marks only the tasks that actually succeed. */
+router.get('/api/offboarding/:id(\\d+)/dc-script', (req, res) => {
+  const out = buildDcOffboardingScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
 
