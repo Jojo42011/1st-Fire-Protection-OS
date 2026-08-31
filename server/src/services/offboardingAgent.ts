@@ -251,6 +251,17 @@ function recompute(requestId: number): void {
 
 const lc = (s: string | null | undefined) => String(s || '').toLowerCase().trim();
 const empFullName = (e: any) => `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim();
+// BambooHR stores a manager as "Last, First"; employee names are "First Last". Flip so they match.
+const flipComma = (s: string) => {
+  const t = String(s || '').trim();
+  if (t.includes(',')) { const [last, ...rest] = t.split(','); return `${rest.join(',').trim()} ${last.trim()}`.trim(); }
+  return t;
+};
+/** Resolve a manager name (either order) to a work email via the name->email map. */
+function mgrEmail(n2e: Map<string, string>, name: string | null | undefined): string | null {
+  if (!name) return null;
+  return n2e.get(lc(name)) || n2e.get(lc(flipComma(name))) || null;
+}
 
 /** Name -> work email, over active employees, so a manager's display name (BambooHR stores the manager
  *  as a name, not an address) can be resolved to an email for forwarding. */
@@ -297,7 +308,7 @@ export function listActiveEmployeesForOffboarding(): PickEmployee[] {
     office: e.office || null,
     title: e.public_job_title || e.job_position || null,
     manager: e.manager || null,
-    manager_email: e.manager ? (n2e.get(lc(e.manager)) || null) : null,
+    manager_email: mgrEmail(n2e, e.manager),
     object_guid: e.entra_object_id || null,
     department: e.department || null,
     status: e.employment_status,
@@ -313,7 +324,7 @@ export function listManagers(): { name: string; email: string | null }[] {
       WHERE manager IS NOT NULL AND manager != '' AND employment_status NOT IN ('terminated','prehire')
       ORDER BY manager`
   ).all() as { manager: string }[];
-  return rows.map((r) => ({ name: r.manager, email: n2e.get(lc(r.manager)) || null }));
+  return rows.map((r) => ({ name: r.manager, email: mgrEmail(n2e, r.manager) }));
 }
 
 /** Fill in a departing person's identity from their employee row when the caller passes employee_id. */
@@ -333,7 +344,7 @@ export function resolveOffboardingFromEmployee(employeeId: number): Partial<Offb
     sam: e.ad_username || (ad && ad.sam) || undefined,
     object_guid: e.entra_object_id || (ad && ad.object_guid) || undefined,
     office: e.office || undefined,
-    manager_email: e.manager ? (n2e.get(lc(e.manager)) || undefined) : undefined,
+    manager_email: mgrEmail(n2e, e.manager) || undefined,
   };
 }
 

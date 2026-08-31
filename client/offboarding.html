@@ -202,41 +202,55 @@ function loadBacklog(){
 }
 
 /* ---------- new ---------- */
-var PEOPLE=[], MANAGERS=[];
+var PEOPLE=[];
+// A type-ahead combobox over `items`. labelFn -> display text, valueFn -> hidden value. Filters as
+// you type (matches anywhere in the label), click to pick. onPick(item) fires on selection.
+function combo(inputId,hiddenId,listId,items,labelFn,valueFn,onPick){
+  var inp=document.getElementById(inputId),hid=document.getElementById(hiddenId),list=document.getElementById(listId);
+  function render(q){
+    q=(q||'').toLowerCase().trim();
+    var m=items.filter(function(it){return labelFn(it).toLowerCase().indexOf(q)>=0;}).slice(0,25);
+    if(!m.length){list.hidden=true;list.innerHTML='';return;}
+    list.innerHTML=m.map(function(it){return '<div class="combo-opt" data-v="'+esc(String(valueFn(it)))+'" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--divider,#eee);font-size:13px">'+esc(labelFn(it))+'</div>';}).join('');
+    list.hidden=false;
+    Array.prototype.forEach.call(list.querySelectorAll('.combo-opt'),function(o){
+      o.addEventListener('mouseenter',function(){o.style.background='var(--hover,#f2f4f7)';});
+      o.addEventListener('mouseleave',function(){o.style.background='';});
+      o.addEventListener('mousedown',function(e){e.preventDefault();
+        var it=items.filter(function(x){return String(valueFn(x))===o.getAttribute('data-v');})[0];
+        inp.value=labelFn(it);hid.value=valueFn(it);list.hidden=true;if(onPick)onPick(it);});
+    });
+  }
+  inp.addEventListener('input',function(){hid.value='';render(inp.value);});
+  inp.addEventListener('focus',function(){render(inp.value);});
+  inp.addEventListener('blur',function(){setTimeout(function(){list.hidden=true;},150);});
+  return {set:function(label,val){inp.value=label||'';hid.value=val||'';}};
+}
 function renderNew(){
   document.getElementById('view').innerHTML='<div class="empty">Loading employees…</div>';
   fetch('/api/offboarding/people').then(function(r){return r.json();}).then(function(d){
-    PEOPLE=d.employees||[]; MANAGERS=d.managers||[];
-    var empOpts='<option value="">Select an employee…</option>'+PEOPLE.map(function(p){
-      return '<option value="'+p.id+'">'+esc(p.name)+(p.office?(' — '+esc(p.office)):'')+'</option>';
-    }).join('');
-    // Manager / forward-target dropdown lists ALL employees (value = their work email); it is
-    // pre-selected to the departing person's real manager on select.
+    PEOPLE=d.employees||[];
     var withEmail=PEOPLE.filter(function(p){return p.work_email;});
-    var mgrOpts='<option value="">Select a manager…</option>'+withEmail.map(function(p){
-      return '<option value="'+esc(p.work_email)+'">'+esc(p.name)+'</option>';
-    }).join('');
+    var box='position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card,#fff);border:1px solid var(--divider,#ddd);border-radius:8px;max-height:260px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.14)';
     document.getElementById('view').innerHTML=
       '<form class="of" id="newForm">'+
-      '<div class="fld full"><label>Employee</label><select name="employee" id="empSel" required>'+empOpts+'</select></div>'+
+      '<div class="fld full" style="position:relative"><label>Employee</label><input type="text" id="empSearch" placeholder="Type a name to search…" autocomplete="off"><input type="hidden" name="employee" id="empId"><div id="empList" style="'+box+'" hidden></div></div>'+
       '<div class="fld"><label>UPN / work email</label><input type="email" name="upn" id="empUpn" placeholder="auto-filled" readonly></div>'+
       '<div class="fld"><label>Office</label><input type="text" name="office" id="empOffice" placeholder="auto-filled" readonly></div>'+
-      '<div class="fld"><label>Manager (forward target)</label><select name="manager_email" id="mgrSel">'+mgrOpts+'</select><div class="sub2" id="mgrHint" style="margin-top:4px"></div></div>'+
+      '<div class="fld full" style="position:relative"><label>Manager (forward target)</label><input type="text" id="mgrSearch" placeholder="Type a manager\'s name…" autocomplete="off"><input type="hidden" name="manager_email" id="mgrEmail"><div id="mgrList" style="'+box+'" hidden></div><div class="sub2" id="mgrHint" style="margin-top:4px"></div></div>'+
       '<div class="fld"><label>Last working day</label><input type="date" name="last_working_date"></div>'+
       '<div class="fld"><label>Termination date</label><input type="date" name="termination_date"></div>'+
       '<div class="fld full"><label class="chk"><input type="checkbox" name="hold"> Keep the mailbox on hold at retention instead of deleting it</label></div>'+
       '<div class="full"><button type="submit" class="os-btn primary">Start offboarding</button></div>'+
       '</form>';
-    var sel=document.getElementById('empSel');
-    sel.addEventListener('change',function(){
-      var p=PEOPLE.filter(function(x){return String(x.id)===sel.value;})[0]||{};
+    var mgrCombo=combo('mgrSearch','mgrEmail','mgrList',withEmail,function(p){return p.name;},function(p){return p.work_email;});
+    combo('empSearch','empId','empList',PEOPLE,function(p){return p.name+(p.office?(' — '+p.office):'');},function(p){return p.id;},function(p){
       document.getElementById('empUpn').value=p.upn||p.work_email||'';
       document.getElementById('empOffice').value=p.office||'';
-      var mgr=document.getElementById('mgrSel'), hint=document.getElementById('mgrHint');
-      // Pre-select the person's real manager.
-      if(p.manager_email){mgr.value=p.manager_email;}
-      else{mgr.value='';}
-      hint.textContent=p.manager?('Manager on file: '+p.manager+(p.manager_email?'':' — no email found, pick one above')):'';
+      var hint=document.getElementById('mgrHint');
+      // Pre-fill the manager combo from the person's resolved manager.
+      if(p.manager_email){mgrCombo.set(p.manager||'',p.manager_email);hint.textContent=p.manager?('Manager on file: '+p.manager):'';}
+      else{mgrCombo.set('','');hint.textContent=p.manager?('Manager on file: '+p.manager+' — no email matched, search and pick one above'):'';}
     });
     document.getElementById('newForm').addEventListener('submit',function(e){
       e.preventDefault(); var f=e.target;
