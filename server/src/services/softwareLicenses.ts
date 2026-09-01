@@ -144,6 +144,41 @@ export function softwareOverview(): { apps: (SoftwareApp & { licensed: number })
   return { apps: listSoftwareApps() };
 }
 
+export interface ReclaimRow {
+  employee_id: number; name: string; app: string; app_id: number; vendor: string | null;
+  employment_status: string; termination_date: string | null; assigned_at: string | null;
+  source: string | null; external_ref: string | null; cost_per_seat: number | null;
+}
+
+/**
+ * Paid licenses still active for people who have left (terminated) or are being offboarded. This is
+ * the "stop paying for seats nobody uses" report. Optionally scoped to one app.
+ */
+export function licenseReclaim(appId?: number): { rows: ReclaimRow[]; total: number; estCost: number } {
+  const db = getDb();
+  const where = appId ? 'AND a.id = @app' : '';
+  const rows = db.prepare(
+    `SELECT es.employee_id, es.app_id, es.assigned_at, es.source, es.external_ref,
+            a.name AS app, a.vendor, a.cost_per_seat,
+            e.legal_first_name, e.legal_last_name, e.preferred_name, e.entra_display_name,
+            e.employment_status, e.termination_date
+       FROM employee_software es
+       JOIN software_apps a ON a.id = es.app_id
+       JOIN employees e ON e.id = es.employee_id
+      WHERE es.status = 'active'
+        AND e.employment_status IN ('terminated', 'offboarding')
+        ${where}
+      ORDER BY a.name, e.legal_last_name, e.legal_first_name`
+  ).all(appId ? { app: appId } : {}) as any[];
+  const out: ReclaimRow[] = rows.map((r) => ({
+    employee_id: r.employee_id, name: empDisplayNameOf(r), app: r.app, app_id: r.app_id, vendor: r.vendor,
+    employment_status: r.employment_status, termination_date: r.termination_date, assigned_at: r.assigned_at,
+    source: r.source, external_ref: r.external_ref, cost_per_seat: r.cost_per_seat,
+  }));
+  const estCost = out.reduce((s, r) => s + (Number(r.cost_per_seat) || 0), 0);
+  return { rows: out, total: out.length, estCost };
+}
+
 /** One person's software licenses (for their profile). */
 export function employeeSoftware(employee_id: number): any[] {
   return getDb().prepare(

@@ -71,6 +71,8 @@
       </div>
       <div id="swImport" style="margin-top:12px"></div>
     </div>
+    <div class="os-sec os-block" style="margin-top:24px">Licenses to reclaim <span class="n" id="swRclN"></span></div>
+    <div class="os-card" style="padding:14px 16px"><div id="swReclaim">Loading…</div></div>
 
     <div class="os-sec os-block" style="margin-top:28px">Terminated but still active in Microsoft 365</div>
     <div class="os-card" style="padding:14px 16px">
@@ -442,6 +444,21 @@ function loadSoftware(){
   fetch('/api/people/software').then(function(r){return r.json();}).then(function(d){
     SW_APPS=(d&&d.apps)||[]; renderSwApps();
   }).catch(function(){ document.getElementById('swApps').innerHTML=OS.errorBox('Could not load software.'); });
+  loadReclaim();
+}
+// Licenses still active for terminated / offboarding employees, so paid seats can be released.
+function loadReclaim(){
+  fetch('/api/people/software/reclaim').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ document.getElementById('swReclaim').innerHTML=OS.errorBox('Could not load the reclaim report.'); return; }
+    var rows=d.rows||[];
+    document.getElementById('swRclN').textContent=rows.length?('· '+rows.length+(d.estCost?(' · ~$'+Number(d.estCost).toLocaleString()+'/seat'):'')):'· none';
+    if(!rows.length){ document.getElementById('swReclaim').innerHTML=OS.empty('No paid licenses held by terminated or offboarding employees. Nothing to reclaim.'); return; }
+    document.getElementById('swReclaim').innerHTML='<div class="os-filter-note" style="margin-bottom:8px">These people have left (or are being offboarded) but still hold an active paid license. Remove them at the vendor, then re-import / re-pull to clear them here.</div>'+
+      '<div class="os-tablewrap"><table class="os-table"><thead><tr><th>App</th><th>Person</th><th>Status</th><th>Termed</th><th>Held since</th><th>Seen as</th></tr></thead><tbody>'+
+      rows.map(function(r){ return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(r.app)+'</td><td>'+OS.esc(r.name)+'</td>'+
+        '<td>'+OS.pill(r.employment_status,'warn')+'</td><td>'+OS.esc((r.termination_date||'').slice(0,10)||'-')+'</td>'+
+        '<td>'+OS.esc((r.assigned_at||'').slice(0,10)||'-')+'</td><td class="os-filter-note">'+OS.esc(r.external_ref||'')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  }).catch(function(){ document.getElementById('swReclaim').innerHTML=OS.errorBox('Could not load the reclaim report.'); });
 }
 // Lazy-load pdf.js from a CDN the first time a PDF is uploaded.
 var PDFJS_READY=null;

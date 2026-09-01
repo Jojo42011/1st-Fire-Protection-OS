@@ -209,6 +209,11 @@ router.get('/api/people/offboarding/m365-gaps', requirePeople('people_admin', 'i
 
 /* Paid-software licenses: the app catalog, plus CSV import that updates who holds each app. */
 router.get('/api/people/software', requirePeople(), (_req, res) => res.json({ ok: true, ...sw.softwareOverview() }));
+// Reclaim report: active licenses still held by terminated / offboarding employees. ?app_id= scopes it.
+router.get('/api/people/software/reclaim', requirePeople(), (req, res) => {
+  const appId = req.query.app_id ? Number(req.query.app_id) : undefined;
+  res.json({ ok: true, ...sw.licenseReclaim(Number.isFinite(appId as number) ? appId : undefined) });
+});
 router.post('/api/people/software/apps', requirePeople('people_admin', 'it'), (req, res) => {
   const b = req.body || {};
   const app = sw.addSoftwareApp({ name: b.name, vendor: b.vendor, has_api: !!b.has_api, seats_paid: b.seats_paid, cost_per_seat: b.cost_per_seat });
