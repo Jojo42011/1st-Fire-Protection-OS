@@ -97,7 +97,7 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'manager', stage: 's1', kind: 'task', action_code: 'data_reassign', label: 'Reassign OneDrive and shared files', detail: 'Grant the manager access to the departing user\'s files.', due_at: base },
 
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'mbx_shared', label: 'Convert the mailbox to a shared mailbox', due_at: s2 },
-    { owner: 'accounting', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared.', due_at: s2 },
+    { owner: 'it', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared. IT handles this (Accounting has no 365 admin access).', due_at: s2 },
 
     { owner: 'it', stage: 's3', kind: 'timed', action_code: 'fwd_stop', label: `Stop forwarding and auto-reply (on ${fwd})`, due_at: fwd },
   ];
