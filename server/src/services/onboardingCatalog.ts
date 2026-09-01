@@ -202,3 +202,37 @@ export function updateCatalogItem(id: number, patch: { name?: string; spec?: str
 export function removeCatalogItem(id: number): boolean {
   return getDb().prepare(`UPDATE onboarding_catalog SET active = 0 WHERE id = ?`).run(id).changes > 0;
 }
+
+// Sensitive SG-SP groups keep their approval routing when synced into the form.
+const SP_ROUTING: Record<string, { owner: string; approval: boolean }> = {
+  'sg-sp-accounting': { owner: 'rebecca', approval: true },
+  'sg-sp-payroll': { owner: 'rebecca', approval: true },
+  'sg-sp-management': { owner: 'mario', approval: true },
+  'sg-sp-hr': { owner: 'sandi', approval: true },
+};
+
+/**
+ * Put the real on-prem SG-SP-* security groups into the onboarding form's SharePoint list. Adds any
+ * SG-SP-* group not already present (with its Entra group id, so it can auto-provision via Graph),
+ * backfills group ids on existing SG-SP rows, and retires the old friendly-name rows so the form shows
+ * the actual groups (whose names pass through to provisioning unchanged, instead of the broken
+ * abbreviation transform). Idempotent. `groups` come from Entra (the caller does the Graph read).
+ */
+export function syncSharepointCatalog(groups: { id: string; name: string }[]): { added: number; retired: number; names: string[] } {
+  const sg = groups.filter((g) => /^sg-sp-/i.test(g.name));
+  const existing = new Map(catalogByKind('sharepoint').map((c) => [c.name.toLowerCase(), c]));
+  let added = 0; const names: string[] = [];
+  for (const g of sg) {
+    const cur = existing.get(g.name.toLowerCase());
+    if (cur) { if (!cur.group_id && g.id) updateCatalogItem(cur.id, { group_id: g.id }); continue; }
+    const r = SP_ROUTING[g.name.toLowerCase()] || { owner: 'it', approval: false };
+    const it = addCatalogItem({ kind: 'sharepoint', name: g.name, owner: r.owner, approval: r.approval, group_id: g.id });
+    if (it) { added++; names.push(g.name); }
+  }
+  // Retire the legacy friendly-name rows (anything not SG-SP-*), so the form lists real groups only.
+  let retired = 0;
+  for (const c of catalogByKind('sharepoint')) {
+    if (!/^sg-sp-/i.test(c.name)) { removeCatalogItem(c.id); retired++; }
+  }
+  return { added, retired, names };
+}
