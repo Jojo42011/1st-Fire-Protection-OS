@@ -19,6 +19,7 @@ export const OWNER_ROLE: Record<Owner, Role | null> = {
   mario: 'executive_approver',
   denise: 'safety',
   daniel: 'branch_manager',
+  laura: 'it', // ServiceTrade provisioning: visible to IT; routed to Laura by email
 };
 
 // Default task-routing addresses (a People admin can override per owner). Note the domain is
@@ -29,6 +30,7 @@ const DEFAULT_EMAIL: Partial<Record<Owner, string>> = {
   it: 'support@liontechlabs.com',
   rebecca: 'rebecca.koen@1stfpservices.com',
   denise: 'safety@1stfpservices.com',
+  laura: 'laura.shannon@1stfpservices.com',
 };
 
 const K_EMAILS = 'onboarding_owner_emails';

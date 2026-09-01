@@ -1230,6 +1230,8 @@ export function initDb(): void {
   addColumn('intake_links', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
+  addColumn('onboarding_requests', 'sage', 'TEXT');          // selected Sage role (routed to Accounting/Rebecca)
+  addColumn('onboarding_requests', 'servicetrade', 'TEXT');  // selected ServiceTrade role (routed to Laura)
   // Live Google reviews: the Google review id (for dedupe + posting a reply), the location it is on,
   // whether the reply was auto-published, and when it published.
   addColumn('reviews', 'ext_id', 'TEXT');
@@ -1303,6 +1305,7 @@ export function initDb(): void {
   // ALTER so existing databases pick them up.
   addColumn('onboarding_catalog', 'group_name', 'TEXT'); // e.g. SG-PR-MCA
   addColumn('onboarding_catalog', 'group_id', 'TEXT');   // the Entra group object id (GUID)
+  addColumn('onboarding_catalog', 'price', 'REAL');      // optional per-seat price (Sage/ServiceTrade roles)
 
   // Per-integration sync cadence. One row per syncing integration (servicetrade|bamboo|microsoft|
   // calls). interval_minutes is how often it auto-syncs (0 or enabled=0 means paused). The scheduler

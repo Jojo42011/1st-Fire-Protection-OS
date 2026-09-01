@@ -8,7 +8,7 @@ import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { operatingOffices } from '../os/office';
 
-export type CatalogKind = 'computer' | 'software' | 'sharepoint' | 'printer';
+export type CatalogKind = 'computer' | 'software' | 'sharepoint' | 'printer' | 'sage' | 'servicetrade';
 export interface CatalogItem {
   id: number;
   kind: CatalogKind;
@@ -18,6 +18,7 @@ export interface CatalogItem {
   approval: boolean;
   group_name: string | null; // Entra security group name (SG-PR-MCA), for access items
   group_id: string | null; // Entra group object id (GUID)
+  price: number | null; // optional per-seat price (Sage/ServiceTrade roles)
   sort: number;
   active: boolean;
 }
@@ -78,6 +79,7 @@ function toItem(r: any): CatalogItem {
     approval: r.approval === 1,
     group_name: r.group_name ?? null,
     group_id: r.group_id ?? null,
+    price: r.price ?? null,
     sort: r.sort ?? 0,
     active: r.active === 1,
   };
@@ -131,26 +133,57 @@ export function catalogAll(): Record<CatalogKind, CatalogItem[]> {
     software: catalogByKind('software'),
     sharepoint: catalogByKind('sharepoint'),
     printer: catalogByKind('printer'),
+    sage: catalogByKind('sage'),
+    servicetrade: catalogByKind('servicetrade'),
   };
 }
 
-const KINDS: CatalogKind[] = ['computer', 'software', 'sharepoint', 'printer'];
+const KINDS: CatalogKind[] = ['computer', 'software', 'sharepoint', 'printer', 'sage', 'servicetrade'];
+
+/** Seed the Sage and ServiceTrade role options once. Idempotent (skips a role already present by
+ *  kind+name), so it also backfills existing databases. */
+export function seedAppAccessCatalog(): void {
+  const db = getDb();
+  const exists = db.prepare(`SELECT 1 FROM onboarding_catalog WHERE kind = ? AND name = ? LIMIT 1`);
+  const ins = db.prepare(
+    `INSERT INTO onboarding_catalog (kind, name, spec, owner, approval, price, sort) VALUES (@kind, @name, @spec, @owner, @approval, @price, @sort)`
+  );
+  const rows: { kind: CatalogKind; name: string; spec: string; owner: string; approval: number; price: number | null }[] = [
+    // Sage (routes to Accounting / Rebecca Koen), priced per seat.
+    { kind: 'sage', name: 'Business user', spec: 'Create customer invoicing; push and edit data that comes in from Service Trade', owner: 'rebecca', approval: 1, price: 2750 },
+    { kind: 'sage', name: 'Construction Manager', spec: 'Full view of all projects and Purchase Order Entry', owner: 'rebecca', approval: 1, price: 378 },
+    { kind: 'sage', name: 'Employee', spec: 'View only with limited access', owner: 'rebecca', approval: 1, price: 148.5 },
+    // ServiceTrade (routes to Laura Shannon).
+    { kind: 'servicetrade', name: 'Technician', spec: '', owner: 'laura', approval: 0, price: null },
+    { kind: 'servicetrade', name: 'Sales', spec: '', owner: 'laura', approval: 0, price: null },
+    { kind: 'servicetrade', name: 'Admin', spec: '', owner: 'laura', approval: 0, price: null },
+  ];
+  const tx = db.transaction(() => {
+    let sort = 0;
+    for (const r of rows) {
+      if (exists.get(r.kind, r.name)) continue;
+      ins.run({ kind: r.kind, name: r.name, spec: r.spec || null, owner: r.owner, approval: r.approval, price: r.price, sort: sort++ });
+    }
+  });
+  tx();
+}
 
 /** Add an item. Returns the created row, or null if the kind/name is invalid. */
-export function addCatalogItem(input: { kind: string; name: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string }): CatalogItem | null {
+export function addCatalogItem(input: { kind: string; name: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string; price?: number | null }): CatalogItem | null {
   const kind = input.kind as CatalogKind;
   const name = (input.name || '').trim();
   if (!KINDS.includes(kind) || !name) return null;
   const db = getDb();
   const maxSort = (db.prepare(`SELECT COALESCE(MAX(sort), -1) AS m FROM onboarding_catalog WHERE kind = ?`).get(kind) as { m: number }).m;
+  const price = input.price === undefined || input.price === null || isNaN(Number(input.price)) ? null : Number(input.price);
   const info = db
-    .prepare(`INSERT INTO onboarding_catalog (kind, name, spec, owner, approval, group_name, group_id, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run(kind, name, input.spec ?? null, input.owner || 'it', input.approval ? 1 : 0, input.group_name?.trim() || null, input.group_id?.trim() || null, maxSort + 1);
+    .prepare(`INSERT INTO onboarding_catalog (kind, name, spec, owner, approval, group_name, group_id, price, sort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(kind, name, input.spec ?? null, input.owner || 'it', input.approval ? 1 : 0, input.group_name?.trim() || null, input.group_id?.trim() || null, price, maxSort + 1);
   return toItem(db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(Number(info.lastInsertRowid)));
 }
 
 /** Edit an item's fields. Returns the updated row, or null if it does not exist. */
-export function updateCatalogItem(id: number, patch: { name?: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string }): CatalogItem | null {
+export function updateCatalogItem(id: number, patch: { name?: string; spec?: string; owner?: string; approval?: boolean; group_name?: string; group_id?: string; price?: number | null }): CatalogItem | null {
   const db = getDb();
   const cur = db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(id) as any;
   if (!cur) return null;
@@ -160,7 +193,8 @@ export function updateCatalogItem(id: number, patch: { name?: string; spec?: str
   const approval = patch.approval != null ? (patch.approval ? 1 : 0) : cur.approval;
   const groupName = patch.group_name !== undefined ? (patch.group_name.trim() || null) : cur.group_name;
   const groupId = patch.group_id !== undefined ? (patch.group_id.trim() || null) : cur.group_id;
-  db.prepare(`UPDATE onboarding_catalog SET name = ?, spec = ?, owner = ?, approval = ?, group_name = ?, group_id = ? WHERE id = ?`).run(name, spec, owner, approval, groupName, groupId, id);
+  const price = patch.price !== undefined ? (patch.price === null || isNaN(Number(patch.price)) ? null : Number(patch.price)) : cur.price;
+  db.prepare(`UPDATE onboarding_catalog SET name = ?, spec = ?, owner = ?, approval = ?, group_name = ?, group_id = ?, price = ? WHERE id = ?`).run(name, spec, owner, approval, groupName, groupId, price, id);
   return toItem(db.prepare(`SELECT * FROM onboarding_catalog WHERE id = ?`).get(id));
 }
 

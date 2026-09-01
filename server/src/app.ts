@@ -70,7 +70,7 @@ import offboarding from './routes/offboarding';
 import sage from './routes/sage';
 import { detectExceptions } from './os/exceptions';
 import { seedPeopleCatalog } from './people/service';
-import { seedOnboardingCatalog, seedPrinterGroups } from './services/onboardingCatalog';
+import { seedOnboardingCatalog, seedPrinterGroups, seedAppAccessCatalog } from './services/onboardingCatalog';
 import { seedSoftwareApps } from './services/softwareLicenses';
 import { seedMailSenders } from './services/mailSenders';
 import { ensureBootstrapAdmin } from './people/authz';
@@ -90,6 +90,8 @@ seedPeopleCatalog();
 seedOnboardingCatalog();
 // Seed the per-office printer Entra security groups (SG-PR-<office>). Idempotent.
 seedPrinterGroups();
+// Seed the Sage + ServiceTrade access-role options. Idempotent (also backfills existing databases).
+seedAppAccessCatalog();
 // Seed the starter software-app catalog (Adobe, Bluebeam, HydraCAD, AutoCAD). Idempotent, editable.
 seedSoftwareApps();
 // Seed the per-purpose mail senders (onboarding@, reviews@, ap@, ...). Idempotent, editable.

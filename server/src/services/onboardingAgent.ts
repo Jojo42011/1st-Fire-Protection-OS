@@ -16,7 +16,7 @@ import { addUserToGroup, graphConfigured } from './msGraphGroups';
  */
 
 /* ─────────────────────────── the owners (the color key) ─────────────────────────── */
-export type Owner = 'bamboo' | 'it' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel';
+export type Owner = 'bamboo' | 'it' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
@@ -27,6 +27,7 @@ export const OWNERS: { key: Owner; label: string; tag: string }[] = [
   { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
   { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
   { key: 'daniel', label: 'Ops (approval)', tag: 'Ops' },
+  { key: 'laura', label: 'ServiceTrade (provisioning)', tag: 'ServiceTrade' },
 ];
 const OWNER_LABEL: Record<Owner, string> = OWNERS.reduce(
   (m, o) => ((m[o.key] = o.label), m),
@@ -40,11 +41,11 @@ const OWNER_ORDER: Owner[] = OWNERS.map((o) => o.key);
  * routing for each selection (owner team, and whether it needs an approval) is read from the same
  * rows. See services/onboardingCatalog.ts. */
 
-/** Look up the routing for one selected software or SharePoint item by name. */
-function catalogRoute(kind: 'software' | 'sharepoint', name: string): { owner: Owner; kind: 'task' | 'approval' } | undefined {
+/** Look up the routing for one selected catalog item (by kind + name). */
+function catalogRoute(kind: 'software' | 'sharepoint' | 'sage' | 'servicetrade', name: string): { owner: Owner; kind: 'task' | 'approval'; price: number | null } | undefined {
   const item = catalogByKind(kind).find((c) => c.name === name);
   if (!item) return undefined;
-  return { owner: item.owner as Owner, kind: item.approval ? 'approval' : 'task' };
+  return { owner: item.owner as Owner, kind: item.approval ? 'approval' : 'task', price: item.price ?? null };
 }
 
 /** Computers are chosen by purchase tier (the form submits the tier key as computer_type). Prices
@@ -108,6 +109,8 @@ export interface OnboardingPayload {
   software?: string[];
   sharepoint?: string[];
   printers?: string[];
+  sage?: string;         // selected Sage role
+  servicetrade?: string; // selected ServiceTrade role
 }
 
 export interface OnboardingItem {
@@ -189,6 +192,21 @@ function routeItems(req: any): DraftItem[] {
     else items.push({ owner: g.owner, kind: 'task', label: `Add to SharePoint group: ${name}` });
   }
 
+  // ── Sage access (Accounting / Rebecca approves the seat + cost) ──
+  if (req.sage) {
+    const s = catalogRoute('sage', String(req.sage));
+    if (s) {
+      const priceStr = s.price != null ? ` ($${Number(s.price).toLocaleString(undefined, { minimumFractionDigits: 2 })})` : '';
+      items.push({ owner: s.owner, kind: s.kind, label: `${s.kind === 'approval' ? 'Approve' : 'Grant'} Sage access: ${req.sage}${priceStr}`, detail: 'Sage seat - provisioned by Accounting.' });
+    }
+  }
+
+  // ── ServiceTrade access (Laura provisions) ──
+  if (req.servicetrade) {
+    const t = catalogRoute('servicetrade', String(req.servicetrade));
+    if (t) items.push({ owner: t.owner, kind: t.kind, label: `Grant ServiceTrade access: ${req.servicetrade}` });
+  }
+
   // ── printers -> per-office Entra security group (IT). Selecting an office's printers adds the hire
   //    to its SG-PR-<office> group; the item carries the group so IT (or auto-provisioning) can act. ──
   const printers: string[] = safeArray(req.printers_json);
@@ -267,12 +285,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -303,6 +321,8 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       software_json: JSON.stringify(Array.isArray(payload.software) ? payload.software : []),
       sharepoint_json: JSON.stringify(Array.isArray(payload.sharepoint) ? payload.sharepoint : []),
       printers_json: JSON.stringify(Array.isArray(payload.printers) ? payload.printers : []),
+      sage: (payload.sage || '').trim() || null,
+      servicetrade: (payload.servicetrade || '').trim() || null,
     });
 
   const requestId = Number(info.lastInsertRowid);
@@ -533,5 +553,8 @@ export function getFormOptions() {
     // Computers are chosen by purchase tier (with price), matching the asset-library cost model.
     computers: computerTierList(),
     dockPrice: DOCK_PRICE,
+    // App-access roles (pick one each): Sage (priced, -> Accounting) and ServiceTrade (-> Laura).
+    sage: cat.sage.map((s) => ({ name: s.name, spec: s.spec, price: s.price })),
+    servicetrade: cat.servicetrade.map((s) => ({ name: s.name, spec: s.spec })),
   };
 }

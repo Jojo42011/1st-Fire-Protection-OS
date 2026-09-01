@@ -660,6 +660,12 @@ function renderForm(){
   var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span class="rc"><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
     (o.computers||[]).map(function(c){return '<label class="fradio"><input type="radio" name="computer_type" value="'+esc(c.key)+'"><span class="rc"><span class="rt">'+esc(c.label)+'</span><span class="rs">'+esc(c.spec)+'</span></span>'+(c.price!=null?'<span class="rp">$'+Number(c.price).toLocaleString()+'</span>':'')+'</label>';}).join('');
   var dockLabel='Docking station'+(o.dockPrice!=null?' · $'+Number(o.dockPrice).toLocaleString():'');
+  var sageRadios=roleRadios('sage',o.sage||[],true);
+  var stRadios=roleRadios('servicetrade',o.servicetrade||[],false);
+  var appAccess=((o.sage&&o.sage.length)||(o.servicetrade&&o.servicetrade.length))?
+    formSection('Application access','Sage seats route to Accounting (Rebecca) for approval; ServiceTrade routes to Laura',
+      ((o.sage&&o.sage.length)?'<div class="fsub2">Sage</div><div class="fradios">'+sageRadios+'</div>':'')+
+      ((o.servicetrade&&o.servicetrade.length)?'<div class="fsub2">ServiceTrade</div><div class="fradios">'+stRadios+'</div>':'')):'';
   document.getElementById('formCard').innerHTML=
     '<details class="formwrap"><summary>Fill the full request manually <span class="hint">Operational setup only. No pay or SSN: that lives in BambooHR.</span></summary>'+
     '<form id="onb-form" class="fbody">'+
@@ -679,6 +685,7 @@ function renderForm(){
         '<div class="fsub2">Safety-issued equipment</div><div class="fchecks">'+
           fchk('company_cell','','Company cell phone')+fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
         '</div>')+
+      appAccess+
       formSection('Vehicle','A company vehicle fans out to Safety, HR, and Ops',
         '<div class="fchecks">'+fchk('company_vehicle','','Company vehicle needed')+'</div>'+
         '<div class="ffield" style="margin-top:12px"><label>Vehicle / new-vehicle details</label><textarea name="vehicle_details" placeholder="Which truck, or the new-vehicle spec for Ops to confirm"></textarea></div>')+
@@ -689,6 +696,14 @@ function renderForm(){
 function ffield(l,name,ph,req){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" placeholder="'+esc(ph||'')+'"'+(req?' required':'')+'></div>';}
 function ffieldDate(l,name){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" type="date"></div>';}
 function fchk(name,val,label){return '<label class="fchk"><input type="checkbox" name="'+name+'"'+(val?' value="'+esc(val)+'"':'')+'> <span>'+esc(label)+'</span></label>';}
+// A pick-one role radio group (Sage / ServiceTrade), with a "None" default and optional price.
+function roleRadios(name,opts,withPrice){
+  var none='<label class="fradio"><input type="radio" name="'+name+'" value="" checked><span class="rc"><span class="rt">None</span><span class="rs">No access</span></span></label>';
+  return none+(opts||[]).map(function(r){
+    var price=(withPrice&&r.price!=null)?'<span class="rp">$'+Number(r.price).toLocaleString(undefined,{minimumFractionDigits:2})+'</span>':'';
+    return '<label class="fradio"><input type="radio" name="'+name+'" value="'+esc(r.name)+'"><span class="rc"><span class="rt">'+esc(r.name)+'</span>'+(r.spec?'<span class="rs">'+esc(r.spec)+'</span>':'')+'</span>'+price+'</label>';
+  }).join('');
+}
 function formSection(title,sub,body){ return '<section class="fcard"><div class="fcard-h"><div class="ft">'+esc(title)+'</div>'+(sub?'<div class="fsubh">'+esc(sub)+'</div>':'')+'</div>'+body+'</section>'; }
 function submitForm(e){
   e.preventDefault();
@@ -706,7 +721,9 @@ function submitForm(e){
     vehicle_transfer:checked('vehicle_transfer'), wex_card:checked('wex_card'),
     computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',
     dock:checked('dock'),
-    software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr')
+    software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr'),
+    sage:(f.querySelector('input[name="sage"]:checked')||{}).value||'',
+    servicetrade:(f.querySelector('input[name="servicetrade"]:checked')||{}).value||''
   };
   if(!payload.name){ f.name.focus(); return; }
   btn.disabled=true; btn.textContent='Routing…';
@@ -718,7 +735,7 @@ function submitForm(e){
 }
 
 /* ─────────────── onboarding catalog editor (computers / software / SharePoint / printers) ─────────────── */
-var CAT_OWNERS=[['it','IT'],['mario','Owner'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['daniel','Ops']];
+var CAT_OWNERS=[['it','IT'],['mario','Owner'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['daniel','Ops'],['laura','ServiceTrade']];
 function ownerSelect(id,val){ return '<select class="cat-in" data-f="owner" data-id="'+id+'">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; }
 function catItemRow(kind,it){
   var rm='<button class="cat-x" data-cat-del="'+it.id+'" title="Remove">×</button>';
@@ -740,6 +757,8 @@ function catAddRow(kind){
 var CAT_SECTIONS=[['computer','Computers','Described by role, not a specific model. Every choice routes to an owner approval.'],
   ['software','Software','Routes to IT unless it needs an owner license approval.'],
   ['sharepoint','SharePoint groups','One per office plus function groups. Approval-gated where marked.'],
+  ['sage','Sage roles','Priced seats, routed to Accounting (Rebecca) for approval. Pick-one on the form.'],
+  ['servicetrade','ServiceTrade roles','Routed to Laura for provisioning. Pick-one on the form.'],
   ['printer','Printers','Each office maps to an on-prem AD security group (SG-PR-...) that syncs to Entra. Picking it on the form adds that group to the hire, included in the generated New-ADUser script IT runs on a domain controller.']];
 function renderCatalog(cat){
   var html=CAT_SECTIONS.map(function(s){
