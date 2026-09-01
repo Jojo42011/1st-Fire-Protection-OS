@@ -436,7 +436,7 @@ function renderSwApps(){
     SW_APPS.map(function(a){ return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(a.name)+'</td><td>'+OS.esc(a.vendor||'')+'</td>'+
       '<td>'+OS.pill(a.licensed+' user'+(a.licensed===1?'':'s'),a.licensed?'good':'neutral')+'</td>'+
       '<td>'+(a.has_api?OS.pill('API','neutral'):OS.pill('CSV upload','warn'))+'</td>'+
-      '<td style="text-align:right"><button class="os-btn" data-sw-app="'+a.id+'" data-sw-name="'+OS.esc(a.name)+'">Upload CSV</button></td></tr>'; }).join('')+'</tbody></table></div>';
+      '<td style="text-align:right"><button class="os-btn" data-sw-app="'+a.id+'" data-sw-name="'+OS.esc(a.name)+'">'+(/^servicetrade$/i.test(a.name)?'Pull / import':'Import users')+'</button></td></tr>'; }).join('')+'</tbody></table></div>';
 }
 function loadSoftware(){
   fetch('/api/people/software').then(function(r){return r.json();}).then(function(d){
