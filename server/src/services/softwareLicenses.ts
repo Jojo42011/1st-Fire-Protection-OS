@@ -15,6 +15,7 @@ const SEED_APPS: { name: string; vendor: string; has_api?: boolean }[] = [
   { name: 'Bluebeam Revu', vendor: 'Bluebeam' },
   { name: 'HydraCAD', vendor: 'Hydratec' },
   { name: 'AutoCAD', vendor: 'Autodesk', has_api: true },
+  { name: 'ServiceTrade', vendor: 'ServiceTrade', has_api: true },
 ];
 
 export function seedSoftwareApps(): void {

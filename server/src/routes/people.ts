@@ -15,6 +15,7 @@ import { operatingOffices } from '../os/office';
 import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from '../services/onboardingCatalog';
 import { importComputers } from '../services/rmmImport';
 import * as sw from '../services/softwareLicenses';
+import { pullServiceTradeUsers } from '../services/servicetradeUsers';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
@@ -217,6 +218,11 @@ router.post('/api/people/software/apps', requirePeople('people_admin', 'it'), (r
 router.post('/api/people/software/import', requirePeople('people_admin', 'it'), (req, res) => {
   const b = req.body || {};
   res.json(sw.importSoftwareCsv(Number(b.app_id), String(b.csv || ''), !!b.commit));
+});
+// ServiceTrade access: pull users live from the ServiceTrade REST API and record who has access.
+router.post('/api/people/software/servicetrade-pull', requirePeople('people_admin', 'it'), async (req, res) => {
+  const out = await pullServiceTradeUsers(!!(req.body || {}).commit);
+  res.status(out.ok ? 200 : 400).json(out);
 });
 // Stamp each employee's authoritative UPN/email from Entra so identity comes from Microsoft 365, not
 // BambooHR. Read-only against the directory (needs User.Read.All).
