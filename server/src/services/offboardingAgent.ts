@@ -88,7 +88,9 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
   const items: DraftItem[] = [
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'ad_disable', label: 'Disable the AD account', due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'revoke_sessions', label: 'Reset the password and revoke 365 sessions', detail: 'Signs out any open session so a device cannot keep sending.', due_at: base },
-    { owner: 'it', stage: 's1', kind: 'task', action_code: 'gal_hide', label: 'Hide from the global address list', due_at: base },
+    // GAL-hide is intentionally omitted: this domain has no on-prem Exchange schema, so the synced
+    // attribute (msExchHideFromAddressLists) cannot be set on-prem, and Exchange Online refuses it for
+    // synced objects. The mailbox leaves the GAL when the account is deleted at retention.
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'groups_remove', label: 'Remove from security and distribution groups', detail: groupCount ? `${groupCount} group${groupCount === 1 ? '' : 's'} captured for audit before removal.` : 'Group membership captured for audit before removal.', due_at: base, snapshot_json: groupSnapshot ? JSON.stringify(groupSnapshot) : undefined },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'fwd_set', label: `Forward mail to ${fwdTo} until ${fwd}`, due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'autoreply_set', label: 'Set the mailbox auto-reply', due_at: base },

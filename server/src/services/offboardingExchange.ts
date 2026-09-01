@@ -73,12 +73,6 @@ export function buildDcOffboardingScript(requestId: number): ExchangeScript {
   L.push(`  Write-Host "Removed from $(@($u.MemberOf).Count) groups"; Complete-Item ${idFor('groups_remove') ?? '$null'}`);
   L.push('} catch { Write-Warning "Group removal failed: $($_.Exception.Message)" }');
   L.push('');
-  L.push('# ---- Hide from the GAL (on-prem; needs the AD Exchange schema) ----');
-  L.push('try {');
-  L.push('  Set-ADUser -Identity $Sam -Replace @{ msExchHideFromAddressLists = $true }');
-  L.push(`  Write-Host "Hidden from GAL"; Complete-Item ${idFor('gal_hide') ?? '$null'}`);
-  L.push('} catch { Write-Warning "GAL-hide skipped: $($_.Exception.Message)" }');
-  L.push('');
   L.push('# ---- Mailbox steps (Exchange Online). Run Connect-ExchangeOnline first. ----');
   L.push('if (Get-Command Set-Mailbox -ErrorAction SilentlyContinue) {');
   L.push('  try {');
