@@ -10,7 +10,7 @@ import {
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
-import { buildExchangeScript, buildDcOffboardingScript } from '../services/offboardingExchange';
+import { buildExchangeScript, buildDcOffboardingScript, buildCloudOffboardingScript } from '../services/offboardingExchange';
 import { getDb } from '../db/index';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 
@@ -66,10 +66,16 @@ router.get('/api/offboarding/:id(\\d+)/exchange-script', (req, res) => {
   res.status(out.ok ? 200 : 400).json(out);
 });
 
-/** The all-in-one DC offboarding script: AD steps + mailbox steps, each reporting back so the app
- *  marks only the tasks that actually succeed. */
+/** The on-prem AD offboarding script (disable + remove groups), run on a domain controller. */
 router.get('/api/offboarding/:id(\\d+)/dc-script', (req, res) => {
   const out = buildDcOffboardingScript(Number(req.params.id));
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** The cloud offboarding script (Exchange Online + Graph): convert to shared, remove license, revoke
+ *  sessions, forward, auto-reply. Run on your own computer. */
+router.get('/api/offboarding/:id(\\d+)/cloud-script', (req, res) => {
+  const out = buildCloudOffboardingScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
 

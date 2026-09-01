@@ -116,19 +116,21 @@ function openReq(id){
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
       '<div><h2 style="margin:0;font-size:17px">'+esc(r.name)+'</h2><div class="sub2 mono">'+esc(r.upn||'')+(r.office?(' · '+esc(r.office)):'')+'</div>'+
       '<div class="sub2" style="margin-top:4px">Forward to '+esc(r.forward_to||'manager')+' until <b>'+esc(r.forward_until)+'</b> · retire <b>'+esc(r.retain_until)+'</b> · mailbox at retention: <b>'+(r.mailbox_action==='hold'?'hold':'delete')+'</b></div></div>'+
-      '<div style="display:flex;gap:8px"><button class="btn2 primary" id="dcReq">Offboarding script (run on DC)</button><button class="btn2 bad" id="cancelReq">Cancel</button><button class="btn2" id="closeReq">Close</button></div></div>'+
+      '<div style="display:flex;gap:8px"><button class="btn2 primary" id="dcReq">AD script (DC)</button><button class="btn2 primary" id="cloudReq">Cloud script (your PC)</button><button class="btn2 bad" id="cancelReq">Cancel</button><button class="btn2" id="closeReq">Close</button></div></div>'+
       '<div id="exoOut"></div>'+
       stages+'</div>';
     document.getElementById('closeReq').addEventListener('click',function(){OPEN=null;document.getElementById('detail').innerHTML='';});
-    document.getElementById('dcReq').addEventListener('click',function(){
-      fetch('/api/offboarding/'+id+'/dc-script').then(function(r){return r.json();}).then(function(d){
+    var showScript=function(path,title,note){
+      fetch(path).then(function(r){return r.json();}).then(function(d){
         if(!d.ok){OS.toast(d.error||'Could not build the script.','bad');return;}
         var out=document.getElementById('exoOut');
-        out.innerHTML='<div class="card" style="padding:12px 14px;margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>Offboarding script — run on the domain controller</b><button class="btn2" id="exoCopy">Copy</button></div><textarea id="exoText" readonly style="width:100%;height:300px;font-family:monospace;font-size:11px;white-space:pre;background:var(--bg);color:var(--ink);border:1px solid var(--divider);border-radius:8px;padding:10px"></textarea><div class="sub2" style="margin-top:6px">Set <b>$env:AGENT_TOKEN</b>, then run on a DC. Does the AD steps immediately; run <b>Connect-ExchangeOnline</b> first for the mailbox steps. Each step marks its task done here ONLY if it succeeds, so refresh this request after running.</div></div>';
+        out.innerHTML='<div class="card" style="padding:12px 14px;margin:10px 0"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>'+title+'</b><button class="btn2" id="exoCopy">Copy</button></div><textarea id="exoText" readonly style="width:100%;height:300px;font-family:monospace;font-size:11px;white-space:pre;background:var(--bg);color:var(--ink);border:1px solid var(--divider);border-radius:8px;padding:10px"></textarea><div class="sub2" style="margin-top:6px">'+note+'</div></div>';
         document.getElementById('exoText').value=d.script;
         document.getElementById('exoCopy').addEventListener('click',function(){var t=document.getElementById('exoText');t.select();document.execCommand('copy');OS.toast('Copied.');});
       });
-    });
+    };
+    document.getElementById('dcReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/dc-script','AD offboarding script — run on the domain controller','Set <b>$env:AGENT_TOKEN</b>, then run on a DC. Disables the account and removes group membership. Each step marks its task done here ONLY if it succeeds; refresh this request after.');});
+    document.getElementById('cloudReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/cloud-script','Cloud offboarding script — run on your computer','Run <b>Connect-ExchangeOnline</b> and <b>Connect-MgGraph</b> first, and set <b>$env:AGENT_TOKEN</b>. Converts to shared, removes the license, revokes sessions, sets forwarding + auto-reply. Marks each task done ONLY if it succeeds; refresh this request after.');});
     document.getElementById('cancelReq').addEventListener('click',function(){if(!confirm('Cancel this offboarding request?'))return;fetch('/api/offboarding/'+id+'/cancel',{method:'POST'}).then(function(){OS.toast('Cancelled.');loadBoard();});});
     document.querySelectorAll('#detail [data-item]').forEach(function(b){b.addEventListener('click',function(){decide(Number(b.getAttribute('data-item')),b.getAttribute('data-verb'));});});
     document.querySelectorAll('#detail [data-run]').forEach(function(b){b.addEventListener('click',function(){runOnDc(Number(b.getAttribute('data-run')),b);});});

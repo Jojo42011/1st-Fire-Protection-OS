@@ -20,7 +20,8 @@ export interface ExchangeScript { ok: boolean; error?: string; upn?: string; scr
  * done, so the board reflects what actually happened. It reads $env:AGENT_TOKEN (the same token the AD
  * agent uses) so the token is never baked into the file.
  */
-export function buildDcOffboardingScript(requestId: number): ExchangeScript {
+interface Resolved { r: any; sam: string; upn: string; items: any[]; idFor: (ac: string) => number | null; fwd: string; name: string; contact: string; }
+function resolve(requestId: number): { ok: false; error: string } | ({ ok: true } & Resolved) {
   const db = getDb();
   const r = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(requestId) as any;
   if (!r) return { ok: false, error: 'request not found' };
@@ -35,19 +36,17 @@ export function buildDcOffboardingScript(requestId: number): ExchangeScript {
   const idFor = (ac: string): number | null => { const it = items.find((x) => x.action_code === ac && x.status === 'pending'); return it ? it.id : null; };
   const fwd = (r.forward_to || r.manager_email || '') as string;
   const name = (r.name || 'This employee') as string;
-  const contact = fwd || 'our office';
+  return { ok: true, r, sam, upn: upn || '', items, idFor, fwd, name, contact: fwd || 'our office' };
+}
 
-  const L: string[] = [];
-  L.push(`# Offboarding: ${name} (${upn || sam}) - RUN ON A DOMAIN CONTROLLER.`);
-  L.push('# Does the on-prem AD steps here; for the mailbox steps, run Connect-ExchangeOnline first.');
-  L.push('# Each step marks its task done in the OS ONLY if it succeeds. Requires $env:AGENT_TOKEN set');
-  L.push('# (the same token the AD agent uses).');
+// The shared preamble: OS URL, token from env, and the Complete-Item callback.
+function preamble(L: string[], sam: string, upn: string, fwd: string): void {
   L.push('$ErrorActionPreference = "Stop"');
   L.push('$Os    = "https://first-fp-os.fly.dev"');
   L.push('$Token = $env:AGENT_TOKEN');
-  L.push('if (-not $Token) { Write-Error "Set `$env:AGENT_TOKEN first (same token the AD agent uses)."; return }');
+  L.push('if (-not $Token) { Write-Error "Set `$env:AGENT_TOKEN first (the same token the AD agent uses)."; return }');
   L.push(`$Sam   = ${psq(sam)}`);
-  L.push(`$Upn   = ${psq(upn || '')}`);
+  L.push(`$Upn   = ${psq(upn)}`);
   L.push(`$Fwd   = ${psq(fwd)}`);
   L.push('$Hdr   = @{ Authorization = "Bearer $Token" }');
   L.push('function Complete-Item($id) {');
@@ -55,6 +54,18 @@ export function buildDcOffboardingScript(requestId: number): ExchangeScript {
   L.push('  try { Invoke-RestMethod -Method Post -Uri "$Os/api/ad-agent/offboarding-item/$id/complete" -Headers $Hdr | Out-Null; Write-Host "  -> marked task $id done" }');
   L.push('  catch { Write-Warning "  could not mark task $id done: $($_.Exception.Message)" }');
   L.push('}');
+}
+
+/** Script 1: the on-prem AD steps only. RUN ON A DOMAIN CONTROLLER. */
+export function buildDcOffboardingScript(requestId: number): ExchangeScript {
+  const R = resolve(requestId);
+  if (!R.ok) return { ok: false, error: R.error };
+  const { sam, upn, fwd, idFor, name } = R;
+  const L: string[] = [];
+  L.push(`# Offboarding (on-prem AD): ${name} (${upn || sam}) - RUN ON A DOMAIN CONTROLLER.`);
+  L.push('# Disables the account and strips group membership. Run the cloud script (mailbox + license +');
+  L.push('# session revoke) on your own computer. Each step marks its task done ONLY if it succeeds.');
+  preamble(L, sam, upn, fwd);
   L.push('Import-Module ActiveDirectory');
   L.push('');
   L.push('# ---- Disable the account + reset the password ----');
@@ -73,26 +84,58 @@ export function buildDcOffboardingScript(requestId: number): ExchangeScript {
   L.push(`  Write-Host "Removed from $(@($u.MemberOf).Count) groups"; Complete-Item ${idFor('groups_remove') ?? '$null'}`);
   L.push('} catch { Write-Warning "Group removal failed: $($_.Exception.Message)" }');
   L.push('');
-  L.push('# ---- Mailbox steps (Exchange Online). Run Connect-ExchangeOnline first. ----');
-  L.push('if (Get-Command Set-Mailbox -ErrorAction SilentlyContinue) {');
-  L.push('  try {');
-  L.push('    if ($Fwd) { Set-Mailbox -Identity $Upn -ForwardingAddress $Fwd -DeliverToMailboxAndForward $true; Write-Host "Forwarding to $Fwd"; Complete-Item ' + (idFor('fwd_set') ?? '$null') + ' }');
-  L.push('  } catch { Write-Warning "Forwarding failed: $($_.Exception.Message)" }');
-  L.push('  try {');
-  L.push(`    Set-MailboxAutoReplyConfiguration -Identity $Upn -AutoReplyState Enabled \``);
-  L.push(`      -InternalMessage ${psq(`${name} is no longer with 1st Fire Protection. Please contact ${contact} for assistance.`)} \``);
-  L.push(`      -ExternalMessage ${psq(`Thank you for your message. ${name} is no longer with 1st Fire Protection. Please contact ${contact} for assistance.`)}`);
-  L.push(`    Write-Host "Auto-reply set"; Complete-Item ${idFor('autoreply_set') ?? '$null'}`);
-  L.push('  } catch { Write-Warning "Auto-reply failed: $($_.Exception.Message)" }');
-  L.push('  try {');
-  L.push(`    Set-Mailbox -Identity $Upn -Type Shared; Write-Host "Converted to shared"; Complete-Item ${idFor('mbx_shared') ?? '$null'}`);
-  L.push('  } catch { Write-Warning "Convert-to-shared failed: $($_.Exception.Message)" }');
-  L.push('} else { Write-Warning "Exchange Online not connected - run Connect-ExchangeOnline, then re-run for the mailbox steps." }');
+  L.push('Write-Host "AD offboarding complete. Now run the cloud script on your computer."');
+  return { ok: true, upn, script: L.join('\n') };
+}
+
+/** Script 2: the cloud steps (Exchange Online + Microsoft Graph). RUN ON YOUR OWN COMPUTER, after
+ *  Connect-ExchangeOnline and Connect-MgGraph. Order: convert to shared FIRST, then remove the
+ *  license, revoke sessions, set forwarding + auto-reply. */
+export function buildCloudOffboardingScript(requestId: number): ExchangeScript {
+  const R = resolve(requestId);
+  if (!R.ok) return { ok: false, error: R.error };
+  const { sam, upn, fwd, idFor, name, contact } = R;
+  const L: string[] = [];
+  L.push(`# Offboarding (cloud): ${name} (${upn}) - RUN ON YOUR COMPUTER.`);
+  L.push('# Prereqs, run first:  Connect-ExchangeOnline   and   Connect-MgGraph -Scopes "User.ReadWrite.All"');
+  L.push('# Order: convert to shared, then drop the license, revoke sessions, set forwarding + auto-reply.');
+  L.push('# Each step marks its task done ONLY if it succeeds. Needs $env:AGENT_TOKEN set.');
+  preamble(L, sam, upn, fwd);
   L.push('');
-  L.push('# Remaining steps are handled elsewhere: the 365 license (Graph), the AD delete + mailbox');
-  L.push('# retention (approval-gated, on their dates), and file reassignment (manager).');
-  L.push('Write-Host "Offboarding script complete."');
-  return { ok: true, upn: upn || undefined, script: L.join('\n') };
+  L.push('# ---- 1. Convert the mailbox to shared (do this before dropping the license) ----');
+  L.push('try {');
+  L.push(`  Set-Mailbox -Identity $Upn -Type Shared; Write-Host "Converted to shared"; Complete-Item ${idFor('mbx_shared') ?? '$null'}`);
+  L.push('} catch { Write-Warning "Convert-to-shared failed: $($_.Exception.Message)" }');
+  L.push('');
+  L.push('# ---- 2. Remove the Microsoft 365 license (Graph) ----');
+  L.push('try {');
+  L.push('  $skus = @((Get-MgUserLicenseDetail -UserId $Upn).SkuId)');
+  L.push('  if ($skus.Count) { Set-MgUserLicense -UserId $Upn -RemoveLicenses $skus -AddLicenses @{} | Out-Null; Write-Host "Removed $($skus.Count) license(s)" }');
+  L.push('  else { Write-Host "No direct licenses to remove" }');
+  L.push(`  Complete-Item ${idFor('license_remove') ?? '$null'}`);
+  L.push('} catch { Write-Warning "License removal failed: $($_.Exception.Message) (group-based licenses are removed via the group)" }');
+  L.push('');
+  L.push('# ---- 3. Revoke all 365 sign-in sessions (Graph) ----');
+  L.push('try {');
+  L.push('  Revoke-MgUserSignInSession -UserId $Upn | Out-Null; Write-Host "Revoked sign-in sessions"');
+  L.push(`  Complete-Item ${idFor('revoke_sessions') ?? '$null'}`);
+  L.push('} catch { Write-Warning "Session revoke failed: $($_.Exception.Message)" }');
+  L.push('');
+  L.push('# ---- 4. Forward new mail to the manager ----');
+  L.push('try {');
+  L.push(`  if ($Fwd) { Set-Mailbox -Identity $Upn -ForwardingAddress $Fwd -DeliverToMailboxAndForward $true; Write-Host "Forwarding to $Fwd"; Complete-Item ${idFor('fwd_set') ?? '$null'} }`);
+  L.push('} catch { Write-Warning "Forwarding failed: $($_.Exception.Message)" }');
+  L.push('');
+  L.push('# ---- 5. Auto-reply ----');
+  L.push('try {');
+  L.push('  Set-MailboxAutoReplyConfiguration -Identity $Upn -AutoReplyState Enabled `');
+  L.push(`    -InternalMessage ${psq(`${name} is no longer with 1st Fire Protection. Please contact ${contact} for assistance.`)} \``);
+  L.push(`    -ExternalMessage ${psq(`Thank you for your message. ${name} is no longer with 1st Fire Protection. Please contact ${contact} for assistance.`)}`);
+  L.push(`  Write-Host "Auto-reply set"; Complete-Item ${idFor('autoreply_set') ?? '$null'}`);
+  L.push('} catch { Write-Warning "Auto-reply failed: $($_.Exception.Message)" }');
+  L.push('');
+  L.push('Write-Host "Cloud offboarding complete."');
+  return { ok: true, upn, script: L.join('\n') };
 }
 
 export function buildExchangeScript(requestId: number): ExchangeScript {
