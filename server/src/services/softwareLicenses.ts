@@ -10,17 +10,25 @@ import { audit, nameKeyVariants, empDisplayNameOf } from '../people/service';
 
 export interface SoftwareApp { id: number; name: string; vendor: string | null; has_api: number; seats_paid: number | null; cost_per_seat: number | null; }
 
-const SEED_APPS: { name: string; vendor: string; has_api?: boolean }[] = [
-  { name: 'Adobe Acrobat', vendor: 'Adobe', has_api: true },
-  { name: 'Bluebeam Revu', vendor: 'Bluebeam' },
-  { name: 'HydraCAD', vendor: 'Hydratec' },
-  { name: 'AutoCAD', vendor: 'Autodesk', has_api: true },
-  { name: 'ServiceTrade', vendor: 'ServiceTrade', has_api: true },
+const SEED_APPS: { name: string; vendor: string; has_api?: boolean; cost?: number }[] = [
+  { name: 'Adobe Acrobat', vendor: 'Adobe', has_api: true, cost: 220 },   // per seat / year
+  { name: 'Bluebeam Revu', vendor: 'Bluebeam', cost: 330 },
+  { name: 'HydraCAD', vendor: 'Hydratec', cost: 2880 },
+  { name: 'AutoCAD', vendor: 'Autodesk', has_api: true, cost: 2095 },
+  { name: 'ServiceTrade', vendor: 'ServiceTrade', has_api: true },        // platform subscription, not per-seat
 ];
 
 export function seedSoftwareApps(): void {
-  const ins = getDb().prepare(`INSERT OR IGNORE INTO software_apps (name, vendor, has_api) VALUES (?, ?, ?)`);
-  const tx = getDb().transaction(() => { for (const a of SEED_APPS) ins.run(a.name, a.vendor, a.has_api ? 1 : 0); });
+  const db = getDb();
+  const ins = db.prepare(`INSERT OR IGNORE INTO software_apps (name, vendor, has_api, cost_per_seat) VALUES (?, ?, ?, ?)`);
+  // Set the annual per-seat cost only where it isn't already set, so admin edits are never overwritten.
+  const setCost = db.prepare(`UPDATE software_apps SET cost_per_seat = ? WHERE name = ? AND cost_per_seat IS NULL`);
+  const tx = db.transaction(() => {
+    for (const a of SEED_APPS) {
+      ins.run(a.name, a.vendor, a.has_api ? 1 : 0, a.cost ?? null);
+      if (a.cost != null) setCost.run(a.cost, a.name);
+    }
+  });
   tx();
 }
 
