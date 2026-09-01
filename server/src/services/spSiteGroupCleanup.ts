@@ -120,10 +120,10 @@ export async function getDriveRootGrants(site: string): Promise<RootGrantsResult
   }
 }
 
-export interface FolderGrant { kind: 'group' | 'siteGroup' | 'user'; name: string; roles: string; inherited: boolean; }
+export interface FolderGrant { kind: 'group' | 'siteGroup' | 'user'; name: string; roles: string; inherited: boolean; permId: string; }
 export interface TopFolderPerms {
   ok: boolean; error?: string;
-  folders: { drive: string; folder: string; unique: boolean; grants: FolderGrant[] }[];
+  folders: { drive: string; driveId: string; folder: string; itemId: string; unique: boolean; grants: FolderGrant[] }[];
 }
 
 /**
@@ -157,12 +157,12 @@ export async function getTopFolderGrants(site: string): Promise<TopFolderPerms> 
           if (!inherited) anyUnique = true;
           const principals = [p.grantedToV2, ...(p.grantedToIdentitiesV2 || [])].filter(Boolean);
           for (const gp of principals) {
-            if (gp.group) grants.push({ kind: 'group', name: gp.group.displayName || '(group)', roles: (p.roles || []).join('/'), inherited });
-            else if (gp.siteGroup) grants.push({ kind: 'siteGroup', name: gp.siteGroup.displayName || '(site group)', roles: (p.roles || []).join('/'), inherited });
-            else if (gp.user) grants.push({ kind: 'user', name: gp.user.displayName || '(user)', roles: (p.roles || []).join('/'), inherited });
+            if (gp.group) grants.push({ kind: 'group', name: gp.group.displayName || '(group)', roles: (p.roles || []).join('/'), inherited, permId: p.id });
+            else if (gp.siteGroup) grants.push({ kind: 'siteGroup', name: gp.siteGroup.displayName || '(site group)', roles: (p.roles || []).join('/'), inherited, permId: p.id });
+            else if (gp.user) grants.push({ kind: 'user', name: gp.user.displayName || '(user)', roles: (p.roles || []).join('/'), inherited, permId: p.id });
           }
         }
-        folders.push({ drive: d.name, folder: it.name, unique: anyUnique, grants });
+        folders.push({ drive: d.name, driveId: d.id, folder: it.name, itemId: it.id, unique: anyUnique, grants });
       }
     }
     return { ok: true, folders };
