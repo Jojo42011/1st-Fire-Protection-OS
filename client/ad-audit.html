@@ -113,6 +113,12 @@ function esc(t){return OS.esc(t);}
 var SEV={critical:'bad',high:'bad',medium:'warn',low:'neutral'};
 var CODE_LABEL={terminated_enabled:'Terminated, still enabled',terminated_in_groups:'Terminated, still in groups',missing_title:'Missing job title',missing_mobile:'Missing mobile number',title_mismatch:'Title mismatch',orphan_enabled:'No employee match'};
 var ALL=[], FILTER='all';
+// Findings the operator has ticked to fix, keyed sam::code, so the selection survives filtering.
+var PICKED={};
+// Which finding codes can be turned into a domain-controller fix, and which are safe to pre-tick.
+var FIXABLE={terminated_enabled:1,terminated_in_groups:1,orphan_enabled:1,missing_title:1,title_mismatch:1,missing_mobile:1};
+var PRECHECK={terminated_enabled:1,terminated_in_groups:1};
+function keyOf(f){return (f.sam||'').toLowerCase()+'::'+f.code;}
 
 function kpi(lab,val,sub){return '<div class="kpi"><div class="lab">'+lab+'</div><div class="val">'+val+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';}
 
@@ -129,13 +135,70 @@ function renderFindings(){
   var rows=ALL.filter(function(f){return FILTER==='all'||f.code===FILTER;});
   if(!rows.length) return '<div class="card"><table><tr><td style="color:var(--muted)">No findings in this view.</td></tr></table></div>';
   var body=rows.map(function(f){
-    return '<tr><td>'+OS.pill(f.severity,SEV[f.severity]||'neutral')+'</td>'+
+    var fix=FIXABLE[f.code]&&f.sam;
+    var cell=fix
+      ? '<input type="checkbox" class="fchk" data-key="'+esc(keyOf(f))+'" data-sam="'+esc(f.sam)+'" data-code="'+esc(f.code)+'"'+(PICKED[keyOf(f)]?' checked':'')+'>'
+      : '<span class="sub2" title="No automatic on-prem fix">—</span>';
+    return '<tr><td style="width:34px;text-align:center">'+cell+'</td>'+
+      '<td>'+OS.pill(f.severity,SEV[f.severity]||'neutral')+'</td>'+
       '<td><div class="who">'+esc(f.name||f.sam||f.upn||'-')+'</div><div class="sub2 mono">'+esc(f.upn||f.sam||'')+'</div></td>'+
       '<td>'+esc(CODE_LABEL[f.code]||f.code)+'<div class="sub2">'+esc(f.detail||'')+'</div></td>'+
       '<td>'+(f.current?'<span class="cur">'+esc(f.current)+'</span>':'')+
         (f.expected?'<div class="exp">&rarr; '+esc(f.expected)+'</div>':'')+'</td></tr>';
   }).join('');
-  return '<div class="card"><table><thead><tr><th>Severity</th><th>Account</th><th>Finding</th><th>Now / target</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  return '<div class="card"><table><thead><tr><th style="width:34px"></th><th>Severity</th><th>Account</th><th>Finding</th><th>Now / target</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
+
+function pickedCount(){var n=0;for(var k in PICKED)if(PICKED[k])n++;return n;}
+function renderCleanupBar(){
+  return '<div class="offrow" style="grid-template-columns:auto auto auto 1fr;max-width:720px;margin-bottom:12px">'+
+    '<button class="os-btn primary" id="cleanGen">Generate DC fix script</button>'+
+    '<button class="os-btn" id="cleanAll">Select all in view</button>'+
+    '<button class="os-btn" id="cleanNone">Clear</button>'+
+    '<span id="cleanN" class="note" style="align-self:center">'+pickedCount()+' selected. Tick only the accounts you want changed; shared/service accounts stay unticked.</span>'+
+    '</div><div id="cleanOut" class="note" style="margin-bottom:10px"></div>';
+}
+function bindCleanupBar(){
+  var g=document.getElementById('cleanGen'); if(g) g.addEventListener('click',genCleanup);
+  var a=document.getElementById('cleanAll'); if(a) a.addEventListener('click',function(){
+    document.querySelectorAll('#fwrap .fchk').forEach(function(c){c.checked=true;PICKED[c.getAttribute('data-key')]=1;});
+    document.getElementById('cleanN').textContent=pickedCount()+' selected.';
+  });
+  var n=document.getElementById('cleanNone'); if(n) n.addEventListener('click',function(){
+    PICKED={}; document.querySelectorAll('#fwrap .fchk').forEach(function(c){c.checked=false;});
+    document.getElementById('cleanN').textContent='0 selected.';
+  });
+}
+function bindChecks(){
+  document.querySelectorAll('#fwrap .fchk').forEach(function(c){
+    c.addEventListener('change',function(){
+      if(c.checked) PICKED[c.getAttribute('data-key')]=1; else delete PICKED[c.getAttribute('data-key')];
+      var el=document.getElementById('cleanN'); if(el) el.textContent=pickedCount()+' selected.';
+    });
+  });
+}
+function genCleanup(){
+  // Collect from the authoritative ALL list so selections off-screen (filtered out) are still included.
+  var sel=[];
+  ALL.forEach(function(f){ if(FIXABLE[f.code]&&f.sam&&PICKED[keyOf(f)]) sel.push({sam:f.sam,code:f.code}); });
+  var out=document.getElementById('cleanOut'), btn=document.getElementById('cleanGen');
+  if(!sel.length){ out.textContent='Tick at least one finding first.'; return; }
+  btn.disabled=true; btn.textContent='Generating…'; out.textContent='Building the domain-controller script…';
+  fetch('/api/ad-audit/cleanup-script',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selections:sel})})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false; btn.textContent='Generate DC fix script';
+      if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not generate.'; return; }
+      var acts=Object.keys(d.actions||{}).map(function(a){return esc(a)+' ×'+d.actions[a];}).join(' · ');
+      out.innerHTML='<div style="margin-bottom:8px"><b>'+d.count+'</b> fix'+(d.count===1?'':'es')+' ready'+(d.skipped?(' · '+d.skipped+' skipped (no longer current)'):'')+
+        '<button class="os-btn primary" id="cleanDl" style="margin-left:8px">Download .ps1</button></div>'+
+        (acts?'<div class="sub2">'+acts+'</div>':'')+
+        '<pre style="margin-top:10px;max-height:320px;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:var(--mono);font-size:11.5px;white-space:pre;color:var(--ink-2)">'+esc(d.script||'')+'</pre>';
+      document.getElementById('cleanDl').addEventListener('click',function(){
+        var blob=new Blob([d.script||''],{type:'text/plain'});
+        var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=d.filename||'ad-cleanup.ps1';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+      });
+    }).catch(function(){ btn.disabled=false; btn.textContent='Generate DC fix script'; out.textContent='Could not reach the cleanup service.'; });
 }
 
 function renderFilters(counts){
@@ -148,6 +211,8 @@ function renderFilters(counts){
 
 function draw(d){
   ALL=d.findings||[];
+  // Pre-tick the unambiguous terminated-account fixes; leave orphan/service and cosmetic ones for review.
+  PICKED={}; ALL.forEach(function(f){ if(f.sam&&PRECHECK[f.code]) PICKED[keyOf(f)]=1; });
   var sync=d.lastSync;
   if(!sync){
     document.getElementById('body').innerHTML=
@@ -168,13 +233,14 @@ function draw(d){
       kpi('Cleanup findings',driftTotal,(d.counts.terminated_enabled||0)+' critical')+
       kpi('Last sync',(sync.users||d.adUserCount),when)+
     '</div>'+
-    '<div class="sec"><div class="sec-h">Cleanup findings</div>'+renderFilters(d.counts)+'<div id="fwrap">'+renderFindings()+'</div></div>'+
+    '<div class="sec"><div class="sec-h">Cleanup findings</div>'+renderFilters(d.counts)+renderCleanupBar()+'<div id="fwrap">'+renderFindings()+'</div></div>'+
     '<div class="sec"><div class="sec-h">OU structure</div><div class="card"><div class="tree" style="padding:12px 6px">'+(renderTree(d.ouTree,0)||'<div style="padding:12px;color:var(--muted)">No OU data.</div>')+'</div></div></div>';
   document.getElementById('body').innerHTML=html;
+  bindCleanupBar(); bindChecks();
   var fbar=document.querySelector('.filters');
   if(fbar) fbar.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;FILTER=b.getAttribute('data-f');
     document.querySelectorAll('.filters button').forEach(function(x){x.classList.toggle('on',x.getAttribute('data-f')===FILTER);});
-    document.getElementById('fwrap').innerHTML=renderFindings();});
+    document.getElementById('fwrap').innerHTML=renderFindings(); bindChecks();});
 }
 
 function load(){

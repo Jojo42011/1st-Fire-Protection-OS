@@ -8,6 +8,7 @@ import { discoverOffices as discoverReviewOffices, setTarget as setReviewTarget,
 import { reviewImpactReport } from '../services/reviewImpact';
 import { buildProvisionPlan, buildProvisionScript } from '../services/adProvision';
 import { buildOfficeDlPlan } from '../services/distributionLists';
+import { buildAdCleanupScript } from '../services/adCleanupScript';
 import { grantGroupsToTopFolders } from '../services/spLocationGrants';
 import { findSiteGroupGrants, removeSiteGroupGrant, replaceSiteGroupsWithModern, getDriveRootGrants, getTopFolderGrants } from '../services/spSiteGroupCleanup';
 import { buildAllStaffGroupPlan } from '../services/spAllStaffGroup';
@@ -506,6 +507,16 @@ router.get('/api/ad-audit/pilot-script', async (req, res) => {
   const group = String(req.query.group || '').slice(0, 128);
   const suffix = String(req.query.suffix || '-AD').slice(0, 16);
   const out = await buildPilotGroupScript(group, suffix);
+  res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Generate a domain-controller cleanup script from hand-picked audit findings. Body:
+ *  { selections: [{ sam, code }] }. The server re-derives every fix from the live drift compute,
+ *  so the browser only chooses which findings to act on, never the values written. */
+router.post('/api/ad-audit/cleanup-script', (req, res) => {
+  const b = req.body || {};
+  const selections = Array.isArray(b.selections) ? b.selections : [];
+  const out = buildAdCleanupScript(selections);
   res.status(out.ok ? 200 : 400).json(out);
 });
 
