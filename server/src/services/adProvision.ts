@@ -25,6 +25,7 @@ const K_DOMAIN = 'ad_upn_domain';
 const K_SKU = 'ad_license_sku';
 const K_OFFICE_OU = 'ad_office_ou_map';
 const K_DEPT_OU = 'ad_dept_ou_map';
+const K_DISABLED_OU = 'ad_disabled_ou';
 
 const DEFAULT_DOMAIN = '1stfpservices.com';
 const OU_PLACEHOLDER = 'OU=New Hires,OU=Users,DC=1stfp,DC=local';
@@ -35,6 +36,7 @@ export interface AdSettings {
   licenseSku: string | null;
   officeOuMap: Record<string, string>; // office label -> OU distinguished name
   departmentOuMap: Record<string, string>; // department -> OU DN; takes precedence over office
+  disabledOu: string | null; // OU disabled accounts are moved into on offboarding (must be a SYNCED OU)
 }
 
 function readMap(key: string): Record<string, string> {
@@ -51,6 +53,7 @@ export function getAdSettings(): AdSettings {
     licenseSku: getState(K_SKU) || null,
     officeOuMap: readMap(K_OFFICE_OU),
     departmentOuMap: readMap(K_DEPT_OU),
+    disabledOu: getState(K_DISABLED_OU) || null,
   };
 }
 
@@ -61,10 +64,11 @@ function cleanMap(m: Record<string, string>): Record<string, string> {
 }
 
 /** Update whichever settings are provided. Blank clears back to the default/placeholder. */
-export function setAdSettings(patch: { targetOu?: string; upnDomain?: string; licenseSku?: string; officeOuMap?: Record<string, string>; departmentOuMap?: Record<string, string> }): AdSettings {
+export function setAdSettings(patch: { targetOu?: string; upnDomain?: string; licenseSku?: string; officeOuMap?: Record<string, string>; departmentOuMap?: Record<string, string>; disabledOu?: string }): AdSettings {
   if (patch.targetOu !== undefined) setState(K_OU, String(patch.targetOu).trim());
   if (patch.upnDomain !== undefined) setState(K_DOMAIN, String(patch.upnDomain).trim() || DEFAULT_DOMAIN);
   if (patch.licenseSku !== undefined) setState(K_SKU, String(patch.licenseSku).trim());
+  if (patch.disabledOu !== undefined) setState(K_DISABLED_OU, String(patch.disabledOu).trim());
   if (patch.officeOuMap !== undefined && patch.officeOuMap && typeof patch.officeOuMap === 'object') setState(K_OFFICE_OU, JSON.stringify(cleanMap(patch.officeOuMap)));
   if (patch.departmentOuMap !== undefined && patch.departmentOuMap && typeof patch.departmentOuMap === 'object') setState(K_DEPT_OU, JSON.stringify(cleanMap(patch.departmentOuMap)));
   return getAdSettings();

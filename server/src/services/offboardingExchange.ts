@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { getAdSettings } from './adProvision';
 
 /**
  * Exchange Online offboarding script for one request. The mailbox lifecycle (forwarding, auto-reply,
@@ -84,6 +85,23 @@ export function buildDcOffboardingScript(requestId: number): ExchangeScript {
   L.push(`  Write-Host "Removed from $(@($u.MemberOf).Count) groups"; Complete-Item ${idFor('groups_remove') ?? '$null'}`);
   L.push('} catch { Write-Warning "Group removal failed: $($_.Exception.Message)" }');
   L.push('');
+  const disabledOu = getAdSettings().disabledOu;
+  if (disabledOu) {
+    L.push('# ---- Move the disabled account into the Disabled Users OU ----');
+    L.push('# This OU MUST be inside the Entra Connect sync scope. Moving a synced account into an');
+    L.push('# unsynced OU makes Connect soft-delete the cloud account (and its mailbox), so verify scope first.');
+    L.push(`$DisabledOu = ${psq(disabledOu)}`);
+    L.push('try {');
+    L.push('  $u = Get-ADUser -Identity $Sam');
+    L.push('  if (-not $u.Enabled) { Move-ADObject -Identity $u.DistinguishedName -TargetPath $DisabledOu; Write-Host "Moved $Sam to $DisabledOu" }');
+    L.push('  else { Write-Warning "Not moved: account is still enabled (disable must succeed first)." }');
+    L.push('} catch { Write-Warning "OU move failed: $($_.Exception.Message)" }');
+    L.push('');
+  } else {
+    L.push('# (No Disabled Users OU is set. Add one on the Active Directory page to auto-move disabled');
+    L.push('#  accounts here. It must be a SYNCED OU or Entra Connect will delete the cloud account.)');
+    L.push('');
+  }
   L.push('Write-Host "AD offboarding complete. Now run the cloud script on your computer."');
   return { ok: true, upn, script: L.join('\n') };
 }

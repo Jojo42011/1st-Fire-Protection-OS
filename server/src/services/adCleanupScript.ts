@@ -1,4 +1,5 @@
 import { computeDrift, DriftFinding, DriftCode } from './adAudit';
+import { getAdSettings } from './adProvision';
 
 /**
  * Turn a hand-picked set of AD audit findings into a single PowerShell script to run ON A DOMAIN
@@ -111,11 +112,33 @@ export function buildAdCleanupScript(selections: CleanupSelection[]): CleanupScr
   L.push('# ------------------------------------------------------------------------');
   L.push('Import-Module ActiveDirectory');
   L.push('');
+  // Accounts this run disables become candidates for the OU move at the end.
+  const disabledSams: string[] = [];
   for (const f of chosen) {
     const block = blockFor(f);
     if (!block.length) { skipped++; continue; }
     actions[ACTION_LABEL[f.code]] = (actions[ACTION_LABEL[f.code]] || 0) + 1;
+    if ((f.code === 'terminated_enabled' || f.code === 'orphan_enabled') && f.sam) disabledSams.push(f.sam);
     L.push(...block, '');
+  }
+
+  // Move the just-disabled accounts into the Disabled Users OU, if one is configured. Only ever moves
+  // an account that is actually disabled, and the OU must be synced or Entra Connect deletes it.
+  const disabledOu = getAdSettings().disabledOu;
+  if (disabledOu && disabledSams.length) {
+    L.push('# ---- Move the disabled accounts into the Disabled Users OU ----');
+    L.push('# This OU MUST be inside the Entra Connect sync scope, or moving a synced account here makes');
+    L.push('# Connect soft-delete the cloud account (and mailbox). Verify scope before running.');
+    L.push(`$DisabledOu = ${psq(disabledOu)}`);
+    L.push(`foreach ($sam in @(${[...new Set(disabledSams)].map(psq).join(', ')})) {`);
+    L.push('  try {');
+    L.push('    $u = Get-ADUser -Identity $sam');
+    L.push('    if (-not $u.Enabled) { Move-ADObject -Identity $u.DistinguishedName -TargetPath $DisabledOu; Write-Host "Moved $sam to Disabled Users OU" }');
+    L.push('    else { Write-Warning "$sam not moved: still enabled." }');
+    L.push('  } catch { Write-Warning "Move $sam failed: $($_.Exception.Message)" }');
+    L.push('}');
+    actions['Move to Disabled Users OU'] = new Set(disabledSams).size;
+    L.push('');
   }
   L.push('Write-Host ""');
   L.push(`Write-Host "AD cleanup complete. Run Start-ADSyncSyncCycle -PolicyType Delta on the AD Connect server to push changes to Entra."`);

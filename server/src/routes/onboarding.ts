@@ -285,7 +285,7 @@ router.get('/api/onboarding/ad-settings', (_req, res) => {
 });
 router.put('/api/onboarding/ad-settings', (req, res) => {
   const b = req.body || {};
-  res.json({ ok: true, settings: setAdSettings({ targetOu: b.targetOu, upnDomain: b.upnDomain, licenseSku: b.licenseSku, officeOuMap: b.officeOuMap, departmentOuMap: b.departmentOuMap }) });
+  res.json({ ok: true, settings: setAdSettings({ targetOu: b.targetOu, upnDomain: b.upnDomain, licenseSku: b.licenseSku, officeOuMap: b.officeOuMap, departmentOuMap: b.departmentOuMap, disabledOu: b.disabledOu }) });
 });
 
 /** Send (or re-send) the invite email for an existing link. */

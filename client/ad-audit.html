@@ -279,6 +279,7 @@ function loadSettings(){
     document.getElementById('adsetBody').innerHTML=hint+
       '<div class="fgrid">'+
       '<div class="fld full"><label>Default OU (used when nothing else matches)</label><input id="s_ou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'">'+dlist+'</div>'+
+      '<div class="fld full"><label>Disabled Users OU (offboarding moves disabled accounts here — must be a SYNCED OU)</label><input id="s_disou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=Disabled Users,OU=1FP,DC=...,DC=...  (blank = do not move)" value="'+esc(s.disabledOu||'')+'"></div>'+
       '<div class="fld"><label>UPN domain</label><input id="s_dom" type="text" spellcheck="false" value="'+esc(s.upnDomain||'')+'"></div>'+
       '<div class="fld"><label>Default license SKU</label><input id="s_sku" type="text" spellcheck="false" placeholder="e.g. SPE_E3" value="'+esc(s.licenseSku||'')+'"></div>'+
       '</div>'+
@@ -293,7 +294,7 @@ function saveSettings(){
   var map={}, dmap={};
   document.querySelectorAll('#adsetBody [data-off]').forEach(function(i){var v=(i.value||'').trim();if(v)map[i.getAttribute('data-off')]=v;});
   document.querySelectorAll('#adsetBody [data-dept]').forEach(function(i){var v=(i.value||'').trim();if(v)dmap[i.getAttribute('data-dept')]=v;});
-  var body={targetOu:document.getElementById('s_ou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map,departmentOuMap:dmap};
+  var body={targetOu:document.getElementById('s_ou').value.trim(),disabledOu:document.getElementById('s_disou').value.trim(),upnDomain:document.getElementById('s_dom').value.trim(),licenseSku:document.getElementById('s_sku').value.trim(),officeOuMap:map,departmentOuMap:dmap};
   var st=document.getElementById('s_status'); st.textContent='Saving…';
   fetch('/api/onboarding/ad-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){ st.textContent=d&&d.ok?'Saved.':'Save failed.'; if(d&&d.ok)OS.toast('Provisioning settings saved.'); })
