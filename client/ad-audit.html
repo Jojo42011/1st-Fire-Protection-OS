@@ -151,15 +151,25 @@ function renderFindings(){
 
 function pickedCount(){var n=0;for(var k in PICKED)if(PICKED[k])n++;return n;}
 function renderCleanupBar(){
-  return '<div class="offrow" style="grid-template-columns:auto auto auto 1fr;max-width:720px;margin-bottom:12px">'+
+  return '<div class="offrow" style="grid-template-columns:repeat(5,auto) 1fr;max-width:900px;margin-bottom:12px">'+
     '<button class="os-btn primary" id="cleanGen">Generate DC fix script</button>'+
+    '<button class="os-btn" id="cleanLow">Select all Low (title/mobile)</button>'+
+    '<button class="os-btn" id="cleanTerm">Select all Terminated</button>'+
     '<button class="os-btn" id="cleanAll">Select all in view</button>'+
     '<button class="os-btn" id="cleanNone">Clear</button>'+
     '<span id="cleanN" class="note" style="align-self:center">'+pickedCount()+' selected. Tick only the accounts you want changed; shared/service accounts stay unticked.</span>'+
     '</div><div id="cleanOut" class="note" style="margin-bottom:10px"></div>';
 }
+// Select every fixable finding matching a predicate, across ALL findings (not just the current filter).
+function selectWhere(pred){
+  ALL.forEach(function(f){ if(FIXABLE[f.code]&&f.sam&&pred(f)) PICKED[keyOf(f)]=1; });
+  document.getElementById('fwrap').innerHTML=renderFindings(); bindChecks();
+  document.getElementById('cleanN').textContent=pickedCount()+' selected.';
+}
 function bindCleanupBar(){
   var g=document.getElementById('cleanGen'); if(g) g.addEventListener('click',genCleanup);
+  var lo=document.getElementById('cleanLow'); if(lo) lo.addEventListener('click',function(){ selectWhere(function(f){return f.severity==='low';}); });
+  var tm=document.getElementById('cleanTerm'); if(tm) tm.addEventListener('click',function(){ selectWhere(function(f){return f.code==='terminated_enabled'||f.code==='terminated_in_groups';}); });
   var a=document.getElementById('cleanAll'); if(a) a.addEventListener('click',function(){
     document.querySelectorAll('#fwrap .fchk').forEach(function(c){c.checked=true;PICKED[c.getAttribute('data-key')]=1;});
     document.getElementById('cleanN').textContent=pickedCount()+' selected.';
