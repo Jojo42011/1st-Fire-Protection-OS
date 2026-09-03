@@ -105,6 +105,17 @@
       </div>
     </div>
   </details>
+  <details id="dl" class="adset">
+    <summary>Location distribution lists (Office/Company backfill)</summary>
+    <div id="dlBody" class="adsetBody">
+      <div class="offrow" style="grid-template-columns:auto auto 1fr;max-width:520px">
+        <button class="os-btn primary" id="dlLoad">Build backfill</button>
+        <button class="os-btn" id="dlBackfillDl" disabled>Download backfill .ps1</button>
+        <span></span>
+      </div>
+      <div id="dlResult" class="note" style="margin-top:10px">Stamps every active BambooHR employee with their Office + Company on-prem, so the per-site dynamic distribution lists resolve to the right people. Run it on a domain controller, then Start-ADSyncSyncCycle -PolicyType Delta. The creation script (one list per office) is also generated below.</div>
+    </div>
+  </details>
   <div id="body"></div>
 </div>
 
@@ -418,9 +429,40 @@ function genPilot(){
   }).catch(function(){ btn.disabled=false; btn.textContent='Generate'; out.textContent='Could not reach the service.'; });
 }
 
+/* ---------- location distribution lists (Office/Company backfill + creation) ---------- */
+var DLPLAN=null;
+function dlDownload(text,fname){
+  var blob=new Blob([text||''],{type:'text/plain'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+}
+function loadDlPlan(){
+  var out=document.getElementById('dlResult'), btn=document.getElementById('dlLoad');
+  btn.disabled=true; btn.textContent='Building…'; out.textContent='Matching BambooHR to the AD mirror…';
+  fetch('/api/ad-audit/office-dl-plan').then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Build backfill';
+    if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not build the plan.'; return; }
+    DLPLAN=d;
+    var rows=(d.offices||[]).map(function(o){
+      var warn=o.needsBackfill?(' <span style="color:var(--critical,#8C1D18)">'+o.needsBackfill+' need stamping</span>'):'';
+      var na=(o.noAccount&&o.noAccount.length)?(' · '+o.noAccount.length+' no account'):'';
+      return '<tr><td>'+esc(o.office)+'</td><td class="mono">'+o.matched+'/'+o.headcount+'</td><td>'+warn+na+'</td></tr>';
+    }).join('');
+    out.innerHTML='<div style="margin-bottom:8px"><b>'+d.backfillCount+'</b> Set-ADUser stamps across <b>'+(d.offices||[]).length+'</b> offices.'+
+      ' <button class="os-btn primary" id="dlBf2" style="margin-left:8px">Download backfill .ps1</button>'+
+      ' <button class="os-btn" id="dlCr2">Download creation .ps1</button></div>'+
+      '<div class="card" style="overflow-x:auto;max-width:640px"><table><thead><tr><th>Office</th><th>Matched</th><th>Notes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    document.getElementById('dlBackfillDl').disabled=false;
+    document.getElementById('dlBf2').addEventListener('click',function(){dlDownload(d.backfillScript,'office-company-backfill.ps1');});
+    document.getElementById('dlCr2').addEventListener('click',function(){dlDownload(d.ddgScript,'create-distribution-lists.ps1');});
+  }).catch(function(){ btn.disabled=false; btn.textContent='Build backfill'; out.textContent='Could not reach the service.'; });
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
+  document.getElementById('dlLoad').addEventListener('click',loadDlPlan);
+  document.getElementById('dlBackfillDl').addEventListener('click',function(){ if(DLPLAN) dlDownload(DLPLAN.backfillScript,'office-company-backfill.ps1'); });
   document.getElementById('spgLoad').addEventListener('click',loadSpGroups);
   document.getElementById('spgCsv').addEventListener('click',downloadSpCsv);
   document.getElementById('driftLoad').addEventListener('click',loadDrift);

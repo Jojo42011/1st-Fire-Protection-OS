@@ -510,6 +510,14 @@ router.get('/api/ad-audit/pilot-script', async (req, res) => {
   res.status(out.ok ? 200 : 400).json(out);
 });
 
+/** Office + All-Employees distribution-list plan for the browser: the Office/Company backfill script
+ *  (stamps every active employee so the dynamic lists resolve) and the EXO creation script, plus a
+ *  per-office headcount/backfill summary. Session-gated (no agent token); nothing is written. */
+router.get('/api/ad-audit/office-dl-plan', (_req, res) => {
+  try { res.json(buildOfficeDlPlan()); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+
 /** Generate a domain-controller cleanup script from hand-picked audit findings. Body:
  *  { selections: [{ sam, code }] }. The server re-derives every fix from the live drift compute,
  *  so the browser only chooses which findings to act on, never the values written. */
