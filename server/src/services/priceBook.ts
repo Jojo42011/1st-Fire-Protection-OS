@@ -79,6 +79,24 @@ export function getItemBySku(office: string, sku: string): PriceItem | null {
     || null;
 }
 
+/**
+ * Find one representative catalog item for a takeoff component: the first active item whose name or
+ * category contains any of the keywords. Optionally require a unit (so a per-each component never
+ * matches a per-100-ft pipe row). Office rows win over the shared catalog. Returns null if nothing fits.
+ */
+export function findItem(office: string, keywords: string[], unit?: string): PriceItem | null {
+  const { items } = listPriceBook(office, '', 5000);
+  const kws = keywords.map((k) => k.toLowerCase()).filter(Boolean);
+  const wantUnit = unit ? unit.toLowerCase() : '';
+  const hit = items.find((r) => {
+    const hay = `${r.name || ''} ${r.cat || ''}`.toLowerCase();
+    if (!kws.some((k) => hay.includes(k))) return false;
+    if (wantUnit) { const u = String(r.unit || '').toLowerCase(); if (u && u !== wantUnit) return false; }
+    return true;
+  });
+  return hit || null;
+}
+
 export function upsertItem(office: string, it: { sku: string; name?: string; cat?: string; unit?: string; cost?: number; labor_hrs?: number }): PriceItem | null {
   const sku = String(it.sku || '').trim();
   if (!sku) return null;

@@ -275,6 +275,8 @@ function drawEditor(d){
           '<table style="margin-top:10px"><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Hrs</th><th class="r">Ext cost</th><th></th></tr></thead>'+
           '<tbody id="lines">'+(lines||'<tr><td colspan="6" class="empty" style="padding:16px">No line items yet. Search above, or add a manual line.</td></tr>')+'</tbody></table>'+
           '<button class="os-btn" id="manual" style="margin-top:10px">+ Manual line</button>'+
+          '<button class="os-btn" id="autotake" style="margin-top:10px;margin-left:8px">Auto-takeoff</button>'+
+          '<div class="note" style="margin-top:8px">Auto-takeoff builds a priced bill of materials from the square feet, hazard, and system type above (a budget/ROM estimate you then refine). Uses your office price book where it can.</div>'+
         '</div></div>'+
         '<div class="card"><div class="card-h"><h2>Scope, inclusions &amp; exclusions</h2></div><div class="card-b">'+
           '<div class="fld"><label>Scope of work (proposal body)</label><textarea id="f_scope" rows="3" placeholder="Describe the system being installed…">'+esc(q.scope)+'</textarea></div>'+
@@ -337,6 +339,18 @@ function drawEditor(d){
   });});
   document.getElementById('manual').addEventListener('click',function(){
     addLine({name:'New line item',qty:1,cost:0,hrs:0});
+  });
+  document.getElementById('autotake').addEventListener('click',function(){
+    var q=CURRENT.quote;
+    if(!q.sf||Number(q.sf)<=0){ toast('Enter the square feet above first',true); var sfEl=document.getElementById('f_sf'); if(sfEl)sfEl.focus(); return; }
+    var hasLines=(CURRENT.lines&&CURRENT.lines.length);
+    var replace=false;
+    if(hasLines){ if(!confirm('Replace the '+CURRENT.lines.length+' existing line(s) with a fresh auto-takeoff?')) return; replace=true; }
+    var btn=document.getElementById('autotake'); btn.disabled=true; btn.textContent='Building…';
+    api('/api/estimating/quotes/'+QID+'/takeoff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({replace:replace})}).then(function(d){
+      if(d.ok){ CURRENT=d; drawEditor(d); toast('Auto-takeoff added '+d.generated+' line items'); }
+      else { toast(d.error||'Could not build takeoff',true); btn.disabled=false; btn.textContent='Auto-takeoff'; }
+    });
   });
   document.getElementById('saverates').addEventListener('click',function(){
     var rates={labor_rate:Number(v('m_labor_rate')),design_rate:Number(v('m_design_rate')),mat_markup:Number(v('m_mat_markup')),overhead:Number(v('m_overhead')),profit:Number(v('m_profit'))};

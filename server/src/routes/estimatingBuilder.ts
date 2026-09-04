@@ -11,6 +11,7 @@ import {
 } from '../services/quotesBuilder';
 import { sendProposal } from '../services/proposalEmail';
 import { jobFromQuote, jobForQuote } from '../services/jobsBoard';
+import { computeTakeoff, generateTakeoff } from '../services/takeoff';
 import { createApproval } from './approvals';
 
 /**
@@ -110,6 +111,34 @@ router.post('/api/estimating/quotes/:id(\\d+)/status', (req, res) => {
   if (status === 'won') { const ctx = currentContext(req); job = jobFromQuote(id, ctx.user?.display_name || ctx.user?.email || undefined); }
   else job = jobForQuote(id);
   res.json({ ok: true, ...out, job });
+});
+
+/* ---- Phase 2: parametric auto-takeoff ---- */
+// Preview the generated bill of materials for a set of parameters without touching the quote.
+router.post('/api/estimating/quotes/:id(\\d+)/takeoff/preview', (req, res) => {
+  const d = getQuote(Number(req.params.id));
+  if (!d) return res.status(404).json({ ok: false, error: 'not found' });
+  const b = req.body || {};
+  const lines = computeTakeoff(d.quote.office, {
+    sf: b.sf != null ? Number(b.sf) : (Number(d.quote.sf) || 0),
+    hazard: b.hazard != null ? String(b.hazard) : (d.quote.hazard || ''),
+    system_type: b.system_type != null ? String(b.system_type) : (d.quote.system_type || ''),
+    stories: b.stories != null ? Number(b.stories) : (Number(d.quote.stories) || 1),
+    type: d.quote.type || 'Fire Sprinkler',
+  });
+  res.json({ ok: true, lines });
+});
+
+router.post('/api/estimating/quotes/:id(\\d+)/takeoff', (req, res) => {
+  const b = req.body || {};
+  const out = generateTakeoff(Number(req.params.id), {
+    replace: !!b.replace,
+    sf: b.sf != null && b.sf !== '' ? Number(b.sf) : undefined,
+    hazard: b.hazard != null && b.hazard !== '' ? String(b.hazard) : undefined,
+    system_type: b.system_type != null && b.system_type !== '' ? String(b.system_type) : undefined,
+    stories: b.stories != null && b.stories !== '' ? Number(b.stories) : undefined,
+  });
+  res.status(out ? 200 : 400).json(out ? { ok: true, ...out } : { ok: false, error: 'Set a square footage first, then run the takeoff.' });
 });
 
 /* ---- CRM account link ---- */
