@@ -365,7 +365,7 @@ function showProposal(){
   var bullets=function(s){return '<ul>'+String(s||'').split(/\n+/).filter(Boolean).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';};
   var what=q.type==='Both'?'fire sprinkler and fire alarm work':q.type==='Fire Alarm'?'a fire alarm system':'a fire sprinkler system';
   var sheet=
-    '<div class="lh"><img src="/1stfp-logo.jpg" alt="1st Fire Protection Services"><div><div class="co">1st Fire Protection Services, LLC</div>'+
+    '<div class="lh"><img src="/brand/logo-proposal.png" alt="1st Fire Protection Services"><div><div class="co">1st Fire Protection Services, LLC</div>'+
       '<div class="ad">'+esc(offLabel)+' office'+(q.address?(' · '+esc(q.address)):'')+'<br>PO Box 460155, San Antonio TX 78246</div></div></div>'+
     '<div class="meta"><span>Proposal '+esc(q.number)+'</span><span>'+new Date().toLocaleDateString()+'</span></div>'+
     '<p>To: <b>'+esc(q.customer||'Customer')+'</b>'+(q.contact?(' · Attn: '+esc(q.contact)):'')+'</p>'+
