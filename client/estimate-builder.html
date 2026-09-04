@@ -360,13 +360,13 @@ function wirePbSearch(){
 
 /* ---------------- proposal ---------------- */
 function showProposal(){
-  var q=CURRENT.quote,t=CURRENT.totals;
-  var offLabel=document.getElementById('office').selectedOptions[0].textContent;
+  var q=CURRENT.quote,t=CURRENT.totals,br=CURRENT.branding||{};
   var bullets=function(s){return '<ul>'+String(s||'').split(/\n+/).filter(Boolean).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';};
   var what=q.type==='Both'?'fire sprinkler and fire alarm work':q.type==='Fire Alarm'?'a fire alarm system':'a fire sprinkler system';
   var sheet=
-    '<div class="lh"><img src="/brand/logo-proposal.png" alt="1st Fire Protection Services"><div><div class="co">1st Fire Protection Services, LLC</div>'+
-      '<div class="ad">'+esc(offLabel)+' office'+(q.address?(' · '+esc(q.address)):'')+'<br>PO Box 460155, San Antonio TX 78246</div></div></div>'+
+    '<div class="lh"><img src="/brand/logo-proposal.png" alt="1st Fire Protection Services"><div>'+
+      '<div class="co">'+esc(br.llc||'1st Fire Protection Services, LLC')+'</div>'+
+      '<div class="ad">'+esc(br.street||'')+'<br>'+esc(br.cityStateZip||'')+(br.phone?('  ·  '+esc(br.phone)):'')+'</div></div></div>'+
     '<div class="meta"><span>Proposal '+esc(q.number)+'</span><span>'+new Date().toLocaleDateString()+'</span></div>'+
     '<p>To: <b>'+esc(q.customer||'Customer')+'</b>'+(q.contact?(' · Attn: '+esc(q.contact)):'')+'</p>'+
     '<p>Thank you for the opportunity to provide '+what+' for <b>'+esc(q.title||'your project')+'</b>. 1st Fire Protection proposes to furnish and install the following, in accordance with the applicable NFPA standards and the authority having jurisdiction:</p>'+
@@ -375,7 +375,7 @@ function showProposal(){
     '<div class="price">Total price: '+money(t.sellPrice)+'</div>'+
     (q.exclusions?'<h2>Exclusions</h2>'+bullets(q.exclusions):'')+
     '<p class="note" style="color:#555">Valid for 30 days. '+esc(q.system_type||'Wet pipe')+' system · '+esc(q.hazard||'')+(q.sf?(' · '+Number(q.sf).toLocaleString()+' sq ft'):'')+'.</p>'+
-    '<div class="acc"><b>Acceptance</b><p style="font-size:11px;color:#555;margin:6px 0 0">Signature below authorizes 1st Fire Protection to proceed under the terms of this proposal.</p>'+
+    '<div class="acc"><b>Acceptance</b><p style="font-size:11px;color:#555;margin:6px 0 0">Signature below authorizes '+esc(br.llc||'1st Fire Protection')+' to proceed under the terms of this proposal.</p>'+
       '<div class="g"><div><div class="ln"></div><div class="cap">Authorized signature</div></div><div><div class="ln"></div><div class="cap">Date</div></div>'+
       '<div><div class="ln"></div><div class="cap">Printed name</div></div><div><div class="ln"></div><div class="cap">Title</div></div></div></div>';
   document.getElementById('sheet').innerHTML=sheet;

@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { canonicalOffice } from '../os/office';
 import { getMargins, getItemBySku, sellPrice, Margins } from './priceBook';
+import { officeBranding, OfficeBranding } from './officeBranding';
 
 /**
  * The construction quote builder (Phase 1). An OS-native quote assembled from price-book line items,
@@ -18,7 +19,7 @@ export interface Quote {
   created_by: string | null; created_at: string; updated_at: string;
 }
 export interface QuoteTotals { matCost: number; laborHrs: number; laborCost: number; sellPrice: number; margins: Margins; markupPct: number; }
-export interface QuoteWithLines { quote: Quote; lines: QuoteLine[]; totals: QuoteTotals; }
+export interface QuoteWithLines { quote: Quote; lines: QuoteLine[]; totals: QuoteTotals; branding: OfficeBranding; }
 
 const off = (raw: string | null | undefined): string => (raw ? canonicalOffice(raw) || '' : '');
 
@@ -118,7 +119,7 @@ export function getQuote(id: number): QuoteWithLines | null {
   const lines = db.prepare(`SELECT * FROM est_quote_lines WHERE quote_id = ? ORDER BY sort, id`).all(id) as QuoteLine[];
   let rates: Margins | undefined; try { rates = quote.rates_json ? { office: quote.office, ...JSON.parse(quote.rates_json) } : undefined; } catch { rates = undefined; }
   const totals = computeTotals(id, quote.office, rates);
-  return { quote, lines, totals };
+  return { quote, lines, totals, branding: officeBranding(quote.office) };
 }
 
 /* ─────────────────────────── lines ─────────────────────────── */
