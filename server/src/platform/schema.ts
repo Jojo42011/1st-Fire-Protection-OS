@@ -104,12 +104,14 @@ export function ensurePlatformSchema(): void {
       actor_json TEXT,
       payload_json TEXT,
       status TEXT NOT NULL DEFAULT 'received',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT,
       processed_at TEXT,
       error TEXT,
       occurred_at TEXT DEFAULT (datetime('now')),
       received_at TEXT DEFAULT (datetime('now'))
     );
-    CREATE INDEX IF NOT EXISTS idx_platform_events_pending ON platform_events(status, received_at);
+    CREATE INDEX IF NOT EXISTS idx_platform_events_pending ON platform_events(status, next_attempt_at, received_at);
 
     CREATE TABLE IF NOT EXISTS agent_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
