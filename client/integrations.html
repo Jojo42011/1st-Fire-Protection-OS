@@ -73,6 +73,21 @@
     </div>
   </div>
 
+  <div class="section-title">Microsoft 365 mail</div>
+  <div class="adset">
+    <p class="why">The OS sends quote proposals, review requests, and notifications through Microsoft Graph, using the same Entra app as the license sync plus the <b>Mail.Send</b> permission. Send yourself a test to confirm the permission and sending mailbox are set, without needing a live quote.</p>
+    <div id="mail_state" class="hint" style="margin-bottom:14px">Checking mail status…</div>
+    <div class="fld">
+      <label for="mail_to">Send a test email to</label>
+      <input id="mail_to" type="email" placeholder="you@1stfpservices.com" spellcheck="false" autocomplete="off" />
+      <span class="hint">Uses the "General notifications" sender. A 403 here means the app is missing the Mail.Send grant.</span>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="mail_send">Send test email</button>
+      <span id="mail_status" class="pill gray" style="display:none"></span>
+    </div>
+  </div>
+
   <div class="section-title">The Team</div>
   <div class="team" id="team"></div>
 
@@ -99,6 +114,29 @@
         var s=d.settings||{}; ou.value=s.targetOu||''; dom.value=s.upnDomain||''; sku.value=s.licenseSku||'';
         show(s.targetOu?'Saved':'Saved · OU still needed', s.targetOu?'green':'amber');
       }).catch(function(){ save.disabled=false; show('Save failed','red'); });
+  });
+})();
+// ── Microsoft 365 mail: status + self-test send ──
+(function(){
+  var to=document.getElementById('mail_to'), send=document.getElementById('mail_send'),
+      status=document.getElementById('mail_status'), state=document.getElementById('mail_state');
+  function show(msg,cls){ status.className='pill '+(cls||'gray'); status.textContent=msg; status.style.display=''; }
+  fetch('/api/integrations/mail/status').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){ state.textContent='Could not read mail status.'; return; }
+    if(!d.credsPresent){ state.innerHTML='<b>Microsoft Graph is not connected</b> in this environment. Set MS_GRAPH_TENANT / MS_GRAPH_CLIENT_ID / MS_GRAPH_CLIENT_SECRET.'; return; }
+    if(!d.from){ state.innerHTML='Graph is connected, but <b>no sending mailbox is set</b>. Set MS_MAIL_FROM.'; return; }
+    state.innerHTML='Graph connected · sends as <b>'+d.from+'</b>. Send a test below to confirm Mail.Send.';
+  }).catch(function(){ state.textContent='Could not read mail status.'; });
+  send.addEventListener('click',function(){
+    var addr=(to.value||'').trim();
+    if(!addr){ show('Enter an email','amber'); return; }
+    send.disabled=true; show('Sending…','gray');
+    fetch('/api/integrations/mail/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:addr})})
+      .then(function(r){return r.json();}).then(function(d){
+        send.disabled=false;
+        if(d&&d.ok){ show('Sent to '+d.sentTo,'green'); }
+        else { show((d&&d.error)?d.error.slice(0,140):'Send failed','red'); }
+      }).catch(function(){ send.disabled=false; show('Send failed','red'); });
   });
 })();
 function pill(status){
