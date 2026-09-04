@@ -1,7 +1,6 @@
 export interface RelevanceTriggerRequest {
   agentId: string;
   content: string;
-  metadata?: Record<string, unknown>;
 }
 
 export interface RelevanceTriggerResult {
@@ -13,6 +12,9 @@ export interface RelevanceTriggerResult {
 /**
  * Relevance AI is a reasoning/workforce layer, not a state store. The API URL is
  * region-specific and is copied from the agent API trigger configuration.
+ *
+ * Keep this adapter deliberately narrow: only send the documented agent_id +
+ * message contract. Correlation/workflow metadata remains in the Systemize OS.
  */
 export class RelevanceClient {
   constructor(
@@ -37,7 +39,6 @@ export class RelevanceClient {
       body: JSON.stringify({
         agent_id: input.agentId,
         message: { role: 'user', content: input.content },
-        ...(input.metadata ? { metadata: input.metadata } : {}),
       }),
     });
 
