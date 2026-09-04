@@ -1,8 +1,9 @@
 import { getDb } from '../db';
 
 /**
- * Platform tables are intentionally additive to the existing domain schema.
- * This lets 1st FP adopt the Systemize standard without rewriting domain tables.
+ * Platform tables are additive to the existing domain schema. Existing 1st FP
+ * tables such as `approvals` remain authoritative; the platform layer links to
+ * them rather than creating a competing inbox.
  */
 export function ensurePlatformSchema(): void {
   const db = getDb();
@@ -57,21 +58,20 @@ export function ensurePlatformSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_external_resource_lookup
       ON external_resources(client_id, system, resource_type, external_id);
 
-    CREATE TABLE IF NOT EXISTS platform_approvals (
+    /* The existing `approvals` table stays the single inbox. This table adds
+       workflow correlation without duplicating approval state. */
+    CREATE TABLE IF NOT EXISTS workflow_approval_links (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      approval_id INTEGER NOT NULL UNIQUE,
       client_id TEXT NOT NULL DEFAULT '1stfp',
-      workflow_run_id TEXT,
-      step_key TEXT,
+      workflow_run_id TEXT NOT NULL,
+      step_key TEXT NOT NULL,
       action_key TEXT NOT NULL,
       risk_level INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      requested_by TEXT,
-      requested_at TEXT DEFAULT (datetime('now')),
-      decided_by TEXT,
-      decided_at TEXT,
-      decision_note TEXT,
-      payload_json TEXT
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE
     );
+    CREATE INDEX IF NOT EXISTS idx_workflow_approval_run ON workflow_approval_links(workflow_run_id, step_key);
 
     CREATE TABLE IF NOT EXISTS agent_actions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,8 +103,13 @@ export function ensurePlatformSchema(): void {
       schema_version TEXT NOT NULL DEFAULT '1',
       actor_json TEXT,
       payload_json TEXT,
-      occurred_at TEXT DEFAULT (datetime('now'))
+      status TEXT NOT NULL DEFAULT 'received',
+      processed_at TEXT,
+      error TEXT,
+      occurred_at TEXT DEFAULT (datetime('now')),
+      received_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE INDEX IF NOT EXISTS idx_platform_events_pending ON platform_events(status, received_at);
 
     CREATE TABLE IF NOT EXISTS agent_versions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
