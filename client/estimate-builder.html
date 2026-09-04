@@ -118,7 +118,10 @@ function esc(t){return (window.OS&&OS.esc)?OS.esc(t):String(t==null?'':t).replac
 function money(n){n=Number(n)||0;return n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});}
 function toast(m){if(window.OS&&OS.toast)OS.toast(m);}
 var OFFICE='', TAB='quotes', QID=null, VIEW;
-function api(path,opts){return fetch(path,opts).then(r=>r.json());}
+function api(path,opts){return fetch(path,opts).then(function(r){return r.json();}).catch(function(e){
+  var v=document.getElementById('view'); if(v)v.innerHTML='<div class="card"><div class="card-b" style="color:var(--critical,#8c1d18)">Could not reach the estimating service ('+esc(e.message)+'). If this persists, hard-refresh the page.</div></div>';
+  throw e;
+});}
 function officeQS(extra){var q='office='+encodeURIComponent(OFFICE);return extra?q+'&'+extra:q;}
 
 /* ---------------- offices + tabs ---------------- */
@@ -432,7 +435,9 @@ document.addEventListener('DOMContentLoaded',function(){
   var ds=document.getElementById('defsearch');
   ds.addEventListener('input',function(){clearTimeout(pbTimer);pbTimer=setTimeout(function(){loadDefs(ds.value);},220);});
   document.getElementById('defcreate').addEventListener('click',createFromDefs);
-  function boot(){ if(!window.OS){return setTimeout(boot,40);} loadOffices().then(function(){bindTabs();render();}); }
+  // Render as soon as we can; don't hang forever waiting on os.js (we have fallbacks for OS.esc/toast).
+  var tries=0;
+  function boot(){ if(!window.OS && tries++<25){return setTimeout(boot,40);} loadOffices().then(function(){bindTabs();render();}).catch(function(){bindTabs();render();}); }
   boot();
 });
 </script>
