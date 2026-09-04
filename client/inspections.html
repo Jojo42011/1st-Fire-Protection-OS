@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inspections · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .wrap{padding:22px 26px;max-width:1080px}
+  h1{font-size:20px;font-weight:600;margin:0}
+  .sub{font-size:13px;color:var(--muted);margin:6px 0 0;max-width:720px}
+  .bar2{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0 4px}
+  select,input,textarea{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;outline:none}
+  select:focus,input:focus,textarea:focus{border-color:var(--ink)}
+  textarea{font-family:inherit;font-size:13px;width:100%;line-height:1.5;resize:vertical}
+  .note{font-size:11.5px;color:var(--muted)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+  .card-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .card-h h2{font-size:13px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:0;font-weight:500}
+  .card-b{padding:14px 16px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:9px 12px;border-bottom:1px solid var(--border);font-weight:500}
+  td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--ink-2);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tbody tr.click{cursor:pointer} tbody tr.click:hover{background:var(--bg)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .empty{padding:26px;color:var(--muted);font-size:13px;text-align:center}
+  .fld{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+  .fld label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pill{font-family:var(--mono);font-size:10.5px;padding:2px 9px;border-radius:20px;font-weight:500}
+  .pill.prog{color:var(--muted);background:var(--bg)}
+  .pill.sat{color:var(--good,#12805c);background:rgba(18,128,92,.12)}
+  .pill.unsat{color:var(--critical,#8c1d18);background:rgba(140,29,24,.12)}
+  .search-wrap{position:relative}
+  .results{position:absolute;z-index:20;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:240px;overflow:auto;box-shadow:0 12px 30px -14px rgba(0,0,0,.4)}
+  .results div{padding:7px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border)}
+  .results div:hover{background:var(--bg)} .results div:last-child{border-bottom:none}
+  /* checklist */
+  .freqhdr{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);font-weight:600;padding:14px 4px 6px;border-bottom:1px solid var(--border)}
+  .item{display:flex;gap:12px;align-items:flex-start;padding:11px 4px;border-bottom:1px solid var(--border)}
+  .item .body{flex:1}
+  .item .txt{font-size:13px;color:var(--ink);line-height:1.4}
+  .item .ref{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:2px}
+  .item .kind{display:inline-block;font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;padding:0 6px;border-radius:10px;background:var(--bg);color:var(--muted);margin-left:6px}
+  .rbtns{display:flex;gap:4px;flex:none}
+  .rbtn{font-family:var(--mono);font-size:11px;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer}
+  .rbtn.pass.on{background:rgba(18,128,92,.16);border-color:#12805c;color:#0f6c4f}
+  .rbtn.fail.on{background:rgba(140,29,24,.16);border-color:#8c1d18;color:#8c1d18}
+  .rbtn.na.on{background:var(--border);border-color:var(--muted);color:var(--ink)}
+  .inote{margin-top:7px;display:none} .inote.on{display:block}
+  .inote input{width:100%}
+  .sumrow{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+  .sumrow .s{font-family:var(--mono);font-size:12px} .sumrow .s b{font-size:16px;font-weight:700}
+  .good{color:var(--good,#12805c)} .bad{color:var(--critical,#8c1d18)}
+  a.back{font-family:var(--mono);font-size:12px;color:var(--muted);text-decoration:none;cursor:pointer}
+  a.back:hover{color:var(--ink)}
+  /* AHJ report overlay */
+  #rep{position:fixed;inset:0;background:rgba(15,18,22,.55);z-index:100;display:none;overflow:auto;padding:24px}
+  #rep.on{display:block}
+  .repbar{max-width:780px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end}
+  .sheet{max-width:780px;margin:0 auto;background:#fff;color:#1f2430;border-radius:8px;padding:44px 52px;font-family:Calibri,'Segoe UI',Candara,sans-serif;line-height:1.5;box-shadow:0 20px 60px -20px rgba(0,0,0,.5)}
+  .lh{display:flex;align-items:center;gap:16px;border-bottom:2px solid #1d2b49;padding-bottom:14px;margin-bottom:16px}
+  .lh img{width:88px;height:auto;flex:none}
+  .lh .co{font-size:18px;font-weight:700;color:#1d2b49} .lh .ad{font-size:11px;color:#556;margin-top:3px;line-height:1.5}
+  .rtitle{font-size:15px;font-weight:700;color:#1d2b49;margin:2px 0} .rstd{font-size:11px;color:#667;margin-bottom:14px}
+  .rgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:12px;margin-bottom:16px} .rgrid .k{color:#889}
+  .rtable{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
+  .rtable th{text-align:left;background:#f4f5f7;color:#556;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:6px 8px;border:1px solid #dcdfe4}
+  .rtable td{padding:6px 8px;border:1px solid #e6e8ec;vertical-align:top}
+  .rp{color:#0f6c4f;font-weight:700} .rf{color:#8c1d18;font-weight:700} .rn{color:#889}
+  .rresult{font-size:14px;font-weight:700;margin:14px 0} .rresult.sat{color:#0f6c4f} .rresult.unsat{color:#8c1d18}
+  .rsig{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:28px;font-size:11px;color:#667}
+  .rsig .ln{border-bottom:1px solid #333;height:26px}
+  @media print{ body *{visibility:hidden} #rep,#rep *{visibility:visible} #rep{position:absolute;inset:0;background:#fff;padding:0} .repbar{display:none} .sheet{box-shadow:none;max-width:none;padding:0} }
+  @media(max-width:620px){.frow,.rgrid,.rsig{grid-template-columns:1fr}}
+</style>
+<script src="/os.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+    <div>
+      <h1>Inspections</h1>
+      <p class="sub">Run an NFPA inspection (10 extinguishers, 25 sprinkler, 72 alarm), score every line, and print a letterheaded AHJ report. Failed items drop straight into the deficiencies backlog to be quoted.</p>
+    </div>
+  </div>
+
+  <div class="bar2">
+    <span class="note">Office</span>
+    <select id="office"></select>
+    <span id="topRight" style="margin-left:auto"></span>
+  </div>
+
+  <div id="view"></div>
+</div>
+
+<div id="rep"><div class="repbar">
+  <button class="os-btn" onclick="document.getElementById('rep').classList.remove('on')">Close</button>
+  <button class="os-btn primary" onclick="window.print()">Print / Save PDF</button>
+</div><div id="sheet" class="sheet"></div></div>
+
+<script>
+function esc(t){return (window.OS&&OS.esc)?OS.esc(t):String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(m,bad){if(window.OS&&OS.toast)OS.toast(m,bad?{tone:'bad'}:undefined);}
+var OFFICE='', INSP=null, SYSTEMS=[];
+function api(path,opts){return fetch(path,opts).then(function(r){return r.json();}).catch(function(e){
+  var v=document.getElementById('view'); if(v)v.innerHTML='<div class="card"><div class="card-b" style="color:var(--critical,#8c1d18)">Could not reach the inspections service ('+esc(e.message)+'). Hard-refresh if this persists.</div></div>';
+  throw e;
+});}
+function officeQS(extra){var q='office='+encodeURIComponent(OFFICE);return extra?q+'&'+extra:q;}
+
+function loadOffices(){
+  return api('/api/estimating/offices').then(function(d){
+    var sel=document.getElementById('office');
+    sel.innerHTML='<option value="">All offices (shared)</option>'+(d.offices||[]).map(function(o){return '<option value="'+esc(o.key)+'">'+esc(o.label)+'</option>';}).join('');
+    sel.addEventListener('change',function(){OFFICE=sel.value;INSP=null;render();});
+  });
+}
+
+function render(){
+  document.getElementById('topRight').innerHTML = INSP?'':'<button class="os-btn primary" id="newBtn">New inspection</button>';
+  if(INSP) return renderDetail();
+  return renderList();
+}
+
+/* ---------------- list + new ---------------- */
+function renderList(){
+  return api('/api/inspections?'+officeQS()).then(function(d){
+    var rows=(d.inspections||[]).map(function(i){
+      var res=i.result?('<span class="pill '+(i.result==='Satisfactory'?'sat':'unsat')+'">'+esc(i.result)+'</span>'):'<span class="pill prog">In progress</span>';
+      var fails=i.fail_count?('<span class="bad">'+i.fail_count+' failed</span>'):'<span class="note">'+(i.total||0)+' items</span>';
+      return '<tr class="click" data-id="'+i.id+'"><td class="mono">'+esc(i.number||'')+'</td><td>'+esc(i.customer||'—')+'</td>'+
+        '<td>'+esc(sysLabel(i.system))+'</td><td>'+esc(i.interval||'')+'</td><td>'+res+'</td><td>'+fails+'</td>'+
+        '<td class="mono note">'+esc((i.inspected_at||'').slice(0,10))+'</td></tr>';
+    }).join('');
+    document.getElementById('view').innerHTML =
+      newForm() +
+      '<div class="card"><div class="card-h"><h2>Inspections</h2></div>'+
+      (rows?('<table><thead><tr><th>No.</th><th>Customer</th><th>System</th><th>Interval</th><th>Result</th><th>Findings</th><th>Date</th></tr></thead><tbody>'+rows+'</tbody></table>')
+        :'<div class="empty">No inspections yet. Start one above.</div>')+'</div>';
+    document.querySelectorAll('tr.click').forEach(function(tr){tr.addEventListener('click',function(){open(Number(tr.getAttribute('data-id')));});});
+    wireNewForm();
+    var nb=document.getElementById('newBtn'); if(nb)nb.addEventListener('click',function(){document.getElementById('newCard').scrollIntoView({behavior:'smooth'});});
+  });
+}
+function sysLabel(s){var m={extinguisher:'Extinguisher (NFPA 10)',sprinkler:'Sprinkler (NFPA 25)',alarm:'Fire alarm (NFPA 72)'};return m[s]||s||'';}
+
+function newForm(){
+  var sysOpts=SYSTEMS.map(function(s){return '<option value="'+esc(s.system)+'">'+esc(s.title)+' · '+esc(s.code)+'</option>';}).join('');
+  return '<div class="card" id="newCard"><div class="card-h"><h2>New inspection</h2></div><div class="card-b">'+
+    '<div class="frow"><div class="fld"><label>System</label><select id="nSystem">'+sysOpts+'</select></div>'+
+    '<div class="fld"><label>Service interval</label><select id="nInterval"></select></div></div>'+
+    '<div class="frow"><div class="fld"><label>Customer / facility</label><div class="search-wrap"><input id="nCustomer" placeholder="Type to search accounts…" autocomplete="off"><div id="nResults" class="results" style="display:none"></div></div></div>'+
+    '<div class="fld"><label>Inspector</label><input id="nInspector" placeholder="Technician name"></div></div>'+
+    '<div class="fld"><label>Address / location</label><input id="nAddress" placeholder="Site address"></div>'+
+    '<button class="os-btn primary" id="nCreate">Start inspection</button>'+
+    '</div></div>';
+}
+function wireNewForm(){
+  var sysSel=document.getElementById('nSystem'); if(!sysSel)return;
+  function fillIntervals(){
+    var s=SYSTEMS.find(function(x){return x.system===sysSel.value;})||SYSTEMS[0]||{intervals:[]};
+    document.getElementById('nInterval').innerHTML=(s.intervals||[]).map(function(iv){return '<option value="'+esc(iv)+'">'+esc(iv)+'</option>';}).join('');
+  }
+  sysSel.addEventListener('change',fillIntervals); fillIntervals();
+  var acctId=null, box=document.getElementById('nCustomer'), results=document.getElementById('nResults');
+  var t; box.addEventListener('input',function(){acctId=null;clearTimeout(t);var q=box.value.trim();if(!q){results.style.display='none';return;}
+    t=setTimeout(function(){api('/api/inspections/accounts?q='+encodeURIComponent(q)).then(function(d){
+      var a=d.accounts||[]; if(!a.length){results.style.display='none';return;}
+      results.innerHTML=a.map(function(x){return '<div data-id="'+x.id+'" data-n="'+esc(x.name)+'">'+esc(x.name)+'</div>';}).join('');
+      results.style.display='block';
+      results.querySelectorAll('div').forEach(function(el){el.addEventListener('click',function(){acctId=Number(el.getAttribute('data-id'));box.value=el.getAttribute('data-n');results.style.display='none';});});
+    });},200);
+  });
+  document.addEventListener('click',function(e){if(!results.contains(e.target)&&e.target!==box)results.style.display='none';});
+  document.getElementById('nCreate').addEventListener('click',function(){
+    var body={office:OFFICE,system:sysSel.value,interval:document.getElementById('nInterval').value,
+      customer:box.value.trim(),account_id:acctId,address:document.getElementById('nAddress').value.trim(),
+      inspector:document.getElementById('nInspector').value.trim()};
+    if(!body.customer){toast('Enter a customer or facility',true);return;}
+    api('/api/inspections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(d){
+      if(!d.ok){toast(d.error||'Could not start',true);return;}
+      open(d.inspection.id);
+    });
+  });
+}
+
+/* ---------------- detail ---------------- */
+function open(id){INSP=id;render();}
+function renderDetail(){
+  return api('/api/inspections/'+INSP).then(function(d){
+    if(!d.ok){INSP=null;return renderList();}
+    window._D=d; var i=d.inspection, items=d.items||[], s=d.summary;
+    var done=i.status==='complete';
+    var resPill=i.result?('<span class="pill '+(i.result==='Satisfactory'?'sat':'unsat')+'">'+esc(i.result)+'</span>'):'<span class="pill prog">In progress</span>';
+    // group by frequency in template order
+    var order=['daily','weekly','monthly','quarterly','semiannual','annual','3-year','5-year','multi-year'];
+    var groups={}; items.forEach(function(it){(groups[it.freq]||(groups[it.freq]=[])).push(it);});
+    var groupHtml=order.filter(function(f){return groups[f];}).map(function(f){
+      return '<div class="freqhdr">'+esc(f)+'</div>'+groups[f].map(itemRow).join('');
+    }).join('');
+    document.getElementById('view').innerHTML=
+      '<a class="back" id="back">&larr; All inspections</a>'+
+      '<div class="card" style="margin-top:10px"><div class="card-h"><h2>'+esc(i.number||'')+' · '+esc(sysLabel(i.system))+'</h2>'+resPill+
+        '<span style="margin-left:auto" class="note">'+esc(i.interval||'')+' interval</span></div>'+
+      '<div class="card-b">'+
+        '<div class="frow"><div class="fld"><label>Customer / facility</label><input id="dCustomer" value="'+esc(i.customer||'')+'"'+(done?' disabled':'')+'></div>'+
+        '<div class="fld"><label>Inspector</label><input id="dInspector" value="'+esc(i.inspector||'')+'"'+(done?' disabled':'')+'></div></div>'+
+        '<div class="fld"><label>Address / location</label><input id="dAddress" value="'+esc(i.address||'')+'"'+(done?' disabled':'')+'></div>'+
+        (done?'':'<button class="os-btn" id="dSaveHdr" style="margin-top:2px">Save details</button>')+
+      '</div></div>'+
+      '<div class="card"><div class="card-h"><h2>Checklist</h2><span class="note" style="margin-left:auto">Reference only. A stricter local AHJ always governs.</span></div>'+
+      '<div class="card-b" style="padding-top:2px">'+groupHtml+'</div></div>'+
+      '<div class="card"><div class="card-b"><div class="sumrow">'+
+        '<span class="s">Pass <b class="good">'+s.pass+'</b></span>'+
+        '<span class="s">Fail <b class="bad">'+s.fail+'</b></span>'+
+        '<span class="s">N/A <b>'+s.na+'</b></span>'+
+        '<span class="s">Unscored <b>'+s.open+'</b></span>'+
+        '<span style="margin-left:auto;display:flex;gap:8px">'+
+          '<button class="os-btn" id="printBtn">AHJ report</button>'+
+          (done?'':'<button class="os-btn primary" id="finBtn">Finalize inspection</button>')+
+        '</span></div>'+
+        (done?'<div class="note" style="margin-top:10px">Finalized '+esc((i.inspected_at||'').slice(0,10))+'. '+
+          (s.fail?('<span class="bad">'+s.fail+' finding(s) sent to the deficiencies backlog.</span>'):'No findings.')+'</div>':'')+
+      '</div></div>';
+    document.getElementById('back').addEventListener('click',function(){INSP=null;render();});
+    document.getElementById('printBtn').addEventListener('click',function(){printReport(d);});
+    var fb=document.getElementById('finBtn'); if(fb)fb.addEventListener('click',finalize);
+    var sh=document.getElementById('dSaveHdr'); if(sh)sh.addEventListener('click',saveHdr);
+    if(!done) wireItems();
+  });
+}
+function itemRow(it){
+  var done=(window._D&&window._D.inspection.status==='complete');
+  function on(v){return it.result===v?' on':'';}
+  var btns=done
+    ? '<div class="rbtns"><span class="rbtn '+(it.result==='pass'?'pass on':(it.result==='fail'?'fail on':(it.result==='na'?'na on':'')))+'">'+(it.result?it.result.toUpperCase():'—')+'</span></div>'
+    : '<div class="rbtns" data-id="'+it.id+'">'+
+        '<button class="rbtn pass'+on('pass')+'" data-r="pass">Pass</button>'+
+        '<button class="rbtn fail'+on('fail')+'" data-r="fail">Fail</button>'+
+        '<button class="rbtn na'+on('na')+'" data-r="na">N/A</button></div>';
+  return '<div class="item">'+
+    '<div class="body"><span class="txt">'+esc(it.text)+'</span><span class="kind">'+esc(it.kind)+'</span>'+
+      '<div class="ref">'+esc(it.ref||'')+'</div>'+
+      '<div class="inote'+(it.result==='fail'?' on':'')+'" data-notefor="'+it.id+'"><input placeholder="Finding note (what was wrong)" value="'+esc(it.note||'')+'"'+(done?' disabled':'')+'></div>'+
+    '</div>'+btns+'</div>';
+}
+function wireItems(){
+  document.querySelectorAll('.rbtns[data-id]').forEach(function(g){
+    var id=Number(g.getAttribute('data-id'));
+    g.querySelectorAll('.rbtn').forEach(function(b){b.addEventListener('click',function(){
+      var r=b.getAttribute('data-r');
+      var cur=g.querySelector('.rbtn.on'); var already=cur&&cur.getAttribute('data-r')===r;
+      var val=already?'':r;
+      setItem(id,val,g);
+    });});
+  });
+  document.querySelectorAll('.inote input').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      var wrap=inp.closest('.inote'); var id=Number(wrap.getAttribute('data-notefor'));
+      api('/api/inspections/'+INSP+'/item/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:currentResult(id),note:inp.value})});
+    });
+  });
+}
+function currentResult(id){var g=document.querySelector('.rbtns[data-id="'+id+'"]');var on=g&&g.querySelector('.rbtn.on');return on?on.getAttribute('data-r'):'';}
+function setItem(id,val,g){
+  var note=''; var w=document.querySelector('.inote[data-notefor="'+id+'"]'); var inp=w&&w.querySelector('input'); if(inp)note=inp.value;
+  api('/api/inspections/'+INSP+'/item/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:val,note:note})}).then(function(){
+    g.querySelectorAll('.rbtn').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-r')===val);});
+    if(w)w.classList.toggle('on',val==='fail');
+    refreshSummary();
+  });
+}
+function refreshSummary(){ // cheap: re-fetch just to update counts
+  api('/api/inspections/'+INSP).then(function(d){window._D=d;var s=d.summary;
+    var el=document.querySelector('.sumrow'); if(!el)return;
+    el.querySelectorAll('.s b')[0].textContent=s.pass; el.querySelectorAll('.s b')[1].textContent=s.fail;
+    el.querySelectorAll('.s b')[2].textContent=s.na; el.querySelectorAll('.s b')[3].textContent=s.open;
+  });
+}
+function saveHdr(){
+  var patch={customer:document.getElementById('dCustomer').value,inspector:document.getElementById('dInspector').value,address:document.getElementById('dAddress').value};
+  api('/api/inspections/'+INSP,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(function(){toast('Details saved');});
+}
+function finalize(){
+  var d=window._D; if(d&&d.summary.open){ if(!confirm(d.summary.open+' item(s) are unscored. Finalize anyway? Unscored lines are treated as not applicable.'))return; }
+  else if(!confirm('Finalize this inspection? Failed items become quotable deficiencies and the report locks.'))return;
+  api('/api/inspections/'+INSP+'/finalize',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r){
+    if(!r.ok){toast('Could not finalize',true);return;}
+    toast(r.result+(r.deficiencies_created?(' · '+r.deficiencies_created+' deficiency(ies) created'):''));
+    render();
+  });
+}
+
+/* ---------------- AHJ report ---------------- */
+function printReport(d){
+  var i=d.inspection, items=d.items||[], b=d.branding||{}, s=d.summary;
+  var rows=items.map(function(it){
+    var r=it.result==='pass'?'<span class="rp">Pass</span>':it.result==='fail'?'<span class="rf">Fail</span>':it.result==='na'?'<span class="rn">N/A</span>':'<span class="rn">—</span>';
+    return '<tr><td>'+esc(it.text)+(it.ref?'<br><span style="color:#99a;font-size:9.5px">'+esc(it.ref)+'</span>':'')+'</td><td>'+r+'</td><td>'+esc(it.note||'')+'</td></tr>';
+  }).join('');
+  var fails=items.filter(function(x){return x.result==='fail';});
+  var findings=fails.length?('<h3 style="font-size:12px;color:#8c1d18;margin:16px 0 6px">Deficiencies noted</h3><ol style="font-size:11.5px;margin:0 0 6px 18px;padding:0">'+
+    fails.map(function(x){return '<li style="margin-bottom:4px">'+esc(x.text)+(x.note?(' — '+esc(x.note)):'')+'</li>';}).join('')+'</ol>'):'';
+  var resClass=i.result==='Unsatisfactory'?'unsat':'sat';
+  var resText=i.result||(s.fail?'Unsatisfactory':'Pending');
+  document.getElementById('sheet').innerHTML=
+    '<div class="lh"><img src="/brand/logo-proposal.png" alt="1st Fire Protection">'+
+      '<div><div class="co">'+esc(b.llc||'1st Fire Protection')+'</div>'+
+      '<div class="ad">'+esc(b.street||'')+(b.cityStateZip?('<br>'+esc(b.cityStateZip)):'')+(b.phone?('  ·  '+esc(b.phone)):'')+'</div></div></div>'+
+    '<div class="rtitle">Inspection &amp; Test Report</div>'+
+    '<div class="rstd">'+esc(sysLabel(i.system))+' · '+esc(dStandard(i))+'</div>'+
+    '<div class="rgrid">'+
+      '<div><span class="k">Report no.</span> '+esc(i.number||'')+'</div>'+
+      '<div><span class="k">Date</span> '+esc((i.inspected_at||new Date().toISOString()).slice(0,10))+'</div>'+
+      '<div><span class="k">Facility</span> '+esc(i.customer||'')+'</div>'+
+      '<div><span class="k">Service interval</span> '+esc(i.interval||'')+'</div>'+
+      '<div><span class="k">Location</span> '+esc(i.address||'')+'</div>'+
+      '<div><span class="k">Inspector</span> '+esc(i.inspector||'')+'</div>'+
+    '</div>'+
+    '<div class="rresult '+resClass+'">Overall result: '+esc(resText)+'</div>'+
+    '<table class="rtable"><thead><tr><th style="width:56%">Item</th><th style="width:12%">Result</th><th>Notes</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    findings+
+    '<div class="rsig"><div><div class="ln"></div><div style="margin-top:3px">Inspector signature</div></div>'+
+      '<div><div class="ln"></div><div style="margin-top:3px">Date</div></div></div>'+
+    '<p style="font-size:9.5px;color:#99a;margin-top:20px">Intervals shown reflect the referenced NFPA standard. The authority having jurisdiction may require more frequent inspection, testing, or maintenance. This report is not a substitute for the adopted edition of the standard.</p>';
+  document.getElementById('rep').classList.add('on');
+}
+function dStandard(i){var m={NFPA10:'NFPA 10 · Portable Fire Extinguishers',NFPA25:'NFPA 25 · Water-Based Fire Protection Systems',NFPA72:'NFPA 72 · Fire Alarm and Signaling'};return m[i.code]||i.code||'';}
+
+/* ---------------- boot ---------------- */
+api('/api/inspections/systems').then(function(d){SYSTEMS=d.systems||[];return loadOffices();}).then(render);
+</script>
+</body>
+</html>

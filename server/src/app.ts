@@ -44,6 +44,8 @@ import crm from './routes/crm';
 import sync from './routes/sync';
 import estimating from './routes/estimating';
 import estimatingBuilder from './routes/estimatingBuilder';
+import jobsBoard from './routes/jobsBoard';
+import inspections from './routes/inspections';
 import { seedStarterCatalog } from './services/priceBook';
 import closer from './routes/closer';
 import plans from './routes/plans';
@@ -161,6 +163,8 @@ app.use(crm);
 app.use(sync);
 app.use(estimating);
 app.use(estimatingBuilder);
+app.use(jobsBoard);
+app.use(inspections);
 app.use(closer);
 app.use(plans);
 app.use(schedule);
@@ -206,6 +210,7 @@ const PAGE_MODULE: Record<string, string> = {
   'accounts.html': 'service', 'sites.html': 'service', 'quotes.html': 'deficiencies',
   'pipeline.html': 'deficiencies', 'closer.html': 'deficiencies', 'estimates.html': 'deficiencies',
   'estimate-builder.html': 'deficiencies',
+  'job-board.html': 'service', 'inspections.html': 'service',
   'account.html': 'service',
   'executive.html': 'overview', 'office-performance.html': 'overview', 'scoreboard.html': 'overview',
   'reports-money.html': 'accounting', 'reports-ops.html': 'service', 'reports-people.html': 'people',
@@ -267,6 +272,8 @@ app.get('/pipeline', page('pipeline.html'));
 app.get('/sync', page('sync.html'));
 app.get('/estimates', page('estimates.html'));
 app.get('/estimate-builder', page('estimate-builder.html'));
+app.get('/job-board', page('job-board.html'));
+app.get('/inspections', page('inspections.html'));
 app.get('/closer', page('closer.html'));
 app.get('/plans', page('plans.html'));
 app.get('/schedule', page('schedule.html'));

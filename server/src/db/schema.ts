@@ -1573,6 +1573,72 @@ export function initDb(): void {
   // Won/lost reason, and the margin floor below which a quote must be approved before it goes out.
   addColumn('est_quotes', 'outcome_note', 'TEXT');
   addColumn('est_margins', 'floor_markup', 'REAL DEFAULT 20');
+
+  /* ---------- Phase 4: jobs from won quotes (the project board) ----------
+   * When a quote is marked won it spawns an est_jobs row: the operational handoff from sales to the
+   * field. The board is a kanban keyed on `stage`; contract_value carries the won quote's sell price.
+   * Entirely local (like est_quotes), separate from the ServiceTrade crm_jobs mirror. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS est_jobs (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      number         TEXT,                                -- "JOB-####"
+      quote_id       INTEGER,                             -- source won quote (null for a standalone job)
+      office         TEXT DEFAULT '',
+      account_id     INTEGER,
+      customer       TEXT, address TEXT, contact TEXT,
+      title          TEXT,
+      type           TEXT DEFAULT 'Fire Sprinkler',       -- Fire Sprinkler | Fire Alarm | Both
+      contract_value REAL DEFAULT 0,                      -- from the won quote's sell price
+      stage          TEXT DEFAULT 'scheduled',            -- scheduled | in_progress | punch | complete | invoiced | on_hold
+      pm             TEXT,                                -- project manager / crew lead
+      start_date     TEXT, due_date TEXT,
+      notes          TEXT, outcome_note TEXT,
+      created_by     TEXT,
+      created_at     TEXT DEFAULT (datetime('now')),
+      updated_at     TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_estjobs_office ON est_jobs(office);
+    CREATE INDEX IF NOT EXISTS idx_estjobs_stage ON est_jobs(stage);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_estjobs_quote ON est_jobs(quote_id) WHERE quote_id IS NOT NULL;
+  `);
+
+  /* ---------- Phase 5: NFPA ITM inspections (AHJ forms) ----------
+   * An inspection snapshots the right NFPA checklist (10/25/72) for the chosen system + interval into
+   * inspection_items, the inspector marks each pass/fail/na, and on finalize every failed line is
+   * pushed into the deficiencies backlog (source='inspection') so it flows into the quote builder. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS inspections (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      number       TEXT,                                  -- "INS-####"
+      office       TEXT DEFAULT '',
+      account_id   INTEGER, site_id INTEGER,
+      customer     TEXT, address TEXT, contact TEXT,
+      system       TEXT,                                  -- extinguisher | sprinkler | alarm
+      code         TEXT,                                  -- NFPA10 | NFPA25 | NFPA72
+      interval     TEXT,                                  -- monthly | quarterly | semiannual | annual | ...
+      status       TEXT DEFAULT 'in_progress',            -- in_progress | complete
+      result       TEXT,                                  -- Satisfactory | Unsatisfactory (overall, set on finalize)
+      inspector    TEXT, inspected_at TEXT,
+      notes        TEXT,
+      created_by   TEXT,
+      created_at   TEXT DEFAULT (datetime('now')),
+      updated_at   TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_inspections_office ON inspections(office);
+    CREATE INDEX IF NOT EXISTS idx_inspections_status ON inspections(status);
+
+    CREATE TABLE IF NOT EXISTS inspection_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      inspection_id INTEGER NOT NULL,
+      item_key      TEXT,
+      text          TEXT, freq TEXT, kind TEXT, ref TEXT,
+      result        TEXT DEFAULT '',                      -- pass | fail | na | '' (unset)
+      note          TEXT,
+      deficiency_id INTEGER,                              -- the deficiency spawned from a failed item
+      sort          INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_inspitems_insp ON inspection_items(inspection_id);
+  `);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

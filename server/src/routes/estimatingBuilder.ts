@@ -10,6 +10,7 @@ import {
   listOpenDeficiencies, quoteFromDeficiencies, searchAccounts, duplicateQuote, quoteApproved,
 } from '../services/quotesBuilder';
 import { sendProposal } from '../services/proposalEmail';
+import { jobFromQuote, jobForQuote } from '../services/jobsBoard';
 import { createApproval } from './approvals';
 
 /**
@@ -99,9 +100,16 @@ router.put('/api/estimating/quotes/:id(\\d+)', (req, res) => {
 });
 
 router.post('/api/estimating/quotes/:id(\\d+)/status', (req, res) => {
+  const id = Number(req.params.id);
   const b = req.body || {};
-  const out = setStatus(Number(req.params.id), String(b.status || ''), b.note !== undefined ? String(b.note) : undefined);
-  res.status(out ? 200 : 400).json(out ? { ok: true, ...out } : { ok: false, error: 'bad status' });
+  const status = String(b.status || '');
+  const out = setStatus(id, status, b.note !== undefined ? String(b.note) : undefined);
+  if (!out) return res.status(400).json({ ok: false, error: 'bad status' });
+  // Winning a quote hands it to the field: spawn (or find) its job on the project board.
+  let job = null;
+  if (status === 'won') { const ctx = currentContext(req); job = jobFromQuote(id, ctx.user?.display_name || ctx.user?.email || undefined); }
+  else job = jobForQuote(id);
+  res.json({ ok: true, ...out, job });
 });
 
 /* ---- CRM account link ---- */

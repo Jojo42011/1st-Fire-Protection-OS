@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job Board · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .wrap{padding:22px 26px;max-width:1500px}
+  h1{font-size:20px;font-weight:600;margin:0}
+  .sub{font-size:13px;color:var(--muted);margin:6px 0 0;max-width:720px}
+  .bar2{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0 4px}
+  select,input,textarea{font-family:var(--mono);font-size:12.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;outline:none}
+  select:focus,input:focus,textarea:focus{border-color:var(--ink)}
+  textarea{font-family:inherit;font-size:13px;width:100%;line-height:1.5;resize:vertical}
+  .note{font-size:11.5px;color:var(--muted)}
+  .jkpis{display:flex;gap:22px;margin:14px 0 6px}
+  .jkpi .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .jkpi .v{font-size:22px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  /* board */
+  .jboard{display:flex;gap:12px;overflow-x:auto;padding:14px 0 6px;align-items:flex-start}
+  .col{flex:0 0 272px;background:var(--panel);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 220px)}
+  .colh{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)}
+  .colh .t{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);font-weight:600}
+  .colh .c{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .colb{padding:9px;overflow:auto;display:flex;flex-direction:column;gap:9px;flex:1;min-height:60px}
+  .jcard{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer}
+  .jcard:hover{border-color:var(--ink)}
+  .jcard .num{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.04em}
+  .jcard .cust{font-size:13px;font-weight:600;color:var(--ink);margin:2px 0 1px}
+  .jcard .ttl{font-size:12px;color:var(--muted);line-height:1.35}
+  .jcard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:8px}
+  .jcard .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600;color:var(--ink)}
+  .jcard .meta{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  .tchip{display:inline-block;font-family:var(--mono);font-size:9.5px;padding:1px 7px;border-radius:20px;background:rgba(31,111,235,.12);color:#1f6feb;margin-top:6px}
+  .tchip.alarm{background:rgba(180,83,9,.14);color:#b45309} .tchip.both{background:rgba(124,58,237,.14);color:#7c3aed}
+  .colempty{color:var(--faint);font-size:12px;text-align:center;padding:16px 6px}
+  /* editor overlay */
+  #ed{position:fixed;inset:0;background:rgba(15,18,22,.55);z-index:100;display:none;padding:24px;overflow:auto}
+  #ed.on{display:flex;align-items:flex-start;justify-content:center}
+  .edcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:620px;max-width:100%;margin-top:20px;overflow:hidden}
+  .edhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .edhead h2{font-size:15px;margin:0;color:var(--ink)} .edhead .num{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:8px}
+  .edbody{padding:16px 18px;max-height:70vh;overflow:auto}
+  .fld{display:flex;flex-direction:column;gap:4px;margin-bottom:11px}
+  .fld label{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .fld input,.fld select,.fld textarea{width:100%}
+  .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .edfoot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
+  .del{color:var(--critical,#8c1d18);cursor:pointer;font-size:12px;background:none;border:1px solid var(--border);border-radius:8px;padding:7px 11px}
+  .link{color:#1f6feb;font-size:12px;text-decoration:none}
+  @media(max-width:620px){.frow{grid-template-columns:1fr}}
+</style>
+<script src="/os.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+    <div>
+      <h1>Job Board</h1>
+      <p class="sub">Every won quote lands here as a job and moves across the board from scheduled to invoiced. Track the field crew, dates, and contract value in one place.</p>
+    </div>
+    <button class="os-btn primary" id="newJob">New job</button>
+  </div>
+
+  <div class="bar2">
+    <span class="note">Office</span>
+    <select id="office"></select>
+    <div class="jkpis" style="margin-left:auto">
+      <div class="jkpi"><div class="k">Open jobs</div><div class="v" id="kOpen">0</div></div>
+      <div class="jkpi"><div class="k">Open value</div><div class="v" id="kValue">$0</div></div>
+    </div>
+  </div>
+
+  <div id="board" class="jboard"></div>
+</div>
+
+<div id="ed"><div class="edcard">
+  <div class="edhead"><div><h2 id="edTitle">Job</h2><span class="num" id="edNum"></span></div>
+    <button class="os-btn" onclick="closeEd()">Close</button></div>
+  <div class="edbody" id="edBody"></div>
+  <div class="edfoot">
+    <button class="del" id="edDelete">Delete</button>
+    <span id="edMsg" class="note"></span>
+    <button class="os-btn primary" id="edSave" style="margin-left:auto">Save changes</button>
+  </div>
+</div></div>
+
+<script>
+function esc(t){return (window.OS&&OS.esc)?OS.esc(t):String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function money(n){n=Number(n)||0;return n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});}
+function toast(m,bad){if(window.OS&&OS.toast)OS.toast(m,bad?{tone:'bad'}:undefined);}
+var OFFICE='', STAGES=[], CUR=null;
+function api(path,opts){return fetch(path,opts).then(function(r){return r.json();}).catch(function(e){
+  var b=document.getElementById('board'); if(b)b.innerHTML='<div class="note" style="padding:20px;color:var(--critical,#8c1d18)">Could not reach the jobs service ('+esc(e.message)+'). Hard-refresh if this persists.</div>';
+  throw e;
+});}
+function officeQS(extra){var q='office='+encodeURIComponent(OFFICE);return extra?q+'&'+extra:q;}
+function typeClass(t){t=String(t||'').toLowerCase();return t.indexOf('alarm')>=0?'alarm':(t.indexOf('both')>=0?'both':'');}
+
+function loadOffices(){
+  return api('/api/estimating/offices').then(function(d){
+    var sel=document.getElementById('office');
+    sel.innerHTML='<option value="">All offices (shared)</option>'+(d.offices||[]).map(function(o){return '<option value="'+esc(o.key)+'">'+esc(o.label)+'</option>';}).join('');
+    sel.addEventListener('change',function(){OFFICE=sel.value;render();});
+  });
+}
+
+function render(){
+  return api('/api/jobboard/board?'+officeQS()).then(function(d){
+    STAGES=d.stages||[];
+    document.getElementById('kOpen').textContent=(d.summary&&d.summary.open)||0;
+    document.getElementById('kValue').textContent=money(d.summary&&d.summary.value);
+    var cols=d.columns||{};
+    document.getElementById('board').innerHTML=STAGES.map(function(s){
+      var jobs=cols[s.key]||[];
+      return '<div class="col"><div class="colh"><span class="t">'+esc(s.label)+'</span><span class="c">'+jobs.length+'</span></div>'+
+        '<div class="colb">'+(jobs.length?jobs.map(card).join(''):'<div class="colempty">No jobs</div>')+'</div></div>';
+    }).join('');
+    document.querySelectorAll('.jcard').forEach(function(el){el.addEventListener('click',function(){openEd(Number(el.getAttribute('data-id')));});});
+  });
+}
+function card(j){
+  var due=j.due_date?('Due '+esc(j.due_date)):(j.pm?esc(j.pm):'');
+  return '<div class="jcard" data-id="'+j.id+'">'+
+    '<div class="num">'+esc(j.number||'')+'</div>'+
+    '<div class="cust">'+esc(j.customer||'Customer')+'</div>'+
+    '<div class="ttl">'+esc(j.title||'')+'</div>'+
+    (j.type?'<span class="tchip '+typeClass(j.type)+'">'+esc(j.type)+'</span>':'')+
+    '<div class="foot"><span class="val">'+money(j.contract_value)+'</span><span class="meta">'+due+'</span></div>'+
+  '</div>';
+}
+
+/* ---- editor ---- */
+function fld(label,id,val,ph){return '<div class="fld"><label>'+label+'</label><input id="'+id+'" value="'+esc(val==null?'':val)+'" placeholder="'+(ph||'')+'"></div>';}
+function openEd(id){
+  api('/api/jobboard/'+id).then(function(d){
+    if(!d.ok){toast('Job not found',true);return;}
+    CUR=d.job; var j=d.job;
+    document.getElementById('edTitle').textContent=j.customer||'Job';
+    document.getElementById('edNum').textContent=j.number||'';
+    document.getElementById('edMsg').textContent='';
+    var stageOpts=STAGES.map(function(s){return '<option value="'+s.key+'"'+(s.key===j.stage?' selected':'')+'>'+esc(s.label)+'</option>';}).join('');
+    var typeOpts=['Fire Sprinkler','Fire Alarm','Both'].map(function(t){return '<option'+(t===j.type?' selected':'')+'>'+t+'</option>';}).join('');
+    document.getElementById('edBody').innerHTML=
+      '<div class="fld"><label>Stage</label><select id="jStage">'+stageOpts+'</select></div>'+
+      fld('Customer','jCustomer',j.customer)+
+      '<div class="fld"><label>Job title</label><input id="jTitle" value="'+esc(j.title||'')+'"></div>'+
+      '<div class="frow">'+
+        '<div class="fld"><label>Type</label><select id="jType">'+typeOpts+'</select></div>'+
+        '<div class="fld"><label>Contract value ($)</label><input id="jValue" value="'+esc(j.contract_value||0)+'"></div>'+
+      '</div>'+
+      '<div class="frow">'+fld('Project manager / crew lead','jPm',j.pm)+fld('Address','jAddress',j.address)+'</div>'+
+      '<div class="frow">'+
+        '<div class="fld"><label>Start date</label><input id="jStart" type="date" value="'+esc(j.start_date||'')+'"></div>'+
+        '<div class="fld"><label>Due date</label><input id="jDue" type="date" value="'+esc(j.due_date||'')+'"></div>'+
+      '</div>'+
+      '<div class="fld"><label>Notes</label><textarea id="jNotes" rows="3">'+esc(j.notes||'')+'</textarea></div>'+
+      (j.quote_id?'<a class="link" href="/estimate-builder" target="_top">View source quote '+esc(j.quote_id)+' &rarr;</a>':'');
+    document.getElementById('ed').classList.add('on');
+  });
+}
+function closeEd(){document.getElementById('ed').classList.remove('on');CUR=null;}
+function saveEd(){
+  if(!CUR)return; var id=CUR.id;
+  var patch={
+    customer:val('jCustomer'),title:val('jTitle'),type:val('jType'),contract_value:val('jValue'),
+    pm:val('jPm'),address:val('jAddress'),start_date:val('jStart'),due_date:val('jDue'),notes:val('jNotes')
+  };
+  var newStage=val('jStage');
+  document.getElementById('edMsg').textContent='Saving…';
+  api('/api/jobboard/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(function(){
+    if(newStage&&newStage!==CUR.stage){
+      return api('/api/jobboard/'+id+'/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:newStage})});
+    }
+  }).then(function(){closeEd();toast('Job updated');render();});
+}
+function val(id){var e=document.getElementById(id);return e?e.value:'';}
+function delJob(){
+  if(!CUR)return; if(!confirm('Delete this job? This does not affect the source quote.'))return;
+  api('/api/jobboard/'+CUR.id,{method:'DELETE'}).then(function(){closeEd();toast('Job deleted');render();});
+}
+function newJob(){
+  var cust=prompt('Customer / project name for the new job:'); if(!cust)return;
+  api('/api/jobboard',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({office:OFFICE,customer:cust,title:cust})}).then(function(d){
+    render().then(function(){if(d&&d.job)openEd(d.job.id);});
+  });
+}
+
+document.getElementById('edSave').addEventListener('click',saveEd);
+document.getElementById('edDelete').addEventListener('click',delJob);
+document.getElementById('newJob').addEventListener('click',newJob);
+document.getElementById('ed').addEventListener('click',function(e){if(e.target.id==='ed')closeEd();});
+
+loadOffices().then(render);
+</script>
+</body>
+</html>
