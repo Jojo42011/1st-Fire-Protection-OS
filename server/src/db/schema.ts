@@ -1517,6 +1517,56 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_entra_lic_status ON entra_license_queue(status);
     CREATE INDEX IF NOT EXISTS idx_entra_lic_ref ON entra_license_queue(ref_type, ref_id);
+
+    /* ---------- Estimating: price book + construction quote builder (Phase 0/1) ----------
+     * A vendor cost catalog scoped per office (office='' is the shared starter set), the per-office
+     * margin settings, and OS-built construction quotes. Kept separate from the ServiceTrade quotes
+     * mirror so the sync logic is never disturbed. */
+    CREATE TABLE IF NOT EXISTS price_book (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      office     TEXT NOT NULL DEFAULT '',   -- canonical office key; '' = shared, all-office default
+      cat        TEXT, sku TEXT, name TEXT, unit TEXT,
+      cost       REAL,                       -- vendor cost in dollars per unit (pipe is per 100 ft)
+      labor_hrs  REAL DEFAULT 0,             -- install hours per unit
+      active     INTEGER DEFAULT 1,
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(office, sku)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pricebook_office ON price_book(office);
+
+    CREATE TABLE IF NOT EXISTS est_margins (
+      office      TEXT PRIMARY KEY,          -- canonical office key; '' = default
+      labor_rate  REAL DEFAULT 85,
+      design_rate REAL DEFAULT 95,
+      mat_markup  REAL DEFAULT 25,           -- percent
+      overhead    REAL DEFAULT 15,           -- percent
+      profit      REAL DEFAULT 12,           -- percent
+      updated_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS est_quotes (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      number      TEXT, office TEXT DEFAULT '',
+      account_id  INTEGER, site_id INTEGER,
+      customer    TEXT, address TEXT, contact TEXT,
+      title       TEXT, type TEXT DEFAULT 'Fire Sprinkler',   -- Fire Sprinkler | Fire Alarm | Both
+      status      TEXT DEFAULT 'draft',                       -- draft | sent | won | lost
+      sf REAL, stories INTEGER DEFAULT 1, hazard TEXT, system_type TEXT, construction TEXT,
+      rates_json  TEXT,                                       -- snapshot of the margins used
+      sell_price  REAL DEFAULT 0, mat_cost REAL DEFAULT 0, labor_hrs REAL DEFAULT 0,
+      scope       TEXT, inclusions TEXT, exclusions TEXT, notes TEXT,
+      created_by  TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_estquotes_office ON est_quotes(office);
+
+    CREATE TABLE IF NOT EXISTS est_quote_lines (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      quote_id INTEGER NOT NULL,
+      sku TEXT, name TEXT, unit TEXT, cat TEXT,
+      qty REAL DEFAULT 0, cost REAL DEFAULT 0, hrs REAL DEFAULT 0,
+      sort INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_estlines_quote ON est_quote_lines(quote_id);
   `);
 }
 

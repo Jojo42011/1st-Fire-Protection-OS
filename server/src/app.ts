@@ -43,6 +43,8 @@ import home from './routes/home';
 import crm from './routes/crm';
 import sync from './routes/sync';
 import estimating from './routes/estimating';
+import estimatingBuilder from './routes/estimatingBuilder';
+import { seedStarterCatalog } from './services/priceBook';
 import closer from './routes/closer';
 import plans from './routes/plans';
 import schedule from './routes/schedule';
@@ -94,6 +96,8 @@ seedPrinterGroups();
 seedAppAccessCatalog();
 // Seed the starter software-app catalog (Adobe, Bluebeam, HydraCAD, AutoCAD). Idempotent, editable.
 seedSoftwareApps();
+// Seed the shared estimating price book (2,000+ vendor items). Idempotent (skips if already loaded).
+try { const r = seedStarterCatalog(); if (r.inserted) console.log(`[pricebook] seeded ${r.inserted} starter items`); } catch (e) { console.warn('[pricebook] seed error:', (e as Error).message); }
 // Seed the per-purpose mail senders (onboarding@, reviews@, ap@, ...). Idempotent, editable.
 seedMailSenders();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the
@@ -156,6 +160,7 @@ app.use(home);
 app.use(crm);
 app.use(sync);
 app.use(estimating);
+app.use(estimatingBuilder);
 app.use(closer);
 app.use(plans);
 app.use(schedule);
@@ -200,6 +205,7 @@ const PAGE_MODULE: Record<string, string> = {
   'people.html': 'people', 'onboarding.html': 'people', 'offboarding.html': 'people',
   'accounts.html': 'service', 'sites.html': 'service', 'quotes.html': 'deficiencies',
   'pipeline.html': 'deficiencies', 'closer.html': 'deficiencies', 'estimates.html': 'deficiencies',
+  'estimate-builder.html': 'deficiencies',
   'account.html': 'service',
   'executive.html': 'overview', 'office-performance.html': 'overview', 'scoreboard.html': 'overview',
   'reports-money.html': 'accounting', 'reports-ops.html': 'service', 'reports-people.html': 'people',
@@ -260,6 +266,7 @@ app.get('/account', page('account.html'));
 app.get('/pipeline', page('pipeline.html'));
 app.get('/sync', page('sync.html'));
 app.get('/estimates', page('estimates.html'));
+app.get('/estimate-builder', page('estimate-builder.html'));
 app.get('/closer', page('closer.html'));
 app.get('/plans', page('plans.html'));
 app.get('/schedule', page('schedule.html'));

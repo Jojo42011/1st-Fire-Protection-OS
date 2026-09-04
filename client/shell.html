@@ -427,6 +427,7 @@ var SCREENS = {
   pipeline:    { src:'/pipeline',    title:'Pipeline',            sub:'Open quotes by stage, live from ServiceTrade' },
   closer:      { src:'/closer',      title:'Follow-ups',          sub:'Every open quote chased on a cadence until it books or dies' },
   estimator:   { src:'/estimates',   title:'Estimates',           sub:'Photos in, a priced quote out' },
+  quoteBuilder:{ src:'/estimate-builder', title:'Quote Builder',   sub:'Build a construction quote from the price book' },
   account:     { src:'/account',     title:'Account',             sub:'Customer detail', detail:true },
   // REPORTS
   reportsExec: { src:'/executive',   title:'Executive',           sub:'The company at a glance' },
@@ -459,7 +460,7 @@ var NAV = [
   { group:'Operations', items:[ 'service','schedule','deficiencies','jobs','agreements','costing' ] },
   { group:'Front desk', items:[ 'phones','reviews','oncall' ] },
   { group:'Reports',    flyout:true, icon:'bars',      items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
-  { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','pipeline','closer','estimator' ] },
+  { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','quoteBuilder','pipeline','closer','estimator' ] },
   { group:'People',     flyout:true, icon:'users',     items:[ 'people','offboarding' ] },
   { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','adAudit','spAccess','integrations','sync','settings','team','hire' ] }
 ];
@@ -474,7 +475,7 @@ var SCREEN_MODULE = {
   service:'service', schedule:'service', deficiencies:'deficiencies', jobs:'service', agreements:'service', costing:'service',
   phones:'service', reviews:'service', oncall:'service',
   people:'people', offboarding:'people',
-  accounts:'service', sites:'service', quotes:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
+  accounts:'service', sites:'service', quotes:'deficiencies', quoteBuilder:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
   reportsExec:'overview', officePerf:'overview', reportsMoney:'accounting', reportsOps:'service', reportsPeople:'people', customReports:'overview',
   companyOffices:'overview', itSystems:'access', adAudit:'access', spAccess:'access', spend:'access', integrations:'access', sync:'access', settings:'access', team:'access', hire:'access'
 };
@@ -582,7 +583,7 @@ var KEY_ICON={
   service:'wrench', schedule:'calendar', deficiencies:'deficiency', jobs:'clipboard', agreements:'repeat', costing:'trend',
   phones:'phone', reviews:'star', oncall:'bell',
   people:'users', offboarding:'users',
-  accounts:'briefcase', sites:'pin', quotes:'invoice', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
+  accounts:'briefcase', sites:'pin', quotes:'invoice', quoteBuilder:'clipboard', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
   reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
   companyOffices:'building', itSystems:'server', adAudit:'users', spAccess:'users', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', team:'bot', hire:'plus'
 };
