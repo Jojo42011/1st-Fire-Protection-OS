@@ -2,7 +2,7 @@ import { getDb } from '../db';
 
 /**
  * Platform tables are additive to the existing domain schema. Existing 1st FP
- * tables such as `approvals` remain authoritative; the platform layer links to
+ * tables such as approvals remain authoritative; the platform layer links to
  * them rather than creating a competing inbox.
  */
 export function ensurePlatformSchema(): void {
@@ -58,7 +58,7 @@ export function ensurePlatformSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_external_resource_lookup
       ON external_resources(client_id, system, resource_type, external_id);
 
-    /* The existing `approvals` table stays the single inbox. This table adds
+    /* The existing approvals table stays the single inbox. This table adds
        workflow correlation without duplicating approval state. */
     CREATE TABLE IF NOT EXISTS workflow_approval_links (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
