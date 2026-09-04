@@ -1568,6 +1568,8 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_estlines_quote ON est_quote_lines(quote_id);
   `);
+  // Repair quotes remember which deficiencies they were built from (Phase 3).
+  addColumn('est_quotes', 'source_deficiencies', 'TEXT');
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

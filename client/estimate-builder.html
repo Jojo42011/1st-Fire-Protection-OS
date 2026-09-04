@@ -65,6 +65,20 @@
   .propbar{max-width:760px;margin:0 auto 12px;display:flex;gap:8px;justify-content:flex-end}
   @media print{ body *{visibility:hidden} #prop,#prop *{visibility:visible} #prop{position:absolute;inset:0;background:#fff;padding:0} .propbar{display:none} .sheet{box-shadow:none;max-width:none;padding:0} }
   @media(max-width:820px){.grid2{grid-template-columns:1fr}}
+  /* deficiency picker */
+  #defpick{position:fixed;inset:0;background:rgba(15,18,22,.55);z-index:100;display:none;padding:28px}
+  #defpick.on{display:flex;align-items:center;justify-content:center}
+  .defcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:640px;max-width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden}
+  .defhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .defhead h2{font-size:14px;margin:0;color:var(--ink)}
+  .defsub{padding:12px 18px;border-bottom:1px solid var(--border)}
+  .defbody{overflow:auto;padding:6px 10px;flex:1}
+  .defgroup{margin:8px 6px}
+  .defco{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink);font-weight:600;padding:6px 4px;position:sticky;top:0;background:var(--panel)}
+  .defrow{display:flex;gap:9px;align-items:flex-start;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:13px}
+  .defrow:hover{background:var(--bg)} .defrow input{margin-top:2px}
+  .dtext{display:flex;flex-direction:column;gap:2px} .dtext b{font-weight:500;color:var(--ink)}
+  .deffoot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
 </style>
 <script src="/os.js" defer></script>
 </head>
@@ -91,6 +105,13 @@
 </div>
 
 <div id="prop"><div class="propbar"><button class="os-btn" onclick="document.getElementById('prop').classList.remove('on')">Close</button><button class="os-btn primary" onclick="window.print()">Print / Save PDF</button></div><div id="sheet" class="sheet"></div></div>
+
+<div id="defpick"><div class="defcard">
+  <div class="defhead"><h2>Open deficiencies · quotable repairs</h2><button class="os-btn" onclick="document.getElementById('defpick').classList.remove('on')">Close</button></div>
+  <div class="defsub"><input id="defsearch" placeholder="Search customer, location, or deficiency…" style="width:100%"><div class="note" style="margin-top:6px">Pick the deficiencies for one customer, then build a repair quote. Each becomes a line for you to price.</div></div>
+  <div id="defbody" class="defbody"></div>
+  <div class="deffoot"><button class="os-btn primary" id="defcreate" disabled>Create repair quote</button></div>
+</div></div>
 
 <script>
 function esc(t){return (window.OS&&OS.esc)?OS.esc(t):String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -134,11 +155,59 @@ function renderQuotes(){
         '<td class="r mono">'+money(q.sell_price)+'</td>'+
         '<td><span class="pill '+esc(q.status)+'">'+esc(q.status)+'</span></td></tr>';
     }).join('');
-    VIEW.innerHTML='<div class="card"><div class="card-h"><h2>Quotes</h2><button class="os-btn primary" id="newq" style="margin-left:auto">New quote</button></div>'+
+    VIEW.innerHTML='<div class="card"><div class="card-h"><h2>Quotes</h2><button class="os-btn" id="fromdef" style="margin-left:auto">Repair quote from deficiencies</button><button class="os-btn primary" id="newq">New quote</button></div>'+
       (qs.length?'<table><thead><tr><th>Number</th><th>Customer</th><th>Type</th><th class="r">Price</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="empty">No quotes yet. Click <b>New quote</b> to build one.</div>')+'</div>';
     document.getElementById('newq').addEventListener('click',newQuote);
+    document.getElementById('fromdef').addEventListener('click',openDefPicker);
     VIEW.querySelectorAll('tr.click').forEach(function(tr){tr.addEventListener('click',function(){QID=Number(tr.getAttribute('data-id'));render();});});
   });
+}
+
+/* ---------------- deficiency -> quote picker ---------------- */
+var DEFSEL={};
+function openDefPicker(){
+  DEFSEL={};
+  var ov=document.getElementById('defpick');
+  ov.classList.add('on');
+  document.getElementById('defsearch').value='';
+  loadDefs('');
+}
+function loadDefs(q){
+  var body=document.getElementById('defbody');
+  body.innerHTML='<div class="empty">Loading…</div>';
+  api('/api/estimating/deficiencies?'+officeQS('q='+encodeURIComponent(q||''))).then(function(d){
+    var defs=d.deficiencies||[];
+    if(!defs.length){body.innerHTML='<div class="empty">No open, unquoted deficiencies'+(OFFICE?' for this office':'')+'.</div>';updateDefCount();return;}
+    // group by company
+    var groups={};defs.forEach(function(x){var k=x.company_name||'(no customer)';(groups[k]=groups[k]||[]).push(x);});
+    body.innerHTML=Object.keys(groups).sort().map(function(co){
+      var rows=groups[co].map(function(x){
+        var sev=x.severity?('<span class="pill" style="background:var(--bg);color:var(--muted)">'+esc(x.severity)+'</span>'):'';
+        return '<label class="defrow"><input type="checkbox" class="defck" data-id="'+x.id+'" data-co="'+esc(co)+'">'+
+          '<span class="dtext"><b>'+esc(x.description||'Deficiency')+'</b><span class="note">'+esc(x.location_name||'')+' '+sev+'</span></span></label>';
+      }).join('');
+      return '<div class="defgroup"><div class="defco">'+esc(co)+' <span class="note">· '+groups[co].length+'</span></div>'+rows+'</div>';
+    }).join('');
+    body.querySelectorAll('.defck').forEach(function(ck){ck.addEventListener('change',function(){
+      if(ck.checked){DEFSEL[ck.getAttribute('data-id')]=ck.getAttribute('data-co');}else{delete DEFSEL[ck.getAttribute('data-id')];}
+      // keep selection to one customer at a time
+      var co=ck.getAttribute('data-co');
+      if(ck.checked){body.querySelectorAll('.defck').forEach(function(o){if(o.getAttribute('data-co')!==co&&o.checked){o.checked=false;delete DEFSEL[o.getAttribute('data-id')];}});}
+      updateDefCount();
+    });});
+    updateDefCount();
+  });
+}
+function updateDefCount(){
+  var n=Object.keys(DEFSEL).length;
+  var b=document.getElementById('defcreate');
+  b.textContent=n?('Create repair quote ('+n+')'):'Create repair quote';
+  b.disabled=!n;
+}
+function createFromDefs(){
+  var ids=Object.keys(DEFSEL).map(Number);if(!ids.length)return;
+  api('/api/estimating/quotes/from-deficiencies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({office:OFFICE,deficiency_ids:ids})})
+    .then(function(d){if(d.ok){document.getElementById('defpick').classList.remove('on');QID=d.quote.id;TAB='quotes';render();toast('Repair quote created');}else{toast(d.error||'Failed');}});
 }
 function newQuote(){
   api('/api/estimating/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({office:OFFICE,customer:'',title:'Fire sprinkler system'})})
@@ -360,6 +429,9 @@ function renderMargins(){
 }
 
 document.addEventListener('DOMContentLoaded',function(){
+  var ds=document.getElementById('defsearch');
+  ds.addEventListener('input',function(){clearTimeout(pbTimer);pbTimer=setTimeout(function(){loadDefs(ds.value);},220);});
+  document.getElementById('defcreate').addEventListener('click',createFromDefs);
   function boot(){ if(!window.OS){return setTimeout(boot,40);} loadOffices().then(function(){bindTabs();render();}); }
   boot();
 });

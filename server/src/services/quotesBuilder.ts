@@ -171,3 +171,63 @@ export function deleteQuote(id: number): boolean {
   db.prepare(`DELETE FROM est_quote_lines WHERE quote_id = ?`).run(id);
   return db.prepare(`DELETE FROM est_quotes WHERE id = ?`).run(id).changes > 0;
 }
+
+/* ─────────────────────────── deficiency → quote (Phase 3) ─────────────────────────── */
+
+// Mirrors deficiencySync.CLOSED_STATUSES so "open" here means the same thing as on the deficiencies board.
+const DEFICIENCY_CLOSED = ['fixed', 'invalid', 'canceled', 'cancelled', 'deleted', 'closed'];
+const OPEN_DEF = `lower(COALESCE(status,'')) NOT IN (${DEFICIENCY_CLOSED.map((s) => `'${s}'`).join(',')})`;
+
+export interface OpenDeficiency {
+  id: number; account_id: number | null; company_name: string | null; location_name: string | null;
+  description: string | null; severity: string | null; proposed_usd: number; office: string | null; reported_at: string | null; quoted: number;
+}
+
+/** Open, not-yet-quoted deficiencies to build a repair quote from. Optional office scope + text search. */
+export function listOpenDeficiencies(office = '', q = '', includeQuoted = false, limit = 400): OpenDeficiency[] {
+  const db = getDb();
+  const key = off(office);
+  const where = [OPEN_DEF]; const args: any = {};
+  if (!includeQuoted) where.push('COALESCE(quoted,0) = 0');
+  if (key) { where.push('os_office_key(office) = @office'); args.office = key; }
+  const term = q.trim();
+  if (term) { where.push('(company_name LIKE @q OR location_name LIKE @q OR description LIKE @q)'); args.q = `%${term}%`; }
+  const sql = `SELECT id, account_id, company_name, location_name, description, severity, proposed_usd, office, reported_at, quoted
+     FROM deficiencies WHERE ${where.join(' AND ')}
+     ORDER BY company_name, location_name, proposed_usd DESC, id DESC LIMIT ${Math.min(limit, 1000)}`;
+  return db.prepare(sql).all(args) as OpenDeficiency[];
+}
+
+/** Build a draft repair quote from selected deficiencies: one line per deficiency (estimator prices
+ *  it), customer/site pulled from the deficiencies, and each source deficiency marked quoted. */
+export function quoteFromDeficiencies(ids: number[], office: string, createdBy?: string): QuoteWithLines | null {
+  const db = getDb();
+  const clean = [...new Set((ids || []).map((n) => Number(n)).filter((n) => Number.isFinite(n)))];
+  if (!clean.length) return null;
+  const rows = db.prepare(`SELECT * FROM deficiencies WHERE id IN (${clean.map(() => '?').join(',')})`).all(...clean) as any[];
+  if (!rows.length) return null;
+
+  // Header comes from the most common company on the selection.
+  const tally = new Map<string, number>();
+  for (const r of rows) { const k = r.company_name || ''; tally.set(k, (tally.get(k) || 0) + 1); }
+  const topCompany = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || rows[0].company_name || 'Customer';
+  const head = rows.find((r) => (r.company_name || '') === topCompany) || rows[0];
+  const key = off(office) || off(head.office) || '';
+  const scope = 'Repair the following deficiencies found during inspection:\n' + rows.map((r) => `- ${r.description || 'deficiency'}${r.location_name ? ` (${r.location_name})` : ''}`).join('\n');
+
+  const quote = createQuote({
+    office: key, account_id: head.account_id ?? null, customer: topCompany, address: head.location_name || '',
+    title: `Repair - ${head.location_name || topCompany}`, type: 'Fire Sprinkler', scope, created_by: createdBy,
+  });
+
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      // proposed_usd is a ServiceTrade projection, not a cost, so lines start unpriced for the estimator.
+      addLine(quote.id, { name: r.description || 'Repair item', unit: 'ea', qty: 1, cost: 0, hrs: 0 });
+    }
+    db.prepare(`UPDATE est_quotes SET source_deficiencies = ? WHERE id = ?`).run(JSON.stringify(clean), quote.id);
+    db.prepare(`UPDATE deficiencies SET quoted = 1 WHERE id IN (${clean.map(() => '?').join(',')})`).run(...clean);
+  });
+  tx();
+  return getQuote(quote.id);
+}

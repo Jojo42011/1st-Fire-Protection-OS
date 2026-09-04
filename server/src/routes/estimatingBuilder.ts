@@ -7,6 +7,7 @@ import {
 } from '../services/priceBook';
 import {
   listQuotes, createQuote, getQuote, updateQuote, addLine, updateLine, deleteLine, setStatus, deleteQuote,
+  listOpenDeficiencies, quoteFromDeficiencies,
 } from '../services/quotesBuilder';
 
 /**
@@ -69,6 +70,20 @@ router.post('/api/estimating/quotes', (req, res) => {
   const who = ctx.user?.display_name || ctx.user?.email || null;
   const q = createQuote({ ...(req.body || {}), office: O(req), created_by: who || undefined });
   res.json({ ok: true, quote: q });
+});
+
+/* ---- deficiency -> quote (Phase 3) ---- */
+router.get('/api/estimating/deficiencies', (req, res) => {
+  const items = listOpenDeficiencies(O(req), String(req.query.q || ''), String(req.query.includeQuoted || '') === '1');
+  res.json({ ok: true, deficiencies: items });
+});
+
+router.post('/api/estimating/quotes/from-deficiencies', (req, res) => {
+  const ctx = currentContext(req);
+  const who = ctx.user?.display_name || ctx.user?.email || undefined;
+  const ids = Array.isArray((req.body || {}).deficiency_ids) ? (req.body.deficiency_ids as any[]).map(Number) : [];
+  const out = quoteFromDeficiencies(ids, O(req), who);
+  res.status(out ? 200 : 400).json(out ? { ok: true, ...out } : { ok: false, error: 'no deficiencies selected' });
 });
 
 router.get('/api/estimating/quotes/:id(\\d+)', (req, res) => {
