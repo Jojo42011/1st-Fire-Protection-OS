@@ -13,9 +13,9 @@ export interface PriceItem {
   id: number; office: string; cat: string | null; sku: string | null; name: string | null;
   unit: string | null; cost: number | null; labor_hrs: number | null; active: number; updated_at: string;
 }
-export interface Margins { office: string; labor_rate: number; design_rate: number; mat_markup: number; overhead: number; profit: number; }
+export interface Margins { office: string; labor_rate: number; design_rate: number; mat_markup: number; overhead: number; profit: number; floor_markup: number; }
 
-const DEFAULT_MARGINS: Omit<Margins, 'office'> = { labor_rate: 85, design_rate: 95, mat_markup: 25, overhead: 15, profit: 12 };
+const DEFAULT_MARGINS: Omit<Margins, 'office'> = { labor_rate: 85, design_rate: 95, mat_markup: 25, overhead: 15, profit: 12, floor_markup: 20 };
 const off = (raw: string | null | undefined): string => (raw ? canonicalOffice(raw) || '' : '');
 
 /* ─────────────────────────── margins ─────────────────────────── */
@@ -27,7 +27,8 @@ export function getMargins(office: string): Margins {
   const row = (db.prepare(`SELECT * FROM est_margins WHERE office = ?`).get(key) as Margins | undefined)
     || (key ? (db.prepare(`SELECT * FROM est_margins WHERE office = ''`).get() as Margins | undefined) : undefined);
   return { office: key, labor_rate: row?.labor_rate ?? DEFAULT_MARGINS.labor_rate, design_rate: row?.design_rate ?? DEFAULT_MARGINS.design_rate,
-    mat_markup: row?.mat_markup ?? DEFAULT_MARGINS.mat_markup, overhead: row?.overhead ?? DEFAULT_MARGINS.overhead, profit: row?.profit ?? DEFAULT_MARGINS.profit };
+    mat_markup: row?.mat_markup ?? DEFAULT_MARGINS.mat_markup, overhead: row?.overhead ?? DEFAULT_MARGINS.overhead, profit: row?.profit ?? DEFAULT_MARGINS.profit,
+    floor_markup: (row as any)?.floor_markup ?? DEFAULT_MARGINS.floor_markup };
 }
 
 export function setMargins(office: string, patch: Partial<Omit<Margins, 'office'>>): Margins {
@@ -35,10 +36,10 @@ export function setMargins(office: string, patch: Partial<Omit<Margins, 'office'
   const key = off(office);
   const cur = getMargins(key);
   const next = { ...cur, ...patch, office: key };
-  db.prepare(`INSERT INTO est_margins (office, labor_rate, design_rate, mat_markup, overhead, profit, updated_at)
-    VALUES (@office,@labor_rate,@design_rate,@mat_markup,@overhead,@profit, datetime('now'))
+  db.prepare(`INSERT INTO est_margins (office, labor_rate, design_rate, mat_markup, overhead, profit, floor_markup, updated_at)
+    VALUES (@office,@labor_rate,@design_rate,@mat_markup,@overhead,@profit,@floor_markup, datetime('now'))
     ON CONFLICT(office) DO UPDATE SET labor_rate=@labor_rate, design_rate=@design_rate, mat_markup=@mat_markup,
-      overhead=@overhead, profit=@profit, updated_at=datetime('now')`).run(next as any);
+      overhead=@overhead, profit=@profit, floor_markup=@floor_markup, updated_at=datetime('now')`).run(next as any);
   return getMargins(key);
 }
 

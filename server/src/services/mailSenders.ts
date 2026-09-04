@@ -13,6 +13,7 @@ export interface MailSender { key: string; label: string; address: string; displ
 // The purposes the OS knows about today. New flows add a key here (and seed it) then call senderFor.
 const PURPOSES: { key: string; label: string; display_name: string; defaultFromEnv?: boolean }[] = [
   { key: 'onboarding', label: 'Onboarding invites', display_name: '1st Fire Protection', defaultFromEnv: true },
+  { key: 'proposals', label: 'Quote proposals', display_name: '1st Fire Protection', defaultFromEnv: true },
   { key: 'reviews', label: 'Review requests', display_name: '1st Fire Protection' },
   { key: 'ap', label: 'Accounts payable', display_name: '1st FP Accounts Payable' },
   { key: 'reports', label: 'Scheduled reports', display_name: '1st Fire Protection', defaultFromEnv: true },

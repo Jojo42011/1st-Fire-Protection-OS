@@ -23,6 +23,18 @@ export interface QuoteWithLines { quote: Quote; lines: QuoteLine[]; totals: Quot
 
 const off = (raw: string | null | undefined): string => (raw ? canonicalOffice(raw) || '' : '');
 
+/** Search CRM accounts by name for linking a quote to a real customer. */
+export function searchAccounts(q: string, limit = 20): Array<{ id: number; name: string }> {
+  const term = String(q || '').trim();
+  if (!term) return [];
+  return getDb().prepare(`SELECT id, name FROM accounts WHERE name LIKE ? ORDER BY name LIMIT ?`).all(`%${term}%`, limit) as any[];
+}
+const accountName = (id: number | null | undefined): string | null => {
+  if (!id) return null;
+  const r = getDb().prepare(`SELECT name FROM accounts WHERE id = ?`).get(id) as { name: string } | undefined;
+  return r ? r.name : null;
+};
+
 function nextNumber(): string {
   const db = getDb();
   const row = db.prepare(`SELECT number FROM est_quotes WHERE number LIKE 'FP-%' ORDER BY id DESC LIMIT 1`).get() as { number: string } | undefined;
@@ -58,7 +70,7 @@ function persistTotals(quoteId: number): QuoteTotals {
   const db = getDb();
   const q = db.prepare(`SELECT office, rates_json FROM est_quotes WHERE id = ?`).get(quoteId) as { office: string; rates_json: string | null } | undefined;
   if (!q) throw new Error('quote not found');
-  let rates: Margins | undefined; try { rates = q.rates_json ? { office: q.office, ...JSON.parse(q.rates_json) } : undefined; } catch { rates = undefined; }
+  let rates: Margins | undefined; try { rates = q.rates_json ? { office: q.office, ...JSON.parse(q.rates_json), floor_markup: getMargins(q.office).floor_markup } : undefined; } catch { rates = undefined; }
   const t = computeTotals(quoteId, q.office, rates);
   db.prepare(`UPDATE est_quotes SET sell_price=?, mat_cost=?, labor_hrs=?, updated_at=datetime('now') WHERE id=?`)
     .run(t.sellPrice, t.matCost, t.laborHrs, quoteId);
@@ -103,6 +115,11 @@ const QUOTE_FIELDS = new Set(['customer', 'address', 'contact', 'title', 'type',
 
 export function updateQuote(id: number, patch: Record<string, any>): QuoteWithLines | null {
   const db = getDb();
+  // Linking to an account with no customer name yet fills the customer from the account.
+  if (patch.account_id && (patch.customer === undefined || patch.customer === '')) {
+    const cur = db.prepare(`SELECT customer FROM est_quotes WHERE id = ?`).get(id) as { customer: string } | undefined;
+    if (!cur?.customer) { const n = accountName(Number(patch.account_id)); if (n) patch.customer = n; }
+  }
   const sets: string[] = []; const args: any = { id };
   for (const [k, v] of Object.entries(patch)) { if (QUOTE_FIELDS.has(k)) { sets.push(`${k} = @${k}`); args[k] = v; } }
   // Allow editing the margin snapshot for this quote.
@@ -117,7 +134,7 @@ export function getQuote(id: number): QuoteWithLines | null {
   const quote = db.prepare(`SELECT * FROM est_quotes WHERE id = ?`).get(id) as Quote | undefined;
   if (!quote) return null;
   const lines = db.prepare(`SELECT * FROM est_quote_lines WHERE quote_id = ? ORDER BY sort, id`).all(id) as QuoteLine[];
-  let rates: Margins | undefined; try { rates = quote.rates_json ? { office: quote.office, ...JSON.parse(quote.rates_json) } : undefined; } catch { rates = undefined; }
+  let rates: Margins | undefined; try { rates = quote.rates_json ? { office: quote.office, ...JSON.parse(quote.rates_json), floor_markup: getMargins(quote.office).floor_markup } : undefined; } catch { rates = undefined; }
   const totals = computeTotals(id, quote.office, rates);
   return { quote, lines, totals, branding: officeBranding(quote.office) };
 }
@@ -161,10 +178,38 @@ export function deleteLine(lineId: number): QuoteWithLines | null {
   return getQuote(row.quote_id);
 }
 
-export function setStatus(id: number, status: string): QuoteWithLines | null {
+export function setStatus(id: number, status: string, note?: string): QuoteWithLines | null {
   if (!['draft', 'sent', 'won', 'lost'].includes(status)) return null;
-  getDb().prepare(`UPDATE est_quotes SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
+  const db = getDb();
+  if (note !== undefined) db.prepare(`UPDATE est_quotes SET status = ?, outcome_note = ?, updated_at = datetime('now') WHERE id = ?`).run(status, note || null, id);
+  else db.prepare(`UPDATE est_quotes SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
   return getQuote(id);
+}
+
+/** Copy a quote and all its lines into a fresh draft with a new number. */
+export function duplicateQuote(id: number, createdBy?: string): QuoteWithLines | null {
+  const db = getDb();
+  const src = db.prepare(`SELECT * FROM est_quotes WHERE id = ?`).get(id) as Quote | undefined;
+  if (!src) return null;
+  const info = db.prepare(
+    `INSERT INTO est_quotes (number, office, account_id, site_id, customer, address, contact, title, type, status,
+       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, created_by)
+     SELECT ?, office, account_id, site_id, customer, address, contact, title || ' (copy)', type, 'draft',
+       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, ?
+     FROM est_quotes WHERE id = ?`
+  ).run(nextNumber(), createdBy || null, id);
+  const newId = Number(info.lastInsertRowid);
+  db.prepare(`INSERT INTO est_quote_lines (quote_id, sku, name, unit, cat, qty, cost, hrs, sort)
+     SELECT ?, sku, name, unit, cat, qty, cost, hrs, sort FROM est_quote_lines WHERE quote_id = ?`).run(newId, id);
+  persistTotals(newId);
+  return getQuote(newId);
+}
+
+/** Whether a manager has already approved this quote in the Approvals inbox. */
+export function quoteApproved(id: number): boolean {
+  return !!getDb().prepare(
+    `SELECT 1 FROM approvals WHERE subject_type = 'est_quote' AND subject_id = ? AND kind = 'quote_price' AND status = 'approved' LIMIT 1`
+  ).get(id);
 }
 
 export function deleteQuote(id: number): boolean {

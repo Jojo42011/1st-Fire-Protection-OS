@@ -7,8 +7,10 @@ import {
 } from '../services/priceBook';
 import {
   listQuotes, createQuote, getQuote, updateQuote, addLine, updateLine, deleteLine, setStatus, deleteQuote,
-  listOpenDeficiencies, quoteFromDeficiencies,
+  listOpenDeficiencies, quoteFromDeficiencies, searchAccounts, duplicateQuote, quoteApproved,
 } from '../services/quotesBuilder';
+import { sendProposal } from '../services/proposalEmail';
+import { createApproval } from './approvals';
 
 /**
  * Estimating builder API (Phase 0/1): the per-office price book + margins, and the construction quote
@@ -56,7 +58,7 @@ router.get('/api/estimating/margins', (req, res) => res.json({ ok: true, margins
 router.put('/api/estimating/margins', (req, res) => {
   const b = req.body || {};
   const patch: any = {};
-  for (const k of ['labor_rate', 'design_rate', 'mat_markup', 'overhead', 'profit']) if (b[k] !== undefined && b[k] !== '') patch[k] = Number(b[k]);
+  for (const k of ['labor_rate', 'design_rate', 'mat_markup', 'overhead', 'profit', 'floor_markup']) if (b[k] !== undefined && b[k] !== '') patch[k] = Number(b[k]);
   res.json({ ok: true, margins: setMargins(O(req), patch) });
 });
 
@@ -97,8 +99,49 @@ router.put('/api/estimating/quotes/:id(\\d+)', (req, res) => {
 });
 
 router.post('/api/estimating/quotes/:id(\\d+)/status', (req, res) => {
-  const out = setStatus(Number(req.params.id), String((req.body || {}).status || ''));
+  const b = req.body || {};
+  const out = setStatus(Number(req.params.id), String(b.status || ''), b.note !== undefined ? String(b.note) : undefined);
   res.status(out ? 200 : 400).json(out ? { ok: true, ...out } : { ok: false, error: 'bad status' });
+});
+
+/* ---- CRM account link ---- */
+router.get('/api/estimating/accounts', (req, res) => {
+  res.json({ ok: true, accounts: searchAccounts(String(req.query.q || '')) });
+});
+
+/* ---- duplicate ---- */
+router.post('/api/estimating/quotes/:id(\\d+)/duplicate', (req, res) => {
+  const ctx = currentContext(req);
+  const out = duplicateQuote(Number(req.params.id), ctx.user?.display_name || ctx.user?.email || undefined);
+  res.status(out ? 200 : 404).json(out ? { ok: true, ...out } : { ok: false, error: 'not found' });
+});
+
+/* ---- send proposal, with margin-floor approval routing ---- */
+router.post('/api/estimating/quotes/:id(\\d+)/send', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const to = String((req.body || {}).to || '');
+    const d = getQuote(id);
+    if (!d) return res.status(404).json({ ok: false, error: 'not found' });
+    const floor = d.totals.margins.floor_markup;
+    // Below the office's margin floor and not already approved: route to the Approvals inbox, don't send.
+    if (d.totals.markupPct < floor && !quoteApproved(id)) {
+      const money = '$' + Math.round(d.totals.sellPrice).toLocaleString('en-US');
+      createApproval({
+        agent_key: 'estimator', kind: 'quote_price', risk: d.totals.sellPrice >= 25000 ? 'sensitive' : 'routine',
+        title: `Quote ${d.quote.number} · ${d.quote.customer || 'Prospect'} (below margin floor)`,
+        stake: money,
+        body: `Effective markup ${d.totals.markupPct}% is below the ${floor}% floor.\nSell ${money} · material $${Math.round(d.totals.matCost).toLocaleString('en-US')} · labor ${d.totals.laborHrs} hrs.`,
+        trail: to ? `Would email the proposal to ${to}` : 'Proposal ready to send once approved',
+        subject_type: 'est_quote', subject_id: id,
+      });
+      return res.json({ ok: true, needsApproval: true, floor, markup: d.totals.markupPct, ...getQuote(id) });
+    }
+    const out = await sendProposal(id, to);
+    res.status(out.ok ? 200 : 400).json(out.ok ? { ok: true, sent: true, ...getQuote(id) } : { ok: false, error: out.error });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: (e as Error).message });
+  }
 });
 
 router.delete('/api/estimating/quotes/:id(\\d+)', (req, res) => {

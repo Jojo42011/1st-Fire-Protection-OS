@@ -105,7 +105,13 @@
   <div id="view"></div>
 </div>
 
-<div id="prop"><div class="propbar"><button class="os-btn" onclick="document.getElementById('prop').classList.remove('on')">Close</button><button class="os-btn primary" onclick="window.print()">Print / Save PDF</button></div><div id="sheet" class="sheet"></div></div>
+<div id="prop"><div class="propbar">
+  <input id="propEmail" placeholder="customer@email.com" style="min-width:200px">
+  <button class="os-btn" id="propSend">Send to customer</button>
+  <span id="propMsg" class="note" style="align-self:center"></span>
+  <button class="os-btn" onclick="document.getElementById('prop').classList.remove('on')">Close</button>
+  <button class="os-btn primary" onclick="window.print()">Print / Save PDF</button>
+</div><div id="sheet" class="sheet"></div></div>
 
 <div id="defpick"><div class="defcard">
   <div class="defhead"><h2>Open deficiencies · quotable repairs</h2><button class="os-btn" onclick="document.getElementById('defpick').classList.remove('on')">Close</button></div>
@@ -244,14 +250,17 @@ function drawEditor(d){
       '<td class="r"><button class="del ln-del" data-id="'+l.id+'">✕</button></td></tr>';
   }).join('');
   VIEW.innerHTML=
-    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button class="os-btn" id="back">← Quotes</button>'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap"><button class="os-btn" id="back">← Quotes</button>'+
       '<div class="mono" style="color:var(--muted)">'+esc(q.number)+'</div><span class="pill '+esc(q.status)+'">'+esc(q.status)+'</span>'+
+      '<button class="os-btn" id="dupq">Duplicate</button><button class="os-btn" id="delq">Delete</button>'+
       '<div class="statusbtns" style="margin-left:auto">'+
-        ['draft','sent','won','lost'].map(function(s){return '<button class="os-btn stbtn" data-s="'+s+'">'+s+'</button>';}).join('')+
+        ['draft','sent','won','lost'].map(function(s){return '<button class="os-btn stbtn'+(q.status===s?' primary':'')+'" data-s="'+s+'">'+s+'</button>';}).join('')+
         '<button class="os-btn primary" id="preview">Preview proposal</button></div></div>'+
     '<div class="grid2">'+
       '<div>'+
         '<div class="card"><div class="card-h"><h2>Customer &amp; scope</h2></div><div class="card-b">'+
+          '<div class="fld"><label>Link to CRM account'+(q.account_id?(' · linked #'+q.account_id):'')+'</label>'+
+            '<div class="search-wrap"><input id="acctsearch" placeholder="Search accounts to link &amp; fill the customer…" autocomplete="off"><div id="acctresults" class="results" style="display:none"></div></div></div>'+
           field('Customer','f_customer',q.customer,'Company / owner')+
           '<div class="frow">'+field('Address','f_address',q.address)+field('Contact','f_contact',q.contact)+'</div>'+
           field('Project title','f_title',q.title)+
@@ -279,6 +288,7 @@ function drawEditor(d){
           '<div class="tot"><span class="k">Material cost</span><span class="v" id="t_mat">'+money(t.matCost)+'</span></div>'+
           '<div class="tot"><span class="k">Labor</span><span class="v" id="t_labor">'+t.laborHrs+' hrs · '+money(t.laborCost)+'</span></div>'+
           '<div class="tot"><span class="k">Effective markup</span><span class="v" id="t_markup">'+t.markupPct+'%</span></div>'+
+          (t.markupPct<t.margins.floor_markup?'<div class="note" style="color:var(--critical,#8c1d18);margin-top:8px">Below the '+t.margins.floor_markup+'% margin floor. Sending will route to Approvals first.</div>':'')+
         '</div></div>'+
         '<div class="card"><div class="card-h"><h2>Margins on this quote</h2></div><div class="card-b">'+
           '<div class="frow"><div class="fld"><label>Labor $/hr</label><input id="m_labor_rate" value="'+t.margins.labor_rate+'"></div>'+
@@ -299,10 +309,21 @@ function drawEditor(d){
     var ev=(el.tagName==='SELECT')?'change':'blur';
     el.addEventListener(ev,function(){var patch={};patch[k]=el.value;saveQuote(patch);});
   });
-  // status
+  // status (lost prompts for a reason)
   VIEW.querySelectorAll('.stbtn').forEach(function(b){b.addEventListener('click',function(){
-    api('/api/estimating/quotes/'+QID+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.getAttribute('data-s')})}).then(function(d){if(d.ok)drawEditor(d);});
+    var s=b.getAttribute('data-s'); var body={status:s};
+    if(s==='lost'){ var r=prompt('Reason lost (optional):', CURRENT.quote.outcome_note||''); if(r===null)return; body.note=r; }
+    api('/api/estimating/quotes/'+QID+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(d){if(d.ok){CURRENT=d;drawEditor(d);}});
   });});
+  // duplicate / delete
+  document.getElementById('dupq').addEventListener('click',function(){
+    api('/api/estimating/quotes/'+QID+'/duplicate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(function(d){if(d.ok){toast('Duplicated as '+d.quote.number);QID=d.quote.id;render();}});
+  });
+  document.getElementById('delq').addEventListener('click',function(){
+    if(!confirm('Delete quote '+CURRENT.quote.number+'? This cannot be undone.'))return;
+    api('/api/estimating/quotes/'+QID,{method:'DELETE'}).then(function(d){if(d.ok){toast('Deleted');QID=null;render();}});
+  });
+  wireAcctSearch();
   // line edits
   VIEW.querySelectorAll('.ln-qty,.ln-cost,.ln-hrs').forEach(function(inp){
     inp.addEventListener('blur',function(){
@@ -357,6 +378,28 @@ function wirePbSearch(){
   });
   document.addEventListener('click',function(e){if(!e.target.closest('.search-wrap'))box.style.display='none';});
 }
+var acctTimer=null;
+function wireAcctSearch(){
+  var inp=document.getElementById('acctsearch'),box=document.getElementById('acctresults');
+  if(!inp)return;
+  inp.addEventListener('input',function(){
+    clearTimeout(acctTimer);var term=inp.value.trim();
+    if(term.length<2){box.style.display='none';return;}
+    acctTimer=setTimeout(function(){
+      api('/api/estimating/accounts?q='+encodeURIComponent(term)).then(function(d){
+        var items=(d.accounts||[]).slice(0,20);
+        if(!items.length){box.innerHTML='<div class="rc">No match</div>';box.style.display='block';return;}
+        box.innerHTML=items.map(function(a){return '<div data-id="'+a.id+'" data-name="'+esc(a.name)+'">'+esc(a.name)+'</div>';}).join('');
+        box.style.display='block';
+        box.querySelectorAll('div[data-id]').forEach(function(row){row.addEventListener('click',function(){
+          var patch={account_id:Number(row.getAttribute('data-id')),customer:row.getAttribute('data-name')};
+          api('/api/estimating/quotes/'+QID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(function(d){if(d.ok){CURRENT=d;drawEditor(d);toast('Linked to '+patch.customer);}});
+          box.style.display='none';inp.value='';
+        });});
+      });
+    },220);
+  });
+}
 
 /* ---------------- proposal ---------------- */
 function showProposal(){
@@ -379,7 +422,21 @@ function showProposal(){
       '<div class="g"><div><div class="ln"></div><div class="cap">Authorized signature</div></div><div><div class="ln"></div><div class="cap">Date</div></div>'+
       '<div><div class="ln"></div><div class="cap">Printed name</div></div><div><div class="ln"></div><div class="cap">Title</div></div></div></div>';
   document.getElementById('sheet').innerHTML=sheet;
+  document.getElementById('propMsg').textContent='';
+  var em=document.getElementById('propEmail'); if(em&&!em.value&&q.contact&&/@/.test(q.contact))em.value=q.contact;
   document.getElementById('prop').classList.add('on');
+}
+function sendProposalEmail(){
+  var to=document.getElementById('propEmail').value.trim();
+  var msg=document.getElementById('propMsg'), btn=document.getElementById('propSend');
+  btn.disabled=true; btn.textContent='Sending…'; msg.textContent='';
+  api('/api/estimating/quotes/'+QID+'/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:to})}).then(function(d){
+    btn.disabled=false; btn.textContent='Send to customer';
+    if(!d.ok){msg.style.color='var(--critical,#8c1d18)';msg.textContent=d.error||'Failed';return;}
+    if(d.needsApproval){msg.style.color='var(--warn,#a56a12)';msg.textContent='Below the '+d.floor+'% floor ('+d.markup+'%) - routed to Approvals.';}
+    else{msg.style.color='var(--good,#12805c)';msg.textContent='Sent to '+to+'.';}
+    if(d.quote){CURRENT={quote:d.quote,lines:d.lines,totals:d.totals,branding:d.branding};}
+  }).catch(function(){btn.disabled=false;btn.textContent='Send to customer';msg.style.color='var(--critical,#8c1d18)';msg.textContent='Could not send.';});
 }
 
 /* ---------------- price book tab ---------------- */
@@ -423,11 +480,12 @@ function renderMargins(){
       '<p class="note" style="margin:0 0 12px">The build-up used to price every quote for this office: mark up material, add labor and design, then overhead and profit.</p>'+
       '<div class="frow"><div class="fld"><label>Labor $/hr</label><input id="g_labor_rate" value="'+m.labor_rate+'"></div><div class="fld"><label>Design $/hr</label><input id="g_design_rate" value="'+m.design_rate+'"></div></div>'+
       '<div class="frow"><div class="fld"><label>Material markup %</label><input id="g_mat_markup" value="'+m.mat_markup+'"></div><div class="fld"><label>Overhead %</label><input id="g_overhead" value="'+m.overhead+'"></div></div>'+
-      '<div class="fld"><label>Profit %</label><input id="g_profit" value="'+m.profit+'"></div>'+
+      '<div class="frow"><div class="fld"><label>Profit %</label><input id="g_profit" value="'+m.profit+'"></div>'+
+        '<div class="fld"><label>Margin floor % (needs approval below)</label><input id="g_floor_markup" value="'+(m.floor_markup!=null?m.floor_markup:20)+'"></div></div>'+
       '<div style="display:flex;gap:10px;align-items:center;margin-top:6px"><button class="os-btn primary" id="savem">Save margins</button><span id="mstatus" class="note"></span></div>'+
       '</div></div>';
     document.getElementById('savem').addEventListener('click',function(){
-      var body={office:OFFICE};['labor_rate','design_rate','mat_markup','overhead','profit'].forEach(function(k){body[k]=Number(v('g_'+k));});
+      var body={office:OFFICE};['labor_rate','design_rate','mat_markup','overhead','profit','floor_markup'].forEach(function(k){body[k]=Number(v('g_'+k));});
       api('/api/estimating/margins',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(d){document.getElementById('mstatus').textContent=d.ok?'Saved.':'Failed.';if(d.ok)toast('Margins saved');});
     });
   });
@@ -437,6 +495,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var ds=document.getElementById('defsearch');
   ds.addEventListener('input',function(){clearTimeout(pbTimer);pbTimer=setTimeout(function(){loadDefs(ds.value);},220);});
   document.getElementById('defcreate').addEventListener('click',createFromDefs);
+  document.getElementById('propSend').addEventListener('click',sendProposalEmail);
   // Render as soon as we can; don't hang forever waiting on os.js (we have fallbacks for OS.esc/toast).
   var tries=0;
   function boot(){ if(!window.OS && tries++<25){return setTimeout(boot,40);} loadOffices().then(function(){bindTabs();render();}).catch(function(){bindTabs();render();}); }

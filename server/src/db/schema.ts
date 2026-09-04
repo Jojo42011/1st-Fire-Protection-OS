@@ -1570,6 +1570,9 @@ export function initDb(): void {
   `);
   // Repair quotes remember which deficiencies they were built from (Phase 3).
   addColumn('est_quotes', 'source_deficiencies', 'TEXT');
+  // Won/lost reason, and the margin floor below which a quote must be approved before it goes out.
+  addColumn('est_quotes', 'outcome_note', 'TEXT');
+  addColumn('est_margins', 'floor_markup', 'REAL DEFAULT 20');
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
