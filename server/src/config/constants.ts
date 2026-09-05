@@ -3,28 +3,28 @@
  * Swap this file (plus theme.ts, integrations.ts, agents.ts and the shell CSS vars)
  * to re-target the whole OS at a different business.
  *
- * Values below are a FICTIONAL demo company (Northstar Fire & Safety). No real data.
+ * Values below identify 1st Fire Protection Services, LLC (the live operator of this OS).
  */
 
 export const COMPANY = {
-  name: 'Northstar Fire & Safety',
-  legal: 'Northstar Fire & Safety Co.',
+  name: '1st Fire Protection',
+  legal: '1st Fire Protection Services, LLC',
   industry: 'Single-source life safety: sprinklers, alarms, extinguishers, suppression, backflow',
   founded: 2011,
-  founders: 'Marcus & Irene Hale',
-  coo: 'Curtis Holloway',
-  president: 'Marcus Hale',
+  founders: '',
+  coo: '',
+  president: '',
   owner: 'IT Director', // the operator this OS answers to
-  hq: '2200 Commerce Way, Suite 100, Riverton, TX 75001',
-  area: 'Central Texas: 9 locations',
+  hq: '231 E Rhapsody Dr, San Antonio, TX 78216',
+  area: 'Central & South Texas: San Antonio HQ + 9 locations',
   brandVoice: 'Authoritative, industrial, urgent: white-glove, relationship-first, safety over sales',
   hero: 'SINGLE-SOURCE LIFE SAFETY',
-  subhero: 'Trusted life safety across Central Texas · Licensed, certified, and always on call',
-  phone: '512-555-0137',
-  phonePretty: '512-555-FIRE',
-  emergency: '844-555-0199',
-  email: 'dispatch@northstardemo.example',
-  site: 'northstardemo.example',
+  subhero: 'Trusted life safety across Central & South Texas · Licensed, certified, and always on call',
+  phone: '210-377-3473',
+  phonePretty: '210-377-FIRE',
+  emergency: '210-377-3473',
+  email: 'dispatch@1stfpservices.com',
+  site: '1stfpservices.com',
   hours: 'Mon to Fri 7:00a to 5:00p CT · 24-hr emergency and monitoring',
   certs: ['NFPA', 'NICET', 'MBE', 'SBE', 'HUB'],
   services: [
@@ -40,13 +40,13 @@ export const COMPANY = {
     '24-hr monitoring',
   ],
   locations: [
-    'Riverton', 'Cedar Hollow', 'Lakeside', 'Millbrook', 'Fairview',
-    'Prairie Point', 'Stonegate', 'Northfield', 'Bayport',
+    'San Antonio', 'Austin', 'Waco', 'College Station', 'Houston',
+    'Laredo', 'McAllen', 'Lubbock', 'Corpus Christi',
   ],
 };
 
 /**
- * The receptionist / home agent persona: the routing brain for the demo company.
+ * The receptionist / home agent persona: the routing brain for 1st Fire Protection.
  */
 export const RECEPTIONIST_SYSTEM_PROMPT = `
 You are the AI receptionist for ${COMPANY.name} (${COMPANY.legal}), answering the main office
@@ -54,7 +54,7 @@ line (${COMPANY.phone}). You are professional, warm, and efficient: this is a wh
 relationship-first company. Keep responses short and natural for a phone call.
 
 GREETING (say first):
-"Welcome to Northstar Fire and Safety. This is an AI, but I can answer any questions that you have
+"Welcome to 1st Fire Protection. This is an AI, but I can answer any questions that you have
 and transfer to a real person if not. How can I help you today?"
 
 YOUR JOB ON EVERY CALL:

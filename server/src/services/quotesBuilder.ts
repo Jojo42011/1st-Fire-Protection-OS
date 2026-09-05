@@ -23,11 +23,39 @@ export interface QuoteWithLines { quote: Quote; lines: QuoteLine[]; totals: Quot
 
 const off = (raw: string | null | undefined): string => (raw ? canonicalOffice(raw) || '' : '');
 
-/** Search CRM accounts by name for linking a quote to a real customer. */
-export function searchAccounts(q: string, limit = 20): Array<{ id: number; name: string }> {
+/**
+ * Search CRM accounts by name for linking a quote to a real customer. When officeKeys is provided
+ * (a scoped caller), results are restricted to accounts that appear in those offices via deficiencies,
+ * quotes, or ServiceTrade jobs, so a scoped user never sees out-of-scope customers. null = company-wide.
+ */
+export function searchAccounts(q: string, officeKeys: string[] | null = null, limit = 20): Array<{ id: number; name: string }> {
   const term = String(q || '').trim();
   if (!term) return [];
-  return getDb().prepare(`SELECT id, name FROM accounts WHERE name LIKE ? ORDER BY name LIMIT ?`).all(`%${term}%`, limit) as any[];
+  const db = getDb();
+  if (officeKeys === null) {
+    return db.prepare(`SELECT id, name FROM accounts WHERE name LIKE ? ORDER BY name LIMIT ?`).all(`%${term}%`, limit) as any[];
+  }
+  if (!officeKeys.length) return [];
+  const ph = officeKeys.map(() => '?').join(',');
+  const sql = `SELECT DISTINCT a.id, a.name FROM accounts a
+     WHERE a.name LIKE ? AND a.id IN (
+       SELECT account_id FROM deficiencies WHERE account_id IS NOT NULL AND os_office_key(office) IN (${ph})
+       UNION SELECT account_id FROM est_quotes WHERE account_id IS NOT NULL AND deleted_at IS NULL AND os_office_key(office) IN (${ph})
+       UNION SELECT account_id FROM crm_jobs WHERE account_id IS NOT NULL AND os_office_key(office_name) IN (${ph})
+     ) ORDER BY a.name LIMIT ?`;
+  return db.prepare(sql).all(`%${term}%`, ...officeKeys, ...officeKeys, ...officeKeys, limit) as any[];
+}
+
+/** The canonical office of a quote (including soft-deleted), for cross-office scope checks. */
+export function quoteOffice(id: number): string | null {
+  const r = getDb().prepare(`SELECT office FROM est_quotes WHERE id = ?`).get(id) as { office: string } | undefined;
+  return r ? r.office : null;
+}
+
+/** The quote a line belongs to, for line-level scope checks. */
+export function lineQuoteId(lineId: number): number | null {
+  const r = getDb().prepare(`SELECT quote_id FROM est_quote_lines WHERE id = ?`).get(lineId) as { quote_id: number } | undefined;
+  return r ? r.quote_id : null;
 }
 const accountName = (id: number | null | undefined): string | null => {
   if (!id) return null;
@@ -79,14 +107,21 @@ function persistTotals(quoteId: number): QuoteTotals {
 
 /* ─────────────────────────── CRUD ─────────────────────────── */
 
-export function listQuotes(office = '', status = ''): Array<Quote & { customer_name: string }> {
+/**
+ * List quotes, always excluding soft-deleted rows. officeKeys restricts to the caller's authorized
+ * offices: null = company-wide (no office filter), [] = no scope (no rows), or a specific set of keys.
+ */
+export function listQuotes(officeKeys: string[] | null = null, status = ''): Array<Quote & { customer_name: string }> {
   const db = getDb();
-  const key = off(office);
-  const where: string[] = []; const args: any = {};
-  if (key) { where.push('office = @office'); args.office = key; }
-  if (status) { where.push('status = @status'); args.status = status; }
-  const sql = `SELECT * FROM est_quotes ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC LIMIT 300`;
-  return (db.prepare(sql).all(args) as Quote[]).map((q) => ({ ...q, customer_name: q.customer || 'Prospect' }));
+  const where: string[] = ['deleted_at IS NULL']; const args: any[] = [];
+  if (officeKeys !== null) {
+    if (!officeKeys.length) return [];
+    where.push(`os_office_key(office) IN (${officeKeys.map(() => '?').join(',')})`);
+    args.push(...officeKeys);
+  }
+  if (status) { where.push('status = ?'); args.push(status); }
+  const sql = `SELECT * FROM est_quotes WHERE ${where.join(' AND ')} ORDER BY updated_at DESC LIMIT 300`;
+  return (db.prepare(sql).all(...args) as Quote[]).map((q) => ({ ...q, customer_name: q.customer || 'Prospect' }));
 }
 
 export function createQuote(input: Partial<Quote> & { created_by?: string }): Quote {
@@ -131,7 +166,7 @@ export function updateQuote(id: number, patch: Record<string, any>): QuoteWithLi
 
 export function getQuote(id: number): QuoteWithLines | null {
   const db = getDb();
-  const quote = db.prepare(`SELECT * FROM est_quotes WHERE id = ?`).get(id) as Quote | undefined;
+  const quote = db.prepare(`SELECT * FROM est_quotes WHERE id = ? AND deleted_at IS NULL`).get(id) as Quote | undefined;
   if (!quote) return null;
   const lines = db.prepare(`SELECT * FROM est_quote_lines WHERE quote_id = ? ORDER BY sort, id`).all(id) as QuoteLine[];
   let rates: Margins | undefined; try { rates = quote.rates_json ? { office: quote.office, ...JSON.parse(quote.rates_json), floor_markup: getMargins(quote.office).floor_markup } : undefined; } catch { rates = undefined; }
@@ -212,10 +247,9 @@ export function quoteApproved(id: number): boolean {
   ).get(id);
 }
 
+/** Soft-delete a quote: archive it (auditable, reversible) rather than destroying the row + lines. */
 export function deleteQuote(id: number): boolean {
-  const db = getDb();
-  db.prepare(`DELETE FROM est_quote_lines WHERE quote_id = ?`).run(id);
-  return db.prepare(`DELETE FROM est_quotes WHERE id = ?`).run(id).changes > 0;
+  return getDb().prepare(`UPDATE est_quotes SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id).changes > 0;
 }
 
 /* ─────────────────────────── deficiency → quote (Phase 3) ─────────────────────────── */

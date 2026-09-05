@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { nudgeSync } from '../services/servicetradeSync';
+import { timingSafeEqualStr } from '../os/security';
+
+const liveMode = (): boolean => process.env.DEMO_MODE === 'off';
 
 /**
  * ServiceTrade webhook receiver — the endpoint ServiceTrade PUSHES events to (job completed,
@@ -16,11 +19,11 @@ import { nudgeSync } from '../services/servicetradeSync';
  */
 const router = Router();
 
-function secretOk(req: any): boolean {
+export function secretOk(req: any): boolean {
   const want = process.env.SERVICETRADE_WEBHOOK_SECRET;
-  if (!want) return true; // no secret configured → accept (dev / not yet locked down)
-  const got = req.query?.token || req.headers['x-webhook-token'];
-  return got === want;
+  if (!want) return !liveMode(); // live mode requires the secret; demo accepts for local dev
+  const got = String(req.query?.token || req.headers['x-webhook-token'] || '');
+  return timingSafeEqualStr(got, want);
 }
 
 router.post('/api/servicetrade/webhook', (req, res) => {

@@ -46,6 +46,32 @@ are present. Live path: forward 210-377-FIRE → Twilio → Vapi (BYO OpenAI key
 
 Swap the founder layer → new company, same hull.
 
+## Production, security & operations
+
+This is a live internal platform carrying real, office-scoped operating data. It is deployed
+as `first-fp-os` on Fly.io (Dallas, one machine, one encrypted 1GB SQLite volume,
+`DEMO_MODE=off`).
+
+- **Authorization posture** is controlled by `OS_AUTH_MODE`: `legacy` (shared-password
+  everywhere), `hybrid` (default: reads open to the shared password, but sensitive
+  writes/sends/deletes require a mapped Entra identity + role + office scope), and `enforce`
+  (every protected page and API requires a mapped identity). The reusable layer lives in
+  `server/src/os/authz.ts`, with the route policy map in `server/src/os/policy.ts`. Office
+  scope is always resolved server-side against the caller - never from the raw client `office`.
+- **Estimating, proposals, pricing, jobs, inspections, approvals, and admin** are all
+  server-enforced and office-scoped, with an immutable audit trail (`os_audit`). Customer
+  proposal sends are draft-first: they queue an approval bound to a quote revision and execute
+  once, idempotently, through the external-action outbox (`server/src/services/outbox.ts`).
+- **Admin backup/reset** fail closed in production unless `ADMIN_TOKEN` is set. Webhooks
+  (Vapi, ServiceTrade) require their secrets in live mode. Security headers, a same-origin CSRF
+  guard, and a small in-memory rate limiter are applied with no new dependencies.
+- **Readiness**: an admin-only screen (Company → Readiness) and `GET /api/readiness` report a
+  safe, non-secret posture snapshot with explicit warnings.
+
+See **`docs/PRODUCTION_HARDENING_RELEASE.md`** (what changed, env vars, rollout, the Fly
+secrets to set) and **`docs/PRODUCTION_RUNBOOK.md`** (backup/restore/incident/rollback/secret
+rotation, and the restore-drill checklist).
+
 ## Non-negotiable conventions
 
 - **Graceful degradation.** Missing key → log a line and no-op. Never crash. A keyless boot still

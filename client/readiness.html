@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Production Readiness · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<style>
+  .wrap{padding:22px 26px;max-width:1080px}
+  h1{font-size:20px;font-weight:600;margin:0}
+  .sub{font-size:13px;color:var(--muted);margin:6px 0 0;max-width:720px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:14px 0}
+  .card-h{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .card-h h2{font-size:12px;font-family:var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0;font-weight:500}
+  .card-b{padding:14px 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .stat{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:9px}
+  .stat .k{font-size:12px;color:var(--muted)} .stat .v{font-family:var(--mono);font-size:12px;font-weight:600}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .ok{background:var(--good,#12805c)} .warn{background:#b45309} .bad{background:var(--critical,#8c1d18)} .off{background:var(--faint)}
+  .pill{font-family:var(--mono);font-size:10.5px;padding:2px 9px;border-radius:20px;font-weight:600}
+  .pill.ok{color:var(--good,#12805c);background:rgba(18,128,92,.12)} .pill.warn{color:#b45309;background:rgba(180,83,9,.14)}
+  .pill.bad{color:var(--critical,#8c1d18);background:rgba(140,29,24,.12)} .pill.off{color:var(--muted);background:var(--bg)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:8px 10px;border-bottom:1px solid var(--border);font-weight:500}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--ink-2);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .mono{font-family:var(--mono)}
+  .warnbox{border-left:3px solid #b45309;background:rgba(180,83,9,.07);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+  .warnbox ul{margin:8px 0 0 18px;padding:0} .warnbox li{font-size:12.5px;color:var(--ink);margin-bottom:6px;line-height:1.45}
+  .allgood{color:var(--good,#12805c);font-size:13px;padding:8px 0}
+  .muted{color:var(--muted);font-size:11.5px}
+</style>
+<script src="/os.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <h1>Production Readiness</h1>
+  <p class="sub">A safe, non-secret snapshot of the operating posture: identity enforcement, admin and webhook protection, integration freshness, backups, and open external actions. No secret values are shown here.</p>
+  <div id="view"><p class="muted" style="margin-top:20px">Loading readiness…</p></div>
+</div>
+<script>
+function esc(t){return (window.OS&&OS.esc)?OS.esc(t):String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function yn(b){return b?'<span class="pill ok">Yes</span>':'<span class="pill off">No</span>';}
+function dotFor(b,warnIfFalse){return '<span class="dot '+(b?'ok':(warnIfFalse?'warn':'off'))+'"></span>';}
+function ago(iso){ if(!iso) return 'never'; var d=Date.now()-Date.parse(iso); if(!isFinite(d))return esc(iso); var m=Math.floor(d/60000); if(m<60)return m+'m ago'; var h=Math.floor(m/60); if(h<48)return h+'h ago'; return Math.floor(h/24)+'d ago'; }
+
+function stat(k,vhtml){return '<div class="stat"><span class="k">'+k+'</span><span class="v">'+vhtml+'</span></div>';}
+
+fetch('/api/readiness').then(function(r){ if(r.status===401||r.status===403){ throw new Error('You do not have access to production readiness.'); } return r.json(); }).then(function(d){
+  if(!d.ok){ throw new Error(d.error||'Could not load readiness.'); }
+  var R=d.readiness, html='';
+
+  // Warnings first
+  if(R.warnings && R.warnings.length){
+    html+='<div class="card"><div class="card-h"><h2>Warnings ('+R.warnings.length+')</h2></div><div class="card-b">'+
+      '<div class="warnbox"><b style="font-size:12.5px">Unsafe or degraded conditions in live mode</b><ul>'+
+      R.warnings.map(function(w){return '<li>'+esc(w)+'</li>';}).join('')+'</ul></div></div></div>';
+  } else {
+    html+='<div class="card"><div class="card-b"><div class="allgood">No production warnings. Posture looks healthy.</div></div></div>';
+  }
+
+  // Posture
+  var p=R.posture;
+  html+='<div class="card"><div class="card-h"><h2>Posture</h2></div><div class="card-b"><div class="grid">'+
+    stat('Environment', '<span class="pill '+(p.live_mode?'ok':'warn')+'">'+(p.live_mode?'LIVE':'DEMO')+'</span>')+
+    stat('Auth mode', '<span class="pill '+(p.os_auth_mode==='enforce'?'ok':(p.os_auth_mode==='hybrid'?'warn':'bad'))+'">'+esc(p.os_auth_mode)+'</span>')+
+    stat('Identity enforced', yn(p.identity_enforced))+
+    stat('Shared password active', p.shared_password_active?'<span class="pill warn">Yes</span>':'<span class="pill off">No</span>')+
+    stat('Entra configured', yn(p.entra_configured))+
+    '</div></div></div>';
+
+  // Protection
+  html+='<div class="card"><div class="card-h"><h2>Admin & webhook protection</h2></div><div class="card-b"><div class="grid">'+
+    stat('Admin secret configured', yn(R.admin.admin_secret_configured))+
+    stat('Admin fails closed', yn(R.admin.fails_closed_in_prod)||'')+
+    stat('Vapi webhook secret', yn(R.webhooks.vapi_secret_configured))+
+    stat('ServiceTrade webhook secret', yn(R.webhooks.servicetrade_secret_configured))+
+    '</div></div></div>';
+
+  // Integrations
+  html+='<div class="card"><div class="card-h"><h2>Integrations</h2></div><div class="card-b"><div class="grid">'+
+    (R.integrations||[]).map(function(i){
+      var cls=i.status==='connected'?'ok':(i.status==='available'?'warn':'off');
+      return stat(esc(i.name), '<span class="pill '+cls+'">'+esc(i.status)+'</span>');
+    }).join('')+'</div></div></div>';
+
+  // Sync freshness
+  html+='<div class="card"><div class="card-h"><h2>Source freshness</h2></div>'+
+    '<table><thead><tr><th>Source</th><th>Last run</th><th>Status</th><th>Fresh</th></tr></thead><tbody>'+
+    (R.sync||[]).map(function(s){
+      return '<tr><td>'+esc(s.label)+'</td><td class="mono muted">'+ago(s.last_run_at)+'</td>'+
+        '<td><span class="pill '+(s.last_status==='ok'?'ok':(s.last_status==='error'?'bad':'off'))+'">'+esc(s.last_status||'never')+'</span></td>'+
+        '<td>'+dotFor(s.fresh,true)+(s.fresh?'fresh':'stale')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+
+  // Backups + open work
+  html+='<div class="card"><div class="card-h"><h2>Backups & open actions</h2></div><div class="card-b"><div class="grid">'+
+    stat('Last backup', '<span class="mono">'+ago(R.backups.last_backup_at)+'</span>')+
+    stat('Off-Fly backup', '<span class="pill '+(R.backups.off_fly_configured?'ok':'warn')+'">'+esc(R.backups.off_fly_verified)+'</span>')+
+    stat('Pending approvals', String(R.approvals.pending))+
+    stat('External actions pending', String(R.external_actions.pending))+
+    stat('External actions failed', (R.external_actions.failed>0?'<span class="pill bad">'+R.external_actions.failed+'</span>':'0'))+
+    stat('DB integrity', '<span class="pill '+(R.database.integrity==='ok'?'ok':'warn')+'">'+esc(R.database.integrity)+'</span>')+
+    stat('DB size', R.database.size_bytes!=null?(Math.round(R.database.size_bytes/1048576*10)/10+' MB'):'unknown')+
+    '</div></div></div>';
+
+  // Policy coverage
+  if(d.policy){
+    html+='<div class="card"><div class="card-h"><h2>Authorization coverage</h2></div>'+
+      '<table><thead><tr><th>Method</th><th>Path</th><th>Policy</th><th>Notes</th></tr></thead><tbody>'+
+      d.policy.map(function(x){return '<tr><td class="mono muted">'+esc(x.method)+'</td><td class="mono">'+esc(x.path)+'</td><td class="mono">'+esc(x.policy)+'</td><td class="muted">'+esc(x.note)+'</td></tr>';}).join('')+
+      '</tbody></table></div>';
+  }
+  html+='<p class="muted">Generated '+esc(R.generated_at)+'. This view never exposes secret values, tokens, PII, or database paths.</p>';
+  document.getElementById('view').innerHTML=html;
+}).catch(function(e){
+  document.getElementById('view').innerHTML='<div class="card"><div class="card-b" style="color:var(--critical,#8c1d18)">'+esc(e.message)+'</div></div>';
+});
+</script>
+</body>
+</html>

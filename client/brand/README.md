@@ -1,6 +1,6 @@
-# Northstar Fire & Safety — Brand Kit
+# 1st Fire Protection - Brand Kit
 
-The reusable visual identity for Northstar Fire & Safety materials. Point any new
+The reusable visual identity for 1st Fire Protection materials. Point any new
 page, doc, or deck at these tokens so everything stays consistent.
 
 - `brand.css` — design tokens (CSS custom properties) + decorative components

@@ -15,6 +15,8 @@ import { runDueSyncs } from './services/syncScheduler';
 import { processLicenseQueue } from './services/entraLicensing';
 
 import { gate, handleLogin, handleLogout, authRequired } from './auth';
+import { securityHeaders, csrfGuard, rateLimit } from './os/security';
+import { osAuthMode } from './os/authz';
 import { currentContext } from './os/scope';
 import { moduleLevel } from './people/permissions';
 import health from './routes/health';
@@ -46,6 +48,8 @@ import estimating from './routes/estimating';
 import estimatingBuilder from './routes/estimatingBuilder';
 import jobsBoard from './routes/jobsBoard';
 import inspections from './routes/inspections';
+import readiness from './routes/readiness';
+import { bootReadinessWarnings } from './services/readiness';
 import { seedStarterCatalog } from './services/priceBook';
 import closer from './routes/closer';
 import plans from './routes/plans';
@@ -109,9 +113,13 @@ ensureBootstrapAdmin();
 // card never claims "live in the roster" without a real agent behind it.
 const healed = healRoster();
 if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into live agents`);
+// Surface production readiness warnings once at boot (live mode only). Non-fatal.
+bootReadinessWarnings();
 
 const app = express();
+app.set('trust proxy', true); // Fly terminates TLS and sets X-Forwarded-*; needed for req.ip rate limiting
 app.use(express.json({ limit: '5mb' }));
+app.use(securityHeaders);
 
 // ---- canonical host redirect ----
 // Browser page loads that arrive on the raw *.fly.dev host are bounced to the branded domain
@@ -130,10 +138,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// ---- rate limits on the public / abuse-prone surfaces (small in-memory limiter) ----
+app.use('/api/webhooks', rateLimit({ windowMs: 60_000, max: 240 }));
+app.use('/api/servicetrade/webhook', rateLimit({ windowMs: 60_000, max: 240 }));
+app.use('/api/intake', rateLimit({ windowMs: 60_000, max: 60 }));
+
 // ---- password gate (enforced only when APP_PASSWORD is set) ----
 app.use(gate);
+// Same-origin CSRF guard for cookie-authenticated state-changing browser requests (webhooks/agent/
+// intake/login are exempt inside csrfGuard). Runs after the gate, before the routes.
+app.use(csrfGuard);
 app.get('/login', (_req, res) => (authRequired() ? res.sendFile(path.join(CLIENT_DIR, 'login.html')) : res.redirect('/')));
-app.post('/api/login', handleLogin);
+app.post('/api/login', rateLimit({ windowMs: 5 * 60_000, max: 12, message: 'Too many sign-in attempts. Wait a few minutes and try again.' }), handleLogin);
 app.post('/api/logout', handleLogout);
 
 // ---- API routes ----
@@ -165,6 +181,7 @@ app.use(estimating);
 app.use(estimatingBuilder);
 app.use(jobsBoard);
 app.use(inspections);
+app.use(readiness);
 app.use(closer);
 app.use(plans);
 app.use(schedule);
@@ -219,6 +236,7 @@ const PAGE_MODULE: Record<string, string> = {
   'company-integrations.html': 'access', 'integrations.html': 'access', 'sync.html': 'access',
   'access.html': 'access', 'roster.html': 'access', 'harness.html': 'access',
   'department.html': 'access', 'agent.html': 'access', 'ad-audit.html': 'access',
+  'readiness.html': 'access',
 };
 const NO_ACCESS_HTML = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>No access</title><style>html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;
@@ -299,6 +317,7 @@ app.get('/offices', page('offices.html'));
 app.get('/it-systems', page('it-systems.html'));
 app.get('/company-integrations', page('company-integrations.html'));
 app.get('/people', page('people.html'));
+app.get('/readiness', page('readiness.html'));
 
 // static assets (theme.css etc.)
 // Serve assets with revalidation, not long-lived caching. os.css/os.js and the other shared assets
@@ -395,8 +414,9 @@ const runReports = () => runDueReports()
 setInterval(runReports, REPORTS_MS).unref();
 
 server.listen(PORT, () => {
-  console.log(`\n  Northstar Operating System`);
+  const mode = process.env.DEMO_MODE !== 'off' ? 'DEMO' : 'LIVE';
+  console.log(`\n  1st Fire Protection OS  [${mode}]`);
   console.log(`  ▸ http://localhost:${PORT}`);
   console.log(`  ▸ client: ${CLIENT_DIR}`);
-  console.log(`  ▸ tabs: /calls (home) /invoices /reviews /integrations\n`);
+  console.log(`  ▸ auth: OS_AUTH_MODE=${(process.env.OS_AUTH_MODE || 'hybrid')}\n`);
 });

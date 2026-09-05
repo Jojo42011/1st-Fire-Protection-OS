@@ -121,8 +121,8 @@ export function buildPartnerCrossSell(): { live: boolean; count: number; leads: 
       triggerEvent: triggerFrom(r.desc),
       techFlagged: false,
       hasSecurityVendor: false,
-      notes: `Northstar ${rel} relationship${r.amount ? `, ~$${Math.round(r.amount).toLocaleString()} of fire work` : ''}.`,
-      source: 'Northstar book',
+      notes: `1st Fire Protection ${rel} relationship${r.amount ? `, ~$${Math.round(r.amount).toLocaleString()} of fire work` : ''}.`,
+      source: '1st FP book',
     });
   }
 
@@ -143,10 +143,10 @@ export function buildPartnerCrossSell(): { live: boolean; count: number; leads: 
       onSiteFrequency: 'high',
       lifetimeValue: 0,
       lastJobAt: f.created_at || '',
-      triggerEvent: f.note || 'a Northstar tech flagged this site for security',
+      triggerEvent: f.note || 'a 1st Fire Protection tech flagged this site for security',
       techFlagged: true,
       hasSecurityVendor: false,
-      notes: `Flagged by ${f.flagged_by || 'a Northstar tech'} on site: ${f.note || 'security gap noted'}.`,
+      notes: `Flagged by ${f.flagged_by || 'a 1st Fire Protection tech'} on site: ${f.note || 'security gap noted'}.`,
       source: 'tech flag',
     });
   }

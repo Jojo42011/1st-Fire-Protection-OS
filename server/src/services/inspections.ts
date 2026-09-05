@@ -67,18 +67,22 @@ export function createInspection(input: {
   return getInspection(id);
 }
 
-export function listInspections(office = '', status = ''): Array<Inspection & { fail_count: number; total: number }> {
+/** List inspections. officeKeys restricts to the caller's offices (null = company-wide, [] = none). */
+export function listInspections(officeKeys: string[] | null = null, status = ''): Array<Inspection & { fail_count: number; total: number }> {
   const db = getDb();
-  const key = off(office);
-  const where: string[] = []; const args: any = {};
-  if (key) { where.push('os_office_key(i.office) = @office'); args.office = key; }
-  if (status) { where.push('i.status = @status'); args.status = status; }
+  const where: string[] = []; const args: any[] = [];
+  if (officeKeys !== null) {
+    if (!officeKeys.length) return [];
+    where.push(`os_office_key(i.office) IN (${officeKeys.map(() => '?').join(',')})`);
+    args.push(...officeKeys);
+  }
+  if (status) { where.push('i.status = ?'); args.push(status); }
   const sql = `SELECT i.*,
       (SELECT COUNT(*) FROM inspection_items x WHERE x.inspection_id = i.id AND x.result = 'fail') AS fail_count,
       (SELECT COUNT(*) FROM inspection_items x WHERE x.inspection_id = i.id) AS total
     FROM inspections i ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
     ORDER BY i.updated_at DESC LIMIT 300`;
-  return db.prepare(sql).all(args) as any[];
+  return db.prepare(sql).all(...args) as any[];
 }
 
 const INSPECTION_FIELDS = ['customer', 'address', 'contact', 'inspector', 'interval', 'notes', 'account_id', 'office'] as const;

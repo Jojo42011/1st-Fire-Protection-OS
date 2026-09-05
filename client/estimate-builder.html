@@ -277,6 +277,7 @@ function drawEditor(d){
           '<button class="os-btn" id="manual" style="margin-top:10px">+ Manual line</button>'+
           '<button class="os-btn" id="autotake" style="margin-top:10px;margin-left:8px">Auto-takeoff</button>'+
           '<div class="note" style="margin-top:8px">Auto-takeoff builds a priced bill of materials from the square feet, hazard, and system type above (a budget/ROM estimate you then refine). Uses your office price book where it can.</div>'+
+          '<div class="note" style="margin-top:6px;color:#b45309"><b>Estimator assistant, not a design.</b> A parametric takeoff requires estimator and designer review before it goes out. It is not a permit or a code-compliant engineering design unless a qualified designer has reviewed and stamped it.</div>'+
         '</div></div>'+
         '<div class="card"><div class="card-h"><h2>Scope, inclusions &amp; exclusions</h2></div><div class="card-b">'+
           '<div class="fld"><label>Scope of work (proposal body)</label><textarea id="f_scope" rows="3" placeholder="Describe the system being installed…">'+esc(q.scope)+'</textarea></div>'+
@@ -443,14 +444,15 @@ function showProposal(){
 function sendProposalEmail(){
   var to=document.getElementById('propEmail').value.trim();
   var msg=document.getElementById('propMsg'), btn=document.getElementById('propSend');
-  btn.disabled=true; btn.textContent='Sending…'; msg.textContent='';
+  btn.disabled=true; btn.textContent='Requesting…'; msg.textContent='';
   api('/api/estimating/quotes/'+QID+'/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:to})}).then(function(d){
     btn.disabled=false; btn.textContent='Send to customer';
     if(!d.ok){msg.style.color='var(--critical,#8c1d18)';msg.textContent=d.error||'Failed';return;}
-    if(d.needsApproval){msg.style.color='var(--warn,#a56a12)';msg.textContent='Below the '+d.floor+'% floor ('+d.markup+'%) - routed to Approvals.';}
-    else{msg.style.color='var(--good,#12805c)';msg.textContent='Sent to '+to+'.';}
+    // Every proposal is draft-first: sending queues an approval. It only leaves the building once approved.
+    if(d.alreadySent){msg.style.color='var(--good,#12805c)';msg.textContent='This exact revision was already sent to '+to+'.';}
+    else{msg.style.color='var(--warn,#a56a12)';msg.textContent='Queued for approval'+(d.markup<d.floor?(' (below the '+d.floor+'% floor)'):'')+'. It sends once approved in the Approvals inbox.';}
     if(d.quote){CURRENT={quote:d.quote,lines:d.lines,totals:d.totals,branding:d.branding};}
-  }).catch(function(){btn.disabled=false;btn.textContent='Send to customer';msg.style.color='var(--critical,#8c1d18)';msg.textContent='Could not send.';});
+  }).catch(function(){btn.disabled=false;btn.textContent='Send to customer';msg.style.color='var(--critical,#8c1d18)';msg.textContent='Could not queue the proposal.';});
 }
 
 /* ---------------- price book tab ---------------- */

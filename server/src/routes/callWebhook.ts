@@ -1,8 +1,17 @@
 import { Router } from 'express';
 import { ingestVapiCall } from '../services/receptionist';
 import { telephonyEnabled } from '../config/voice';
+import { timingSafeEqualStr } from '../os/security';
 
 const router = Router();
+const liveMode = (): boolean => process.env.DEMO_MODE === 'off';
+
+/** Pure webhook-auth decision (testable): a set secret must match; in live mode a missing secret rejects. */
+export function vapiWebhookAuth(got: string, secret: string | undefined, live: boolean): 'ok' | 'invalid' | 'missing_secret' {
+  if (secret) return timingSafeEqualStr(got, secret) ? 'ok' : 'invalid';
+  if (live) return 'missing_secret';
+  return 'ok';
+}
 
 /**
  * Telephony webhook (Vapi Server URL). WIRED now, GATED off until a voice key is present.
@@ -18,16 +27,16 @@ const router = Router();
 let warnedNoSecret = false;
 
 router.post('/api/webhooks/call', async (req, res) => {
-  // --- verify the shared secret when configured ---
-  const secret = process.env.VAPI_SERVER_SECRET;
-  if (secret) {
-    const got = req.header('x-vapi-secret');
-    if (got !== secret) {
-      return res.status(401).json({ ok: false, error: 'invalid x-vapi-secret' });
-    }
-  } else if (!warnedNoSecret) {
+  // --- verify the shared secret ---
+  const decision = vapiWebhookAuth(String(req.header('x-vapi-secret') || ''), process.env.VAPI_SERVER_SECRET, liveMode());
+  if (decision === 'invalid') return res.status(401).json({ ok: false, error: 'invalid x-vapi-secret' });
+  if (decision === 'missing_secret') {
+    if (!warnedNoSecret) { warnedNoSecret = true; console.warn('[callWebhook] READINESS: VAPI_SERVER_SECRET not set in live mode - rejecting unauthenticated webhooks.'); }
+    return res.status(401).json({ ok: false, error: 'webhook_secret_required' });
+  }
+  if (!process.env.VAPI_SERVER_SECRET && !warnedNoSecret) {
     warnedNoSecret = true;
-    console.warn('[callWebhook] VAPI_SERVER_SECRET not set — accepting unauthenticated webhooks.');
+    console.warn('[callWebhook] VAPI_SERVER_SECRET not set (demo mode) - accepting unauthenticated webhooks.');
   }
 
   const body = req.body || {};

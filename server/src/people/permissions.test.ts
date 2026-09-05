@@ -18,7 +18,10 @@ const user = (roles: string[]): AppUser => ({ email: 'x@y.z', display_name: null
 
 test('presets are returned for every role, and overrides start empty', () => {
   const m = getMatrix();
-  assert.equal(m.modules.length, 9);
+  assert.equal(m.modules.length, 10); // + the 'pricing' module (price book & margins)
+  assert.ok(m.modules.some((x: any) => x.key === 'pricing'));
+  assert.equal(m.roles.partner.levels.pricing, 2);
+  assert.equal(m.roles.safety.levels.pricing, 0);
   assert.equal(m.roles.hr.levels.comp, 2);
   assert.equal(m.roles.accounting.levels.comp, 0);
   assert.equal(m.roles.accounting.customized, false);

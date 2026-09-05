@@ -110,18 +110,22 @@ export function deleteJob(id: number): boolean {
   return getDb().prepare(`DELETE FROM est_jobs WHERE id = ?`).run(id).changes > 0;
 }
 
-export function listJobs(office = '', stage = ''): Job[] {
-  const key = off(office);
-  const where: string[] = []; const args: any = {};
-  if (key) { where.push('os_office_key(office) = @office'); args.office = key; }
-  if (stage && STAGE_KEYS.includes(stage)) { where.push('stage = @stage'); args.stage = stage; }
+/** List jobs. officeKeys restricts to the caller's authorized offices (null = company-wide, [] = none). */
+export function listJobs(officeKeys: string[] | null = null, stage = ''): Job[] {
+  const where: string[] = []; const args: any[] = [];
+  if (officeKeys !== null) {
+    if (!officeKeys.length) return [];
+    where.push(`os_office_key(office) IN (${officeKeys.map(() => '?').join(',')})`);
+    args.push(...officeKeys);
+  }
+  if (stage && STAGE_KEYS.includes(stage)) { where.push('stage = ?'); args.push(stage); }
   const sql = `SELECT * FROM est_jobs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC LIMIT 500`;
-  return getDb().prepare(sql).all(args) as Job[];
+  return getDb().prepare(sql).all(...args) as Job[];
 }
 
 /** Jobs grouped into board columns plus per-stage count and open pipeline value. */
-export function board(office = ''): { stages: typeof STAGES; columns: Record<string, Job[]>; summary: { open: number; value: number } } {
-  const jobs = listJobs(office);
+export function board(officeKeys: string[] | null = null): { stages: typeof STAGES; columns: Record<string, Job[]>; summary: { open: number; value: number } } {
+  const jobs = listJobs(officeKeys);
   const columns: Record<string, Job[]> = {};
   for (const s of STAGES) columns[s.key] = [];
   for (const j of jobs) (columns[j.stage] || (columns[j.stage] = [])).push(j);

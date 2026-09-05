@@ -17,6 +17,7 @@ export const MODULES: { key: string; label: string }[] = [
   { key: 'overview', label: 'Overview & metrics' },
   { key: 'receivables', label: 'Receivables (AR)' },
   { key: 'deficiencies', label: 'Deficiencies & quotes' },
+  { key: 'pricing', label: 'Price book & margins' },
   { key: 'service', label: 'Jobs & service' },
   { key: 'people', label: 'People & employees' },
   { key: 'comp', label: 'Compensation & payroll' },
@@ -34,17 +35,17 @@ export const LEVELS: { value: Level; label: string }[] = [
 
 // The documented intent per role (matches the eleven authz.ts role keys). Overrides overlay these.
 export const PRESETS: Record<string, Record<string, Level>> = {
-  executive: { overview: 1, receivables: 1, deficiencies: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
-  partner: { overview: 1, receivables: 1, deficiencies: 2, service: 2, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
-  branch_manager: { overview: 1, receivables: 1, deficiencies: 2, service: 2, people: 1, comp: 0, safety: 1, accounting: 0, access: 0 },
-  accounting: { overview: 1, receivables: 2, deficiencies: 1, service: 1, people: 0, comp: 0, safety: 0, accounting: 2, access: 0 },
-  people_admin: { overview: 1, receivables: 1, deficiencies: 1, service: 1, people: 2, comp: 2, safety: 2, accounting: 1, access: 2 },
-  hr: { overview: 0, receivables: 0, deficiencies: 0, service: 0, people: 2, comp: 2, safety: 1, accounting: 0, access: 0 },
-  it: { overview: 0, receivables: 0, deficiencies: 0, service: 0, people: 1, comp: 0, safety: 0, accounting: 0, access: 2 },
-  safety: { overview: 0, receivables: 0, deficiencies: 0, service: 1, people: 1, comp: 0, safety: 2, accounting: 0, access: 0 },
-  executive_approver: { overview: 1, receivables: 1, deficiencies: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
-  manager: { overview: 1, receivables: 0, deficiencies: 1, service: 1, people: 1, comp: 0, safety: 0, accounting: 0, access: 0 },
-  viewer: { overview: 1, receivables: 1, deficiencies: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
+  executive: { overview: 1, receivables: 1, deficiencies: 1, pricing: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
+  partner: { overview: 1, receivables: 1, deficiencies: 2, pricing: 2, service: 2, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
+  branch_manager: { overview: 1, receivables: 1, deficiencies: 2, pricing: 1, service: 2, people: 1, comp: 0, safety: 1, accounting: 0, access: 0 },
+  accounting: { overview: 1, receivables: 2, deficiencies: 1, pricing: 2, service: 1, people: 0, comp: 0, safety: 0, accounting: 2, access: 0 },
+  people_admin: { overview: 1, receivables: 1, deficiencies: 1, pricing: 1, service: 1, people: 2, comp: 2, safety: 2, accounting: 1, access: 2 },
+  hr: { overview: 0, receivables: 0, deficiencies: 0, pricing: 0, service: 0, people: 2, comp: 2, safety: 1, accounting: 0, access: 0 },
+  it: { overview: 0, receivables: 0, deficiencies: 0, pricing: 0, service: 0, people: 1, comp: 0, safety: 0, accounting: 0, access: 2 },
+  safety: { overview: 0, receivables: 0, deficiencies: 0, pricing: 0, service: 1, people: 1, comp: 0, safety: 2, accounting: 0, access: 0 },
+  executive_approver: { overview: 1, receivables: 1, deficiencies: 1, pricing: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
+  manager: { overview: 1, receivables: 0, deficiencies: 1, pricing: 0, service: 1, people: 1, comp: 0, safety: 0, accounting: 0, access: 0 },
+  viewer: { overview: 1, receivables: 1, deficiencies: 1, pricing: 1, service: 1, people: 1, comp: 0, safety: 1, accounting: 1, access: 0 },
 };
 
 function presetFor(role: string): Record<string, Level> {

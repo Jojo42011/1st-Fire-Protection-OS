@@ -35,6 +35,7 @@ export function renderProposalHtml(d: QuoteWithLines): string {
     <div style="font-size:19px;font-weight:700;color:#1d2b49;margin:18px 0">Total price: ${money(t.sellPrice)}</div>
     ${q.exclusions ? `<h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#1d2b49;margin:18px 0 6px">Exclusions</h3>${bullets(q.exclusions)}` : ''}
     <p style="font-size:11px;color:#666">Valid for 30 days. ${esc(q.system_type || 'Wet pipe')} system · ${esc(q.hazard || '')}${q.sf ? ` · ${Number(q.sf).toLocaleString()} sq ft` : ''}.</p>
+    <p style="font-size:9.5px;color:#8a8f98">Pricing reflects an estimate prepared from project parameters and is subject to designer review. This proposal is not a permit or a code-compliant engineering design; final quantities and hydraulic calculations are confirmed on the stamped drawings.</p>
     <div style="margin-top:22px;border-top:1px solid #999;padding-top:12px;font-size:12px">
       <b>Acceptance</b>
       <p style="font-size:11px;color:#555;margin:6px 0 14px">Signature below authorizes ${esc(br.llc)} to proceed under the terms of this proposal.</p>

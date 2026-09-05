@@ -1,50 +1,78 @@
 import { Router } from 'express';
-import { currentContext } from '../os/scope';
+import { requireOs, actorOf, officeKeysOrFail, writeOfficeOrFail, canActOnOffice } from '../os/authz';
+import { P } from '../os/policy';
+import { osAudit } from '../os/audit';
 import { board, listJobs, getJob, createJob, updateJob, setStage, deleteJob, jobForQuote, STAGES } from '../services/jobsBoard';
 
 /**
- * Phase 4 API: the project board of jobs spawned from won quotes. Mounted bare; office comes from the
- * client like the rest of the estimating family. Jobs are created automatically when a quote is won
- * (see the /send-status hook in estimatingBuilder), or manually here for standalone field work.
+ * Phase 4 API: the project board of jobs spawned from won quotes. Namespaced under /api/jobboard so it
+ * never collides with the ServiceTrade job-readiness endpoint (crm.ts owns GET /api/jobs). Every route
+ * is authorized and office-scoped; job IDs are checked against the caller's office scope.
  */
 const router = Router();
-const O = (req: any): string => String(req.query.office || req.body?.office || '');
-const who = (req: any): string | undefined => { const c = currentContext(req); return c.user?.display_name || c.user?.email || undefined; };
 
-// Namespaced under /api/jobboard (not /api/jobs) so it never collides with the ServiceTrade job
-// readiness endpoint (crm.ts owns GET /api/jobs). This is the local project board of won quotes.
-router.get('/api/jobboard/stages', (_req, res) => res.json({ ok: true, stages: STAGES }));
+/** Verify a job is in the caller's office scope; sends 404/403 and returns null on failure. */
+function scopeJob(req: any, res: any, id: number) {
+  const j = getJob(id);
+  if (!j) { res.status(404).json({ ok: false, error: 'not found' }); return null; }
+  if (!canActOnOffice(req, j.office)) { res.status(403).json({ ok: false, error: 'office_forbidden' }); return null; }
+  return j;
+}
 
-router.get('/api/jobboard/board', (req, res) => res.json({ ok: true, ...board(O(req)) }));
+router.get('/api/jobboard/stages', requireOs(P.jobs_read), (_req, res) => res.json({ ok: true, stages: STAGES }));
 
-router.get('/api/jobboard/list', (req, res) => res.json({ ok: true, jobs: listJobs(O(req), String(req.query.stage || '')) }));
+router.get('/api/jobboard/board', requireOs(P.jobs_read), (req, res) => {
+  const scope = officeKeysOrFail(req, res); if (scope === null) return;
+  res.json({ ok: true, ...board(scope === 'ALL' ? null : scope) });
+});
 
-router.post('/api/jobboard', (req, res) => {
-  const j = createJob({ ...(req.body || {}), office: O(req), created_by: who(req) });
+router.get('/api/jobboard/list', requireOs(P.jobs_read), (req, res) => {
+  const scope = officeKeysOrFail(req, res); if (scope === null) return;
+  res.json({ ok: true, jobs: listJobs(scope === 'ALL' ? null : scope, String(req.query.stage || '')) });
+});
+
+router.post('/api/jobboard', requireOs(P.jobs_write), (req, res) => {
+  const office = writeOfficeOrFail(req, res); if (office === null) return;
+  const who = actorOf(req);
+  const j = createJob({ ...(req.body || {}), office, created_by: who.label });
+  osAudit({ actor: who.label, actor_email: who.email, office, module: 'service', action: 'job.create', subject_type: 'est_job', subject_id: j.id, new_summary: j.number || '' });
   res.json({ ok: true, job: j });
 });
 
-router.get('/api/jobboard/for-quote/:quoteId(\\d+)', (req, res) => {
+router.get('/api/jobboard/for-quote/:quoteId(\\d+)', requireOs(P.jobs_read), (req, res) => {
   const j = jobForQuote(Number(req.params.quoteId));
+  if (j && !canActOnOffice(req, j.office)) return res.status(403).json({ ok: false, error: 'office_forbidden' });
   res.json({ ok: true, job: j });
 });
 
-router.get('/api/jobboard/:id(\\d+)', (req, res) => {
-  const j = getJob(Number(req.params.id));
+router.get('/api/jobboard/:id(\\d+)', requireOs(P.jobs_read), (req, res) => {
+  const j = scopeJob(req, res, Number(req.params.id)); if (!j) return;
+  res.json({ ok: true, job: j });
+});
+
+router.put('/api/jobboard/:id(\\d+)', requireOs(P.jobs_write), (req, res) => {
+  const id = Number(req.params.id);
+  if (!scopeJob(req, res, id)) return;
+  const j = updateJob(id, req.body || {});
+  if (j) osAudit({ actor: actorOf(req).label, actor_email: actorOf(req).email, office: j.office, module: 'service', action: 'job.update', subject_type: 'est_job', subject_id: id });
   res.status(j ? 200 : 404).json(j ? { ok: true, job: j } : { ok: false, error: 'not found' });
 });
 
-router.put('/api/jobboard/:id(\\d+)', (req, res) => {
-  const j = updateJob(Number(req.params.id), req.body || {});
-  res.status(j ? 200 : 404).json(j ? { ok: true, job: j } : { ok: false, error: 'not found' });
-});
-
-router.post('/api/jobboard/:id(\\d+)/stage', (req, res) => {
+router.post('/api/jobboard/:id(\\d+)/stage', requireOs(P.jobs_write), (req, res) => {
+  const id = Number(req.params.id);
+  if (!scopeJob(req, res, id)) return;
   const b = req.body || {};
-  const j = setStage(Number(req.params.id), String(b.stage || ''), b.note !== undefined ? String(b.note) : undefined);
+  const j = setStage(id, String(b.stage || ''), b.note !== undefined ? String(b.note) : undefined);
+  if (j) osAudit({ actor: actorOf(req).label, actor_email: actorOf(req).email, office: j.office, module: 'service', action: 'job.stage', subject_type: 'est_job', subject_id: id, new_summary: j.stage });
   res.status(j ? 200 : 400).json(j ? { ok: true, job: j } : { ok: false, error: 'bad stage' });
 });
 
-router.delete('/api/jobboard/:id(\\d+)', (req, res) => res.json({ ok: deleteJob(Number(req.params.id)) }));
+router.delete('/api/jobboard/:id(\\d+)', requireOs(P.jobs_write), (req, res) => {
+  const id = Number(req.params.id);
+  const j = scopeJob(req, res, id); if (!j) return;
+  const ok = deleteJob(id);
+  if (ok) osAudit({ actor: actorOf(req).label, actor_email: actorOf(req).email, office: j.office, module: 'service', action: 'job.delete', subject_type: 'est_job', subject_id: id });
+  res.json({ ok });
+});
 
 export default router;

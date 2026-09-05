@@ -1639,6 +1639,61 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_inspitems_insp ON inspection_items(inspection_id);
   `);
+
+  /* ---------- Production hardening: immutable OS action-audit trail ----------
+   * A single append-only trail for sensitive operating actions (quotes, pricing, approvals, sends,
+   * admin). Rows are never updated or deleted by application code. actor is the authenticated identity
+   * (never a client-supplied label); old/new summaries are short human-readable strings, never secrets. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS os_audit (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      at             TEXT DEFAULT (datetime('now')),
+      actor          TEXT,                 -- display name or email of the authenticated actor, or 'system'
+      actor_email    TEXT,
+      office         TEXT,
+      module         TEXT,
+      action         TEXT NOT NULL,        -- e.g. quote.create, margin.update, proposal.send
+      subject_type   TEXT,
+      subject_id     TEXT,
+      correlation_id TEXT,
+      old_summary    TEXT,
+      new_summary    TEXT,
+      detail         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_osaudit_subject ON os_audit(subject_type, subject_id);
+    CREATE INDEX IF NOT EXISTS idx_osaudit_at ON os_audit(at);
+    CREATE INDEX IF NOT EXISTS idx_osaudit_action ON os_audit(action);
+
+    /* ---------- Production hardening: external-action outbox ledger ----------
+     * Every externally consequential action (starting with proposal email) is recorded here before it
+     * executes. idempotency_key is unique so a retry/refresh/double-click/worker-restart can never send
+     * twice. revision_hash binds an approval to an exact snapshot; editing the subject changes the hash
+     * and supersedes the old row. provider_status/detail store SAFE metadata only (never tokens/bodies). */
+    CREATE TABLE IF NOT EXISTS external_actions (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind            TEXT NOT NULL,        -- proposal_email
+      subject_type    TEXT, subject_id INTEGER,
+      office          TEXT,
+      recipient       TEXT,
+      subject         TEXT,
+      revision_hash   TEXT,
+      idempotency_key TEXT UNIQUE,
+      status          TEXT DEFAULT 'pending_approval', -- pending_approval|approved|sending|sent|failed|superseded
+      approval_id     INTEGER,
+      actor           TEXT,
+      provider_status TEXT,
+      provider_detail TEXT,
+      attempts        INTEGER DEFAULT 0,
+      created_at      TEXT DEFAULT (datetime('now')),
+      updated_at      TEXT DEFAULT (datetime('now')),
+      sent_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_extact_subject ON external_actions(subject_type, subject_id, status);
+    CREATE INDEX IF NOT EXISTS idx_extact_status ON external_actions(status);
+  `);
+
+  // Soft-delete for quotes: deletion archives instead of destroying the row (auditable, reversible).
+  addColumn('est_quotes', 'deleted_at', 'TEXT');
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */
