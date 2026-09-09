@@ -1,6 +1,8 @@
 import { getDb } from '../db/index';
+import { getState, setState } from '../db/schema';
 import { canonicalOffice } from '../os/office';
 import starter from './priceBookStarter';
+import { LUBBOCK_REPAIR_CATALOG } from './lubbockRepairCatalog';
 
 /**
  * The estimating price book (Phase 0). A vendor cost catalog scoped per office, plus each office's
@@ -126,6 +128,28 @@ export function seedStarterCatalog(): { inserted: number } {
   });
   tx();
   return { inserted: n };
+}
+
+/**
+ * Load the Lubbock partner's repair / deficiency catalog into the Lubbock price book (office='lubbock').
+ * Scoped to Lubbock ONLY on purpose: other offices are untouched until we wire it company-wide. Runs
+ * once (guarded by a state flag) so a partner's later edits in the app are never clobbered by a reseed;
+ * upsert-by-(office,sku) also makes it idempotent. Returns how many rows were loaded.
+ */
+export function seedLubbockRepairCatalog(): { office: string; upserted: number } {
+  const FLAG = 'seed_lubbock_repair_v1';
+  if (getState(FLAG) === '1') return { office: 'lubbock', upserted: 0 };
+  const db = getDb();
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const it of LUBBOCK_REPAIR_CATALOG) {
+      upsertItem('lubbock', { sku: it.sku, name: it.name, cat: it.cat, unit: it.unit, cost: it.cost, labor_hrs: it.labor_hrs });
+      n++;
+    }
+  });
+  tx();
+  setState(FLAG, '1');
+  return { office: 'lubbock', upserted: n };
 }
 
 /* ─────────────────────────── CSV import ─────────────────────────── */

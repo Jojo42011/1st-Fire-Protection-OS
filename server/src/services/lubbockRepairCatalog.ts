@@ -1,0 +1,87 @@
+/**
+ * Lubbock repair / deficiency price catalog.
+ *
+ * Sourced from the Excel repair price list the Lubbock partner (Robert Wilson) built for small
+ * service tickets and inspection deficiencies. It uses the SAME margin build-up as the rest of the OS
+ * (labor $85/hr, material markup 25%, overhead 15%, profit 12%), so once these items are in the Lubbock
+ * price book the OS quote builder produces the same per-line sell prices as the sheet.
+ *
+ * SCOPED TO LUBBOCK ONLY for now (office = 'lubbock'). A handful of service items in the sheet carry a
+ * flat "override sell" that bypasses the build-up (see override_sell below); the OS prices by build-up,
+ * so those few lines can be adjusted by hand until per-item sell override is wired for every office.
+ */
+
+export interface RepairCatalogItem { sku: string; cat: string; name: string; unit: string; cost: number; labor_hrs: number; override_sell?: number; }
+
+export const LUBBOCK_REPAIR_CATALOG: RepairCatalogItem[] = [
+  { sku: 'SVC-TRIP', cat: 'Service', name: 'Trip charge - Lubbock metro (inside Loop 289 + nearby)', unit: 'ea', cost: 95.0, labor_hrs: 0.0, override_sell: 125.0 },
+  { sku: 'SVC-TRIP-X', cat: 'Service', name: 'Trip charge - outside metro (Midland / Amarillo / out-of-town)', unit: 'ea', cost: 95.0, labor_hrs: 0.0, override_sell: 275.0 },
+  { sku: 'SVC-HR', cat: 'Service', name: 'Service labor - standard hours', unit: 'hr', cost: 0.0, labor_hrs: 1.0, override_sell: 125.0 },
+  { sku: 'SVC-OT', cat: 'Service', name: 'After-hours / emergency labor premium (adder per hour)', unit: 'hr', cost: 0.0, labor_hrs: 0.5 },
+  { sku: 'SVC-EMER', cat: 'Service', name: 'Same-day emergency dispatch adder', unit: 'ea', cost: 175.0, labor_hrs: 0.0, override_sell: 250.0 },
+  { sku: 'SVC-LIFT', cat: 'Service', name: 'Scissor / boom lift (rental day)', unit: 'day', cost: 275.0, labor_hrs: 0.5 },
+  { sku: 'SVC-IMPAIR', cat: 'Service', name: 'System impairment tag, notify, restore', unit: 'ea', cost: 25.0, labor_hrs: 0.4 },
+  { sku: 'SVC-AHJ', cat: 'Service', name: 'AHJ re-inspection coordination', unit: 'ea', cost: 0.0, labor_hrs: 1.0 },
+  { sku: 'SP-HD-PND', cat: 'Sprinkler heads', name: 'Replace standard pendent head 5.6K', unit: 'ea', cost: 18.5, labor_hrs: 0.85 },
+  { sku: 'SP-HD-UPR', cat: 'Sprinkler heads', name: 'Replace upright head 5.6K', unit: 'ea', cost: 16.75, labor_hrs: 0.8 },
+  { sku: 'SP-HD-CON', cat: 'Sprinkler heads', name: 'Replace concealed pendent + cover plate', unit: 'ea', cost: 38.0, labor_hrs: 1.0 },
+  { sku: 'SP-HD-SW', cat: 'Sprinkler heads', name: 'Replace horizontal sidewall head', unit: 'ea', cost: 22.0, labor_hrs: 0.9 },
+  { sku: 'SP-HD-DRY', cat: 'Sprinkler heads', name: 'Replace dry pendent', unit: 'ea', cost: 72.0, labor_hrs: 1.1 },
+  { sku: 'SP-HD-RES', cat: 'Sprinkler heads', name: 'Replace residential pendent 13D/13R', unit: 'ea', cost: 14.5, labor_hrs: 0.7 },
+  { sku: 'SP-ESC', cat: 'Sprinkler heads', name: 'Replace escutcheon / cover plate only', unit: 'ea', cost: 6.5, labor_hrs: 0.3 },
+  { sku: 'SP-CAB', cat: 'Sprinkler heads', name: 'Restock spare-head cabinet + wrench', unit: 'ls', cost: 185.0, labor_hrs: 0.5 },
+  { sku: 'SP-HEAD-PAINT', cat: 'Sprinkler heads', name: 'Replace painted / loaded head (same as pendent)', unit: 'ea', cost: 18.5, labor_hrs: 0.9 },
+  { sku: 'SP-GAUGE', cat: 'Sprinkler devices', name: 'Replace 300 psi water gauge', unit: 'ea', cost: 28.0, labor_hrs: 0.5 },
+  { sku: 'SP-GAUGE-AIR', cat: 'Sprinkler devices', name: 'Replace air / dry-system gauge', unit: 'ea', cost: 32.0, labor_hrs: 0.5 },
+  { sku: 'SP-FLOW', cat: 'Sprinkler devices', name: 'Replace waterflow switch', unit: 'ea', cost: 145.0, labor_hrs: 1.5 },
+  { sku: 'SP-TAMPER', cat: 'Sprinkler devices', name: 'Replace valve tamper switch', unit: 'ea', cost: 95.0, labor_hrs: 1.1 },
+  { sku: 'SP-PSW', cat: 'Sprinkler devices', name: 'Replace pressure switch', unit: 'ea', cost: 110.0, labor_hrs: 1.0 },
+  { sku: 'SP-BELL', cat: 'Sprinkler devices', name: 'Replace electric alarm bell', unit: 'ea', cost: 85.0, labor_hrs: 0.9 },
+  { sku: 'SP-GONG', cat: 'Sprinkler devices', name: 'Replace water motor gong', unit: 'ea', cost: 165.0, labor_hrs: 1.25 },
+  { sku: 'SP-LOCK', cat: 'Sprinkler devices', name: 'Breakaway lock + chain + sign', unit: 'ea', cost: 18.0, labor_hrs: 0.3 },
+  { sku: 'SP-SIGN', cat: 'Sprinkler devices', name: 'Valve identification / hydraulic nameplate', unit: 'ea', cost: 22.0, labor_hrs: 0.35 },
+  { sku: 'SP-DRAIN', cat: 'Sprinkler devices', name: 'Replace 2" main drain valve', unit: 'ea', cost: 95.0, labor_hrs: 1.4 },
+  { sku: 'SP-ITV', cat: 'Sprinkler devices', name: 'Replace inspector\'s test valve / sight glass', unit: 'ea', cost: 85.0, labor_hrs: 1.1 },
+  { sku: 'SP-CPLG', cat: 'Sprinkler pipe', name: 'Replace grooved coupling gasket / coupling', unit: 'ea', cost: 28.0, labor_hrs: 0.8 },
+  { sku: 'SP-DROP', cat: 'Sprinkler pipe', name: 'Replace 1" drop / arm-over / nipple', unit: 'ea', cost: 22.0, labor_hrs: 0.7 },
+  { sku: 'SP-HNG', cat: 'Sprinkler pipe', name: 'Replace hanger / ring / all-thread', unit: 'ea', cost: 12.0, labor_hrs: 0.45 },
+  { sku: 'SP-LEAK-HR', cat: 'Sprinkler pipe', name: 'Leak locate and repair - labor only', unit: 'hr', cost: 0.0, labor_hrs: 1.0 },
+  { sku: 'SP-FREEZE', cat: 'Sprinkler pipe', name: 'Freeze-break repair allowance (per joint)', unit: 'ea', cost: 45.0, labor_hrs: 1.5 },
+  { sku: 'SP-FDC-CAP', cat: 'Sprinkler FDC', name: 'Replace FDC cap pair', unit: 'pr', cost: 35.0, labor_hrs: 0.3 },
+  { sku: 'SP-FDC-SW', cat: 'Sprinkler FDC', name: 'Repair / replace FDC swivel', unit: 'ea', cost: 85.0, labor_hrs: 0.8 },
+  { sku: 'SP-FDC-SIGN', cat: 'Sprinkler FDC', name: 'FDC identification sign', unit: 'ea', cost: 28.0, labor_hrs: 0.25 },
+  { sku: 'SP-FWD', cat: 'Sprinkler test', name: 'Forward-flow test of backflow (labor)', unit: 'ls', cost: 0.0, labor_hrs: 2.5 },
+  { sku: 'SP-TRIP', cat: 'Sprinkler test', name: 'Dry-pipe partial trip test', unit: 'ls', cost: 0.0, labor_hrs: 2.0 },
+  { sku: 'SP-5YR', cat: 'Sprinkler test', name: '5-year internal obstruction investigation (allowance)', unit: 'ls', cost: 150.0, labor_hrs: 4.0 },
+  { sku: 'FA-SMK', cat: 'Fire alarm', name: 'Replace addressable smoke detector', unit: 'ea', cost: 78.0, labor_hrs: 0.7 },
+  { sku: 'FA-SMK-C', cat: 'Fire alarm', name: 'Replace conventional smoke detector', unit: 'ea', cost: 42.0, labor_hrs: 0.65 },
+  { sku: 'FA-HEAT', cat: 'Fire alarm', name: 'Replace addressable heat detector', unit: 'ea', cost: 72.0, labor_hrs: 0.65 },
+  { sku: 'FA-PULL', cat: 'Fire alarm', name: 'Replace dual-action pull station', unit: 'ea', cost: 68.0, labor_hrs: 0.65 },
+  { sku: 'FA-HS', cat: 'Fire alarm', name: 'Replace horn/strobe', unit: 'ea', cost: 95.0, labor_hrs: 0.75 },
+  { sku: 'FA-STR', cat: 'Fire alarm', name: 'Replace strobe only', unit: 'ea', cost: 72.0, labor_hrs: 0.65 },
+  { sku: 'FA-MON', cat: 'Fire alarm', name: 'Replace monitor module', unit: 'ea', cost: 62.0, labor_hrs: 0.7 },
+  { sku: 'FA-CTRL', cat: 'Fire alarm', name: 'Replace control / relay module', unit: 'ea', cost: 72.0, labor_hrs: 0.75 },
+  { sku: 'FA-DUCT', cat: 'Fire alarm', name: 'Replace duct smoke detector + sampling tube', unit: 'ea', cost: 285.0, labor_hrs: 2.0 },
+  { sku: 'FA-ISO', cat: 'Fire alarm', name: 'Replace isolator module', unit: 'ea', cost: 58.0, labor_hrs: 0.4 },
+  { sku: 'FA-CLEAN', cat: 'Fire alarm', name: 'Clean / service smoke detector (keep device)', unit: 'ea', cost: 0.0, labor_hrs: 0.25 },
+  { sku: 'FA-SENS', cat: 'Fire alarm', name: 'Sensitivity test per detector', unit: 'ea', cost: 0.0, labor_hrs: 0.15 },
+  { sku: 'FA-BATT7', cat: 'Fire alarm', name: 'Replace FACP batteries 12V 7 to 8AH pair', unit: 'set', cost: 48.0, labor_hrs: 0.5 },
+  { sku: 'FA-BATT18', cat: 'Fire alarm', name: 'Replace FACP batteries 12V 18AH pair', unit: 'set', cost: 95.0, labor_hrs: 0.55 },
+  { sku: 'FA-BATT-NAC', cat: 'Fire alarm', name: 'Replace NAC booster batteries pair', unit: 'set', cost: 65.0, labor_hrs: 0.5 },
+  { sku: 'FA-COMM', cat: 'Fire alarm', name: 'Replace / reprogram dual-path communicator', unit: 'ea', cost: 540.0, labor_hrs: 1.5 },
+  { sku: 'FA-GND', cat: 'Fire alarm', name: 'Ground-fault locate and repair - labor', unit: 'hr', cost: 0.0, labor_hrs: 1.0 },
+  { sku: 'FA-PROG', cat: 'Fire alarm', name: 'Programming / point change after device swap', unit: 'ls', cost: 0.0, labor_hrs: 1.0 },
+  { sku: 'FA-ANN', cat: 'Fire alarm', name: 'Replace remote annunciator', unit: 'ea', cost: 620.0, labor_hrs: 2.0 },
+  { sku: 'FA-COVER', cat: 'Fire alarm', name: 'Pull-station cover / stopper', unit: 'ea', cost: 42.0, labor_hrs: 0.25 },
+  { sku: 'EX-5', cat: 'Extinguisher', name: 'Recharge ABC 5 lb', unit: 'ea', cost: 18.0, labor_hrs: 0.25 },
+  { sku: 'EX-10', cat: 'Extinguisher', name: 'Recharge ABC 10 lb', unit: 'ea', cost: 24.0, labor_hrs: 0.3 },
+  { sku: 'EX-20', cat: 'Extinguisher', name: 'Recharge ABC 20 lb', unit: 'ea', cost: 38.0, labor_hrs: 0.35 },
+  { sku: 'EX-6YR', cat: 'Extinguisher', name: '6-year maintenance ABC 10 lb', unit: 'ea', cost: 32.0, labor_hrs: 0.3 },
+  { sku: 'EX-HYDRO', cat: 'Extinguisher', name: 'Hydrostatic test ABC 10 lb (plus recharge)', unit: 'ea', cost: 28.0, labor_hrs: 0.2 },
+  { sku: 'EX-NEW10', cat: 'Extinguisher', name: 'New 10 lb ABC extinguisher hung and tagged', unit: 'ea', cost: 85.0, labor_hrs: 0.4 },
+  { sku: 'EL-BATT', cat: 'Egress', name: 'Replace emergency-light / exit-sign battery', unit: 'ea', cost: 22.0, labor_hrs: 0.4 },
+  { sku: 'EL-EXIT', cat: 'Egress', name: 'Replace exit sign (LED)', unit: 'ea', cost: 55.0, labor_hrs: 0.5 },
+  { sku: 'EL-HEAD', cat: 'Egress', name: 'Replace emergency-light head / lamp', unit: 'ea', cost: 28.0, labor_hrs: 0.3 },
+  { sku: 'BF-TEST', cat: 'Backflow', name: 'Test backflow preventer (DCDA / RPZ)', unit: 'ea', cost: 0.0, labor_hrs: 1.25 },
+  { sku: 'BF-KIT', cat: 'Backflow', name: 'Backflow rebuild kit (2-1/2" to 4" typical)', unit: 'ea', cost: 285.0, labor_hrs: 2.0 },
+];

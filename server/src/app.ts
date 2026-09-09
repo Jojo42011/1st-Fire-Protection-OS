@@ -46,6 +46,7 @@ import crm from './routes/crm';
 import sync from './routes/sync';
 import estimating from './routes/estimating';
 import estimatingBuilder from './routes/estimatingBuilder';
+import { seedLubbockRepairCatalog } from './services/priceBook';
 import jobsBoard from './routes/jobsBoard';
 import inspections from './routes/inspections';
 import readiness from './routes/readiness';
@@ -104,6 +105,8 @@ seedAppAccessCatalog();
 seedSoftwareApps();
 // Seed the shared estimating price book (2,000+ vendor items). Idempotent (skips if already loaded).
 try { const r = seedStarterCatalog(); if (r.inserted) console.log(`[pricebook] seeded ${r.inserted} starter items`); } catch (e) { console.warn('[pricebook] seed error:', (e as Error).message); }
+// Load the Lubbock partner's repair/deficiency catalog into the Lubbock price book only. Idempotent.
+try { const r = seedLubbockRepairCatalog(); if (r.upserted) console.log(`[pricebook] loaded ${r.upserted} Lubbock repair items`); } catch (e) { console.warn('[pricebook] lubbock seed error:', (e as Error).message); }
 // Seed the per-purpose mail senders (onboarding@, reviews@, ap@, ...). Idempotent, editable.
 seedMailSenders();
 // Make the configured bootstrap admin a real, durable app_users row so People is authorized the
