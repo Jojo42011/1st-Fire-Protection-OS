@@ -254,7 +254,8 @@ function renderHeadcount(HC){
   return '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>Headcount by position</h2>'+
     '<span class="muted" style="margin-left:auto">'+esc(HC.total||0)+' active company-wide</span></div>'+
     '<table><thead><tr><th>Position</th><th style="text-align:right">Count</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-    '<details style="padding:10px 14px"><summary class="muted" style="cursor:pointer;font-size:12px">Full title breakdown</summary>'+
+    '<p class="muted" style="padding:8px 14px 0;font-size:11.5px">Positions can overlap: a Sales/Project Manager counts as both Estimator and Project Manager, so the buckets add up to more than the total. "None of the five" is field and office staff (fitters, foremen, helpers, admin) who do not fit these five.</p>'+
+    '<details style="padding:8px 14px"><summary class="muted" style="cursor:pointer;font-size:12px">Full title breakdown</summary>'+
     '<table style="margin-top:8px"><tbody>'+other+'</tbody></table></details></div>';
 }
 function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:pointer;border-left:4px solid '+(tone==='bad'?'#d64545':tone==='warn'?'#c9821a':'#7c869b')+'" onclick="go(\''+tab+'\')"><div class="val" style="font-size:15px;line-height:1.3">'+esc(title)+'</div><div class="lab" style="text-transform:none;font-weight:500;margin-top:4px">'+esc(why)+'</div></div>';}

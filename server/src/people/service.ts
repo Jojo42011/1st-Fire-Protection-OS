@@ -311,26 +311,26 @@ export function headcountByPosition(): { buckets: { label: string; count: number
     `SELECT COALESCE(NULLIF(job_position,''), NULLIF(public_job_title,''), '(unspecified)') AS title, COUNT(*) c
        FROM employees WHERE employment_status = 'active' GROUP BY title ORDER BY c DESC, title`
   ).all() as { title: string; c: number }[];
-  // Matching precedence: Inspector is checked before Technician so a combined "Inspector/FA Tech" lands
-  // in Inspector. Fitters, foremen, helpers, admins and office staff intentionally do not match any of
-  // the five (they are a different trade/role and fall into Other), so nobody is force-fit.
+  // Buckets can OVERLAP: a person counts in every position their title fits. That reflects the dual
+  // field roles here (a "Sales/Project Manager" both estimates and PMs; an "Inspector/FA Tech" is both).
+  // Sales counts as Estimator, since estimating lives in the sales/PM role. Fitters, foremen, helpers,
+  // and office/admin staff match none of the five and land in "None of the five" (not force-fit).
   const MATCH: { label: string; re: RegExp }[] = [
-    { label: 'Inspector', re: /inspect/i },
     { label: 'Technician', re: /\btech\b|technician/i },
     { label: 'Project Manager', re: /project\s*manager|project\s*mgr|\bpm\b/i },
-    { label: 'Estimator', re: /estimat/i },
+    { label: 'Estimator', re: /estimat|sales/i },
+    { label: 'Inspector', re: /inspect/i },
     { label: 'Coordinator', re: /coordinat/i },
   ];
-  const DISPLAY = ['Technician', 'Project Manager', 'Estimator', 'Inspector', 'Coordinator'];
-  const counts: Record<string, number> = { Other: 0 };
-  for (const b of MATCH) counts[b.label] = 0;
-  let total = 0;
+  const counts: Record<string, number> = {}; for (const b of MATCH) counts[b.label] = 0;
+  let total = 0, none = 0;
   for (const r of rows) {
     total += r.c;
-    const b = MATCH.find((x) => x.re.test(r.title));
-    counts[b ? b.label : 'Other'] += r.c;
+    let any = false;
+    for (const b of MATCH) if (b.re.test(r.title)) { counts[b.label] += r.c; any = true; }
+    if (!any) none += r.c;
   }
-  const buckets = [...DISPLAY.map((label) => ({ label, count: counts[label] })), { label: 'Other', count: counts.Other }];
+  const buckets = [...MATCH.map((b) => ({ label: b.label, count: counts[b.label] })), { label: 'None of the five', count: none }];
   return { buckets, total, byTitle: rows.map((r) => ({ title: r.title, count: r.c })) };
 }
 
