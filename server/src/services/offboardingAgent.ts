@@ -108,6 +108,12 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
 
+    // Accounting checklist (day one). Manual tasks Accounting marks done.
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_expense_reconcile', label: 'Reconcile and close final expense reports and outstanding reimbursements', due_at: base },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_card_cancel', label: 'Collect and cancel the company credit card / purchasing card', due_at: base },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_ap_approver', label: 'Remove the user as an AP approver and from bill-pay authorization', due_at: base },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_bank_access', label: 'Remove the user\'s access to bank and payment portals', detail: 'If the departing employee was an authorized user or signer.', due_at: base },
+
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'mbx_shared', label: 'Convert the mailbox to a shared mailbox', due_at: s2 },
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared. IT handles this (Accounting has no 365 admin access).', due_at: s2 },
 

@@ -34,11 +34,18 @@ test('offboarding includes the nine HR tasks and scopes items by department', ()
     assert.ok(out.items.some((i: any) => i.action_code === c && i.owner === 'it'), `${c} under IT`);
   }
 
-  // HR viewer sees only HR tasks; IT viewer sees only IT tasks; admin sees everything.
+  // Accounting has its own tasks now.
+  for (const c of ['acct_expense_reconcile', 'acct_card_cancel', 'acct_ap_approver', 'acct_bank_access']) {
+    assert.ok(out.items.some((i: any) => i.action_code === c && i.owner === 'accounting'), `${c} under accounting`);
+  }
+
+  // Each department viewer sees only its own tasks; admin sees everything.
   const hrView = getOffboarding(id, ['hr'])!;
   assert.ok(hrView.items.length === 6 && hrView.items.every((i: any) => i.owner === 'hr'));
   const itView = getOffboarding(id, ['it'])!;
   assert.ok(itView.items.length > 0 && itView.items.every((i: any) => i.owner === 'it'));
+  const acctView = getOffboarding(id, ['accounting'])!;
+  assert.ok(acctView.items.length === 4 && acctView.items.every((i: any) => i.owner === 'accounting'));
   const all = getOffboarding(id, null)!;
   assert.ok(all.items.length >= hrView.items.length + itView.items.length);
 });
