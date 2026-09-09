@@ -311,22 +311,26 @@ export function headcountByPosition(): { buckets: { label: string; count: number
     `SELECT COALESCE(NULLIF(job_position,''), NULLIF(public_job_title,''), '(unspecified)') AS title, COUNT(*) c
        FROM employees WHERE employment_status = 'active' GROUP BY title ORDER BY c DESC, title`
   ).all() as { title: string; c: number }[];
-  const BUCKETS: { label: string; re: RegExp }[] = [
-    { label: 'Technician', re: /tech/i },
+  // Matching precedence: Inspector is checked before Technician so a combined "Inspector/FA Tech" lands
+  // in Inspector. Fitters, foremen, helpers, admins and office staff intentionally do not match any of
+  // the five (they are a different trade/role and fall into Other), so nobody is force-fit.
+  const MATCH: { label: string; re: RegExp }[] = [
+    { label: 'Inspector', re: /inspect/i },
+    { label: 'Technician', re: /\btech\b|technician/i },
     { label: 'Project Manager', re: /project\s*manager|project\s*mgr|\bpm\b/i },
     { label: 'Estimator', re: /estimat/i },
-    { label: 'Inspector', re: /inspect/i },
     { label: 'Coordinator', re: /coordinat/i },
   ];
+  const DISPLAY = ['Technician', 'Project Manager', 'Estimator', 'Inspector', 'Coordinator'];
   const counts: Record<string, number> = { Other: 0 };
-  for (const b of BUCKETS) counts[b.label] = 0;
+  for (const b of MATCH) counts[b.label] = 0;
   let total = 0;
   for (const r of rows) {
     total += r.c;
-    const b = BUCKETS.find((x) => x.re.test(r.title));
+    const b = MATCH.find((x) => x.re.test(r.title));
     counts[b ? b.label : 'Other'] += r.c;
   }
-  const buckets = [...BUCKETS.map((b) => ({ label: b.label, count: counts[b.label] })), { label: 'Other', count: counts.Other }];
+  const buckets = [...DISPLAY.map((label) => ({ label, count: counts[label] })), { label: 'Other', count: counts.Other }];
   return { buckets, total, byTitle: rows.map((r) => ({ title: r.title, count: r.c })) };
 }
 
