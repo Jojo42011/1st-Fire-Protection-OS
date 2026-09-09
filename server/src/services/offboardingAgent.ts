@@ -98,9 +98,10 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
 
     // HR checklist (day one). Manual tasks HR marks done; not run on the DC.
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_notify_safety', label: 'Notify the Safety department of the termination', detail: 'Safety updates fleet, MVR, and fire-marshal licensing records.', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_receive_devices', label: 'Receive all assigned devices', detail: 'Collect the phone, laptop, tablet, and any field hardware.', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_icloud_logoff', label: 'Log off iCloud accounts on returned devices', detail: 'Sign out of iCloud so devices can be wiped and reissued.', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_remove_pins', label: 'Remove all PIN codes from returned devices', due_at: base },
+    // Device handling is owned by IT.
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_receive_devices', label: 'Receive all assigned devices', detail: 'Collect the phone, laptop, tablet, and any field hardware.', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_icloud_logoff', label: 'Log off iCloud accounts on returned devices', detail: 'Sign out of iCloud so devices can be wiped and reissued.', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_remove_pins', label: 'Remove all PIN codes from returned devices', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: 'Pull the departing employee from the fire-marshal license and insurance filings.', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', due_at: base },
