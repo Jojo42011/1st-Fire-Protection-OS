@@ -301,6 +301,35 @@ export function computeReadiness(workflow_id: number): { overall: string; catego
 }
 
 /* ─────────────────────────── overview ─────────────────────────── */
+/**
+ * Company-wide active headcount, bucketed into the field positions plus an "Other" catch-all, with the
+ * raw job-title breakdown for transparency. Counts only employees whose employment_status is 'active'.
+ */
+export function headcountByPosition(): { buckets: { label: string; count: number }[]; total: number; byTitle: { title: string; count: number }[] } {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT COALESCE(NULLIF(job_position,''), NULLIF(public_job_title,''), '(unspecified)') AS title, COUNT(*) c
+       FROM employees WHERE employment_status = 'active' GROUP BY title ORDER BY c DESC, title`
+  ).all() as { title: string; c: number }[];
+  const BUCKETS: { label: string; re: RegExp }[] = [
+    { label: 'Technician', re: /tech/i },
+    { label: 'Project Manager', re: /project\s*manager|project\s*mgr|\bpm\b/i },
+    { label: 'Estimator', re: /estimat/i },
+    { label: 'Inspector', re: /inspect/i },
+    { label: 'Coordinator', re: /coordinat/i },
+  ];
+  const counts: Record<string, number> = { Other: 0 };
+  for (const b of BUCKETS) counts[b.label] = 0;
+  let total = 0;
+  for (const r of rows) {
+    total += r.c;
+    const b = BUCKETS.find((x) => x.re.test(r.title));
+    counts[b ? b.label : 'Other'] += r.c;
+  }
+  const buckets = [...BUCKETS.map((b) => ({ label: b.label, count: counts[b.label] })), { label: 'Other', count: counts.Other }];
+  return { buckets, total, byTitle: rows.map((r) => ({ title: r.title, count: r.c })) };
+}
+
 export function overview(): any {
   const db = getDb();
   const n = (sql: string, ...a: any[]) => (db.prepare(sql).get(...a) as { c: number }).c;

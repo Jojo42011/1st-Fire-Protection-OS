@@ -224,8 +224,9 @@ function openTemplatesDrawer(){
 /* ---------- views ---------- */
 var VIEWS={};
 VIEWS.overview=function(v){
-  Promise.all([j('/api/people/overview'),j('/api/people/attention')]).then(function(res){
+  Promise.all([j('/api/people/overview'),j('/api/people/attention'),j('/api/people/headcount')]).then(function(res){
     var o=res[0].body||{}; var A=(res[1].ok?res[1].body:{})||{}; var att=A.attention||{}; var soon=A.startingSoon||[];
+    var HC=(res[2]&&res[2].ok?res[2].body:{})||{};
     // 1) Needs attention: current employee risk first (config is demoted below).
     var cards=[];
     if(att.startingSoon>0) cards.push(attn('warn',att.startingSoon+' starting within 7 days','Confirm Day-1 readiness before they arrive','onboarding'));
@@ -241,9 +242,21 @@ VIEWS.overview=function(v){
       '</tbody></table></div>' : '';
     // 3) Config note (demoted). The headline lifecycle counts now live in the metric strip above.
     var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My tasks</span>.</p>';
-    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+cfg;
+    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+renderHeadcount(HC)+cfg;
   });
 };
+function renderHeadcount(HC){
+  var buckets=HC.buckets||[]; if(!buckets.length) return '';
+  var rows=buckets.map(function(b){
+    return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(b.label)+'</td><td class="mono" style="text-align:right;font-variant-numeric:tabular-nums">'+esc(b.count)+'</td></tr>';
+  }).join('');
+  var other=(HC.byTitle||[]).slice(0,40).map(function(t){return '<tr><td>'+esc(t.title)+'</td><td class="mono" style="text-align:right">'+esc(t.count)+'</td></tr>';}).join('');
+  return '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>Headcount by position</h2>'+
+    '<span class="muted" style="margin-left:auto">'+esc(HC.total||0)+' active company-wide</span></div>'+
+    '<table><thead><tr><th>Position</th><th style="text-align:right">Count</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<details style="padding:10px 14px"><summary class="muted" style="cursor:pointer;font-size:12px">Full title breakdown</summary>'+
+    '<table style="margin-top:8px"><tbody>'+other+'</tbody></table></details></div>';
+}
 function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:pointer;border-left:4px solid '+(tone==='bad'?'#d64545':tone==='warn'?'#c9821a':'#7c869b')+'" onclick="go(\''+tab+'\')"><div class="val" style="font-size:15px;line-height:1.3">'+esc(title)+'</div><div class="lab" style="text-transform:none;font-weight:500;margin-top:4px">'+esc(why)+'</div></div>';}
 function goGlobal(tab){try{parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(_){}}
 function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+'</div><div class="val">'+(val==null?'0':esc(val))+'</div></div>';}
