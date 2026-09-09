@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { getDb } from '../db/index';
 import { getState } from '../db/schema';
-import { authRequired } from '../auth';
+import { authRequired, godModeConfigured } from '../auth';
 import { osAuthMode } from '../os/authz';
 import { entraConfigured } from '../people/identity';
 import { resolveIntegrations, integrationConnected } from '../config/integrations';
@@ -42,6 +42,7 @@ export interface Readiness {
   posture: {
     demo_mode: boolean; live_mode: boolean; os_auth_mode: string;
     identity_enforced: boolean; shared_password_active: boolean; entra_configured: boolean;
+    god_mode_configured: boolean;
   };
   admin: { admin_secret_configured: boolean; fails_closed_in_prod: boolean };
   webhooks: { vapi_secret_configured: boolean; servicetrade_secret_configured: boolean };
@@ -83,6 +84,7 @@ export function readinessReport(): Readiness {
     for (const s of sync) if (integrationConnected(s.key) && !s.fresh) warnings.push(`Sync source "${s.label}" is stale or failing (last status: ${s.last_status || 'never'}).`);
     const failed = failedActionCount();
     if (failed > 0) warnings.push(`${failed} external action(s) have failed and need review.`);
+    if (godModeConfigured()) warnings.push('GOD_MODE_PASSWORD is set: a break-glass full-admin sign-in is active. Every use is audited; unset it once normal identity access is in place.');
   }
 
   return {
@@ -90,6 +92,7 @@ export function readinessReport(): Readiness {
     posture: {
       demo_mode: !liveMode(), live_mode: liveMode(), os_auth_mode: mode,
       identity_enforced: mode === 'enforce', shared_password_active: sharedPw, entra_configured: entra,
+      god_mode_configured: godModeConfigured(),
     },
     admin: { admin_secret_configured: adminSecret, fails_closed_in_prod: !adminSecret },
     webhooks: { vapi_secret_configured: vapiSecret, servicetrade_secret_configured: stSecret },

@@ -9,14 +9,28 @@ import { currentIdentity } from './people/identity';
  * is disabled so a fresh deploy can never lock everyone out before the secret exists. A correct
  * password sets a signed, HttpOnly session cookie (30 days); the signing key is derived from the
  * password itself, so rotating the password invalidates old sessions. No new dependencies.
+ *
+ * Break-glass "god mode": if GOD_MODE_PASSWORD is set, signing in with it grants a FULL super-admin
+ * session (all offices, all modules) without Microsoft sign-in. It is env-gated (off unless set),
+ * every use is audited, and readiness flags it as a standing bypass. It does not bypass the separate
+ * ADMIN_TOKEN gate on the raw database export/reset endpoints. Use it as a fallback, not daily.
  */
 
 const COOKIE = 'fpos_auth';
+const GOD_COOKIE = 'fpos_god';
 const TTL_MS = 30 * 24 * 3600 * 1000; // 30 days
+const GOD_TTL_MS = 12 * 3600 * 1000;  // god-mode sessions are short-lived (12h)
 
 function appPassword(): string | null {
   const p = process.env.APP_PASSWORD;
   return p && p.length > 0 ? p : null;
+}
+function godPassword(): string | null {
+  const p = process.env.GOD_MODE_PASSWORD;
+  return p && p.length >= 12 ? p : null; // require a real length; a weak god password is refused
+}
+export function godModeConfigured(): boolean {
+  return godPassword() != null;
 }
 
 /** The gate only enforces when a password is configured. */
@@ -26,6 +40,26 @@ export function authRequired(): boolean {
 
 function signingSecret(): string {
   return crypto.createHash('sha256').update('fpos-session|' + (appPassword() || '')).digest('hex');
+}
+function godSecret(): string {
+  return crypto.createHash('sha256').update('fpos-god|' + (godPassword() || '')).digest('hex');
+}
+function signGod(): string {
+  const exp = String(Date.now() + GOD_TTL_MS);
+  return exp + '.' + crypto.createHmac('sha256', godSecret()).update(exp).digest('hex');
+}
+/** A valid, unexpired god-mode session cookie. False when god mode is not configured. */
+export function isGodMode(req: express.Request): boolean {
+  if (!godModeConfigured()) return false;
+  const token = readCookie(req, GOD_COOKIE);
+  if (!token) return false;
+  const dot = token.indexOf('.');
+  if (dot < 0) return false;
+  const exp = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  if (!/^\d+$/.test(exp) || Number(exp) < Date.now()) return false;
+  const expect = crypto.createHmac('sha256', godSecret()).update(exp).digest('hex');
+  try { return sig.length === expect.length && crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect)); } catch { return false; }
 }
 
 function signSession(): string {
@@ -117,12 +151,32 @@ export function gate(req: express.Request, res: express.Response, next: express.
 }
 
 export function handleLogin(req: express.Request, res: express.Response): void {
+  const given = String(req.body?.password ?? '');
+
+  // God mode is checked first: signing in with GOD_MODE_PASSWORD grants a full super-admin session
+  // (a normal app session cookie PLUS a short-lived god cookie) even when the office password gate is
+  // off. Every use is audited so it is never a silent backdoor.
+  const god = godPassword();
+  if (god && given.length > 0 && passwordMatches(given, god)) {
+    res.setHeader('Set-Cookie', [
+      `${COOKIE}=${signSession()}; HttpOnly; Path=/; Max-Age=${Math.floor(TTL_MS / 1000)}; SameSite=Lax; Secure`,
+      `${GOD_COOKIE}=${signGod()}; HttpOnly; Path=/; Max-Age=${Math.floor(GOD_TTL_MS / 1000)}; SameSite=Lax; Secure`,
+    ]);
+    try {
+      // Lazy require so auth.ts stays free of a static dependency on the audit module.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { osAudit } = require('./os/audit');
+      osAudit({ actor: 'god-mode', module: 'access', action: 'auth.god_login', detail: 'full-admin break-glass sign-in' });
+    } catch { /* auditing must never block sign-in */ }
+    res.json({ ok: true, godMode: true });
+    return;
+  }
+
   const pw = appPassword();
   if (!pw) {
     res.json({ ok: true }); // gate disabled
     return;
   }
-  const given = String(req.body?.password ?? '');
   if (given.length > 0 && passwordMatches(given, pw)) {
     res.setHeader('Set-Cookie', `${COOKIE}=${signSession()}; HttpOnly; Path=/; Max-Age=${Math.floor(TTL_MS / 1000)}; SameSite=Lax; Secure`);
     res.json({ ok: true });
@@ -132,6 +186,9 @@ export function handleLogin(req: express.Request, res: express.Response): void {
 }
 
 export function handleLogout(_req: express.Request, res: express.Response): void {
-  res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`);
+  res.setHeader('Set-Cookie', [
+    `${COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`,
+    `${GOD_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax; Secure`,
+  ]);
   res.json({ ok: true });
 }

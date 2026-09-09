@@ -12,6 +12,7 @@
 import express from 'express';
 import { getDb } from '../db/index';
 import { currentIdentity, Identity } from './identity';
+import { isGodMode } from '../auth';
 
 export type Role =
   // ── OS operating roles (office-scoped business access) ──
@@ -55,6 +56,19 @@ export interface AppUser {
 
 /** The current signed-in user with their mapped roles, or null when unauthenticated. */
 export function currentUser(req: express.Request): AppUser | null {
+  // Break-glass god mode: a valid god-mode session is a full super-admin (people_admin, all offices)
+  // regardless of any Entra identity. Env-gated and audited at sign-in; see auth.ts.
+  if (isGodMode(req)) {
+    return {
+      email: 'god-mode@1stfp.local',
+      display_name: 'God Mode Admin',
+      roles: ['people_admin'],
+      active: true,
+      source: 'god-mode',
+      offices: [],
+      all_offices: true,
+    };
+  }
   const id: Identity | null = currentIdentity(req);
   if (!id || !id.email) return null;
   return resolveAppUser(id.email, id.name);

@@ -34,6 +34,20 @@ configured or not verified, it says so.
 - Rotate the shared password: `flyctl secrets set APP_PASSWORD=<new>`. This invalidates all
   existing shared sessions (the session key is derived from the password).
 
+### Break-glass god mode (optional)
+
+- Set `GOD_MODE_PASSWORD` (a Fly secret, minimum 12 characters) to enable a break-glass
+  sign-in: entering it on the normal sign-in screen grants a full super-admin session (all
+  offices, all modules) without Microsoft sign-in. Use it only as a fallback when identity
+  access is broken or not yet set up, not for daily work.
+- Every god-mode sign-in is written to the immutable audit trail (`auth.god_login`), and the
+  Readiness screen flags it as a standing bypass whenever the secret is set.
+- The session is short-lived (12 hours) and does NOT bypass the separate `ADMIN_TOKEN` gate on
+  the raw database export/reset endpoints.
+- Set it: `flyctl secrets set GOD_MODE_PASSWORD=<strong-random>`. Turn it off:
+  `flyctl secrets unset GOD_MODE_PASSWORD`. Rotating it invalidates any active god session.
+- It is stripped in demo mode, so it only ever works on the live deploy.
+
 ## Backups
 
 **What exists:** Fly volume snapshots (daily, ~5-day retention), and an on-demand consistent
