@@ -1694,6 +1694,15 @@ export function initDb(): void {
 
   // Soft-delete for quotes: deletion archives instead of destroying the row (auditable, reversible).
   addColumn('est_quotes', 'deleted_at', 'TEXT');
+
+  // Repair-ticket pricing capability (per the Lubbock partner's service-call workbook), company-wide:
+  //  - override_sell: a flat per-item / per-line sell price that bypasses the margin build-up.
+  //  - after_hours: adds an emergency labor premium to the quote sell.
+  //  - waive_trip: credits (removes) the trip-charge lines from the quote total.
+  addColumn('price_book', 'override_sell', 'REAL');
+  addColumn('est_quote_lines', 'override_sell', 'REAL');
+  addColumn('est_quotes', 'after_hours', 'INTEGER DEFAULT 0');
+  addColumn('est_quotes', 'waive_trip', 'INTEGER DEFAULT 0');
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

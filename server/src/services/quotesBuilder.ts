@@ -9,16 +9,17 @@ import { officeBranding, OfficeBranding } from './officeBranding';
  * / est_quote_lines, entirely separate from the ServiceTrade quote mirror.
  */
 
-export interface QuoteLine { id: number; quote_id: number; sku: string | null; name: string | null; unit: string | null; cat: string | null; qty: number; cost: number; hrs: number; sort: number; }
+export interface QuoteLine { id: number; quote_id: number; sku: string | null; name: string | null; unit: string | null; cat: string | null; qty: number; cost: number; hrs: number; override_sell: number | null; sort: number; }
 export interface Quote {
   id: number; number: string | null; office: string; account_id: number | null; site_id: number | null;
   customer: string | null; address: string | null; contact: string | null; title: string | null; type: string;
   status: string; sf: number | null; stories: number | null; hazard: string | null; system_type: string | null; construction: string | null;
   rates_json: string | null; sell_price: number; mat_cost: number; labor_hrs: number;
   scope: string | null; inclusions: string | null; exclusions: string | null; notes: string | null;
+  after_hours: number; waive_trip: number;
   created_by: string | null; created_at: string; updated_at: string;
 }
-export interface QuoteTotals { matCost: number; laborHrs: number; laborCost: number; sellPrice: number; margins: Margins; markupPct: number; }
+export interface QuoteTotals { matCost: number; laborHrs: number; laborCost: number; baseSell: number; afterHoursAdder: number; tripCredit: number; sellPrice: number; margins: Margins; markupPct: number; }
 export interface QuoteWithLines { quote: Quote; lines: QuoteLine[]; totals: QuoteTotals; branding: OfficeBranding; }
 
 const off = (raw: string | null | undefined): string => (raw ? canonicalOffice(raw) || '' : '');
@@ -81,16 +82,43 @@ const DEFAULT_EXCLUSIONS = [
 
 /* ─────────────────────────── totals ─────────────────────────── */
 
+/** A line is a trip charge if its SKU is a trip code or its name reads as one (for the trip credit). */
+export function isTripLine(l: { sku: string | null; name: string | null }): boolean {
+  return /^SVC-TRIP/i.test(String(l.sku || '')) || /trip charge/i.test(String(l.name || ''));
+}
+
 export function computeTotals(quoteId: number, office: string, rates?: Margins): QuoteTotals {
   const db = getDb();
   const lines = db.prepare(`SELECT * FROM est_quote_lines WHERE quote_id = ?`).all(quoteId) as QuoteLine[];
+  const q = db.prepare(`SELECT after_hours, waive_trip FROM est_quotes WHERE id = ?`).get(quoteId) as { after_hours: number; waive_trip: number } | undefined;
+  const m = rates || getMargins(office);
+
   const matCost = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.cost) || 0), 0);
   const laborHrs = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.hrs) || 0), 0);
-  const m = rates || getMargins(office);
-  const sp = sellPrice(matCost, laborHrs, 0, m);
+
+  // Per-line sell: a line with override_sell uses that flat price; every other line uses the margin
+  // build-up. The build-up is linear, so the non-override lines are summed and built up once (which
+  // keeps totals identical to before for quotes that use no overrides).
+  let buildMat = 0, buildHrs = 0, overrideSell = 0, tripSell = 0;
+  for (const l of lines) {
+    const lm = (Number(l.qty) || 0) * (Number(l.cost) || 0);
+    const lh = (Number(l.qty) || 0) * (Number(l.hrs) || 0);
+    const hasOverride = l.override_sell != null && l.override_sell !== undefined;
+    const lineSell = hasOverride ? (Number(l.qty) || 0) * Number(l.override_sell) : sellPrice(lm, lh, 0, m);
+    if (hasOverride) overrideSell += lineSell; else { buildMat += lm; buildHrs += lh; }
+    if (isTripLine(l)) tripSell += lineSell;
+  }
+  const baseSell = sellPrice(buildMat, buildHrs, 0, m) + overrideSell;
+  const afterHoursAdder = q?.after_hours ? Math.round(laborHrs * m.labor_rate * 0.35) : 0;
+  const tripCredit = q?.waive_trip ? Math.round(tripSell) : 0;
+  const sp = Math.round(baseSell + afterHoursAdder - tripCredit);
+
   const laborCost = laborHrs * m.labor_rate;
   const markupPct = matCost + laborCost > 0 ? Math.round(((sp / (matCost + laborCost)) - 1) * 100) : 0;
-  return { matCost: Math.round(matCost * 100) / 100, laborHrs: Math.round(laborHrs * 10) / 10, laborCost: Math.round(laborCost), sellPrice: sp, margins: m, markupPct };
+  return {
+    matCost: Math.round(matCost * 100) / 100, laborHrs: Math.round(laborHrs * 10) / 10, laborCost: Math.round(laborCost),
+    baseSell: Math.round(baseSell), afterHoursAdder, tripCredit, sellPrice: sp, margins: m, markupPct,
+  };
 }
 
 /** Recompute and persist the quote's stored totals (material, hours, sell price). */
@@ -146,7 +174,8 @@ export function createQuote(input: Partial<Quote> & { created_by?: string }): Qu
   return getQuote(Number(info.lastInsertRowid))!.quote;
 }
 
-const QUOTE_FIELDS = new Set(['customer', 'address', 'contact', 'title', 'type', 'account_id', 'site_id', 'sf', 'stories', 'hazard', 'system_type', 'construction', 'scope', 'inclusions', 'exclusions', 'notes', 'status']);
+const QUOTE_FIELDS = new Set(['customer', 'address', 'contact', 'title', 'type', 'account_id', 'site_id', 'sf', 'stories', 'hazard', 'system_type', 'construction', 'scope', 'inclusions', 'exclusions', 'notes', 'status', 'after_hours', 'waive_trip']);
+const BOOL_FIELDS = new Set(['after_hours', 'waive_trip']);
 
 export function updateQuote(id: number, patch: Record<string, any>): QuoteWithLines | null {
   const db = getDb();
@@ -156,7 +185,7 @@ export function updateQuote(id: number, patch: Record<string, any>): QuoteWithLi
     if (!cur?.customer) { const n = accountName(Number(patch.account_id)); if (n) patch.customer = n; }
   }
   const sets: string[] = []; const args: any = { id };
-  for (const [k, v] of Object.entries(patch)) { if (QUOTE_FIELDS.has(k)) { sets.push(`${k} = @${k}`); args[k] = v; } }
+  for (const [k, v] of Object.entries(patch)) { if (QUOTE_FIELDS.has(k)) { sets.push(`${k} = @${k}`); args[k] = BOOL_FIELDS.has(k) ? (v ? 1 : 0) : v; } }
   // Allow editing the margin snapshot for this quote.
   if (patch.rates && typeof patch.rates === 'object') { sets.push(`rates_json = @rates_json`); args.rates_json = JSON.stringify(patch.rates); }
   if (sets.length) { db.prepare(`UPDATE est_quotes SET ${sets.join(', ')}, updated_at=datetime('now') WHERE id=@id`).run(args); }
@@ -177,28 +206,35 @@ export function getQuote(id: number): QuoteWithLines | null {
 /* ─────────────────────────── lines ─────────────────────────── */
 
 /** Add a line from the price book (by SKU) or a manual line. Quantity defaults to 1. */
-export function addLine(quoteId: number, input: { sku?: string; name?: string; unit?: string; cat?: string; qty?: number; cost?: number; hrs?: number }): QuoteWithLines | null {
+export function addLine(quoteId: number, input: { sku?: string; name?: string; unit?: string; cat?: string; qty?: number; cost?: number; hrs?: number; override_sell?: number | null }): QuoteWithLines | null {
   const db = getDb();
   const q = db.prepare(`SELECT office FROM est_quotes WHERE id = ?`).get(quoteId) as { office: string } | undefined;
   if (!q) return null;
+  let override_sell: number | null = input.override_sell === undefined ? null : (input.override_sell === null ? null : Number(input.override_sell));
   let line = { sku: input.sku || null as string | null, name: input.name || '', unit: input.unit || '', cat: input.cat || '', qty: Number(input.qty) || 1, cost: Number(input.cost) || 0, hrs: Number(input.hrs) || 0 };
   if (input.sku && (input.cost === undefined || input.name === undefined)) {
     const it = getItemBySku(q.office, input.sku);
-    if (it) line = { sku: it.sku, name: input.name || it.name || '', unit: it.unit || '', cat: it.cat || '', qty: line.qty, cost: input.cost ?? (it.cost || 0), hrs: input.hrs ?? (it.labor_hrs || 0) };
+    if (it) {
+      line = { sku: it.sku, name: input.name || it.name || '', unit: it.unit || '', cat: it.cat || '', qty: line.qty, cost: input.cost ?? (it.cost || 0), hrs: input.hrs ?? (it.labor_hrs || 0) };
+      // Carry the catalog's flat sell override onto the line unless the caller set one explicitly.
+      if (input.override_sell === undefined) override_sell = it.override_sell ?? null;
+    }
   }
   const maxSort = (db.prepare(`SELECT COALESCE(MAX(sort),0) m FROM est_quote_lines WHERE quote_id = ?`).get(quoteId) as { m: number }).m;
-  db.prepare(`INSERT INTO est_quote_lines (quote_id, sku, name, unit, cat, qty, cost, hrs, sort) VALUES (?,?,?,?,?,?,?,?,?)`)
-    .run(quoteId, line.sku, line.name, line.unit, line.cat, line.qty, line.cost, line.hrs, maxSort + 1);
+  db.prepare(`INSERT INTO est_quote_lines (quote_id, sku, name, unit, cat, qty, cost, hrs, override_sell, sort) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+    .run(quoteId, line.sku, line.name, line.unit, line.cat, line.qty, line.cost, line.hrs, override_sell, maxSort + 1);
   persistTotals(quoteId);
   return getQuote(quoteId);
 }
 
-export function updateLine(lineId: number, patch: { qty?: number; cost?: number; hrs?: number; name?: string; unit?: string }): QuoteWithLines | null {
+export function updateLine(lineId: number, patch: { qty?: number; cost?: number; hrs?: number; name?: string; unit?: string; override_sell?: number | null }): QuoteWithLines | null {
   const db = getDb();
   const row = db.prepare(`SELECT quote_id FROM est_quote_lines WHERE id = ?`).get(lineId) as { quote_id: number } | undefined;
   if (!row) return null;
   const sets: string[] = []; const args: any = { id: lineId };
   for (const k of ['qty', 'cost', 'hrs', 'name', 'unit'] as const) if (patch[k] !== undefined) { sets.push(`${k} = @${k}`); args[k] = patch[k]; }
+  // override_sell: a number sets a flat sell; null/empty clears it back to build-up pricing.
+  if (patch.override_sell !== undefined) { sets.push(`override_sell = @ov`); args.ov = (patch.override_sell === null || patch.override_sell as any === '') ? null : Number(patch.override_sell); }
   if (sets.length) db.prepare(`UPDATE est_quote_lines SET ${sets.join(', ')} WHERE id = @id`).run(args);
   persistTotals(row.quote_id);
   return getQuote(row.quote_id);
@@ -228,14 +264,14 @@ export function duplicateQuote(id: number, createdBy?: string): QuoteWithLines |
   if (!src) return null;
   const info = db.prepare(
     `INSERT INTO est_quotes (number, office, account_id, site_id, customer, address, contact, title, type, status,
-       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, created_by)
+       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, after_hours, waive_trip, created_by)
      SELECT ?, office, account_id, site_id, customer, address, contact, title || ' (copy)', type, 'draft',
-       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, ?
+       sf, stories, hazard, system_type, construction, rates_json, scope, inclusions, exclusions, notes, after_hours, waive_trip, ?
      FROM est_quotes WHERE id = ?`
   ).run(nextNumber(), createdBy || null, id);
   const newId = Number(info.lastInsertRowid);
-  db.prepare(`INSERT INTO est_quote_lines (quote_id, sku, name, unit, cat, qty, cost, hrs, sort)
-     SELECT ?, sku, name, unit, cat, qty, cost, hrs, sort FROM est_quote_lines WHERE quote_id = ?`).run(newId, id);
+  db.prepare(`INSERT INTO est_quote_lines (quote_id, sku, name, unit, cat, qty, cost, hrs, override_sell, sort)
+     SELECT ?, sku, name, unit, cat, qty, cost, hrs, override_sell, sort FROM est_quote_lines WHERE quote_id = ?`).run(newId, id);
   persistTotals(newId);
   return getQuote(newId);
 }

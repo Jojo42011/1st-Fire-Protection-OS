@@ -39,7 +39,9 @@ export function proposalRevisionHash(quoteId: number, recipient: string): string
     sell: d.totals.sellPrice, mat: d.totals.matCost, hrs: d.totals.laborHrs,
     scope: q.scope, inclusions: q.inclusions, exclusions: q.exclusions,
     system_type: q.system_type, hazard: q.hazard, sf: q.sf,
-    lines: d.lines.map((l) => ({ n: l.name, q: l.qty, c: l.cost, h: l.hrs, s: l.sku })),
+    after_hours: q.after_hours, waive_trip: q.waive_trip,
+    adder: d.totals.afterHoursAdder, credit: d.totals.tripCredit,
+    lines: d.lines.map((l) => ({ n: l.name, q: l.qty, c: l.cost, h: l.hrs, s: l.sku, o: l.override_sell })),
     to: recipient.trim().toLowerCase(),
   };
   return crypto.createHash('sha256').update(JSON.stringify(snap)).digest('hex').slice(0, 24);

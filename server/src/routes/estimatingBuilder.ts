@@ -248,7 +248,7 @@ router.post('/api/estimating/quotes/:id(\\d+)/line', requireOs(P.estimating_writ
   const id = Number(req.params.id);
   const office = scopeQuote(req, res, id); if (office === null) return;
   const b = req.body || {};
-  if (!nonNeg(b.qty) || !nonNeg(b.cost) || !nonNeg(b.hrs)) return res.status(400).json({ ok: false, error: 'invalid_value' });
+  if (!nonNeg(b.qty) || !nonNeg(b.cost) || !nonNeg(b.hrs) || !nonNeg(b.override_sell)) return res.status(400).json({ ok: false, error: 'invalid_value' });
   const out = addLine(id, b);
   if (out) { invalidateQuoteActions(id); osAudit({ actor: actorOf(req).label, actor_email: actorOf(req).email, office, module: 'deficiencies', action: 'quote.line.add', subject_type: 'est_quote', subject_id: id }); }
   res.status(out ? 200 : 404).json(out ? { ok: true, ...out } : { ok: false, error: 'not found' });
@@ -259,7 +259,7 @@ router.put('/api/estimating/lines/:lineId(\\d+)', requireOs(P.estimating_write),
   if (qid === null) return res.status(404).json({ ok: false, error: 'not found' });
   const office = scopeQuote(req, res, qid); if (office === null) return;
   const b = req.body || {};
-  if (!nonNeg(b.qty) || !nonNeg(b.cost) || !nonNeg(b.hrs)) return res.status(400).json({ ok: false, error: 'invalid_value' });
+  if (!nonNeg(b.qty) || !nonNeg(b.cost) || !nonNeg(b.hrs) || !nonNeg(b.override_sell)) return res.status(400).json({ ok: false, error: 'invalid_value' });
   const out = updateLine(lineId, b);
   if (out) { invalidateQuoteActions(qid); osAudit({ actor: actorOf(req).label, actor_email: actorOf(req).email, office, module: 'deficiencies', action: 'quote.line.update', subject_type: 'est_quote', subject_id: qid }); }
   res.status(out ? 200 : 404).json(out ? { ok: true, ...out } : { ok: false, error: 'not found' });

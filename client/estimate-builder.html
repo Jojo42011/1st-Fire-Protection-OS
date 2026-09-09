@@ -50,6 +50,8 @@
   .results div:hover{background:var(--bg)} .results div:last-child{border-bottom:none}
   .results .rc{font-family:var(--mono);color:var(--muted);font-size:11px}
   .statusbtns{display:flex;gap:6px} .note{font-size:11.5px;color:var(--muted)}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);font-family:inherit;cursor:pointer} .chk input{width:auto}
+  .ln-ov{width:74px;text-align:right}
   .del{color:var(--critical,#8c1d18);cursor:pointer;font-size:14px;background:none;border:none;padding:2px 6px}
   /* proposal overlay */
   #prop{position:fixed;inset:0;background:rgba(15,18,22,.55);z-index:100;display:none;overflow:auto;padding:24px}
@@ -246,6 +248,7 @@ function drawEditor(d){
       '<td><input class="qty mono ln-qty" data-id="'+l.id+'" value="'+(l.qty||0)+'"></td>'+
       '<td><input class="cst mono ln-cost" data-id="'+l.id+'" value="'+(l.cost||0)+'"></td>'+
       '<td><input class="qty mono ln-hrs" data-id="'+l.id+'" value="'+(l.hrs||0)+'"></td>'+
+      '<td><input class="mono ln-ov" data-id="'+l.id+'" value="'+(l.override_sell!=null?l.override_sell:'')+'" placeholder="auto" title="Flat sell price each. Blank = built from margins."></td>'+
       '<td class="r mono">'+money(ext)+'</td>'+
       '<td class="r"><button class="del ln-del" data-id="'+l.id+'">✕</button></td></tr>';
   }).join('');
@@ -269,11 +272,15 @@ function drawEditor(d){
           '<div class="frow"><div class="fld"><label>Hazard</label><select id="f_hazard">'+optsel(hazards,q.hazard)+'</select></div>'+
             field('Square feet','f_sf',q.sf)+'</div>'+
           '<div class="frow">'+field('Stories','f_stories',q.stories)+field('Construction','f_construction',q.construction)+'</div>'+
+          '<div class="frow" style="align-items:center">'+
+            '<label class="chk"><input type="checkbox" id="f_after_hours"'+(q.after_hours?' checked':'')+'> After hours (adds 35% labor premium)</label>'+
+            '<label class="chk"><input type="checkbox" id="f_waive_trip"'+(q.waive_trip?' checked':'')+'> Waive trip charge</label>'+
+          '</div>'+
         '</div></div>'+
         '<div class="card"><div class="card-h"><h2>Line items</h2></div><div class="card-b">'+
           '<div class="search-wrap"><input id="pbsearch" placeholder="Search the price book (name or SKU) to add a line…" style="width:100%" autocomplete="off"><div id="pbresults" class="results" style="display:none"></div></div>'+
-          '<table style="margin-top:10px"><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Hrs</th><th class="r">Ext cost</th><th></th></tr></thead>'+
-          '<tbody id="lines">'+(lines||'<tr><td colspan="6" class="empty" style="padding:16px">No line items yet. Search above, or add a manual line.</td></tr>')+'</tbody></table>'+
+          '<table style="margin-top:10px"><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Hrs</th><th class="r">Sell ea</th><th class="r">Ext cost</th><th></th></tr></thead>'+
+          '<tbody id="lines">'+(lines||'<tr><td colspan="7" class="empty" style="padding:16px">No line items yet. Search above, or add a manual line.</td></tr>')+'</tbody></table>'+
           '<button class="os-btn" id="manual" style="margin-top:10px">+ Manual line</button>'+
           '<button class="os-btn" id="autotake" style="margin-top:10px;margin-left:8px">Auto-takeoff</button>'+
           '<div class="note" style="margin-top:8px">Auto-takeoff builds a priced bill of materials from the square feet, hazard, and system type above (a budget/ROM estimate you then refine). Uses your office price book where it can.</div>'+
@@ -290,6 +297,8 @@ function drawEditor(d){
           '<div class="tot big"><span class="k">Sell price</span><span class="v" id="t_sell">'+money(t.sellPrice)+'</span></div>'+
           '<div class="tot"><span class="k">Material cost</span><span class="v" id="t_mat">'+money(t.matCost)+'</span></div>'+
           '<div class="tot"><span class="k">Labor</span><span class="v" id="t_labor">'+t.laborHrs+' hrs · '+money(t.laborCost)+'</span></div>'+
+          (t.afterHoursAdder?'<div class="tot"><span class="k">After-hours premium</span><span class="v">'+money(t.afterHoursAdder)+'</span></div>':'')+
+          (t.tripCredit?'<div class="tot"><span class="k">Trip credit</span><span class="v">-'+money(t.tripCredit)+'</span></div>':'')+
           '<div class="tot"><span class="k">Effective markup</span><span class="v" id="t_markup">'+t.markupPct+'%</span></div>'+
           (t.markupPct<t.margins.floor_markup?'<div class="note" style="color:var(--critical,#8c1d18);margin-top:8px">Below the '+t.margins.floor_markup+'% margin floor. Sending will route to Approvals first.</div>':'')+
         '</div></div>'+
@@ -312,6 +321,13 @@ function drawEditor(d){
     var ev=(el.tagName==='SELECT')?'change':'blur';
     el.addEventListener(ev,function(){var patch={};patch[k]=el.value;saveQuote(patch);});
   });
+  // repair-ticket toggles (after-hours premium, waive trip charge) - redraw to show the price rows
+  ['after_hours','waive_trip'].forEach(function(k){
+    var el=document.getElementById('f_'+k); if(!el)return;
+    el.addEventListener('change',function(){var patch={};patch[k]=el.checked;
+      api('/api/estimating/quotes/'+QID,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(function(d){if(d.ok){CURRENT=d;drawEditor(d);}});
+    });
+  });
   // status (lost prompts for a reason)
   VIEW.querySelectorAll('.stbtn').forEach(function(b){b.addEventListener('click',function(){
     var s=b.getAttribute('data-s'); var body={status:s};
@@ -333,6 +349,13 @@ function drawEditor(d){
       var id=inp.getAttribute('data-id');var patch={};
       patch[inp.classList.contains('ln-qty')?'qty':inp.classList.contains('ln-cost')?'cost':'hrs']=Number(inp.value)||0;
       api('/api/estimating/lines/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(function(d){if(d.ok){CURRENT=d;drawEditor(d);}});
+    });
+  });
+  VIEW.querySelectorAll('.ln-ov').forEach(function(inp){
+    inp.addEventListener('blur',function(){
+      var id=inp.getAttribute('data-id');
+      var val=inp.value.trim()===''?null:(Number(inp.value)||0);
+      api('/api/estimating/lines/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({override_sell:val})}).then(function(d){if(d.ok){CURRENT=d;drawEditor(d);}});
     });
   });
   VIEW.querySelectorAll('.ln-del').forEach(function(b){b.addEventListener('click',function(){

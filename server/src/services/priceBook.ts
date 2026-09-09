@@ -13,7 +13,7 @@ import { LUBBOCK_REPAIR_CATALOG } from './lubbockRepairCatalog';
 
 export interface PriceItem {
   id: number; office: string; cat: string | null; sku: string | null; name: string | null;
-  unit: string | null; cost: number | null; labor_hrs: number | null; active: number; updated_at: string;
+  unit: string | null; cost: number | null; labor_hrs: number | null; override_sell: number | null; active: number; updated_at: string;
 }
 export interface Margins { office: string; labor_rate: number; design_rate: number; mat_markup: number; overhead: number; profit: number; floor_markup: number; }
 
@@ -99,16 +99,17 @@ export function findItem(office: string, keywords: string[], unit?: string): Pri
   return hit || null;
 }
 
-export function upsertItem(office: string, it: { sku: string; name?: string; cat?: string; unit?: string; cost?: number; labor_hrs?: number }): PriceItem | null {
+export function upsertItem(office: string, it: { sku: string; name?: string; cat?: string; unit?: string; cost?: number; labor_hrs?: number; override_sell?: number | null }): PriceItem | null {
   const sku = String(it.sku || '').trim();
   if (!sku) return null;
   const db = getDb();
   const key = off(office);
-  db.prepare(`INSERT INTO price_book (office, cat, sku, name, unit, cost, labor_hrs, updated_at)
-    VALUES (?,?,?,?,?,?,?, datetime('now'))
+  const ov = it.override_sell === undefined ? null : (it.override_sell === null ? null : Number(it.override_sell));
+  db.prepare(`INSERT INTO price_book (office, cat, sku, name, unit, cost, labor_hrs, override_sell, updated_at)
+    VALUES (?,?,?,?,?,?,?,?, datetime('now'))
     ON CONFLICT(office, sku) DO UPDATE SET cat=excluded.cat, name=excluded.name, unit=excluded.unit,
-      cost=excluded.cost, labor_hrs=excluded.labor_hrs, active=1, updated_at=datetime('now')`)
-    .run(key, it.cat || null, sku, it.name || null, it.unit || null, it.cost ?? null, it.labor_hrs ?? 0);
+      cost=excluded.cost, labor_hrs=excluded.labor_hrs, override_sell=excluded.override_sell, active=1, updated_at=datetime('now')`)
+    .run(key, it.cat || null, sku, it.name || null, it.unit || null, it.cost ?? null, it.labor_hrs ?? 0, ov);
   return db.prepare(`SELECT * FROM price_book WHERE office = ? AND sku = ?`).get(key, sku) as PriceItem;
 }
 
@@ -137,13 +138,14 @@ export function seedStarterCatalog(): { inserted: number } {
  * upsert-by-(office,sku) also makes it idempotent. Returns how many rows were loaded.
  */
 export function seedLubbockRepairCatalog(): { office: string; upserted: number } {
-  const FLAG = 'seed_lubbock_repair_v1';
+  // v2 re-applies the flat sell overrides on the four service items now that the price book carries them.
+  const FLAG = 'seed_lubbock_repair_v2';
   if (getState(FLAG) === '1') return { office: 'lubbock', upserted: 0 };
   const db = getDb();
   let n = 0;
   const tx = db.transaction(() => {
     for (const it of LUBBOCK_REPAIR_CATALOG) {
-      upsertItem('lubbock', { sku: it.sku, name: it.name, cat: it.cat, unit: it.unit, cost: it.cost, labor_hrs: it.labor_hrs });
+      upsertItem('lubbock', { sku: it.sku, name: it.name, cat: it.cat, unit: it.unit, cost: it.cost, labor_hrs: it.labor_hrs, override_sell: it.override_sell ?? null });
       n++;
     }
   });
