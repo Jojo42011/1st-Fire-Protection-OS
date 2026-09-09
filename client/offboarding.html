@@ -63,6 +63,9 @@ function esc(t){return OS.esc(t);}
 var SEV={critical:'bad',high:'bad',medium:'warn'};
 var STAGE={s1:'Day 0 · lock down',s2:'Stop paying',s3:'Cut the forward',s4:'Retire'};
 var TAB='board', OPEN=null, POLICY={forwardDays:90,retainDays:180};
+var DEPT='', CAN_ALL=false; // department filter (admins can see all and narrow by dept)
+var DEPTS=[['','All departments'],['it','IT'],['hr','HR'],['accounting','Accounting'],['manager','Manager']];
+function ownerQS(){return DEPT?('?owner='+encodeURIComponent(DEPT)):'';}
 
 function setTab(t){TAB=t;document.querySelectorAll('.tabs button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t);});render();
   try{history.replaceState(null,'','#'+t);}catch(_){} try{parent.postMessage({type:'fp-subtab',tab:t},'*');}catch(_){}
@@ -76,8 +79,9 @@ function render(){
 }
 function loadBoard(){
   document.getElementById('view').innerHTML='<div class="empty">Loading…</div>';
-  fetch('/api/offboarding').then(function(r){return r.json();}).then(function(d){
+  fetch('/api/offboarding'+ownerQS()).then(function(r){return r.json();}).then(function(d){
     POLICY=d.policy||POLICY;
+    CAN_ALL=!!(d.viewer&&d.viewer.canSeeAll);
     var reqs=d.requests||[];
     var rows=reqs.map(function(r){var ru=r.rollup||{};
       var st=r.status==='complete'?OS.pill('Complete','good'):r.status==='cancelled'?OS.pill('Cancelled','neutral'):OS.pill('Open','warn');
@@ -89,9 +93,13 @@ function loadBoard(){
         '<td>'+(r.source==='backlog'?OS.pill('backlog','neutral'):'')+'</td></tr>';
     }).join('');
     var table=reqs.length?'<div class="card"><table><thead><tr><th>Person</th><th>Status</th><th>Done</th><th>Forward until</th><th>Retain until</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="empty">No offboarding requests yet. Start one under New offboarding, or pull from the Backlog sweep.</div>';
-    document.getElementById('view').innerHTML='<div class="policy">Forwarding runs <b>'+POLICY.forwardDays+'</b> days; accounts retire after <b>'+POLICY.retainDays+'</b> days. <a href="#" id="editPolicy" style="color:var(--ink)">Edit</a></div>'+table+'<div id="detail" style="margin-top:20px"></div>';
+    var deptBar = CAN_ALL
+      ? '<div class="policy">Department: <select id="deptSel">'+DEPTS.map(function(d2){return '<option value="'+d2[0]+'"'+(d2[0]===DEPT?' selected':'')+'>'+esc(d2[1])+'</option>';}).join('')+'</select> <span class="sub2">(admins see all; pick one to focus)</span></div>'
+      : '<div class="policy sub2">Showing your department\'s offboarding tasks.</div>';
+    document.getElementById('view').innerHTML=deptBar+'<div class="policy">Forwarding runs <b>'+POLICY.forwardDays+'</b> days; accounts retire after <b>'+POLICY.retainDays+'</b> days. <a href="#" id="editPolicy" style="color:var(--ink)">Edit</a></div>'+table+'<div id="detail" style="margin-top:20px"></div>';
     document.querySelectorAll('.rowlink').forEach(function(tr){tr.addEventListener('click',function(){openReq(Number(tr.getAttribute('data-id')));});});
     document.getElementById('editPolicy').addEventListener('click',function(e){e.preventDefault();editPolicy();});
+    var ds=document.getElementById('deptSel'); if(ds)ds.addEventListener('change',function(){DEPT=ds.value;OPEN=null;loadBoard();});
   });
 }
 function editPolicy(){
@@ -104,7 +112,7 @@ function editPolicy(){
 }
 function openReq(id){
   OPEN=id;
-  fetch('/api/offboarding/'+id).then(function(r){return r.json();}).then(function(d){
+  fetch('/api/offboarding/'+id+ownerQS()).then(function(r){return r.json();}).then(function(d){
     if(!d.ok)return; var r=d.request, ru=d.rollup;
     var byStage={s1:[],s2:[],s3:[],s4:[]};
     (d.items||[]).forEach(function(it){(byStage[it.stage]||(byStage[it.stage]=[])).push(it);});
@@ -129,8 +137,8 @@ function openReq(id){
         document.getElementById('exoCopy').addEventListener('click',function(){var t=document.getElementById('exoText');t.select();document.execCommand('copy');OS.toast('Copied.');});
       });
     };
-    document.getElementById('dcReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/dc-script','AD offboarding script — run on the domain controller','Set <b>$env:AGENT_TOKEN</b>, then run on a DC. Disables the account and removes group membership. Each step marks its task done here ONLY if it succeeds; refresh this request after.');});
-    document.getElementById('cloudReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/cloud-script','Cloud offboarding script — run on your computer','Run <b>Connect-ExchangeOnline</b> and <b>Connect-MgGraph</b> first, and set <b>$env:AGENT_TOKEN</b>. Converts to shared, removes the license, revokes sessions, sets forwarding + auto-reply. Marks each task done ONLY if it succeeds; refresh this request after.');});
+    document.getElementById('dcReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/dc-script','AD offboarding script - run on the domain controller','Set <b>$env:AGENT_TOKEN</b>, then run on a DC. Disables the account and removes group membership. Each step marks its task done here ONLY if it succeeds; refresh this request after.');});
+    document.getElementById('cloudReq').addEventListener('click',function(){showScript('/api/offboarding/'+id+'/cloud-script','Cloud offboarding script - run on your computer','Run <b>Connect-ExchangeOnline</b> and <b>Connect-MgGraph</b> first, and set <b>$env:AGENT_TOKEN</b>. Converts to shared, removes the license, revokes sessions, sets forwarding + auto-reply. Marks each task done ONLY if it succeeds; refresh this request after.');});
     document.getElementById('cancelReq').addEventListener('click',function(){if(!confirm('Cancel this offboarding request?'))return;fetch('/api/offboarding/'+id+'/cancel',{method:'POST'}).then(function(){OS.toast('Cancelled.');loadBoard();});});
     document.querySelectorAll('#detail [data-item]').forEach(function(b){b.addEventListener('click',function(){decide(Number(b.getAttribute('data-item')),b.getAttribute('data-verb'));});});
     document.querySelectorAll('#detail [data-run]').forEach(function(b){b.addEventListener('click',function(){runOnDc(Number(b.getAttribute('data-run')),b);});});
@@ -247,14 +255,14 @@ function renderNew(){
       '<div class="fld full"><label class="chk"><input type="checkbox" name="hold"> Keep the mailbox on hold at retention instead of deleting it</label></div>'+
       '<div class="full"><button type="submit" class="os-btn primary">Start offboarding</button></div>'+
       '</form>';
-    var mgrCombo=combo('mgrSearch','mgrEmail','mgrList',withEmail,function(p){return p.name+(p.office?(' — '+p.office):'');},function(p){return emailOf(p);});
-    combo('empSearch','empId','empList',PEOPLE,function(p){return p.name+(p.office?(' — '+p.office):'');},function(p){return p.id;},function(p){
+    var mgrCombo=combo('mgrSearch','mgrEmail','mgrList',withEmail,function(p){return p.name+(p.office?(' - '+p.office):'');},function(p){return emailOf(p);});
+    combo('empSearch','empId','empList',PEOPLE,function(p){return p.name+(p.office?(' - '+p.office):'');},function(p){return p.id;},function(p){
       document.getElementById('empUpn').value=p.upn||p.work_email||'';
       document.getElementById('empOffice').value=p.office||'';
       var hint=document.getElementById('mgrHint');
       // Pre-fill the manager combo from the person's resolved manager.
       if(p.manager_email){mgrCombo.set(p.manager||'',p.manager_email);hint.textContent=p.manager?('Manager on file: '+p.manager):'';}
-      else{mgrCombo.set('','');hint.textContent=p.manager?('Manager on file: '+p.manager+' — no email matched, search and pick one above'):'';}
+      else{mgrCombo.set('','');hint.textContent=p.manager?('Manager on file: '+p.manager+' - no email matched, search and pick one above'):'';}
     });
     document.getElementById('newForm').addEventListener('submit',function(e){
       e.preventDefault(); var f=e.target;

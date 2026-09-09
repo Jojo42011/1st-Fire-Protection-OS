@@ -7,19 +7,36 @@ import {
   cancelOffboarding,
   getPolicy,
   setPolicy,
+  ownersForRoles,
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
 import { buildExchangeScript, buildDcOffboardingScript, buildCloudOffboardingScript } from '../services/offboardingExchange';
 import { getDb } from '../db/index';
+import { currentContext } from '../os/scope';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
 
-/** The board: every offboarding request with its progress rollup, plus the policy defaults. */
-router.get('/api/offboarding', (_req, res) => {
-  res.json({ ok: true, requests: listOffboarding(), policy: getPolicy() });
+// Department scoping: each department sees only its own offboarding tasks. Admins/execs (allowed=null)
+// see all and may narrow to one department via ?owner=; a department member is locked to their own.
+function scopeOwners(req: any): { owners: string[] | null; allowed: string[] | null; canSeeAll: boolean } {
+  const ctx = currentContext(req);
+  const allowed = ownersForRoles(ctx.user?.roles);
+  const requested = String(req.query.owner || '').trim();
+  let owners = allowed;
+  if (requested) {
+    if (allowed === null) owners = [requested];
+    else if (allowed.includes(requested)) owners = [requested];
+  }
+  return { owners, allowed, canSeeAll: allowed === null };
+}
+
+/** The board: every offboarding request with its (department-scoped) progress rollup, plus policy. */
+router.get('/api/offboarding', (req, res) => {
+  const s = scopeOwners(req);
+  res.json({ ok: true, requests: listOffboarding(s.owners), policy: getPolicy(), viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
 });
 
 /** Create an offboarding request (manual). Routes it into the dated SOP items. */
@@ -98,11 +115,12 @@ router.post('/api/offboarding/backlog/create', (req, res) => {
   res.json({ ok: true, ...createFromBacklog(guids, actor(req)) });
 });
 
-/** One request: the record + its items + the rollup. */
+/** One request: the record + its (department-scoped) items + the rollup. */
 router.get('/api/offboarding/:id(\\d+)', (req, res) => {
-  const out = getOffboarding(Number(req.params.id));
+  const s = scopeOwners(req);
+  const out = getOffboarding(Number(req.params.id), s.owners);
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
-  res.json({ ok: true, ...out });
+  res.json({ ok: true, ...out, viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
 });
 
 /** Cancel a request. */

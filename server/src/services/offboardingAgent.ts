@@ -96,6 +96,17 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'autoreply_set', label: 'Set the mailbox auto-reply', due_at: base },
     { owner: 'manager', stage: 's1', kind: 'task', action_code: 'data_reassign', label: 'Reassign OneDrive and shared files', detail: 'Grant the manager access to the departing user\'s files.', due_at: base },
 
+    // HR checklist (day one). Manual tasks HR marks done; not run on the DC.
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_notify_safety', label: 'Notify the Safety department of the termination', detail: 'Safety updates fleet, MVR, and fire-marshal licensing records.', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_receive_devices', label: 'Receive all assigned devices', detail: 'Collect the phone, laptop, tablet, and any field hardware.', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_icloud_logoff', label: 'Log off iCloud accounts on returned devices', detail: 'Sign out of iCloud so devices can be wiped and reissued.', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_remove_pins', label: 'Remove all PIN codes from returned devices', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: 'Pull the departing employee from the fire-marshal license and insurance filings.', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
+
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'mbx_shared', label: 'Convert the mailbox to a shared mailbox', due_at: s2 },
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared. IT handles this (Accounting has no 365 admin access).', due_at: s2 },
 
@@ -194,18 +205,41 @@ function rollup(items: any[]): OffRollup {
   return { total, done, pending, pendingApprovals, progress: total ? Math.round((done / total) * 100) : 0 };
 }
 
-export function getOffboarding(id: number): { request: any; items: any[]; rollup: OffRollup } | null {
+/**
+ * Which offboarding owners (departments) a viewer may see, from their People roles. Returns null for
+ * "all" (people_admin, executive, or a role with no department mapping, and legacy sessions). This is
+ * how each department sees only its own offboarding tasks: IT sees 'it', HR sees 'hr', Accounting sees
+ * 'accounting', managers see 'manager'.
+ */
+export function ownersForRoles(roles: string[] | undefined | null): string[] | null {
+  const r = roles || [];
+  if (!r.length) return null; // no mapped identity: see all (legacy compatibility)
+  if (r.includes('people_admin') || r.includes('executive')) return null; // oversight
+  const owners = new Set<string>();
+  if (r.includes('it')) owners.add('it');
+  if (r.includes('hr')) owners.add('hr');
+  if (r.includes('accounting')) owners.add('accounting');
+  if (r.includes('manager') || r.includes('branch_manager') || r.includes('partner')) owners.add('manager');
+  return owners.size ? [...owners] : null;
+}
+
+export function getOffboarding(id: number, owners: string[] | null = null): { request: any; items: any[]; rollup: OffRollup } | null {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(id);
   if (!request) return null;
-  const items = itemsFor(id);
+  let items = itemsFor(id);
+  if (owners) items = items.filter((i) => owners.includes(i.owner));
   return { request, items, rollup: rollup(items) };
 }
 
-export function listOffboarding(): any[] {
+export function listOffboarding(owners: string[] | null = null): any[] {
   const db = getDb();
   const rows = db.prepare(`SELECT * FROM offboarding_requests ORDER BY id DESC`).all() as any[];
-  return rows.map((r) => ({ ...r, rollup: rollup(itemsFor(r.id)) }));
+  return rows.map((r) => {
+    let items = itemsFor(r.id);
+    if (owners) items = items.filter((i) => owners.includes(i.owner));
+    return { ...r, rollup: rollup(items) };
+  });
 }
 
 /** Whether a person already has an offboarding request (any status), to avoid duplicates. */
