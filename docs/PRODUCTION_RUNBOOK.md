@@ -128,6 +128,15 @@ modules have to coexist in one terminal:
   (`offboarding.cloud_run`).
 - **Exchange Online only:** converting the mailbox to a shared mailbox has no Graph API, so it
   stays a small Exchange step (the "cloud script" on the request still covers it).
+- **Shared-mailbox notifications:** some HR/Accounting tasks carry a "Email ..." button that sends a
+  handoff from `offboarding@firstfpservices.com` to the right shared mailbox (Safety notify and
+  Vehicle licensing to `safety@`, Sage removal and the accounting tasks to `accounting@`). Sending
+  uses the existing `Mail.Send` grant; the `offboarding@` mailbox must exist. ServiceTrade removal is
+  owned by IT; Bamboo and Employee Navigator stay with HR (manual).
+- **No-directory people:** when a departing person has no AD account and no email (no UPN / SAM /
+  object id), the OS auto-marks the account/mailbox/cloud steps N/A, so only the physical and
+  other-system tasks remain. Physical-access steps (deactivate + collect key fobs, collect ID badge)
+  are IT tasks that always apply.
 
 ### Graph application permissions for server-side cloud offboarding
 

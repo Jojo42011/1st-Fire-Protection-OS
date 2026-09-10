@@ -8,6 +8,8 @@ import {
   getPolicy,
   setPolicy,
   ownersForRoles,
+  hasDirectory,
+  sendOffboardingEmail,
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
@@ -122,6 +124,21 @@ router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) =>
   res.json({ ok: true, item: updated, detail: result.detail || cloudActionLabel(item.action_code), already: result.already });
 });
 
+/** Send the shared-mailbox notification email for one offboarding task (from offboarding@). */
+router.post('/api/offboarding/items/:id(\\d+)/send-email', async (req, res) => {
+  const itemId = Number(req.params.id);
+  const out = await sendOffboardingEmail(itemId, actor(req));
+  const ctx = currentContext(req);
+  osAudit({
+    actor: actorLabel(ctx), actor_email: ctx.user?.email ?? null,
+    module: 'offboarding', action: out.ok ? 'offboarding.email_sent' : 'offboarding.email_failed',
+    subject_type: 'offboarding_item', subject_id: itemId,
+    detail: `notify ${out.to || '(no mailbox)'}${out.ok ? '' : ': ' + (out.error || 'failed')}`,
+  });
+  if (!out.ok) return res.status(400).json({ ok: false, error: out.error });
+  res.json({ ok: true, to: out.to });
+});
+
 /** Latest DC job status for one offboarding item, for the UI to poll. */
 router.get('/api/offboarding/items/:id(\\d+)/job', (req, res) => {
   const j = latestJobForRef('offboarding_item', Number(req.params.id));
@@ -171,7 +188,8 @@ router.get('/api/offboarding/:id(\\d+)', (req, res) => {
   const s = scopeOwners(req);
   const out = getOffboarding(Number(req.params.id), s.owners);
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
-  res.json({ ok: true, ...out, viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
+  const no_directory = !hasDirectory(out.request);
+  res.json({ ok: true, ...out, no_directory, viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
 });
 
 /** Cancel a request. */

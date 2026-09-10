@@ -21,6 +21,11 @@ import { getState, setState } from '../db/schema';
 export type OffOwner = 'it' | 'manager' | 'accounting' | 'hr';
 const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', accounting: 'Accounting', hr: 'HR' };
 
+/* Shared mailboxes some tasks notify, and the address offboarding mail is sent from. */
+const SAFETY_MBX = 'safety@firstfpservices.com';
+const ACCT_MBX = 'accounting@firstfpservices.com';
+export const OFFBOARDING_FROM = 'offboarding@firstfpservices.com';
+
 /* ─────────────────────────── policy (editable defaults) ─────────────────────────── */
 const K_FORWARD_DAYS = 'offboard_forward_days';
 const K_RETAIN_DAYS = 'offboard_retain_days';
@@ -74,7 +79,21 @@ interface DraftItem {
   detail?: string;
   due_at: string;
   snapshot_json?: string;
+  email_to?: string; // a shared mailbox this task can notify with a click (Send email)
 }
+
+/** True when the person has a directory/mailbox identity. When false (no AD account and no email), the
+ *  account/mailbox-dependent steps do not apply and are auto-marked N/A. */
+export function hasDirectory(req: { upn?: string | null; sam?: string | null; object_guid?: string | null }): boolean {
+  return !!((req.upn && String(req.upn).trim()) || (req.sam && String(req.sam).trim()) || (req.object_guid && String(req.object_guid).trim()));
+}
+
+// The account/mailbox/cloud steps that only make sense when the person actually had an AD account or
+// mailbox. For a no-directory offboarding these are marked N/A automatically.
+const DIRECTORY_ACTIONS = new Set<string>([
+  'ad_disable', 'revoke_sessions', 'groups_remove', 'fwd_set', 'autoreply_set', 'data_reassign',
+  'mbx_shared', 'license_remove', 'fwd_stop', 'ad_delete', 'mbx_delete', 'mbx_hold', 'it_icloud_logoff',
+]);
 
 /* ─────────────────────────── the plan ─────────────────────────── */
 function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftItem[] {
@@ -96,23 +115,26 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'autoreply_set', label: 'Set the mailbox auto-reply', due_at: base },
     { owner: 'manager', stage: 's1', kind: 'task', action_code: 'data_reassign', label: 'Reassign OneDrive and shared files', detail: 'Grant the manager access to the departing user\'s files.', due_at: base },
 
-    // HR checklist (day one). Manual tasks HR marks done; not run on the DC.
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_notify_safety', label: 'Notify the Safety department of the termination', detail: 'Safety updates fleet, MVR, and fire-marshal licensing records.', due_at: base },
-    // Device handling is owned by IT.
+    // HR checklist (day one). Some tasks notify a shared mailbox with one click (email_to).
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_notify_safety', label: 'Notify the Safety department of the termination', detail: `Emails ${SAFETY_MBX}. Safety updates fleet, MVR, and fire-marshal licensing records.`, due_at: base, email_to: SAFETY_MBX },
+    // Device + physical-access handling is owned by IT.
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_receive_devices', label: 'Receive all assigned devices', detail: 'Collect the phone, laptop, tablet, and any field hardware.', due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_icloud_logoff', label: 'Log off iCloud accounts on returned devices', detail: 'Sign out of iCloud so devices can be wiped and reissued.', due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_remove_pins', label: 'Remove all PIN codes from returned devices', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: 'Pull the departing employee from the fire-marshal license and insurance filings.', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', due_at: base },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_keyfob_deactivate', label: 'Deactivate key fob / access-card credentials', detail: 'Disable the departing employee\'s building access credentials in the access-control system.', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_keyfob_collect', label: 'Collect physical key fobs', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_badge_collect', label: 'Collect the company ID badge', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: `Emails ${SAFETY_MBX}. Pull the departing employee from the fire-marshal license and insurance filings.`, due_at: base, email_to: SAFETY_MBX },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', detail: `Emails ${ACCT_MBX} to remove the Sage Intacct user.`, due_at: base, email_to: ACCT_MBX },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: 'Handled by IT.', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
 
-    // Accounting checklist (day one). Manual tasks Accounting marks done.
-    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_expense_reconcile', label: 'Reconcile and close final expense reports and outstanding reimbursements', due_at: base },
-    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_card_cancel', label: 'Collect and cancel the company credit card / purchasing card', due_at: base },
-    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_ap_approver', label: 'Remove the user as an AP approver and from bill-pay authorization', due_at: base },
-    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_bank_access', label: 'Remove the user\'s access to bank and payment portals', detail: 'If the departing employee was an authorized user or signer.', due_at: base },
+    // Accounting checklist (day one). Each notifies the accounting shared mailbox with one click.
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_expense_reconcile', label: 'Reconcile and close final expense reports and outstanding reimbursements', due_at: base, email_to: ACCT_MBX },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_card_cancel', label: 'Collect and cancel the company credit card / purchasing card', due_at: base, email_to: ACCT_MBX },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_ap_approver', label: 'Remove the user as an AP approver and from bill-pay authorization', due_at: base, email_to: ACCT_MBX },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_bank_access', label: 'Remove the user\'s access to bank and payment portals', detail: 'If the departing employee was an authorized user or signer.', due_at: base, email_to: ACCT_MBX },
 
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'mbx_shared', label: 'Convert the mailbox to a shared mailbox', due_at: s2 },
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared. IT handles this (Accounting has no 365 admin access).', due_at: s2 },
@@ -191,12 +213,28 @@ export function createOffboarding(payload: OffboardingPayload): { request: any; 
 
   const drafts = planItems(req, groupSnapshot);
   const ins = db.prepare(
-    `INSERT INTO offboarding_items (request_id, owner, owner_label, stage, kind, action_code, label, detail, due_at, snapshot_json)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO offboarding_items (request_id, owner, owner_label, stage, kind, action_code, label, detail, due_at, snapshot_json, email_to)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
   );
-  for (const d of drafts) ins.run(requestId, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null);
+  for (const d of drafts) ins.run(requestId, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null, d.email_to || null);
+
+  // No AD account and no email? The account/mailbox/cloud steps do not apply: mark them N/A up front.
+  if (!hasDirectory(req)) markNonApplicable(requestId);
 
   return { request: req, items: itemsFor(requestId) };
+}
+
+/** Auto-mark the directory/mailbox-dependent steps N/A for a request (used for no-directory people). */
+function markNonApplicable(requestId: number): number {
+  const db = getDb();
+  const codes = [...DIRECTORY_ACTIONS];
+  const placeholders = codes.map(() => '?').join(',');
+  const r = db.prepare(
+    `UPDATE offboarding_items SET status='na', decided_by='system (no AD/email)', decided_at=datetime('now')
+      WHERE request_id = ? AND status = 'pending' AND action_code IN (${placeholders})`
+  ).run(requestId, ...codes);
+  recompute(requestId);
+  return r.changes;
 }
 
 function itemsFor(requestId: number): any[] {
@@ -213,8 +251,11 @@ export function backfillOffboardingItems(): { requestsTouched: number; itemsAdde
   const db = getDb();
   const requests = db.prepare(`SELECT * FROM offboarding_requests WHERE status != 'cancelled'`).all() as any[];
   const ins = db.prepare(
-    `INSERT INTO offboarding_items (request_id, owner, owner_label, stage, kind, action_code, label, detail, due_at, snapshot_json)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+    `INSERT INTO offboarding_items (request_id, owner, owner_label, stage, kind, action_code, label, detail, due_at, snapshot_json, email_to)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  const reconcile = db.prepare(
+    `UPDATE offboarding_items SET owner=?, owner_label=?, email_to=?, detail=COALESCE(?, detail) WHERE request_id=? AND action_code=?`
   );
   let requestsTouched = 0, itemsAdded = 0;
   for (const req of requests) {
@@ -226,10 +267,16 @@ export function backfillOffboardingItems(): { requestsTouched: number; itemsAdde
       const groups = db.prepare(`SELECT group_name AS name FROM ad_user_groups WHERE object_guid = ?`).all(req.object_guid) as { name: string }[];
       groupSnapshot = groups.length ? groups : null;
     }
-    const drafts = planItems(req, groupSnapshot).filter((d) => !existing.has(d.action_code));
-    if (!drafts.length) continue;
-    for (const d of drafts) ins.run(req.id, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null);
-    requestsTouched++; itemsAdded += drafts.length;
+    const planned = planItems(req, groupSnapshot);
+    // Reconcile routing on items that already exist (owner moves, new email_to, refreshed detail),
+    // without touching their status/decision. This fixes older requests in place.
+    for (const d of planned) {
+      if (existing.has(d.action_code)) reconcile.run(d.owner, OWNER_LABEL[d.owner], d.email_to || null, d.detail || null, req.id, d.action_code);
+    }
+    const drafts = planned.filter((d) => !existing.has(d.action_code));
+    for (const d of drafts) ins.run(req.id, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null, d.email_to || null);
+    if (drafts.length) { requestsTouched++; itemsAdded += drafts.length; }
+    if (!hasDirectory(req)) markNonApplicable(req.id); // catch no-directory requests created before this rule
     recompute(req.id); // an added pending item may reopen a request that had shown complete
   }
   return { requestsTouched, itemsAdded };
@@ -238,7 +285,7 @@ export function backfillOffboardingItems(): { requestsTouched: number; itemsAdde
 export interface OffRollup { total: number; done: number; pending: number; pendingApprovals: number; progress: number }
 function rollup(items: any[]): OffRollup {
   const total = items.length;
-  const done = items.filter((i) => i.status === 'done' || i.status === 'approved' || i.status === 'skipped').length;
+  const done = items.filter((i) => i.status === 'done' || i.status === 'approved' || i.status === 'skipped' || i.status === 'na').length;
   const pending = items.filter((i) => i.status === 'pending').length;
   const pendingApprovals = items.filter((i) => i.kind === 'approval' && i.status === 'pending').length;
   return { total, done, pending, pendingApprovals, progress: total ? Math.round((done / total) * 100) : 0 };
@@ -277,7 +324,7 @@ export function listOffboarding(owners: string[] | null = null): any[] {
   return rows.map((r) => {
     let items = itemsFor(r.id);
     if (owners) items = items.filter((i) => owners.includes(i.owner));
-    return { ...r, rollup: rollup(items) };
+    return { ...r, no_directory: !hasDirectory(r), rollup: rollup(items) };
   });
 }
 
@@ -306,6 +353,46 @@ export function decideItem(id: number, verb: 'complete' | 'approve' | 'reject' |
   }
   recompute(item.request_id);
   return db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(id);
+}
+
+/**
+ * Send the shared-mailbox notification for one offboarding task (the tasks carrying an email_to), from
+ * offboarding@firstfpservices.com. On success the task is marked done. Returns { ok, error }.
+ */
+export async function sendOffboardingEmail(itemId: number, by = 'operator'): Promise<{ ok: boolean; error?: string; to?: string }> {
+  const db = getDb();
+  const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return { ok: false, error: 'item not found' };
+  if (!item.email_to) return { ok: false, error: 'this task has no shared mailbox to email' };
+  const req = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(item.request_id) as any;
+  if (!req) return { ok: false, error: 'request not found' };
+
+  const { sendMail, mailCredsPresent } = require('./msGraphMail') as typeof import('./msGraphMail');
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 mail is not connected, so offboarding email cannot be sent' };
+
+  const who = req.name || 'the departing employee';
+  const idLine = req.upn ? ` (${req.upn})` : '';
+  const term = req.termination_date || req.last_working_date || 'the termination date';
+  const esc = (s: any) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
+  const subject = `Offboarding: ${who}${idLine} - ${item.label}`;
+  const html =
+    `<p>Please action the following as part of an employee offboarding.</p>` +
+    `<table cellpadding="4" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px">` +
+    `<tr><td><b>Employee</b></td><td>${esc(who)}${esc(idLine)}</td></tr>` +
+    (req.office ? `<tr><td><b>Office</b></td><td>${esc(req.office)}</td></tr>` : '') +
+    `<tr><td><b>Termination</b></td><td>${esc(term)}</td></tr>` +
+    `<tr><td valign="top"><b>Action</b></td><td>${esc(item.label)}</td></tr>` +
+    (item.detail ? `<tr><td valign="top"><b>Notes</b></td><td>${esc(item.detail)}</td></tr>` : '') +
+    `</table>` +
+    `<p style="color:#666;font-size:12px">Sent by the 1st Fire Protection OS offboarding board. Reply to this mailbox to coordinate.</p>`;
+
+  const out = await sendMail(item.email_to, subject, html, { from: OFFBOARDING_FROM, fromName: '1st FP Offboarding' });
+  if (!out.ok) return { ok: false, error: out.error, to: item.email_to };
+  if (item.status === 'pending') {
+    db.prepare(`UPDATE offboarding_items SET status='done', decided_by=?, decided_at=datetime('now') WHERE id = ?`).run(by, itemId);
+    recompute(item.request_id);
+  }
+  return { ok: true, to: item.email_to };
 }
 
 export function cancelOffboarding(id: number, by = 'operator'): boolean {

@@ -1448,6 +1448,7 @@ export function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_offboarding_items_req ON offboarding_items(request_id);
   `);
+  addColumn('offboarding_items', 'email_to', 'TEXT'); // shared mailbox this task notifies (safety@, accounting@), enables a Send-email button
 
   // DC agent job queue: the OS enqueues write actions (create a user, etc.); the agent on the domain
   // controller pulls pending jobs, executes them against AD, and posts results back. Outbound-only:
