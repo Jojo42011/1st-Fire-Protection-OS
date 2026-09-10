@@ -112,6 +112,36 @@ recorded. Nothing is uploaded unless both variables are set.
 - After rotating a webhook secret, update the provider (Vapi Server URL secret, ServiceTrade
   webhook token) to match, or live webhooks will be rejected.
 
+## Offboarding: where each step runs
+
+An offboarding is split across three planes, so the right tool runs each step and no PowerShell
+modules have to coexist in one terminal:
+
+- **On-prem AD (domain controller):** disable the account, reset the password, remove group
+  membership, delete at retention. These are mastered on-prem and run through the DC agent
+  ("Run on DC" on the board). Enabling/disabling a synced account is authoritative here.
+- **Cloud, server-side via Microsoft Graph ("Run in cloud" on the board):** block sign-in +
+  revoke sessions, remove the Microsoft 365 license, set the mailbox auto-reply, forward new mail
+  to the manager, and grant the manager the departing user's OneDrive (the SharePoint delegation).
+  These run from the OS with the app registration's own permissions: no `Connect-MgGraph`,
+  `Connect-ExchangeOnline`, or `Connect-SPOService` on anyone's laptop. Every run is audited
+  (`offboarding.cloud_run`).
+- **Exchange Online only:** converting the mailbox to a shared mailbox has no Graph API, so it
+  stays a small Exchange step (the "cloud script" on the request still covers it).
+
+### Graph application permissions for server-side cloud offboarding
+
+Grant these to the same app registration (MS_GRAPH_CLIENT_ID) with admin consent. Each maps to
+one step and fails closed with a clear "add this permission" message if missing:
+
+| Step | Application permission |
+| --- | --- |
+| Block sign-in + revoke sessions | `User.ReadWrite.All` |
+| Remove 365 license | `User.ReadWrite.All`, `Organization.Read.All` |
+| Auto-reply | `MailboxSettings.ReadWrite` |
+| Forward to manager | `Mail.ReadWrite` |
+| OneDrive / SharePoint delegation | `Files.ReadWrite.All` |
+
 ## Readiness checklist (Company -> Readiness)
 
 Green when: live mode on, `OS_AUTH_MODE=hybrid` or `enforce`, Entra configured, `ADMIN_TOKEN`

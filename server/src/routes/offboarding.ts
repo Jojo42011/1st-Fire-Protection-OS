@@ -15,9 +15,20 @@ import { buildExchangeScript, buildDcOffboardingScript, buildCloudOffboardingScr
 import { getDb } from '../db/index';
 import { currentContext } from '../os/scope';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
+import { completeItemByScript } from '../services/offboardingAgent';
+import { isCloudExecutable, cloudActionLabel, runCloudAction, graphOffboardConfigured } from '../services/msGraphOffboard';
+import { osAudit, actorLabel } from '../os/audit';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
+
+// Running a live cloud action against Microsoft 365 is an IT/admin operation. A department viewer who
+// only sees their own tasks (HR, Accounting, Manager) may not trigger it.
+function canRunCloud(req: any): boolean {
+  const roles: string[] = currentContext(req).user?.roles || [];
+  if (!roles.length) return true; // legacy shared-password session (no mapped identity): allowed, audited
+  return roles.some((r) => ['it', 'people_admin', 'executive'].includes(r));
+}
 
 // Department scoping: each department sees only its own offboarding tasks. Admins/execs (allowed=null)
 // see all and may narrow to one department via ?owner=; a department member is locked to their own.
@@ -69,6 +80,40 @@ router.post('/api/offboarding/items/:id(\\d+)/run-on-dc', (req, res) => {
   if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
   const job = enqueue(built.kind as any, built.payload, { type: 'offboarding_item', id: itemId }, actor(req));
   res.json({ ok: true, job, kind: built.kind });
+});
+
+/**
+ * Run one cloud offboarding step SERVER-SIDE via Microsoft Graph (no PowerShell, no laptop modules).
+ * Covers: block sign-in + revoke sessions, remove license, auto-reply, forward to manager, and the
+ * OneDrive/SharePoint delegation. On success the checklist item is marked done; every attempt is audited.
+ */
+router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) => {
+  const itemId = Number(req.params.id);
+  const db = getDb();
+  const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return res.status(404).json({ ok: false, error: 'item not found' });
+  if (!isCloudExecutable(item.action_code)) {
+    return res.status(400).json({ ok: false, error: 'this step is not a server-runnable cloud action (it runs on the DC or in Exchange Online)' });
+  }
+  if (!canRunCloud(req)) return res.status(403).json({ ok: false, error: 'only IT or an admin can run cloud offboarding actions' });
+  if (!graphOffboardConfigured()) return res.status(400).json({ ok: false, error: 'Microsoft Graph is not connected' });
+
+  const request = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(item.request_id) as any;
+  if (!request) return res.status(404).json({ ok: false, error: 'request not found' });
+
+  const ctx = currentContext(req);
+  const result = await runCloudAction(item.action_code, request);
+  osAudit({
+    actor: actorLabel(ctx), actor_email: ctx.user?.email ?? null, office: request.office ?? null,
+    module: 'offboarding', action: result.ok ? 'offboarding.cloud_run' : 'offboarding.cloud_run_failed',
+    subject_type: 'offboarding_item', subject_id: itemId,
+    detail: `${cloudActionLabel(item.action_code)} for ${request.upn || request.name}${result.ok ? (result.detail ? ': ' + result.detail : '') : ': ' + (result.error || 'failed')}`,
+  });
+  if (!result.ok) return res.status(400).json({ ok: false, error: result.error, action: item.action_code });
+
+  completeItemByScript(itemId); // mark the board item done now that the live action succeeded
+  const updated = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId);
+  res.json({ ok: true, item: updated, detail: result.detail || cloudActionLabel(item.action_code), already: result.already });
 });
 
 /** Latest DC job status for one offboarding item, for the UI to poll. */
