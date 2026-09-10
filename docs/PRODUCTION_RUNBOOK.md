@@ -129,7 +129,7 @@ modules have to coexist in one terminal:
 - **Exchange Online only:** converting the mailbox to a shared mailbox has no Graph API, so it
   stays a small Exchange step (the "cloud script" on the request still covers it).
 - **Shared-mailbox notifications:** some HR/Accounting tasks carry a "Email ..." button that sends a
-  handoff from `offboarding@firstfpservices.com` to the right shared mailbox (Safety notify and
+  handoff from `offboarding@1stfpservices.com` to the right shared mailbox (Safety notify and
   Vehicle licensing to `safety@`, Sage removal and the accounting tasks to `accounting@`). Sending
   uses the existing `Mail.Send` grant; the `offboarding@` mailbox must exist. ServiceTrade removal is
   owned by IT; Bamboo and Employee Navigator stay with HR (manual).

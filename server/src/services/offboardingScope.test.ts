@@ -75,11 +75,11 @@ test('offboarding includes the nine HR tasks and scopes items by department', ()
 
   // Shared-mailbox routing: the notify tasks carry the right email_to.
   const emailOf = (c: string) => out.items.find((i: any) => i.action_code === c)?.email_to;
-  assert.equal(emailOf('hr_notify_safety'), 'safety@firstfpservices.com');
-  assert.equal(emailOf('hr_vehicle_licensing'), 'safety@firstfpservices.com');
-  assert.equal(emailOf('hr_sage_remove'), 'accounting@firstfpservices.com');
+  assert.equal(emailOf('hr_notify_safety'), 'safety@1stfpservices.com');
+  assert.equal(emailOf('hr_vehicle_licensing'), 'safety@1stfpservices.com');
+  assert.equal(emailOf('hr_sage_remove'), 'accounting@1stfpservices.com');
   for (const c of ['acct_expense_reconcile', 'acct_card_cancel', 'acct_ap_approver', 'acct_bank_access']) {
-    assert.equal(emailOf(c), 'accounting@firstfpservices.com', `${c} notifies accounting`);
+    assert.equal(emailOf(c), 'accounting@1stfpservices.com', `${c} notifies accounting`);
   }
 
   // Accounting has its own tasks now.

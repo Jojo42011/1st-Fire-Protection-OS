@@ -22,9 +22,9 @@ export type OffOwner = 'it' | 'manager' | 'accounting' | 'hr';
 const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', accounting: 'Accounting', hr: 'HR' };
 
 /* Shared mailboxes some tasks notify, and the address offboarding mail is sent from. */
-const SAFETY_MBX = 'safety@firstfpservices.com';
-const ACCT_MBX = 'accounting@firstfpservices.com';
-export const OFFBOARDING_FROM = 'offboarding@firstfpservices.com';
+const SAFETY_MBX = 'safety@1stfpservices.com';
+const ACCT_MBX = 'accounting@1stfpservices.com';
+export const OFFBOARDING_FROM = 'offboarding@1stfpservices.com';
 
 /* ─────────────────────────── policy (editable defaults) ─────────────────────────── */
 const K_FORWARD_DAYS = 'offboard_forward_days';
@@ -357,7 +357,7 @@ export function decideItem(id: number, verb: 'complete' | 'approve' | 'reject' |
 
 /**
  * Send the shared-mailbox notification for one offboarding task (the tasks carrying an email_to), from
- * offboarding@firstfpservices.com. On success the task is marked done. Returns { ok, error }.
+ * offboarding@1stfpservices.com. On success the task is marked done. Returns { ok, error }.
  */
 export async function sendOffboardingEmail(itemId: number, by = 'operator'): Promise<{ ok: boolean; error?: string; to?: string }> {
   const db = getDb();
