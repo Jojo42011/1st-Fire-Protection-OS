@@ -128,11 +128,14 @@ modules have to coexist in one terminal:
   (`offboarding.cloud_run`).
 - **Exchange Online only:** converting the mailbox to a shared mailbox has no Graph API, so it
   stays a small Exchange step (the "cloud script" on the request still covers it).
-- **Shared-mailbox notifications:** some HR/Accounting tasks carry a "Email ..." button that sends a
-  handoff from `offboarding@1stfpservices.com` to the right shared mailbox (Safety notify and
-  Vehicle licensing to `safety@`, Sage removal and the accounting tasks to `accounting@`). Sending
-  uses the existing `Mail.Send` grant; the `offboarding@` mailbox must exist. ServiceTrade removal is
-  owned by IT; Bamboo and Employee Navigator stay with HR (manual).
+- **Department digest emails:** the request detail is grouped by department (IT, Safety, Accounting,
+  HR, Manager). Each department with a shared mailbox shows an "Email <dept>" button that sends that
+  department its still-open tasks in ONE email, from `offboarding@1stfpservices.com`:
+  IT -> `it@1stfpservices.com`, Safety -> `safety@1stfpservices.com`,
+  Accounting -> `accounting@1stfpservices.com`. The digest is a handoff and does not mark tasks done.
+  Sending uses the existing `Mail.Send` grant. Required shared mailboxes: `offboarding@` (sender),
+  `it@`, `safety@`, `accounting@`. ServiceTrade removal is owned by IT; Bamboo and Employee Navigator
+  stay with HR (worked directly, no mailbox).
 - **No-directory people:** when a departing person has no AD account and no email (no UPN / SAM /
   object id), the OS auto-marks the account/mailbox/cloud steps N/A, so only the physical and
   other-system tasks remain. Physical-access steps (deactivate + collect key fobs, collect ID badge)

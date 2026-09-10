@@ -24,7 +24,25 @@ const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', ac
 /* Shared mailboxes some tasks notify, and the address offboarding mail is sent from. */
 const SAFETY_MBX = 'safety@1stfpservices.com';
 const ACCT_MBX = 'accounting@1stfpservices.com';
+const IT_MBX = 'it@1stfpservices.com';
 export const OFFBOARDING_FROM = 'offboarding@1stfpservices.com';
+
+/* ─────────────────────────── departments (grouping + digest email) ───────────────────────────
+ * The board is grouped by department, and HR can send each department ONE email listing that
+ * department's still-open tasks, to its shared mailbox. A task's department is its owner, except the
+ * Safety-notify tasks (which belong to Safety) and anything routed to accounting@ (which belongs to
+ * Accounting). HR and Manager have no shared mailbox: they work their tasks directly. */
+export type Dept = 'it' | 'safety' | 'accounting' | 'hr' | 'manager';
+export const DEPT_ORDER: Dept[] = ['it', 'safety', 'accounting', 'hr', 'manager'];
+export const DEPT_LABEL: Record<Dept, string> = { it: 'IT', safety: 'Safety', accounting: 'Accounting', hr: 'HR', manager: 'Manager' };
+export const DEPT_MAILBOX: Partial<Record<Dept, string>> = { it: IT_MBX, safety: SAFETY_MBX, accounting: ACCT_MBX };
+
+/** The department a checklist item belongs to (for grouping and the digest email). */
+export function itemDept(it: { owner: string; email_to?: string | null }): Dept {
+  if (it.email_to === SAFETY_MBX) return 'safety';
+  if (it.owner === 'accounting' || it.email_to === ACCT_MBX) return 'accounting';
+  return (it.owner as Dept) || 'it';
+}
 
 /* ─────────────────────────── policy (editable defaults) ─────────────────────────── */
 const K_FORWARD_DAYS = 'offboard_forward_days';
@@ -309,13 +327,64 @@ export function ownersForRoles(roles: string[] | undefined | null): string[] | n
   return owners.size ? [...owners] : null;
 }
 
-export function getOffboarding(id: number, owners: string[] | null = null): { request: any; items: any[]; rollup: OffRollup } | null {
+export interface DeptSummary { key: Dept; label: string; mailbox: string | null; open: number; total: number }
+function deptSummary(items: any[]): DeptSummary[] {
+  const map = new Map<Dept, DeptSummary>();
+  for (const it of items) {
+    const d = it.dept as Dept;
+    if (!map.has(d)) map.set(d, { key: d, label: DEPT_LABEL[d] || d, mailbox: DEPT_MAILBOX[d] || null, open: 0, total: 0 });
+    const e = map.get(d)!; e.total++; if (it.status === 'pending') e.open++;
+  }
+  return DEPT_ORDER.filter((k) => map.has(k)).map((k) => map.get(k)!);
+}
+
+export function getOffboarding(id: number, owners: string[] | null = null): { request: any; items: any[]; rollup: OffRollup; departments: DeptSummary[] } | null {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(id);
   if (!request) return null;
   let items = itemsFor(id);
   if (owners) items = items.filter((i) => owners.includes(i.owner));
-  return { request, items, rollup: rollup(items) };
+  items = items.map((i) => ({ ...i, dept: itemDept(i), dept_label: DEPT_LABEL[itemDept(i)] }));
+  return { request, items, rollup: rollup(items), departments: deptSummary(items) };
+}
+
+/**
+ * Send one department its still-open offboarding tasks as a single digest email, to its shared mailbox
+ * (IT -> it@, Safety -> safety@, Accounting -> accounting@). A notification/handoff: it does NOT mark
+ * anything done. Returns { ok, to, count }.
+ */
+export async function sendDepartmentDigest(requestId: number, dept: string, by = 'operator'): Promise<{ ok: boolean; error?: string; to?: string; count?: number }> {
+  const mailbox = DEPT_MAILBOX[dept as Dept];
+  if (!mailbox) return { ok: false, error: `${DEPT_LABEL[dept as Dept] || dept} has no shared mailbox to email` };
+  const db = getDb();
+  const req = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(requestId) as any;
+  if (!req) return { ok: false, error: 'request not found' };
+  const items = itemsFor(requestId).filter((i) => itemDept(i) === dept && i.status === 'pending');
+  if (!items.length) return { ok: false, error: `no outstanding ${DEPT_LABEL[dept as Dept] || dept} tasks to send` };
+
+  const { sendMail, mailCredsPresent } = require('./msGraphMail') as typeof import('./msGraphMail');
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 mail is not connected, so offboarding email cannot be sent' };
+
+  const who = req.name || 'the departing employee';
+  const idLine = req.upn ? ` (${req.upn})` : '';
+  const term = req.termination_date || req.last_working_date || 'the termination date';
+  const esc = (s: any) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
+  const rows = items.map((it) =>
+    `<li style="margin-bottom:6px"><b>${esc(it.label)}</b>${it.detail ? `<br><span style="color:#555">${esc(it.detail)}</span>` : ''}${it.due_at ? `<br><span style="color:#888;font-size:12px">Due ${esc(it.due_at)}</span>` : ''}</li>`
+  ).join('');
+  const subject = `Offboarding: ${who}${idLine} - ${DEPT_LABEL[dept as Dept]} tasks to complete`;
+  const html =
+    `<p>The following ${DEPT_LABEL[dept as Dept]} tasks still need to be completed for an employee offboarding.</p>` +
+    `<table cellpadding="4" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin-bottom:8px">` +
+    `<tr><td><b>Employee</b></td><td>${esc(who)}${esc(idLine)}</td></tr>` +
+    (req.office ? `<tr><td><b>Office</b></td><td>${esc(req.office)}</td></tr>` : '') +
+    `<tr><td><b>Termination</b></td><td>${esc(term)}</td></tr></table>` +
+    `<ol style="font-family:Arial,sans-serif;font-size:14px;padding-left:18px">${rows}</ol>` +
+    `<p style="color:#666;font-size:12px">Sent by the 1st Fire Protection OS offboarding board. Reply to this mailbox to coordinate.</p>`;
+
+  const out = await sendMail(mailbox, subject, html, { from: OFFBOARDING_FROM, fromName: '1st FP Offboarding' });
+  if (!out.ok) return { ok: false, error: out.error, to: mailbox };
+  return { ok: true, to: mailbox, count: items.length };
 }
 
 export function listOffboarding(owners: string[] | null = null): any[] {

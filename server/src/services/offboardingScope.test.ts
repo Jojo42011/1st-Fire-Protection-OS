@@ -8,7 +8,7 @@ process.env.DEMO_MODE = 'off';
 
 import { initDb } from '../db/schema';
 import { getDb } from '../db/index';
-import { ownersForRoles, createOffboarding, getOffboarding, backfillOffboardingItems, hasDirectory } from './offboardingAgent';
+import { ownersForRoles, createOffboarding, getOffboarding, backfillOffboardingItems, hasDirectory, itemDept, sendDepartmentDigest } from './offboardingAgent';
 
 initDb();
 
@@ -48,6 +48,31 @@ test('a no-directory person (no AD account, no email) has the account/mailbox st
   for (const c of ['it_receive_devices', 'it_keyfob_collect', 'it_badge_collect', 'hr_bamboo_inactivate', 'acct_card_cancel']) {
     assert.equal(status(c), 'pending', `${c} still applies`);
   }
+});
+
+test('items map to departments, getOffboarding summarizes them, and digests target the right mailbox', async () => {
+  assert.equal(itemDept({ owner: 'hr', email_to: 'safety@1stfpservices.com' }), 'safety');
+  assert.equal(itemDept({ owner: 'hr', email_to: 'accounting@1stfpservices.com' }), 'accounting');
+  assert.equal(itemDept({ owner: 'accounting', email_to: null }), 'accounting');
+  assert.equal(itemDept({ owner: 'it', email_to: null }), 'it');
+  assert.equal(itemDept({ owner: 'hr', email_to: null }), 'hr');
+
+  const out = createOffboarding({ name: 'Dept Person', upn: 'dept@1stfpservices.com', office: 'lubbock', termination_date: '2026-09-20' } as any);
+  const full = getOffboarding(out.request.id, null)!;
+  const depts = full.departments.map((d) => d.key);
+  assert.ok(depts.includes('it') && depts.includes('safety') && depts.includes('accounting') && depts.includes('hr'));
+  const safety = full.departments.find((d) => d.key === 'safety')!;
+  assert.equal(safety.mailbox, 'safety@1stfpservices.com');
+  assert.equal(safety.open, 2, 'the two safety-notify tasks are open');
+  assert.equal(full.departments.find((d) => d.key === 'hr')!.mailbox, null, 'HR has no shared mailbox');
+
+  // HR/Manager have no mailbox to send to.
+  assert.equal((await sendDepartmentDigest(out.request.id, 'hr')).ok, false);
+  assert.equal((await sendDepartmentDigest(out.request.id, 'manager')).ok, false);
+  // A real department with open tasks fails only because mail is not connected in the test (never throws).
+  const it = await sendDepartmentDigest(out.request.id, 'it');
+  assert.equal(it.ok, false);
+  assert.match(it.error || '', /not connected/i);
 });
 
 test('ownersForRoles maps each department to its own owner, admins see all', () => {

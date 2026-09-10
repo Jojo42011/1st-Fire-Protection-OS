@@ -10,6 +10,7 @@ import {
   ownersForRoles,
   hasDirectory,
   sendOffboardingEmail,
+  sendDepartmentDigest,
 } from '../services/offboardingAgent';
 import { backlogCandidates, createFromBacklog } from '../services/offboardingBacklog';
 import { listActiveEmployeesForOffboarding, listManagers, buildItemJob, isDcExecutable } from '../services/offboardingAgent';
@@ -122,6 +123,21 @@ router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) =>
   completeItemByScript(itemId); // mark the board item done now that the live action succeeded
   const updated = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId);
   res.json({ ok: true, item: updated, detail: result.detail || cloudActionLabel(item.action_code), already: result.already });
+});
+
+/** Send one department its still-open tasks as a single digest email to its shared mailbox. */
+router.post('/api/offboarding/:id(\\d+)/email-department', async (req, res) => {
+  const dept = String(req.body?.dept || '').trim();
+  const out = await sendDepartmentDigest(Number(req.params.id), dept, actor(req));
+  const ctx = currentContext(req);
+  osAudit({
+    actor: actorLabel(ctx), actor_email: ctx.user?.email ?? null,
+    module: 'offboarding', action: out.ok ? 'offboarding.dept_email_sent' : 'offboarding.dept_email_failed',
+    subject_type: 'offboarding_request', subject_id: Number(req.params.id),
+    detail: `${dept} digest to ${out.to || '(no mailbox)'}${out.ok ? ` (${out.count} task${out.count === 1 ? '' : 's'})` : ': ' + (out.error || 'failed')}`,
+  });
+  if (!out.ok) return res.status(400).json({ ok: false, error: out.error });
+  res.json({ ok: true, to: out.to, count: out.count });
 });
 
 /** Send the shared-mailbox notification email for one offboarding task (from offboarding@). */

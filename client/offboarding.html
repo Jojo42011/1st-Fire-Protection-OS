@@ -127,11 +127,19 @@ function openReq(id){
   OPEN=id;
   fetch('/api/offboarding/'+id+ownerQS()).then(function(r){return r.json();}).then(function(d){
     if(!d.ok)return; var r=d.request, ru=d.rollup;
-    var byStage={s1:[],s2:[],s3:[],s4:[]};
-    (d.items||[]).forEach(function(it){(byStage[it.stage]||(byStage[it.stage]=[])).push(it);});
-    var stages=Object.keys(STAGE).map(function(s){
-      var its=byStage[s]||[]; if(!its.length)return '';
-      return '<div class="stg"><h4>'+STAGE[s]+'</h4>'+its.map(itemRow).join('')+'</div>';
+    // Group by department. Each department with a shared mailbox and open tasks gets a one-click
+    // digest button that emails that department its still-to-do tasks.
+    var byDept={};
+    (d.items||[]).forEach(function(it){(byDept[it.dept]||(byDept[it.dept]=[])).push(it);});
+    var stages=(d.departments||[]).map(function(dp){
+      var its=byDept[dp.key]||[]; if(!its.length)return '';
+      var emailBtn = (dp.mailbox && dp.open>0)
+        ? '<button class="btn2 primary" data-deptemail="'+dp.key+'">Email '+esc(dp.label)+' &middot; '+dp.open+' open</button>'
+        : (dp.mailbox?'<span class="sub2 mono">'+esc(dp.mailbox)+' &middot; nothing open</span>':'');
+      return '<div class="stg" style="margin-top:14px;border-top:2px solid var(--line,#eee);padding-top:10px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+        '<h4 style="margin:0;font-size:14px">'+esc(dp.label)+' <span class="sub2" style="font-weight:400">'+(dp.total-dp.open)+'/'+dp.total+' done</span></h4>'+emailBtn+'</div>'+
+        its.map(itemRow).join('')+'</div>';
     }).join('');
     document.getElementById('detail').innerHTML='<div class="card" style="padding:16px 18px">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'+
@@ -157,7 +165,7 @@ function openReq(id){
     document.querySelectorAll('#detail [data-item]').forEach(function(b){b.addEventListener('click',function(){decide(Number(b.getAttribute('data-item')),b.getAttribute('data-verb'));});});
     document.querySelectorAll('#detail [data-run]').forEach(function(b){b.addEventListener('click',function(){runOnDc(Number(b.getAttribute('data-run')),b);});});
     document.querySelectorAll('#detail [data-cloud]').forEach(function(b){b.addEventListener('click',function(){runInCloud(Number(b.getAttribute('data-cloud')),b);});});
-    document.querySelectorAll('#detail [data-email]').forEach(function(b){b.addEventListener('click',function(){sendEmail(Number(b.getAttribute('data-email')),b);});});
+    document.querySelectorAll('#detail [data-deptemail]').forEach(function(b){b.addEventListener('click',function(){emailDept(b.getAttribute('data-deptemail'),b);});});
     document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
   });
 }
@@ -176,8 +184,6 @@ function itemRow(it){
     if(dc && it.kind!=='approval') ax='<button class="btn2 primary" data-run="'+it.id+'">Run on DC</button>'+ax;
     // Cloud steps run server-side, right now, no laptop needed.
     if(cloud && it.kind!=='approval') ax='<button class="btn2 primary" data-cloud="'+it.id+'">Run in cloud</button>'+ax;
-    // Tasks that notify a shared mailbox get a one-click Send email.
-    if(it.email_to && it.kind!=='approval') ax='<button class="btn2 primary" data-email="'+it.id+'">Email '+esc(it.email_to)+'</button>'+ax;
   } else if(it.status==='na'){
     st=OS.pill('N/A','neutral');
   } else if(it.status==='approved'){
@@ -209,14 +215,13 @@ function runInCloud(id,btn){
     if(OPEN)openReq(OPEN);
   }).catch(function(){btn.disabled=false;btn.textContent='Run in cloud';OS.toast('Could not run.','bad');});
 }
-function sendEmail(id,btn){
-  var to=btn.getAttribute('data-to')||btn.textContent.replace(/^Email\s+/,'');
-  if(!confirm('Send the offboarding notification email now?'))return;
+function emailDept(dept,btn){
+  if(!confirm('Send this department its open offboarding tasks in one email?'))return;
   btn.disabled=true; var was=btn.textContent; btn.textContent='Sending…';
-  fetch('/api/offboarding/items/'+id+'/send-email',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+  fetch('/api/offboarding/'+OPEN+'/email-department',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dept:dept})}).then(function(r){return r.json();}).then(function(d){
     if(!d.ok){OS.toast(d.error||'Could not send.','bad');btn.disabled=false;btn.textContent=was;return;}
-    OS.toast('Emailed '+(d.to||'the shared mailbox')+'.');
-    if(OPEN)openReq(OPEN);
+    OS.toast('Emailed '+(d.to||'the shared mailbox')+' with '+(d.count||0)+' task'+(d.count===1?'':'s')+'.');
+    btn.disabled=false;btn.textContent=was;
   }).catch(function(){btn.disabled=false;btn.textContent=was;OS.toast('Could not send.','bad');});
 }
 
