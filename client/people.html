@@ -89,9 +89,7 @@
       <h1>People</h1>
       <div class="os-question">Who is joining, who is here, and what do we reverse when someone leaves?</div>
     </div>
-    <div class="os-actions" id="headActions" style="display:none">
-      <button class="os-btn primary" id="startOnb">Start onboarding</button>
-    </div>
+    <div class="os-actions" id="headActions" style="display:none"></div>
   </div>
   <div id="who" class="muted" style="margin-bottom:6px"></div>
   <div id="tabsWrap" style="display:none">
@@ -201,7 +199,6 @@ document.getElementById('pstrip').addEventListener('click',function(e){
   if(t.key===cur) return;
   go(t.key);
 });
-document.getElementById('startOnb').addEventListener('click',function(){ go('onboarding'); });
 function openTemplatesDrawer(){
   var scrim=document.createElement('div'); scrim.className='os-scrim';
   scrim.innerHTML='<div class="os-drawer" role="dialog" aria-label="Role templates"><div class="dh"><div><h2>Role templates</h2><div class="sub">Job positions and their access defaults</div></div><button class="x" aria-label="Close">&times;</button></div><div class="db" id="tmplBody" style="overflow:auto;flex:1;padding:0"><p class="muted" style="padding:18px 20px">Loading…</p></div></div>';
@@ -731,7 +728,11 @@ VIEWS.credentials=function(v){
 function setCredView(x){_credView=x;go('credentials');}
 
 VIEWS.onboarding=function(v){
-  if(!has('manager')&&!has('hr')){ v.innerHTML='<div class="card card-pad"><p class="muted">Onboarding is initiated by a hiring manager or HR. You have read access only.</p></div>'; return; }
+  // Onboarding starts only by creating an intake link on the Onboarding page. Any path that lands
+  // here (e.g. an attention card) is sent straight there; the old in-page create form is retired.
+  location.href='/onboarding';
+  return;
+  // eslint-disable-next-line no-unreachable
   var C=CAT||{};
   var soft=(C.systems||[]).filter(function(s){return s.category!=='identity';}).map(function(s){return chk('sys_'+s.key,s.name);}).join('');
   var sp=(C.sharepointGroups||[]).map(function(g){return chk('sp_'+g.key,g.name+(g.restricted?' (approval)':''));}).join('');
