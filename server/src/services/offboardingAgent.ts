@@ -25,7 +25,12 @@ const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', ac
 const SAFETY_MBX = 'safety@1stfpservices.com';
 const ACCT_MBX = 'accounting@1stfpservices.com';
 const IT_MBX = 'it@1stfpservices.com';
-export const OFFBOARDING_FROM = 'offboarding@1stfpservices.com';
+/** The mailbox offboarding email is sent from. Configurable via OFFBOARDING_FROM so it can point at a
+ *  mailbox already allowed by a tenant Application Access Policy without a code change. */
+export function offboardingFrom(): string {
+  const v = process.env.OFFBOARDING_FROM;
+  return v && v.trim() ? v.trim() : 'offboarding@1stfpservices.com';
+}
 
 /* ─────────────────────────── departments (grouping + digest email) ───────────────────────────
  * The board is grouped by department, and HR can send each department ONE email listing that
@@ -382,7 +387,7 @@ export async function sendDepartmentDigest(requestId: number, dept: string, by =
     `<ol style="font-family:Arial,sans-serif;font-size:14px;padding-left:18px">${rows}</ol>` +
     `<p style="color:#666;font-size:12px">Sent by the 1st Fire Protection OS offboarding board. Reply to this mailbox to coordinate.</p>`;
 
-  const out = await sendMail(mailbox, subject, html, { from: OFFBOARDING_FROM, fromName: '1st FP Offboarding' });
+  const out = await sendMail(mailbox, subject, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
   if (!out.ok) return { ok: false, error: out.error, to: mailbox };
   return { ok: true, to: mailbox, count: items.length };
 }
@@ -455,7 +460,7 @@ export async function sendOffboardingEmail(itemId: number, by = 'operator'): Pro
     `</table>` +
     `<p style="color:#666;font-size:12px">Sent by the 1st Fire Protection OS offboarding board. Reply to this mailbox to coordinate.</p>`;
 
-  const out = await sendMail(item.email_to, subject, html, { from: OFFBOARDING_FROM, fromName: '1st FP Offboarding' });
+  const out = await sendMail(item.email_to, subject, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
   if (!out.ok) return { ok: false, error: out.error, to: item.email_to };
   if (item.status === 'pending') {
     db.prepare(`UPDATE offboarding_items SET status='done', decided_by=?, decided_at=datetime('now') WHERE id = ?`).run(by, itemId);
