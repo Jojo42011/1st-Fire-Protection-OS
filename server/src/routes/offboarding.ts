@@ -16,7 +16,7 @@ import { getDb } from '../db/index';
 import { currentContext } from '../os/scope';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { completeItemByScript } from '../services/offboardingAgent';
-import { isCloudExecutable, cloudActionLabel, runCloudAction, graphOffboardConfigured } from '../services/msGraphOffboard';
+import { isCloudExecutable, cloudActionLabel, runCloudAction, graphOffboardConfigured, offboardingPermissionCheck } from '../services/msGraphOffboard';
 import { osAudit, actorLabel } from '../os/audit';
 
 const router = Router();
@@ -80,6 +80,12 @@ router.post('/api/offboarding/items/:id(\\d+)/run-on-dc', (req, res) => {
   if (!built.ok) return res.status(400).json({ ok: false, error: built.error });
   const job = enqueue(built.kind as any, built.payload, { type: 'offboarding_item', id: itemId }, actor(req));
   res.json({ ok: true, job, kind: built.kind });
+});
+
+/** What Microsoft Graph application permissions the connected app actually holds, versus what
+ *  server-side cloud offboarding needs. Read from the app's own token, so it is definitive. */
+router.get('/api/offboarding/cloud-permissions', async (_req, res) => {
+  res.json({ ok: true, ...(await offboardingPermissionCheck()) });
 });
 
 /**

@@ -12,7 +12,7 @@ delete process.env.MS_GRAPH_CLIENT_ID;
 delete process.env.MS_GRAPH_CLIENT_SECRET;
 
 import {
-  isCloudExecutable, cloudActionLabel, graphOffboardConfigured, runCloudAction,
+  isCloudExecutable, cloudActionLabel, graphOffboardConfigured, runCloudAction, offboardingPermissionCheck,
 } from './msGraphOffboard';
 
 test('the five cloud steps are recognized and labeled; DC/Exchange-only steps are not', () => {
@@ -35,6 +35,14 @@ test('with Graph not connected, every cloud action fails safe (never throws)', a
     assert.equal(r.ok, false);
     assert.match(r.error || '', /not connected/i, `${ac} reports not connected`);
   }
+});
+
+test('permission check reports not-connected safely when Graph is off', async () => {
+  const c = await offboardingPermissionCheck();
+  assert.equal(c.connected, false);
+  assert.equal(c.introspectable, false);
+  assert.equal(c.allPresent, false);
+  assert.deepEqual(c.roles, []);
 });
 
 test('an unknown action code is refused, not dispatched', async () => {

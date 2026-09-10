@@ -49,6 +49,67 @@ function accessDenied(perm: string): string {
   return `Graph returned Access Denied. Add the ${perm} application permission to the app registration and grant admin consent.`;
 }
 
+/**
+ * The application permissions actually granted to the connected app, read from the `roles` claim of a
+ * live client-credentials token (definitive, needs no extra directory-read permission). Returns null
+ * when Graph is not connected or a token cannot be acquired.
+ */
+export async function graphGrantedRoles(): Promise<string[] | null> {
+  if (!graphOffboardConfigured()) return null;
+  try {
+    const token = await graphToken();
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length < 2) return []; // an opaque MS_GRAPH_TOKEN, not a JWT: cannot introspect
+    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    return Array.isArray(payload.roles) ? payload.roles.map(String) : [];
+  } catch {
+    return null;
+  }
+}
+
+// Each cloud step's requirement, with the exact permission it needs plus supersets that also satisfy it.
+const PERMISSION_REQS: { step: string; label: string; accept: string[] }[] = [
+  { step: 'revoke_sessions', label: 'Block sign-in + revoke sessions', accept: ['User.ReadWrite.All', 'Directory.ReadWrite.All'] },
+  { step: 'license_remove', label: 'Remove 365 license (write)', accept: ['User.ReadWrite.All', 'Directory.ReadWrite.All'] },
+  { step: 'license_remove', label: 'Remove 365 license (read SKUs)', accept: ['Organization.Read.All', 'Directory.Read.All', 'Directory.ReadWrite.All'] },
+  { step: 'autoreply_set', label: 'Mailbox auto-reply', accept: ['MailboxSettings.ReadWrite'] },
+  { step: 'fwd_set', label: 'Forward to manager', accept: ['Mail.ReadWrite'] },
+  { step: 'data_reassign', label: 'OneDrive / SharePoint delegation', accept: ['Files.ReadWrite.All', 'Sites.ReadWrite.All', 'Sites.FullControl.All'] },
+];
+
+export interface PermissionCheck {
+  connected: boolean;
+  introspectable: boolean; // false when using an opaque token we cannot decode
+  roles: string[];
+  requirements: { label: string; satisfiedBy: string | null; accept: string[] }[];
+  missing: string[];
+  allPresent: boolean;
+}
+
+/** Compare the app's granted roles against everything server-side cloud offboarding needs. */
+export async function offboardingPermissionCheck(): Promise<PermissionCheck> {
+  const roles = await graphGrantedRoles();
+  const connected = graphOffboardConfigured();
+  if (roles === null) {
+    return { connected, introspectable: false, roles: [], requirements: [], missing: [], allPresent: false };
+  }
+  const have = new Set(roles);
+  const requirements = PERMISSION_REQS.map((r) => {
+    const satisfiedBy = r.accept.find((a) => have.has(a)) || null;
+    return { label: r.label, satisfiedBy, accept: r.accept };
+  });
+  const missing = requirements.filter((r) => !r.satisfiedBy).map((r) => r.accept[0]);
+  return {
+    connected,
+    introspectable: roles.length > 0 || connected, // a JWT with no roles is still introspectable (means none granted)
+    roles: roles.slice().sort(),
+    requirements,
+    missing: [...new Set(missing)],
+    allPresent: missing.length === 0,
+  };
+}
+
 async function resolveUserId(token: string, upn: string): Promise<string | null> {
   const res = await fetch(`${GRAPH}/users/${encodeURIComponent(upn)}?$select=id`, { headers: { authorization: `Bearer ${token}` } });
   if (!res.ok) return null;

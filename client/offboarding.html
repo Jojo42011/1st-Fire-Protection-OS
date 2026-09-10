@@ -96,11 +96,23 @@ function loadBoard(){
     var deptBar = CAN_ALL
       ? '<div class="policy">Department: <select id="deptSel">'+DEPTS.map(function(d2){return '<option value="'+d2[0]+'"'+(d2[0]===DEPT?' selected':'')+'>'+esc(d2[1])+'</option>';}).join('')+'</select> <span class="sub2">(admins see all; pick one to focus)</span></div>'
       : '<div class="policy sub2">Showing your department\'s offboarding tasks.</div>';
-    document.getElementById('view').innerHTML=deptBar+'<div class="policy">Forwarding runs <b>'+POLICY.forwardDays+'</b> days; accounts retire after <b>'+POLICY.retainDays+'</b> days. <a href="#" id="editPolicy" style="color:var(--ink)">Edit</a></div>'+table+'<div id="detail" style="margin-top:20px"></div>';
+    document.getElementById('view').innerHTML=deptBar+'<div id="cloudPerm"></div><div class="policy">Forwarding runs <b>'+POLICY.forwardDays+'</b> days; accounts retire after <b>'+POLICY.retainDays+'</b> days. <a href="#" id="editPolicy" style="color:var(--ink)">Edit</a></div>'+table+'<div id="detail" style="margin-top:20px"></div>';
     document.querySelectorAll('.rowlink').forEach(function(tr){tr.addEventListener('click',function(){openReq(Number(tr.getAttribute('data-id')));});});
     document.getElementById('editPolicy').addEventListener('click',function(e){e.preventDefault();editPolicy();});
     var ds=document.getElementById('deptSel'); if(ds)ds.addEventListener('change',function(){DEPT=ds.value;OPEN=null;loadBoard();});
+    loadCloudPerm();
   });
+}
+// Show whether the connected Microsoft app actually holds the permissions the "Run in cloud" steps need.
+function loadCloudPerm(){
+  var el=document.getElementById('cloudPerm'); if(!el)return;
+  fetch('/api/offboarding/cloud-permissions').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok)return;
+    if(!d.connected){el.innerHTML='<div class="policy sub2">Cloud offboarding: Microsoft Graph is not connected, so "Run in cloud" is unavailable.</div>';return;}
+    if(!d.introspectable){el.innerHTML='<div class="policy sub2">Cloud offboarding: connected (permissions could not be read from a static token).</div>';return;}
+    if(d.allPresent){el.innerHTML='<div class="policy" style="border-left:3px solid var(--good,#1a7f37);padding-left:10px">Cloud offboarding ready: the connected app has all required Microsoft 365 permissions. "Run in cloud" works with no PowerShell.</div>';return;}
+    el.innerHTML='<div class="policy" style="border-left:3px solid var(--warn,#b7791f);padding-left:10px">Cloud offboarding: the connected app is missing '+d.missing.length+' permission'+(d.missing.length===1?'':'s')+'. Add and consent to: <b>'+d.missing.map(esc).join(', ')+'</b>. Steps whose permission is present still work.</div>';
+  }).catch(function(){});
 }
 function editPolicy(){
   var p=document.querySelector('.policy');
