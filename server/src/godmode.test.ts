@@ -8,7 +8,7 @@ process.env.DEMO_MODE = 'off';
 process.env.GOD_MODE_PASSWORD = 'break-glass-super-secret-9182';
 
 import { initDb } from './db/schema';
-import { godModeConfigured, isGodMode, handleLogin, handleLogout } from './auth';
+import { godModeConfigured, isGodMode, handleLogin, handleLogout, godStatus, setGodPassword, clearGodPassword } from './auth';
 import { currentUser } from './people/authz';
 
 initDb();
@@ -78,4 +78,42 @@ test('logout clears the god cookie', () => {
   const raw = res.headers['set-cookie'];
   const arr = Array.isArray(raw) ? raw : [raw];
   assert.ok(arr.some((c: string) => /^fpos_god=;/.test(c)), 'logout must expire the god cookie');
+});
+
+test('an app-managed god password (set in Access & Roles) works and is reported by status', () => {
+  delete process.env.GOD_MODE_PASSWORD; // rely only on the app-managed one
+  assert.equal(godModeConfigured(), false, 'off with neither source');
+
+  const set = setGodPassword('app-managed-break-glass-77', 'admin@1stfp.com');
+  assert.equal(set.ok, true);
+  assert.equal(godModeConfigured(), true);
+  const st = godStatus();
+  assert.equal(st.configured, true);
+  assert.equal(st.app_set, true);
+  assert.equal(st.env_set, false);
+  assert.equal(st.set_by, 'admin@1stfp.com');
+
+  // Sign in with the app-managed password -> full super-admin.
+  const res = fakeRes();
+  handleLogin(fakeReq(undefined, { password: 'app-managed-break-glass-77' }), res);
+  assert.equal(res.body?.godMode, true);
+  const token = godCookieFrom(res)!;
+  const u = currentUser(fakeReq(`fpos_god=${encodeURIComponent(token)}`));
+  assert.deepEqual(u!.roles, ['people_admin']);
+
+  // A short password is refused; clearing turns god mode back off.
+  assert.equal(setGodPassword('short', 'x').ok, false);
+  clearGodPassword();
+  assert.equal(godModeConfigured(), false);
+});
+
+test('god mode is always off in demo mode regardless of source', () => {
+  process.env.GOD_MODE_PASSWORD = 'break-glass-super-secret-9182';
+  process.env.DEMO_MODE = 'on';
+  try {
+    assert.equal(godModeConfigured(), false, 'demo disables god mode');
+    assert.equal(setGodPassword('another-strong-one-here', 'x').ok, false, 'cannot set in demo');
+  } finally {
+    process.env.DEMO_MODE = 'off';
+  }
 });

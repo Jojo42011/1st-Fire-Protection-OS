@@ -84,7 +84,7 @@ export function readinessReport(): Readiness {
     for (const s of sync) if (integrationConnected(s.key) && !s.fresh) warnings.push(`Sync source "${s.label}" is stale or failing (last status: ${s.last_status || 'never'}).`);
     const failed = failedActionCount();
     if (failed > 0) warnings.push(`${failed} external action(s) have failed and need review.`);
-    if (godModeConfigured()) warnings.push('GOD_MODE_PASSWORD is set: a break-glass full-admin sign-in is active. Every use is audited; unset it once normal identity access is in place.');
+    if (godModeConfigured()) warnings.push('God mode is active: a break-glass full-admin sign-in is enabled (Fly secret or app-managed password). Every use is audited; remove it once normal identity access is in place.');
   }
 
   return {

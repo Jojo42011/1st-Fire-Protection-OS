@@ -7,9 +7,31 @@ process.env.DB_PATH = path.join(os.tmpdir(), `offscope-test-${process.pid}.db`);
 process.env.DEMO_MODE = 'off';
 
 import { initDb } from '../db/schema';
-import { ownersForRoles, createOffboarding, getOffboarding } from './offboardingAgent';
+import { getDb } from '../db/index';
+import { ownersForRoles, createOffboarding, getOffboarding, backfillOffboardingItems } from './offboardingAgent';
 
 initDb();
+
+test('backfill re-adds newly-defined items to existing requests, without duplicating', () => {
+  const out = createOffboarding({ name: 'Old Request', upn: 'old@1stfpservices.com', office: 'lubbock', termination_date: '2026-08-01' } as any);
+  const id = out.request.id;
+  const db = getDb();
+  // Simulate a request created before HR/accounting tasks existed: strip those owners.
+  db.prepare(`DELETE FROM offboarding_items WHERE request_id = ? AND owner IN ('hr','accounting')`).run(id);
+  const before = getOffboarding(id, null)!;
+  assert.equal(before.items.filter((i: any) => i.owner === 'hr' || i.owner === 'accounting').length, 0);
+
+  const r1 = backfillOffboardingItems();
+  assert.ok(r1.itemsAdded >= 10, 'the 6 HR + 4 accounting tasks are added back');
+  const after = getOffboarding(id, null)!;
+  assert.equal(after.items.filter((i: any) => i.owner === 'hr').length, 6);
+  assert.equal(after.items.filter((i: any) => i.owner === 'accounting').length, 4);
+
+  // Idempotent: a second run adds nothing for this request.
+  const countBefore = getOffboarding(id, null)!.items.length;
+  backfillOffboardingItems();
+  assert.equal(getOffboarding(id, null)!.items.length, countBefore, 'no duplicates on a second backfill');
+});
 
 test('ownersForRoles maps each department to its own owner, admins see all', () => {
   assert.deepEqual(ownersForRoles(['it']), ['it']);

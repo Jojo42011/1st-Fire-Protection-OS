@@ -203,6 +203,38 @@ function itemsFor(requestId: number): any[] {
   return getDb().prepare(`SELECT * FROM offboarding_items WHERE request_id = ? ORDER BY id ASC`).all(requestId);
 }
 
+/**
+ * Add any newly-defined checklist items (e.g. the HR/Accounting/IT-device tasks) to EXISTING open
+ * requests that were created before those items existed. Idempotent: an item is only inserted when its
+ * action_code is not already present for that request, so decided items and prior state are untouched.
+ * Runs at boot; safe to run repeatedly.
+ */
+export function backfillOffboardingItems(): { requestsTouched: number; itemsAdded: number } {
+  const db = getDb();
+  const requests = db.prepare(`SELECT * FROM offboarding_requests WHERE status != 'cancelled'`).all() as any[];
+  const ins = db.prepare(
+    `INSERT INTO offboarding_items (request_id, owner, owner_label, stage, kind, action_code, label, detail, due_at, snapshot_json)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  );
+  let requestsTouched = 0, itemsAdded = 0;
+  for (const req of requests) {
+    const existing = new Set(
+      (db.prepare(`SELECT action_code FROM offboarding_items WHERE request_id = ?`).all(req.id) as { action_code: string }[]).map((r) => r.action_code)
+    );
+    let groupSnapshot: { name: string }[] | null = null;
+    if (req.object_guid) {
+      const groups = db.prepare(`SELECT group_name AS name FROM ad_user_groups WHERE object_guid = ?`).all(req.object_guid) as { name: string }[];
+      groupSnapshot = groups.length ? groups : null;
+    }
+    const drafts = planItems(req, groupSnapshot).filter((d) => !existing.has(d.action_code));
+    if (!drafts.length) continue;
+    for (const d of drafts) ins.run(req.id, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null);
+    requestsTouched++; itemsAdded += drafts.length;
+    recompute(req.id); // an added pending item may reopen a request that had shown complete
+  }
+  return { requestsTouched, itemsAdded };
+}
+
 export interface OffRollup { total: number; done: number; pending: number; pendingApprovals: number; progress: number }
 function rollup(items: any[]): OffRollup {
   const total = items.length;

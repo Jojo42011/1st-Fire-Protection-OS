@@ -48,7 +48,7 @@
 <div class="wrap">
   <div>
     <h1 style="font-size:20px;font-weight:600;margin:0">Offboarding</h1>
-    <p style="font-size:13px;color:var(--muted);margin:6px 0 0;max-width:660px">The departure SOP: lock down the account, convert the mailbox to shared and drop the license, forward mail for a set window, then retire the account. Deletes always need approval. Nothing runs against AD or 365 automatically yet: each step is surfaced here to work through.</p>
+    <p style="font-size:13px;color:var(--muted);margin:6px 0 0;max-width:660px">The departure SOP: lock down the account, convert the mailbox to shared and drop the license, forward mail for a set window, then retire the account. Deletes always need approval. IT steps can run in place: "Run on DC" for the on-prem AD steps, and "Run in cloud" for the Microsoft 365 steps (revoke sessions, license, auto-reply, forward, OneDrive handover) with no PowerShell.</p>
   </div>
   <div class="tabs">
     <button data-tab="board" class="on">Board</button>
@@ -106,12 +106,13 @@ function loadBoard(){
 // Show whether the connected Microsoft app actually holds the permissions the "Run in cloud" steps need.
 function loadCloudPerm(){
   var el=document.getElementById('cloudPerm'); if(!el)return;
+  function box(bg,bd,ink,html){return '<div style="margin:12px 0;padding:12px 14px;border:1px solid '+bd+';border-radius:10px;background:'+bg+';color:'+ink+';font-size:13.5px;line-height:1.5">'+html+'</div>';}
   fetch('/api/offboarding/cloud-permissions').then(function(r){return r.json();}).then(function(d){
     if(!d||!d.ok)return;
-    if(!d.connected){el.innerHTML='<div class="policy sub2">Cloud offboarding: Microsoft Graph is not connected, so "Run in cloud" is unavailable.</div>';return;}
-    if(!d.introspectable){el.innerHTML='<div class="policy sub2">Cloud offboarding: connected (permissions could not be read from a static token).</div>';return;}
-    if(d.allPresent){el.innerHTML='<div class="policy" style="border-left:3px solid var(--good,#1a7f37);padding-left:10px">Cloud offboarding ready: the connected app has all required Microsoft 365 permissions. "Run in cloud" works with no PowerShell.</div>';return;}
-    el.innerHTML='<div class="policy" style="border-left:3px solid var(--warn,#b7791f);padding-left:10px">Cloud offboarding: the connected app is missing '+d.missing.length+' permission'+(d.missing.length===1?'':'s')+'. Add and consent to: <b>'+d.missing.map(esc).join(', ')+'</b>. Steps whose permission is present still work.</div>';
+    if(!d.connected){el.innerHTML=box('#f6f6f4','#e2e2dd','#6b6b66','<b>Cloud offboarding</b>: Microsoft Graph is not connected, so "Run in cloud" is unavailable.');return;}
+    if(!d.introspectable){el.innerHTML=box('#f6f6f4','#e2e2dd','#6b6b66','<b>Cloud offboarding</b>: connected (permissions could not be read from a static token).');return;}
+    if(d.allPresent){el.innerHTML=box('#eaf6ee','#bfe3cb','#1a7f37','&#10003; <b>Cloud offboarding ready.</b> The connected app has all required Microsoft 365 permissions. "Run in cloud" works with no PowerShell.');return;}
+    el.innerHTML=box('#fdf3e3','#f0dcb4','#8a5a12','&#9888; <b>Cloud offboarding: missing '+d.missing.length+' permission'+(d.missing.length===1?'':'s')+'.</b> Add these to the app registration and grant admin consent: <b>'+d.missing.map(esc).join(', ')+'</b>. Steps whose permission is already present still work.');
   }).catch(function(){});
 }
 function editPolicy(){

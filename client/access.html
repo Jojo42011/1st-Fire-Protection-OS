@@ -130,6 +130,23 @@
 
       </div>
 
+      <!-- God mode (break-glass) -->
+      <div class="os-card" id="godCard" style="margin-top:16px">
+        <div class="os-card-h">
+          <div class="os-card-t">God mode (break-glass admin)</div>
+          <div class="os-card-s">A single password that signs in as full super-admin without Microsoft, for when identity access is down. Every use is audited and flagged on Readiness. Stored only as a hash; never shown. Off in demo mode.</div>
+        </div>
+        <div class="os-card-b">
+          <div id="godStatus" class="a-note">Loading…</div>
+          <div class="a-add" style="margin-top:10px">
+            <input id="godPw" type="password" placeholder="New break-glass password (min 12 chars)" autocomplete="new-password" />
+            <button class="os-btn primary" id="godSet">Set password</button>
+            <button class="os-btn" id="godClear" style="display:none">Remove app password</button>
+          </div>
+          <div class="a-note" style="margin-top:8px">Keep this in your password manager. Setting a new one immediately replaces the old and signs out any active god session. The Fly secret <b>GOD_MODE_PASSWORD</b>, if set, is separate and can only be changed with flyctl.</div>
+        </div>
+      </div>
+
       <div class="os-foot">
         Everything a person actually reaches is enforced on the server, on every request, by the
         <b>roles</b> assigned in "Assign a person". Hiding a control in the UI is a convenience,
@@ -165,7 +182,47 @@ function boot(){
     if(USERS.length){ select(0); } else { renderPeople(); renderEditor(); }
     renderRoleChips();
     loadMatrix().then(function(){ renderMatrix(); });
+    loadGod();
   }).catch(function(){gate('Could not load access settings.');});
+}
+
+/* ---------------- God mode (break-glass) ---------------- */
+function loadGod(){
+  fetch('/api/people/godmode').then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok) return;
+    var el=document.getElementById('godStatus');
+    var parts=[];
+    if(d.configured){
+      if(d.env_set) parts.push('Fly secret <b>GOD_MODE_PASSWORD</b> is set');
+      if(d.app_set) parts.push('an app-managed password is set'+(d.set_by?(' by '+esc(d.set_by)):'')+(d.set_at?(' on '+esc(String(d.set_at).slice(0,10))):''));
+      el.innerHTML='God mode is <b style="color:var(--amber-ink)">ACTIVE</b>: '+parts.join(' and ')+'.';
+    } else {
+      el.innerHTML='God mode is <b>off</b>. Set a password below to enable break-glass sign-in.';
+    }
+    document.getElementById('godClear').style.display=d.app_set?'':'none';
+    document.getElementById('godSet').textContent=d.app_set?'Change password':'Set password';
+  }).catch(function(){});
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function setGod(){
+  var pw=document.getElementById('godPw').value||'';
+  if(pw.length<12){ alert('Password must be at least 12 characters.'); return; }
+  var btn=document.getElementById('godSet'); btn.disabled=true;
+  j('/api/people/godmode/password',{method:'POST',body:JSON.stringify({password:pw})}).then(function(r){
+    btn.disabled=false;
+    if(!r.ok){ alert((r.body&&r.body.error)||'Could not set the password.'); return; }
+    document.getElementById('godPw').value='';
+    loadGod();
+    if(window.OS&&OS.toast)OS.toast('God mode password saved.'); else alert('God mode password saved.');
+  });
+}
+function clearGod(){
+  if(!confirm('Remove the app-managed god password? The Fly secret, if any, still applies.')) return;
+  j('/api/people/godmode/password',{method:'DELETE'}).then(function(r){
+    if(!r.ok){ alert((r.body&&r.body.error)||'Could not remove.'); return; }
+    loadGod();
+    if(window.OS&&OS.toast)OS.toast('App-managed god password removed.');
+  });
 }
 function gate(msg){var g=document.getElementById('gate');g.style.display='';g.textContent=msg;document.getElementById('admin').style.display='none';}
 
@@ -342,6 +399,9 @@ document.addEventListener('click',function(e){
     else if(kind==='office'){ if(DRAFT.all_offices) return; toggle('offices',val); }
     renderEditor(); renderPeople(); return;
   }
+  // god mode
+  if(e.target.closest('#godSet')){ setGod(); return; }
+  if(e.target.closest('#godClear')){ clearGod(); return; }
   // revert / save
   if(e.target.closest('#revertBtn')){ DRAFT=clone(USERS[SELECTED]); renderEditor(); renderPeople(); return; }
   if(e.target.closest('#saveBtn')){ if(isDirty()) saveDraft(); return; }

@@ -19,6 +19,7 @@ import { pullServiceTradeUsers } from '../services/servicetradeUsers';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
+import { godStatus, setGodPassword, clearGodPassword } from '../auth';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || 'system';
@@ -348,6 +349,22 @@ router.post('/api/people/users', requirePeople('people_admin'), (req, res) => {
 router.post('/api/people/users/:email/active', requirePeople('people_admin'), (req, res) => {
   setAppUserActive(req.params.email, req.body?.active !== false);
   res.json({ ok: true });
+});
+
+/* ─────────────────────────── god mode (break-glass) admin ─────────────────────────── */
+// Manage the app-managed break-glass password from Access & Roles. The password is stored only as a
+// scrypt hash (never returned); the env-set GOD_MODE_PASSWORD, if any, is reported but not editable here.
+router.get('/api/people/godmode', requirePeople('people_admin'), (_req, res) => res.json({ ok: true, ...godStatus() }));
+router.post('/api/people/godmode/password', requirePeople('people_admin'), (req, res) => {
+  const out = setGodPassword(String(req.body?.password ?? ''), actor(req));
+  if (!out.ok) return res.status(400).json(out);
+  svc.audit('access_requested', 'God mode break-glass password was set/rotated', { actor: actor(req) });
+  res.json({ ok: true, ...godStatus() });
+});
+router.delete('/api/people/godmode/password', requirePeople('people_admin'), (req, res) => {
+  clearGodPassword();
+  svc.audit('access_requested', 'God mode app-managed password was removed', { actor: actor(req) });
+  res.json({ ok: true, ...godStatus() });
 });
 
 /* ─────────────────────────── role x module matrix (admin) ─────────────────────────── */
