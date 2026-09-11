@@ -20,6 +20,7 @@ import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
 import { godStatus, setGodPassword, clearGodPassword } from '../auth';
+import { phoneListPull, filterEntities, toPhoneCsv } from '../services/phoneList';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || 'system';
@@ -349,6 +350,30 @@ router.post('/api/people/users', requirePeople('people_admin'), (req, res) => {
 router.post('/api/people/users/:email/active', requirePeople('people_admin'), (req, res) => {
   setAppUserActive(req.params.email, req.body?.active !== false);
   res.json({ ok: true });
+});
+
+/* ─────────────────────────── phone list (BambooHR, last 4) ─────────────────────────── */
+// First name, Last name, Last 4 of mobile phone, from BambooHR. Default entities: 1st FP Services + MGMT.
+// ?entities=a,b overrides the location filter; ?all=1 includes inactive; ?format=csv downloads the file;
+// JSON also returns every distinct BambooHR location so the entity labels can be confirmed. HR/admin only.
+const DEFAULT_PHONE_ENTITIES = ['1st fp services', 'mgmt', 'management'];
+router.get('/api/people/phone-list', requirePeople('people_admin', 'hr'), async (req, res) => {
+  const out = await phoneListPull();
+  if (!out.ok) return res.status(400).json({ ok: false, error: out.error });
+  const entParam = String(req.query.entities || '').trim();
+  const entities = entParam ? entParam.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_PHONE_ENTITIES;
+  const rows = filterEntities(out.rows, entities, String(req.query.all || '') !== '1');
+  if (String(req.query.format || '') === 'csv') {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="phone-last4.csv"');
+    return res.send(toPhoneCsv(rows));
+  }
+  res.json({
+    ok: true, entities, count: rows.length,
+    missingPhone: rows.filter((r) => !r.hasPhone).length,
+    rows: rows.map((r) => ({ first: r.first, last: r.last, last4: r.last4, location: r.location })),
+    locations: out.locations, // every distinct location + count, to confirm the entity labels
+  });
 });
 
 /* ─────────────────────────── god mode (break-glass) admin ─────────────────────────── */
