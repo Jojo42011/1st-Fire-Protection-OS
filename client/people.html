@@ -239,9 +239,32 @@ VIEWS.overview=function(v){
       '</tbody></table></div>' : '';
     // 3) Config note (demoted). The headline lifecycle counts now live in the metric strip above.
     var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My tasks</span>.</p>';
-    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+renderHeadcount(HC)+cfg;
+    var exports=(has('hr')||has('people_admin'))
+      ? '<div class="card card-pad" style="margin-top:14px"><div class="card-head" style="padding:0 0 6px"><h2>Exports</h2></div>'+
+        '<p class="muted" style="margin:0 0 10px">Phone list (First name, Last name, last 4 of the mobile number) for 1st FP Services and MGMT, from BambooHR.</p>'+
+        '<button class="os-btn primary" id="dlPhone">Download phone list (last 4)</button>'+
+        '<span id="dlPhoneMsg" class="muted" style="margin-left:10px"></span></div>'
+      : '';
+    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+renderHeadcount(HC)+exports+cfg;
+    var dp=document.getElementById('dlPhone'); if(dp) dp.addEventListener('click',downloadPhoneList);
   });
 };
+// Download the BambooHR phone list from within the authenticated app (cookies travel with fetch, so
+// no "auth required" like a raw URL in the address bar). Builds the CSV file client-side.
+function downloadPhoneList(){
+  var btn=document.getElementById('dlPhone'), msg=document.getElementById('dlPhoneMsg');
+  btn.disabled=true; if(msg) msg.textContent='Pulling from BambooHR…';
+  fetch('/api/people/phone-list?format=csv',{headers:{'accept':'text/csv'}}).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error(r.status+': '+t.slice(0,140)); });
+    return r.text();
+  }).then(function(csv){
+    var rows=csv.split(/\r?\n/).length-1;
+    var blob=new Blob([csv],{type:'text/csv'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='phone-last4.csv';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },0);
+    btn.disabled=false; if(msg) msg.textContent='Downloaded '+rows+' people.';
+  }).catch(function(e){ btn.disabled=false; if(msg) msg.textContent='Could not export: '+e.message; });
+}
 function renderHeadcount(HC){
   var buckets=HC.buckets||[]; if(!buckets.length) return '';
   var rows=buckets.map(function(b){
