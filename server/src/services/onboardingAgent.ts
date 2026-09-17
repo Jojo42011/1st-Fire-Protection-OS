@@ -109,8 +109,9 @@ export interface OnboardingPayload {
   software?: string[];
   sharepoint?: string[];
   printers?: string[];
-  sage?: string;         // selected Sage role
-  servicetrade?: string; // selected ServiceTrade role
+  sage?: string;              // selected Sage role
+  servicetrade?: string;      // selected ServiceTrade role
+  existing_computer?: string; // name or asset tag of a computer being transferred to this hire
 }
 
 export interface OnboardingItem {
@@ -207,6 +208,11 @@ function routeItems(req: any): DraftItem[] {
     if (t) items.push({ owner: t.owner, kind: t.kind, label: `Grant ServiceTrade access: ${req.servicetrade}` });
   }
 
+  // ── existing computer: IT task to set up the transferred machine for the new hire ──
+  if (req.existing_computer && String(req.existing_computer).trim()) {
+    items.push({ owner: 'it', kind: 'task', label: `Set up existing computer for ${req.name}: ${String(req.existing_computer).trim()}`, detail: 'Wipe or re-profile the existing machine, add to the hire\'s AD account, verify encryption and updates.' });
+  }
+
   // ── printers -> per-office Entra security group (IT). Selecting an office's printers adds the hire
   //    to its SG-PR-<office> group; the item carries the group so IT (or auto-provisioning) can act. ──
   const printers: string[] = safeArray(req.printers_json);
@@ -285,12 +291,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -323,6 +329,7 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       printers_json: JSON.stringify(Array.isArray(payload.printers) ? payload.printers : []),
       sage: (payload.sage || '').trim() || null,
       servicetrade: (payload.servicetrade || '').trim() || null,
+      existing_computer: (payload.existing_computer || '').trim() || null,
     });
 
   const requestId = Number(info.lastInsertRowid);

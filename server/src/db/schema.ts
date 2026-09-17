@@ -1230,8 +1230,9 @@ export function initDb(): void {
   addColumn('intake_links', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
-  addColumn('onboarding_requests', 'sage', 'TEXT');          // selected Sage role (routed to Accounting/Rebecca)
-  addColumn('onboarding_requests', 'servicetrade', 'TEXT');  // selected ServiceTrade role (routed to Laura)
+  addColumn('onboarding_requests', 'sage', 'TEXT');                // selected Sage role (routed to Accounting/Rebecca)
+  addColumn('onboarding_requests', 'servicetrade', 'TEXT');         // selected ServiceTrade role (routed to Laura)
+  addColumn('onboarding_requests', 'existing_computer', 'TEXT');    // name/asset tag of a machine being transferred to this hire
   // Live Google reviews: the Google review id (for dedupe + posting a reply), the location it is on,
   // whether the reply was auto-published, and when it published.
   addColumn('reviews', 'ext_id', 'TEXT');
@@ -1449,6 +1450,74 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_offboarding_items_req ON offboarding_items(request_id);
   `);
   addColumn('offboarding_items', 'email_to', 'TEXT'); // shared mailbox this task notifies (safety@, accounting@), enables a Send-email button
+
+  /* ---------- IT device inventory (ConnectWise Automate, read-only) ----------
+   * One row per Automate computer, upserted by automate_computer_id (unique). Read-only mirror: the
+   * OS never writes back to Automate. purchase_date is operator-maintained and preserved across syncs;
+   * a sync never erases a stored value just because one API response omitted it. All timestamps UTC. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS it_devices (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      automate_computer_id   TEXT NOT NULL UNIQUE,
+      computer_name          TEXT,
+      friendly_name          TEXT,
+      last_logged_in_user    TEXT,               -- last OBSERVED user (DOMAIN\\user), not necessarily current
+      last_user_source_at    TEXT,               -- when Automate observed that user, if supplied
+      manufacturer           TEXT,
+      model                  TEXT,
+      serial_number          TEXT,
+      serial_source          TEXT,               -- which tenant field the serial came from (audit of mapping)
+      operating_system       TEXT,
+      bios_date              TEXT,               -- normalized ISO date or null (placeholders rejected)
+      purchase_date          TEXT,               -- operator-maintained; preserved across syncs
+      purchase_date_manual   INTEGER DEFAULT 0,  -- 1 when a human set purchase_date (never overwritten by sync)
+      first_seen_at          TEXT,               -- first time THIS app observed the device
+      agent_install_at       TEXT,               -- Automate agent install / first-discovered, if available
+      estimated_age_years    REAL,
+      age_source             TEXT,               -- purchase_date | warranty | bios_date | first_seen | agent_install
+      age_confidence         TEXT,               -- high | medium | low
+      age_basis_at           TEXT,               -- the date the age was computed from
+      last_contact_at        TEXT,
+      automate_client_id     TEXT,
+      automate_client_name   TEXT,
+      automate_location_id   TEXT,
+      automate_location_name TEXT,
+      connection_status      TEXT,               -- recent | stale | offline | unknown
+      online                 INTEGER,            -- Automate online flag if provided (0/1/null)
+      active                 INTEGER DEFAULT 1,  -- archival: 0 once absent from a full sync past the grace period
+      missing_since          TEXT,               -- first successful sync in which it was absent
+      source                 TEXT DEFAULT 'connectwise_automate',
+      source_updated_at      TEXT,
+      last_synced_at         TEXT,
+      created_at             TEXT DEFAULT (datetime('now')),
+      updated_at             TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_itdev_location ON it_devices(automate_location_name);
+    CREATE INDEX IF NOT EXISTS idx_itdev_status   ON it_devices(connection_status);
+    CREATE INDEX IF NOT EXISTS idx_itdev_mfr      ON it_devices(manufacturer);
+    CREATE INDEX IF NOT EXISTS idx_itdev_age      ON it_devices(estimated_age_years);
+    CREATE INDEX IF NOT EXISTS idx_itdev_contact  ON it_devices(last_contact_at);
+    CREATE INDEX IF NOT EXISTS idx_itdev_name     ON it_devices(computer_name);
+
+    /* One sanitized row per sync run (counts only; never credentials, tokens, or raw payloads). */
+    CREATE TABLE IF NOT EXISTS it_device_sync_runs (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      integration       TEXT DEFAULT 'connectwise_automate',
+      started_at        TEXT,
+      completed_at      TEXT,
+      ok                INTEGER DEFAULT 0,
+      status            TEXT,                    -- ok | partial | failed | skipped_locked
+      devices_received  INTEGER DEFAULT 0,
+      devices_created   INTEGER DEFAULT 0,
+      devices_updated   INTEGER DEFAULT 0,
+      devices_unchanged INTEGER DEFAULT 0,
+      devices_skipped   INTEGER DEFAULT 0,
+      errors            INTEGER DEFAULT 0,
+      error_detail      TEXT,                    -- sanitized latest error, never secrets
+      actor             TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_itdev_runs_started ON it_device_sync_runs(started_at);
+  `);
 
   // DC agent job queue: the OS enqueues write actions (create a user, etc.); the agent on the domain
   // controller pulls pending jobs, executes them against AD, and posts results back. Outbound-only:

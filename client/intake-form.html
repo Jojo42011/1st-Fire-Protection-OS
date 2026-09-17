@@ -162,20 +162,23 @@
         { key: 'email', label: 'Personal email', help: 'Where we send their first-day instructions.', text: true, placeholder: 'name@email.com' },
         { key: 'mobile', label: 'Mobile', help: 'For the first-day text only.', text: true, placeholder: '(210) 555-0142' }
       ] },
-    { label: 'IT and access', title: 'What should they be able to get into?',
-      blurb: 'IT provisions these. Add only what they genuinely need.',
+    { label: ‘IT and access’, title: ‘What should they be able to get into?’,
+      blurb: ‘IT provisions these. Add only what they genuinely need.’,
       fields: [
-        { key: 'accounts', label: 'Accounts', help: 'Tap to add or remove.', opts: ['Company email', 'Teams number'], def: ['Company email'], multi: true },
-        { key: 'sharepoint', label: 'SharePoint groups', help: 'Tap the groups they need. Some need an owner to approve them.', opts: [], def: [], multi: true },
-        { key: 'printers', label: 'Printers', help: 'Tap any they should be connected to.', opts: [], def: [], multi: true, hideIfEmpty: true }
+        { key: ‘accounts’, label: ‘Accounts’, help: ‘Tap to add or remove.’, opts: [‘Company email’, ‘Teams number’], def: [‘Company email’], multi: true },
+        { key: ‘sharepoint’, label: ‘SharePoint groups’, help: ‘Tap the groups they need. Some need an owner to approve them.’, opts: [], def: [], multi: true },
+        { key: ‘printers’, label: ‘Printers’, help: ‘Tap any they should be connected to.’, opts: [], def: [], multi: true, hideIfEmpty: true },
+        { key: ‘sage’, label: ‘Sage Intacct access’, help: ‘Priced seat — Accounting approves before access is set up.’, radio: true, opts: [], def: ‘none’, noneLabel: ‘No Sage access needed’, noneSpec: ‘Skip this application’, hideIfEmpty: true },
+        { key: ‘servicetrade’, label: ‘ServiceTrade access’, help: ‘Pick the role they will use. Provisioned by Laura.’, radio: true, opts: [], def: ‘none’, noneLabel: ‘No ServiceTrade access’, noneSpec: ‘Skip this application’, hideIfEmpty: true }
       ] },
-    { label: 'equipment', title: 'What will they need to do the job?',
-      blurb: 'A new computer needs an owner approval. IT confirms before anything is ordered.',
+    { label: ‘equipment’, title: ‘What will they need to do the job?’,
+      blurb: ‘A new computer needs an owner approval. IT confirms before anything is ordered.’,
       fields: [
-        { key: 'computer_type', label: 'Computer', help: 'Pick the closest fit, or none. Price is the company’s cost.', radio: true, opts: [], def: 'none' },
-        { key: 'dock', label: 'Docking station', help: 'A desk dock for their laptop.', toggle: true, toggleLabel: 'Add a docking station', def: false },
-        { key: 'software', label: 'Software', help: 'Tap to add or remove. Some need a licence owner to approve.', opts: [], def: [], multi: true },
-        { key: 'safety_gear', label: 'Safety-issued equipment', help: 'Company phone, iPad, a vehicle transfer, or a fuel card.', opts: ['Company cell phone', 'Company iPad', 'Company vehicle transfer', 'WEX fuel card'], def: [], multi: true }
+        { key: ‘computer_type’, label: ‘New computer’, help: ‘Pick the closest fit, or none. Price is the company\’s cost.’, radio: true, opts: [], def: ‘none’ },
+        { key: ‘existing_computer’, label: ‘Existing computer’, help: ‘If they are taking over a computer already in service instead of getting a new one, enter the computer name or asset tag here. IT will wipe and set it up for them.’, text: true, placeholder: ‘e.g. DESKTOP-1FP042 or serial number’ },
+        { key: ‘dock’, label: ‘Docking station’, help: ‘A desk dock for their laptop.’, toggle: true, toggleLabel: ‘Add a docking station’, def: false },
+        { key: ‘software’, label: ‘Software’, help: ‘Tap to add or remove. Some need a licence owner to approve.’, opts: [], def: [], multi: true },
+        { key: ‘safety_gear’, label: ‘Safety-issued equipment’, help: ‘Company phone, iPad, a vehicle transfer, or a fuel card.’, opts: [‘Company cell phone’, ‘Company iPad’, ‘Company vehicle transfer’, ‘WEX fuel card’], def: [], multi: true }
       ] },
     { label: 'vehicle', title: 'Last part: do they need a company vehicle?',
       blurb: 'A company vehicle fans out to Safety, HR, and Ops (the MVR check, insurance, and the truck itself).',
@@ -205,6 +208,8 @@
     if (cat.printers) setFieldOpts('printers', cat.printers);
     if (cat.computers) eachField('computer_type', function (f) { f.opts = cat.computers.slice(); });
     if (cat.dockPrice != null) { DOCK_PRICE = cat.dockPrice; eachField('dock', function (f) { f.toggleLabel = 'Add a docking station · $' + Number(cat.dockPrice).toLocaleString(); }); }
+    if (cat.sage && cat.sage.length) eachField('sage', function (f) { f.opts = cat.sage.map(function (s) { return { key: s.name, label: s.name, spec: s.spec || '', price: s.price != null ? s.price : null }; }); });
+    if (cat.servicetrade && cat.servicetrade.length) eachField('servicetrade', function (f) { f.opts = cat.servicetrade.map(function (s) { return { key: s.name, label: s.name, spec: s.spec || '' }; }); });
   }
 
   function defaults() {
@@ -218,6 +223,8 @@
   }
 
   var step = 0, vals = defaults();
+  // text fields not declared with def in STEPS need an explicit blank so vals always has the key
+  vals.existing_computer = vals.existing_computer || '';
   var el = function (id) { return document.getElementById(id); };
   var HIRE = null, DOCK_PRICE = 200;
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -354,7 +361,7 @@
         trow.appendChild(tb);
         box.appendChild(trow);
       } else if (f.radio) {
-        var opts = [{ key: 'none', label: 'No computer needed', spec: 'Nothing is ordered' }].concat(f.opts || []);
+        var opts = [{ key: 'none', label: f.noneLabel || 'No computer needed', spec: f.noneSpec || 'Nothing is ordered' }].concat(f.opts || []);
         var rw = document.createElement('div');
         rw.className = 'rcards';
         opts.forEach(function (o) {
@@ -432,9 +439,12 @@
       ['Office', vals.office || 'their office', 'scopes everything downstream'],
       ['Accounts and SharePoint', access.length + ' item' + (access.length === 1 ? '' : 's'), access.join(', ') || 'none selected'],
       ['Software', sw.length + ' app' + (sw.length === 1 ? '' : 's'), sw.join(', ') || 'none selected'],
-      ['Computer', computerLabel(), hasComp ? 'routes to an owner approval' : 'nothing routed']
+      ['New computer', computerLabel(), hasComp ? 'routes to an owner approval' : 'nothing ordered']
     ];
+    if (vals.existing_computer && vals.existing_computer.trim()) rows.push(['Existing computer', vals.existing_computer.trim(), 'IT will wipe and set it up']);
     if (vals.dock) rows.push(['Docking station', 'Yes' + (DOCK_PRICE != null ? ' · $' + Number(DOCK_PRICE).toLocaleString() : ''), 'routes to IT']);
+    if (vals.sage && vals.sage !== 'none') rows.push(['Sage Intacct', vals.sage, 'routed to Accounting for approval']);
+    if (vals.servicetrade && vals.servicetrade !== 'none') rows.push(['ServiceTrade', vals.servicetrade, 'routed to Laura for provisioning']);
     rows.push(['Safety-issued equipment', gear.length + ' item' + (gear.length === 1 ? '' : 's'), gear.join(', ') || 'none']);
     rows.push(['Company vehicle', vals.company_vehicle ? 'Yes' : 'No', vals.company_vehicle ? 'fans out to Safety, HR, and Ops' : 'not needed']);
     var s = el('summary');

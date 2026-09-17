@@ -20,7 +20,7 @@ import { intakeSubmittedHtml } from '../services/onboardingEmail';
 function intakeOptions(): {
   offices: string[];
   positions: string[];
-  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string; price: number }[]; dockPrice: number };
+  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string; price: number }[]; dockPrice: number; sage: { name: string; spec: string | null; price: number | null }[]; servicetrade: { name: string; spec: string | null }[] };
 } {
   const offices = operatingOffices().map((o) => o.label);
   let positions: string[] = [];
@@ -31,9 +31,10 @@ function intakeOptions(): {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    // Computers by purchase tier (with price), matching the asset library's cost model.
     computers: computerTierList(),
     dockPrice: DOCK_PRICE,
+    sage: catalogByKind('sage').map((s) => ({ name: s.name, spec: s.spec, price: s.price })),
+    servicetrade: catalogByKind('servicetrade').map((s) => ({ name: s.name, spec: s.spec })),
   };
   return { offices, positions, catalog };
 }

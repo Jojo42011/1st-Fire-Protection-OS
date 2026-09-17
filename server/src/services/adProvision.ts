@@ -132,19 +132,11 @@ function splitName(full: string): { first: string; last: string } {
   return { first: parts[0], last: parts[parts.length - 1] };
 }
 
-/** A one-time temp password that meets AD default complexity (upper, lower, digit, symbol). */
+/** The standard first-day password: Welcome + current year + !  (e.g. Welcome2026!).
+ *  Meets AD default complexity: uppercase W, lowercase letters, digit(s), symbol.
+ *  The hire is required to change it at first sign-in (ChangePasswordAtLogon $true). */
 function tempPassword(): string {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghijkmnpqrstuvwxyz';
-  const digit = '23456789';
-  const symbol = '!@#$%*?';
-  const all = upper + lower + digit + symbol;
-  const b = randomBytes(16);
-  const pick = (set: string, i: number) => set[b[i] % set.length];
-  // Guarantee one of each class, then fill to 14 chars.
-  const chars = [pick(upper, 0), pick(lower, 1), pick(digit, 2), pick(symbol, 3)];
-  for (let i = 4; i < 14; i++) chars.push(pick(all, i));
-  return chars.join('');
+  return `Welcome${new Date().getFullYear()}!`;
 }
 
 export interface ProvisionScript {

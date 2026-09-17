@@ -188,6 +188,7 @@ function toPayload(vals: any): OnboardingPayload {
     teams_number: accounts.includes('Teams number'),
     computer_type: vals.computer_type && vals.computer_type !== 'none' ? String(vals.computer_type) : 'none',
     dock: !!vals.dock,
+    existing_computer: (vals.existing_computer || '').trim() || undefined,
     software: arr(vals.software),
     sharepoint: arr(vals.sharepoint),
     printers: arr(vals.printers),
@@ -197,6 +198,8 @@ function toPayload(vals: any): OnboardingPayload {
     wex_card: gear.includes('WEX fuel card'),
     company_vehicle: !!vals.company_vehicle,
     vehicle_details: vals.vehicle_details || undefined,
+    sage: (vals.sage || '').trim() !== 'none' ? (vals.sage || '').trim() || undefined : undefined,
+    servicetrade: (vals.servicetrade || '').trim() !== 'none' ? (vals.servicetrade || '').trim() || undefined : undefined,
   };
 }
 

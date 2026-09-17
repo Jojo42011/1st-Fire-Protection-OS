@@ -53,9 +53,10 @@ router.get('/api/onboarding/form-options', (_req, res) => {
     software: catalogByKind('software').map((s) => s.name),
     sharepoint: catalogByKind('sharepoint').map((s) => s.name),
     printers: catalogByKind('printer').map((p) => p.name),
-    // Computers by purchase tier (with price), matching the asset-library cost model and live form.
     computers: computerTierList(),
     dockPrice: DOCK_PRICE,
+    sage: catalogByKind('sage').map((s) => ({ name: s.name, spec: s.spec, price: s.price })),
+    servicetrade: catalogByKind('servicetrade').map((s) => ({ name: s.name, spec: s.spec })),
   };
   res.json({ offices: operatingOffices().map((o) => o.label), positions, catalog });
 });
