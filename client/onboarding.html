@@ -679,8 +679,9 @@ function renderForm(){
         '<div class="fsub2">SharePoint groups</div><div class="fchecks">'+sp+'</div>'+
         (pr?'<div class="fsub2">Printers</div><div class="fchecks">'+pr+'</div>':''))+
       formSection('Equipment and software','A new computer routes to an owner approval; software installs route to IT or its licence owner',
-        '<div class="fsub2">Computer</div><div class="fradios">'+radios+'</div>'+
+        '<div class="fsub2">New computer</div><div class="fradios">'+radios+'</div>'+
         '<div class="fchecks" style="margin-top:9px">'+fchk('dock','',dockLabel)+'</div>'+
+        '<div class="ffield" style="margin-top:12px"><label>Existing computer (if transferring instead of buying new)</label><input name="existing_computer" placeholder="e.g. DESKTOP-1FP042 or serial number"></div>'+
         '<div class="fsub2">Software</div><div class="fchecks">'+sw+'</div>'+
         '<div class="fsub2">Safety-issued equipment</div><div class="fchecks">'+
           fchk('company_cell','','Company cell phone')+fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
@@ -723,7 +724,8 @@ function submitForm(e){
     dock:checked('dock'),
     software:multi('sw'), sharepoint:multi('sp'), printers:multi('pr'),
     sage:(f.querySelector('input[name="sage"]:checked')||{}).value||'',
-    servicetrade:(f.querySelector('input[name="servicetrade"]:checked')||{}).value||''
+    servicetrade:(f.querySelector('input[name="servicetrade"]:checked')||{}).value||'',
+    existing_computer:(f.existing_computer||{value:''}).value.trim()
   };
   if(!payload.name){ f.name.focus(); return; }
   btn.disabled=true; btn.textContent='Routing…';
