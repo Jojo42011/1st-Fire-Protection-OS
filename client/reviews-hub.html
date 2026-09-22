@@ -98,6 +98,14 @@ function renderGconn(){
     dot='var(--good, #1f9d55)';
     title='Google Business Profile connected';
     sub='Signed in as <b>'+esc(g.email||'the owner')+'</b>'+(g.account?' · '+esc(g.account):'')+'. New reviews sync automatically: <b>4-5 stars auto-reply and post</b>, 3-and-under are held below for your approval.';
+    var ls=g.last_sync;
+    if(ls&&ls.at){
+      var bad=ls.status==='error';
+      if(bad) dot='var(--bad, #c0392b)';
+      sub+='<div style="margin-top:6px;'+(bad?'color:var(--bad, #c0392b)':'')+'"><b>Last sync</b> '+esc(OS.ago(String(ls.at).replace(' ','T')+'Z'))+': '+esc(ls.detail||ls.status)+'</div>';
+    } else {
+      sub+='<div style="margin-top:6px">Not synced yet. Click <b>Sync now</b> to pull reviews and see any error from Google.</div>';
+    }
     acts='<button class="os-btn primary" style="padding:6px 12px;font-size:12px" id="gb-sync">Sync now</button>'+
          '<button class="os-btn" style="padding:6px 12px;font-size:12px" id="gb-disc">Disconnect</button>';
   } else if(configured){
@@ -120,8 +128,8 @@ document.getElementById('gconn').addEventListener('click',function(e){
   var sync=e.target.closest('#gb-sync');
   if(sync){ sync.disabled=true; sync.textContent='Syncing…';
     fetch('/api/google/sync',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-      if(d&&d.ok){ OS.toast('Synced '+d.pulled+' new review(s): '+d.autoReplied+' auto-replied, '+d.held+' held.'); }
-      else{ OS.toast((d&&d.error)||'Could not sync Google reviews.','bad'); }
+      if(d&&d.ok){ OS.toast('Synced '+d.pulled+' new review(s) across '+d.locations+' location(s): '+d.autoReplied+' auto-replied, '+d.held+' held.'+(d.error?' '+d.error:''), d.error?{tone:'bad',ms:12000}:undefined); }
+      else{ OS.toast((d&&d.error)||'Could not sync Google reviews.',{tone:'bad',ms:12000}); }
       load();
     }).catch(function(){ sync.disabled=false; sync.textContent='Sync now'; OS.toast('Could not reach Google.','bad'); });
     return;

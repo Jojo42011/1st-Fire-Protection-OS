@@ -19,6 +19,7 @@ import {
   syncReviews,
   publishReply,
   accessToken,
+  explainGoogleError,
 } from './googleBusiness';
 
 initDb();
@@ -77,4 +78,11 @@ test('keyless-safe: nothing is configured, so every entry point degrades gracefu
   // publishReply on a non-existent row is a graceful failure, not a crash.
   const pub = await publishReply(999999, 'hello');
   assert.equal(pub.ok, false);
+});
+
+test('explainGoogleError points at the fix for the common v4 reviews failures', () => {
+  assert.match(explainGoogleError('reviews 403: {"status":"PERMISSION_DENIED","reason":"SERVICE_DISABLED"}'), /mybusiness\.googleapis\.com/);
+  assert.match(explainGoogleError('reviews 429: RESOURCE_EXHAUSTED'), /quota/i);
+  assert.match(explainGoogleError('reviews 403: PERMISSION_DENIED'), /owner\/manager/);
+  assert.equal(explainGoogleError('locations 500: boom'), 'locations 500: boom');
 });

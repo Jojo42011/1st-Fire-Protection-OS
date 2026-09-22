@@ -177,27 +177,49 @@ function hashCode(s: string): number { let h = 0; for (let i = 0; i < s.length; 
 
 const idFromPath = (path: string) => (path || '').split('/').pop() || '';
 
-export async function syncReviews(): Promise<{ ok: boolean; error?: string; locations: number; pulled: number; autoReplied: number; held: number }> {
-  if (!googleConfigured()) return { ok: false, error: 'Google is not configured', locations: 0, pulled: 0, autoReplied: 0, held: 0 };
-  if (!googleConnected()) return { ok: false, error: 'Google Business Profile is not connected', locations: 0, pulled: 0, autoReplied: 0, held: 0 };
+/** Turn a raw Google API failure into something an operator can act on. */
+export function explainGoogleError(err: string): string {
+  const e = err || '';
+  if (/^reviews (403|404)/.test(e) && /SERVICE_DISABLED|has not been used|is disabled|not been enabled/i.test(e)) {
+    return `${e} | Fix: enable the legacy "Google My Business API" (mybusiness.googleapis.com) in the same Google Cloud project.`;
+  }
+  if (/^reviews 429/.test(e) || /quota/i.test(e)) {
+    return `${e} | Fix: the Google My Business API (v4) quota for this project is 0 or exhausted. Request quota for it in Google Cloud (Quotas page).`;
+  }
+  if (/^reviews 403/.test(e)) {
+    return `${e} | Fix: the connected Google account may not be an owner/manager of this location, or the v4 reviews API is not approved for this project.`;
+  }
+  return e;
+}
+
+export interface SyncResult { ok: boolean; error?: string; locations: number; pulled: number; autoReplied: number; held: number; failedLocations: number; locationTitles: string[] }
+
+export async function syncReviews(): Promise<SyncResult> {
+  const empty = { locations: 0, pulled: 0, autoReplied: 0, held: 0, failedLocations: 0, locationTitles: [] as string[] };
+  if (!googleConfigured()) return { ok: false, error: 'Google is not configured', ...empty };
+  if (!googleConnected()) return { ok: false, error: 'Google Business Profile is not connected', ...empty };
   const token = await accessToken();
-  if (!token) return { ok: false, error: 'could not refresh the Google access token', locations: 0, pulled: 0, autoReplied: 0, held: 0 };
+  if (!token) return { ok: false, error: 'could not refresh the Google access token', ...empty };
   const accts = await listAccounts(token);
-  if (!accts.ok) return { ok: false, error: accts.error, locations: 0, pulled: 0, autoReplied: 0, held: 0 };
+  if (!accts.ok) return { ok: false, error: explainGoogleError(accts.error || ''), ...empty };
+  if (!accts.accounts.length) return { ok: false, error: 'The connected Google account has no Business Profile accounts. Connect with the Google login that owns or manages the office listings.', ...empty };
   const db = getDb();
   const findExisting = db.prepare(`SELECT id, reply_status FROM reviews WHERE ext_id = ?`);
   const insert = db.prepare(`INSERT INTO reviews (source, author, stars, text, received_at, reply_draft, reply_status, ext_id, location, auto_replied, reply_published_at) VALUES ('google', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  let locations = 0, pulled = 0, autoReplied = 0, held = 0;
+  let locations = 0, pulled = 0, autoReplied = 0, held = 0, failedLocations = 0;
+  let firstError: string | null = null;
+  const locationTitles: string[] = [];
 
   for (const acct of accts.accounts) {
     const accountId = idFromPath(acct.name);
     const locs = await listLocations(token, acct.name);
-    if (!locs.ok) continue;
+    if (!locs.ok) { firstError = firstError || locs.error || 'could not list locations'; continue; }
     for (const loc of locs.locations) {
       locations++;
+      locationTitles.push(loc.title);
       const locationId = idFromPath(loc.name);
       const revs = await listReviews(token, accountId, locationId);
-      if (!revs.ok) continue;
+      if (!revs.ok) { failedLocations++; firstError = firstError || revs.error || 'could not fetch reviews'; continue; }
       for (const r of revs.reviews) {
         if (findExisting.get(r.reviewId)) continue; // already have it
         pulled++;
@@ -215,7 +237,17 @@ export async function syncReviews(): Promise<{ ok: boolean; error?: string; loca
       }
     }
   }
-  return { ok: true, locations, pulled, autoReplied, held };
+  const base = { locations, pulled, autoReplied, held, failedLocations, locationTitles };
+  if (!locations) {
+    return { ok: false, error: firstError ? explainGoogleError(firstError) : 'No locations found under the connected Google account.', ...base };
+  }
+  if (failedLocations === locations) {
+    return { ok: false, error: `Reviews could not be read for any of ${locations} location(s): ${explainGoogleError(firstError || '')}`, ...base };
+  }
+  if (failedLocations) {
+    return { ok: true, error: `${failedLocations} of ${locations} location(s) failed: ${explainGoogleError(firstError || '')}`, ...base };
+  }
+  return { ok: true, ...base };
 }
 
 /** Post a specific stored review's reply to Google (used when a human approves a held reply). */

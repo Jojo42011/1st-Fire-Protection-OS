@@ -99,8 +99,9 @@ export const SYNC_DEFS: SyncDef[] = [
     run: async () => {
       if (!googleConnected()) return 'not connected';
       const r = await syncReviews();
-      if (!r.ok) return `error: ${r.error}`;
-      return `${r.pulled} new across ${r.locations} location(s): ${r.autoReplied} auto-replied, ${r.held} held`;
+      if (!r.ok) throw new Error(r.error || 'Google review sync failed');
+      const summary = `${r.pulled} new across ${r.locations} location(s): ${r.autoReplied} auto-replied, ${r.held} held`;
+      return r.error ? `${summary}. ${r.error}` : summary;
     },
   },
 ];
@@ -165,7 +166,7 @@ export function setSchedule(key: string, patch: { interval_minutes?: number; ena
   return rowFor(def);
 }
 
-function recordRun(key: string, status: 'ok' | 'error', detail: string): void {
+export function recordRun(key: string, status: 'ok' | 'error', detail: string): void {
   getDb()
     .prepare(
       `INSERT INTO sync_schedules (integration_key, interval_minutes, enabled, last_run_at, last_status, last_detail, updated_at)

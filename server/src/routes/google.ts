@@ -16,6 +16,7 @@ import {
   disconnect,
   syncReviews,
 } from '../services/googleBusiness';
+import { listSchedules, recordRun } from '../services/syncScheduler';
 
 const router = Router();
 
@@ -53,7 +54,12 @@ const actor = (req: any): string => (req.user?.email as string) || 'operator';
 
 /** Connection status for the Integrations + Reviews screens. */
 router.get('/api/google/status', (_req, res) => {
-  res.json({ ok: true, ...connectionInfo() });
+  const last = listSchedules().find((s) => s.integration_key === 'google_business');
+  res.json({
+    ok: true,
+    ...connectionInfo(),
+    last_sync: last ? { at: last.last_run_at, status: last.last_status, detail: last.last_detail } : null,
+  });
 });
 
 /** Start the consent flow: redirect the owner to Google. */
@@ -82,6 +88,8 @@ router.post('/api/google/disconnect', (_req, res) => {
 /** Pull reviews now: auto-reply + publish positives, hold the rest as drafts. */
 router.post('/api/google/sync', async (_req, res) => {
   const out = await syncReviews();
+  const summary = `${out.pulled} new across ${out.locations} location(s): ${out.autoReplied} auto-replied, ${out.held} held`;
+  recordRun('google_business', out.ok ? 'ok' : 'error', out.ok ? (out.error ? `${summary}. ${out.error}` : summary) : (out.error || 'Google review sync failed'));
   res.status(out.ok ? 200 : 400).json(out);
 });
 
