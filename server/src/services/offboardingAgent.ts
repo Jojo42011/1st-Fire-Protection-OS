@@ -24,7 +24,8 @@ const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', ac
 /* Shared mailboxes some tasks notify, and the address offboarding mail is sent from. */
 const SAFETY_MBX = 'safety@1stfpservices.com';
 const ACCT_MBX = 'accounting@1stfpservices.com';
-const IT_MBX = 'it@1stfpservices.com';
+const IT_MBX = 'laura.shannon@1stfpservices.com';
+const LAURA_MBX = IT_MBX;
 /** The mailbox offboarding email is sent from. Configurable via OFFBOARDING_FROM so it can point at a
  *  mailbox already allowed by a tenant Application Access Policy without a code change. */
 export function offboardingFrom(): string {
@@ -149,7 +150,7 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_badge_collect', label: 'Collect the company ID badge', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: `Emails ${SAFETY_MBX}. Pull the departing employee from the fire-marshal license and insurance filings.`, due_at: base, email_to: SAFETY_MBX },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', detail: `Emails ${ACCT_MBX} to remove the Sage Intacct user.`, due_at: base, email_to: ACCT_MBX },
-    { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: 'Handled by IT.', due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: `Emails ${LAURA_MBX}.`, due_at: base, email_to: LAURA_MBX },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
 
