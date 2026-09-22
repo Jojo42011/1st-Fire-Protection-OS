@@ -9,6 +9,7 @@ import {
 } from '../services/reviewRequests';
 import { pullCompletedJobs } from '../services/servicetradeSync';
 import { reviewImpactReport } from '../services/reviewImpact';
+import { coverageReport, coverageCsv } from '../services/reviewCoverage';
 
 const router = Router();
 
@@ -29,6 +30,31 @@ router.get('/r/:token', (req, res) => {
   res.set('X-Robots-Tag', 'noindex');
   if (!out.url) { res.status(404).type('text/plain').send('This review link is no longer active.'); return; }
   res.redirect(302, out.url);
+});
+
+/** Did each completed job get a review request, and if not, why. Plus phone and one-time-customer counts. */
+router.get('/api/reviews/coverage', (_req, res) => {
+  res.json({ ...coverageReport(), historyPull });
+});
+
+router.get('/api/reviews/coverage.csv', (_req, res) => {
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="review-coverage-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.set('Cache-Control', 'no-store');
+  res.send(coverageCsv());
+});
+
+/* Pull older completed jobs for sizing a campaign. Runs in the background (years of jobs take a few
+   minutes) and never triggers requests: the sweep ignores anything older than SWEEP_MAX_AGE_DAYS. */
+let historyPull: { state: 'idle' | 'running' | 'done' | 'error'; days?: number; pulled?: number; error?: string; at?: string } = { state: 'idle' };
+router.post('/api/reviews/history', (req, res) => {
+  const days = Math.min(1095, Math.max(30, Math.round(Number(req.body?.days) || 730)));
+  if (historyPull.state === 'running') { res.status(409).json({ ok: false, error: 'A history pull is already running.', historyPull }); return; }
+  historyPull = { state: 'running', days, at: new Date().toISOString() };
+  pullCompletedJobs(undefined, days)
+    .then((r) => { historyPull = { state: 'done', days, pulled: r.pulled, at: new Date().toISOString() }; })
+    .catch((e) => { historyPull = { state: 'error', days, error: (e as Error).message, at: new Date().toISOString() }; });
+  res.json({ ok: true, historyPull });
 });
 
 router.get('/api/reviews/targets', (_req, res) => {

@@ -225,23 +225,23 @@ export async function pullJobs(since?: number): Promise<{ pulled: number; pages:
  * so we filter to completed and use longForm=true to get assignedOffice + primaryContact. On
  * first run it backfills the last ~90 days; after that it is incremental on updatedAfter.
  */
-export async function pullCompletedJobs(since?: number): Promise<{ pulled: number; pages: number }> {
+export async function pullCompletedJobs(since?: number, days = 180): Promise<{ pulled: number; pages: number }> {
   const db = getDb();
   const startedAt = Math.floor(Date.now() / 1000);
   const acctBy = db.prepare(`SELECT id FROM accounts WHERE st_id = ?`);
   const siteBy = db.prepare(`SELECT id FROM sites WHERE st_id = ?`);
   const upsert = db.prepare(
     `INSERT INTO crm_jobs (st_id, account_id, site_id, number, kind, status, scheduled_at, completed_at, st_updated_at, source,
-       office_id, office_name, office_phone, contact_name, contact_email, contact_phone)
+       office_id, office_name, office_phone, contact_name, contact_email, contact_phone, contact_mobile)
      VALUES (@st_id, @account_id, @site_id, @number, @kind, @status, @sched, @completed, @updated, 'servicetrade',
-       @office_id, @office_name, @office_phone, @contact_name, @contact_email, @contact_phone)
+       @office_id, @office_name, @office_phone, @contact_name, @contact_email, @contact_phone, @contact_mobile)
      ON CONFLICT(st_id) DO UPDATE SET account_id=excluded.account_id, site_id=excluded.site_id, number=excluded.number,
        kind=excluded.kind, status=excluded.status, scheduled_at=excluded.scheduled_at, completed_at=excluded.completed_at,
        st_updated_at=excluded.st_updated_at, source='servicetrade',
        office_id=excluded.office_id, office_name=excluded.office_name, office_phone=excluded.office_phone, contact_name=excluded.contact_name,
-       contact_email=excluded.contact_email, contact_phone=excluded.contact_phone`
+       contact_email=excluded.contact_email, contact_phone=excluded.contact_phone, contact_mobile=excluded.contact_mobile`
   );
-  const windowStart = since ? '' : `&completedOnBegin=${startedAt - 180 * 86400}`;
+  const windowStart = since ? '' : `&completedOnBegin=${startedAt - Math.max(1, days) * 86400}`;
   const sinceQ = since ? `&updatedAfter=${since}` : '';
   let page = 1, totalPages = 1, pulled = 0;
   do {
@@ -257,10 +257,17 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
         const pc = j.primaryContact || null;
         const lc = j.location?.primaryContact || null;
         const fullName = (c: any) => (c ? [c.firstName, c.lastName].filter(Boolean).join(' ') || null : null);
-        let cEmail: string | null = null, cName: string | null = null, cPhone: string | null = null;
-        if (pc?.email) { cEmail = pc.email; cName = fullName(pc); cPhone = pc.mobile || pc.phone || null; }
-        else if (lc?.email) { cEmail = lc.email; cName = fullName(lc); cPhone = lc.mobile || lc.phone || null; }
-        else if (j.location?.email) { cEmail = j.location.email; cName = fullName(pc) || fullName(lc); cPhone = pc?.mobile || pc?.phone || null; }
+        let cEmail: string | null = null, cName: string | null = null, cPhone: string | null = null, cMobile: string | null = null;
+        if (pc?.email) { cEmail = pc.email; cName = fullName(pc); cPhone = pc.mobile || pc.phone || null; cMobile = pc.mobile || null; }
+        else if (lc?.email) { cEmail = lc.email; cName = fullName(lc); cPhone = lc.mobile || lc.phone || null; cMobile = lc.mobile || null; }
+        else {
+          // No contact email: keep the best phone anyway, so text-only customers are counted and reachable.
+          const c = (pc && (pc.mobile || pc.phone)) ? pc : lc;
+          if (j.location?.email) cEmail = j.location.email;
+          cName = fullName(pc) || fullName(lc);
+          cPhone = c ? c.mobile || c.phone || null : null;
+          cMobile = c ? c.mobile || null : null;
+        }
         upsert.run({
           st_id: String(j.id), account_id: a ? a.id : null, site_id: s ? s.id : null,
           number: j.number != null ? String(j.number) : j.name || null,
@@ -272,6 +279,7 @@ export async function pullCompletedJobs(since?: number): Promise<{ pulled: numbe
           contact_name: cName,
           contact_email: cEmail ? String(cEmail).toLowerCase() : null,
           contact_phone: cPhone,
+          contact_mobile: cMobile,
         });
         pulled++;
       }

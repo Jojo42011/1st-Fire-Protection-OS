@@ -18,6 +18,9 @@ import { renderEmail, p, em, escapeHtml } from './emailShell';
  */
 
 const DEDUPE_DAYS = 90;
+// Automatic requests only cover recent work. Older history (pulled for campaign sizing, or an old
+// job ServiceTrade happens to touch) must never trigger a review request on its own.
+export const SWEEP_MAX_AGE_DAYS = 180;
 
 export interface ReviewTarget {
   office_id: string;
@@ -249,10 +252,11 @@ export function pendingReviewJobs(limit = 200): JobForReview[] {
         WHERE j.source = 'servicetrade' AND COALESCE(j.review_requested, 0) = 0
           AND lower(j.status) LIKE '%complete%'
           AND j.contact_email IS NOT NULL
+          AND j.completed_at >= ?
         ORDER BY j.completed_at DESC
         LIMIT ?`
     )
-    .all(limit) as JobForReview[];
+    .all(new Date(Date.now() - SWEEP_MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString(), limit) as JobForReview[];
 }
 
 function recentlyAsked(email: string): boolean {

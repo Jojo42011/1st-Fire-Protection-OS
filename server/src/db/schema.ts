@@ -914,6 +914,7 @@ export function initDb(): void {
   addColumn('crm_jobs', 'contact_email', 'TEXT');
   addColumn('crm_jobs', 'contact_phone', 'TEXT');
   addColumn('crm_jobs', 'review_requested', 'INTEGER DEFAULT 0'); // 1 once a request has been queued/sent
+  addColumn('crm_jobs', 'contact_mobile', 'TEXT'); // set only when ServiceTrade lists the number as a mobile
   addColumn('quotes', 'office', 'TEXT'); // the ServiceTrade "Quote Office" (e.g. "Northstar Austin LLC"), for per-location scoping
   db.exec(`
     /* ---------- service-plan mirror: ServiceTrade recurring services (the real agreement book) ----

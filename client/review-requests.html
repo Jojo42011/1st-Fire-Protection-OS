@@ -10,6 +10,22 @@
 <style>
   .screen{max-width:none}
   #kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+  .cv-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:0}
+  @media(max-width:900px){.cv-grid{grid-template-columns:1fr}}
+  .cv-col{padding:14px 18px;min-width:0}
+  .cv-col+.cv-col{border-left:1px solid var(--divider)}
+  @media(max-width:900px){.cv-col+.cv-col{border-left:none;border-top:1px solid var(--divider)}}
+  .cv-h{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+  .cv-row{display:grid;grid-template-columns:minmax(0,1fr) 64px 110px;gap:10px;align-items:center;padding:5px 0;font-size:12.5px;color:var(--ink-2)}
+  .cv-row .n{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink)}
+  .cv-bar{height:6px;border-radius:3px;background:var(--divider);overflow:hidden}
+  .cv-bar i{display:block;height:100%;background:var(--ink-3)}
+  .cv-bar i.good{background:var(--green)}
+  .cv-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin-bottom:16px}
+  .cv-stat .v{font-weight:800;font-size:18px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .cv-stat .l{font-size:11.5px;color:var(--muted);line-height:1.35}
+  .cv-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .cv-tools select{font-size:12px;padding:6px 8px;border:1px solid var(--divider);border-radius:8px;background:var(--bg);color:var(--ink)}
   .rr-note{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;
     padding:10px 14px;margin-bottom:12px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
   .rr-note svg{width:15px;height:15px;flex:none;margin-top:1px}
@@ -41,8 +57,30 @@
 
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
 
+  <!-- coverage: did every completed job get a request -->
+  <div class="card card-clip" style="margin-top:6px" id="coverage-card">
+    <div class="card-head" style="flex-wrap:wrap">
+      <h2>Coverage</h2>
+      <span id="cv-range" style="font-weight:500;font-size:12px;color:var(--muted)">Loading…</span>
+      <span style="flex:1"></span>
+      <div class="cv-tools">
+        <a class="btn btn-sm" href="/api/reviews/coverage.csv" style="text-decoration:none">Download job list (CSV)</a>
+        <select id="cv-days" aria-label="How much history to pull"><option value="365">1 year</option><option value="730" selected>2 years</option><option value="1095">3 years</option></select>
+        <button class="btn btn-sm" id="cv-pull" onclick="pullHistory(this)">Pull older jobs</button>
+      </div>
+    </div>
+    <div class="cv-grid">
+      <div class="cv-col"><div class="cv-h">Completed jobs, by request status</div><div id="cv-reasons"></div></div>
+      <div class="cv-col">
+        <div class="cv-h">Phone numbers (for text messages)</div><div class="cv-stats" id="cv-phones"></div>
+        <div class="cv-h">One-time customers (one completed job on file)</div><div class="cv-stats" id="cv-oneoff"></div>
+      </div>
+    </div>
+    <div class="card-foot" id="cv-foot">Older jobs are pulled only to size campaigns. They never trigger a review request: automatic requests only cover jobs completed in the last 180 days.</div>
+  </div>
+
   <!-- office → Google link mapping -->
-  <div class="card card-clip" style="margin-top:6px">
+  <div class="card card-clip" style="margin-top:14px">
     <div class="card-head"><h2>Offices → Google review link</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">each ServiceTrade office routes to its own profile</span></div>
     <table>
       <thead><tr><th>Office</th><th class="right">Completed</th><th class="right">Emails</th><th class="right">Clicked</th><th>Google review link</th><th>Phone</th><th></th><th></th></tr></thead>
@@ -172,7 +210,47 @@ function sendAll(btn){
     load();
   });
 }
+function fmtN(n){return Number(n||0).toLocaleString();}
+function fmtDate(iso){if(!iso)return '';var d=new Date(iso);return isNaN(d)?'':d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}
+function stat(v,l){return '<div class="cv-stat"><div class="v">'+v+'</div><div class="l">'+esc(l)+'</div></div>';}
+var HIST_TIMER=null;
+function loadCoverage(){
+  fetch('/api/reviews/coverage').then(function(r){return r.json();}).then(function(c){
+    if(!c||!c.ok)return;
+    var h=c.history||{};
+    document.getElementById('cv-range').textContent=c.completed?(fmtN(c.completed)+' completed jobs on file, '+fmtDate(h.first)+' to '+fmtDate(h.last)+' ('+fmtN(c.customers)+' customers)'):'No completed jobs on file yet';
+    var order=['sent','queued','repeat_customer','no_email_has_phone','no_contact','office_off','too_old','waiting'];
+    var tot=c.completed||1;
+    document.getElementById('cv-reasons').innerHTML=order.filter(function(k){return c.byReason[k];}).map(function(k){
+      var n=c.byReason[k], pct=Math.round(100*n/tot);
+      return '<div class="cv-row"><span>'+esc(c.reasonLabels[k])+'</span><span class="n">'+fmtN(n)+'</span><span class="cv-bar" title="'+pct+'%"><i class="'+(k==='sent'?'good':'')+'" style="width:'+Math.max(pct,n?1:0)+'%"></i></span></div>';
+    }).join('')||'<div class="cv-row"><span>Nothing yet</span></div>';
+    var p=c.phones||{};
+    document.getElementById('cv-phones').innerHTML=
+      stat(fmtN(p.uniqueNumbers),'unique phone numbers ('+fmtN(p.jobsWithPhone)+' jobs)')+
+      stat(fmtN(p.uniqueMobiles),'known mobile numbers (fills in as jobs re-sync)')+
+      stat(fmtN(p.textOnlyNumbers),'numbers with no email: reachable only by text')+
+      stat(fmtN(c.byReason.no_email_has_phone),'completed jobs we could only reach by text');
+    var o=c.oneOff||{};
+    document.getElementById('cv-oneoff').innerHTML=
+      stat(fmtN(o.customers),'one-time customers')+
+      stat(fmtN(o.neverAsked),'never sent a review request')+
+      stat(fmtN(o.withEmail)+' / '+fmtN(o.phoneOnly),'have an email / phone only')+
+      stat(fmtN(o.annualDue),'completed 10 to 15 months ago: annual inspection due');
+    var hp=c.historyPull||{}, btn=document.getElementById('cv-pull'), foot=document.getElementById('cv-foot');
+    var base='Older jobs are pulled only to size campaigns. They never trigger a review request: automatic requests only cover jobs completed in the last 180 days.';
+    if(hp.state==='running'){btn.disabled=true;btn.textContent='Pulling…';foot.textContent='Pulling '+Math.round((hp.days||0)/365)+' year(s) of completed jobs from ServiceTrade. This can take a few minutes; the numbers above update when it finishes. '+base;clearTimeout(HIST_TIMER);HIST_TIMER=setTimeout(loadCoverage,10000);}
+    else{btn.disabled=false;btn.textContent='Pull older jobs';foot.textContent=(hp.state==='done'?'Pulled '+fmtN(hp.pulled)+' completed jobs. ':hp.state==='error'?'History pull failed: '+hp.error+'. ':'')+base;}
+  });
+}
+function pullHistory(btn){
+  var days=document.getElementById('cv-days').value;
+  btn.disabled=true;btn.textContent='Starting…';
+  fetch('/api/reviews/history',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({days:Number(days)})})
+    .then(function(r){return r.json();}).then(function(){loadCoverage();}).catch(function(){btn.disabled=false;btn.textContent='Pull older jobs';});
+}
 load();
+loadCoverage();
 </script>
 </body>
 </html>
