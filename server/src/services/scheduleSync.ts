@@ -78,6 +78,21 @@ export async function syncSchedule(daysBack = 7, daysAhead = 21): Promise<{ appo
         techLinks++;
       }
     }
+    // Remember each job's crew from its latest visit, for the review-request email.
+    const latest = new Map<string, { at: number; names: string[] }>();
+    for (const a of appts) {
+      const jobId = a.job?.id != null ? String(a.job.id) : null;
+      const names = (a.techs || []).map((t) => (t.name || t.firstName || '').trim()).filter(Boolean);
+      if (!jobId || !names.length) continue;
+      const at = a.windowStart || 0;
+      const cur = latest.get(jobId);
+      if (!cur || at >= cur.at) latest.set(jobId, { at, names });
+    }
+    const upJT = db.prepare(
+      `INSERT INTO job_techs (job_st_id, tech_names, updated_at) VALUES (?, ?, datetime('now'))
+       ON CONFLICT(job_st_id) DO UPDATE SET tech_names = excluded.tech_names, updated_at = datetime('now')`
+    );
+    for (const [jobId, v] of latest) upJT.run(jobId, JSON.stringify(v.names));
     return techLinks;
   });
 

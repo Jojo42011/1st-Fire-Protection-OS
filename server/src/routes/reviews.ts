@@ -5,7 +5,7 @@ import { integrationConnected } from '../config/integrations';
 import { createApproval } from './approvals';
 import {
   discoverOffices, getTargets, setTarget, setTargetActive, getMode, setMode,
-  runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest, sendPending,
+  runReviewSweep, reviewRequestQueue, reviewRequestSummary, sendReviewRequest, sendPending, recordClick,
 } from '../services/reviewRequests';
 import { pullCompletedJobs } from '../services/servicetradeSync';
 import { reviewImpactReport } from '../services/reviewImpact';
@@ -21,6 +21,16 @@ router.get('/api/reviews/impact', (req, res) => {
 /* ---------- Google review requests, routed per office (live ServiceTrade) ---------- */
 
 // Offices discovered from real jobs + their Google-link mapping state + queue summary.
+/** Public: a customer's click on a review-request link. Count it, then send them to Google. */
+router.get('/r/:token', (req, res) => {
+  const out = recordClick(String(req.params.token || ''), { method: req.method, userAgent: req.get('user-agent') || '' });
+  res.set('Cache-Control', 'no-store');
+  res.set('Referrer-Policy', 'no-referrer');
+  res.set('X-Robots-Tag', 'noindex');
+  if (!out.url) { res.status(404).type('text/plain').send('This review link is no longer active.'); return; }
+  res.redirect(302, out.url);
+});
+
 router.get('/api/reviews/targets', (_req, res) => {
   res.json({ offices: discoverOffices(), targets: getTargets(), summary: reviewRequestSummary() });
 });

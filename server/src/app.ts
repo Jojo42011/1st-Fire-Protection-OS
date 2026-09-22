@@ -148,6 +148,7 @@ app.use((req, res, next) => {
 app.use('/api/webhooks', rateLimit({ windowMs: 60_000, max: 240 }));
 app.use('/api/servicetrade/webhook', rateLimit({ windowMs: 60_000, max: 240 }));
 app.use('/api/intake', rateLimit({ windowMs: 60_000, max: 60 }));
+app.use('/r', rateLimit({ windowMs: 60_000, max: 120 }));
 
 // ---- password gate (enforced only when APP_PASSWORD is set) ----
 app.use(gate);

@@ -956,6 +956,21 @@ export function initDb(): void {
   addColumn('review_requests', 'sent_at', 'TEXT');
   addColumn('review_requests', 'error', 'TEXT');
   addColumn('review_requests', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
+  addColumn('review_requests', 'token', 'TEXT'); // click-tracking token behind /r/:token
+  addColumn('review_requests', 'clicked_at', 'TEXT');
+  addColumn('review_requests', 'click_count', 'INTEGER DEFAULT 0');
+  addColumn('review_requests', 'reminder_sent_at', 'TEXT');
+  addColumn('review_requests', 'tech_names', 'TEXT');
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_review_requests_token ON review_requests(token) WHERE token IS NOT NULL;`);
+  // Techs per ServiceTrade job, kept permanently (the schedule mirror is rebuilt each sync, so a
+  // job's appointment drops out once it completes).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS job_techs (
+      job_st_id  TEXT PRIMARY KEY,
+      tech_names TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_jobs_office ON crm_jobs(office_id);`);
 
   // Indexes for the v2 server-side list query (search / filter / sort / paginate at scale).

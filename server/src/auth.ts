@@ -192,6 +192,11 @@ function isAsset(p: string): boolean {
 function isPublicIntake(p: string): boolean {
   return p.startsWith('/intake/') || p.startsWith('/api/intake/');
 }
+// Review-request links: a customer clicks them from email. The random token only resolves to that
+// office's public Google review page, so nothing private is exposed.
+function isReviewLink(p: string): boolean {
+  return p.startsWith('/r/');
+}
 // The on-prem AD agent authenticates with its own bearer token (checked in routes/agent.ts), not an
 // app session: the domain controller has no OS login. Let its endpoints past the session gate so the
 // token check can run.
@@ -203,7 +208,7 @@ function isAgentApi(p: string): boolean {
 export function gate(req: express.Request, res: express.Response, next: express.NextFunction): void {
   if (!authRequired()) return next();
   const p = req.path;
-  if (OPEN.has(p) || isAsset(p) || isPublicIntake(p) || isAgentApi(p) || isAuthed(req)) return next();
+  if (OPEN.has(p) || isAsset(p) || isPublicIntake(p) || isReviewLink(p) || isAgentApi(p) || isAuthed(req)) return next();
   if (p.startsWith('/api/')) {
     res.status(401).json({ ok: false, error: 'auth required' });
     return;

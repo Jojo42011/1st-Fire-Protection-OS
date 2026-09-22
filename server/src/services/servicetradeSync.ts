@@ -1,7 +1,7 @@
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { stGet, stConfigured } from './servicetrade';
-import { runReviewSweep, sendPending, getMode } from './reviewRequests';
+import { runReviewSweep, sendPending, sendReminders, getMode } from './reviewRequests';
 
 /**
  * The pull path — reads real records FROM ServiceTrade into our local mirror tables. Every call
@@ -393,7 +393,10 @@ export async function runScheduledSync(): Promise<{ accounts?: any; sites?: any;
     try {
       (out as any).reviews = await runReviewSweep();
       // In auto mode, drain approved requests up to the daily cap (protects deliverability).
-      if (getMode() === 'auto') (out as any).reviewsSent = await sendPending(true);
+      if (getMode() === 'auto') {
+        (out as any).reviewsSent = await sendPending(true);
+        (out as any).reviewReminders = await sendReminders();
+      }
     } catch { /* review sweep is best-effort */ }
     lastStatus = { entity: 'invoices', state: 'done', counts: out, at: new Date().toISOString() };
     return out;
