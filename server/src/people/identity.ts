@@ -117,8 +117,29 @@ export function beginLogin(req: express.Request, res: express.Response): void {
   res.redirect(`https://login.microsoftonline.com/${process.env.ENTRA_TENANT_ID}/oauth2/v2.0/authorize?${params}`);
 }
 
-/** GET /api/people/auth/callback — exchange the code, validate id_token, set the session. */
-export async function handleCallback(req: express.Request, res: express.Response): Promise<void> {
+export interface CallbackPolicy {
+  /** True only for someone allowed into the OS (an active Access & roles user). */
+  authorize: (email: string) => boolean;
+  /** Called when Microsoft vouched for the person but they are not allowed in. */
+  onDenied?: (email: string, name: string | null) => void;
+}
+
+const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function deniedPage(email: string): string {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No access</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f7f9;color:#14213a}
+main{max-width:440px;margin:24px;padding:32px;background:#fff;border:1px solid #e5e8ed;border-radius:16px;box-shadow:0 8px 24px rgba(20,33,58,.06)}
+h1{font-size:22px;margin:0 0 10px;letter-spacing:-.02em}p{color:#5a6577;line-height:1.55;margin:0 0 12px}b{color:#14213a}a{color:#c62828;font-weight:600}</style></head>
+<body><main><h1>You don't have access to 1st FP OS</h1>
+<p>Microsoft signed you in as <b>${escHtml(email)}</b>, but that account has not been given access.</p>
+<p>If you work at 1st Fire Protection, ask an administrator to add you in <b>People, then Access &amp; roles</b>, then sign in again.</p>
+<p><a href="/login">Back to sign in</a></p></main></body></html>`;
+}
+
+/** GET /api/people/auth/callback: exchange the code, validate id_token, and set the session only for
+ *  someone the policy authorizes. Microsoft proves who the person is; Access & roles decides if they get in. */
+export async function handleCallback(req: express.Request, res: express.Response, policy: CallbackPolicy): Promise<void> {
   if (!entraConfigured()) { res.status(503).json({ ok: false, error: 'entra_not_configured' }); return; }
   const code = String(req.query.code || '');
   const st = readState(String(req.query.state || ''));
@@ -138,6 +159,12 @@ export async function handleCallback(req: express.Request, res: express.Response
     const claims = await validateIdToken(tj.id_token, st.nonce);
     const email = (claims.email || claims.preferred_username || claims.upn || '').toLowerCase();
     if (!email) { res.status(401).send('Sign-in failed: no email in token.'); return; }
+    if (!policy.authorize(email)) {
+      try { policy.onDenied?.(email, claims.name || null); } catch { /* auditing must not change the outcome */ }
+      signOut(res);
+      res.status(403).type('html').send(deniedPage(email));
+      return;
+    }
     setSession(res, { email, name: claims.name || null, oid: claims.oid || null });
     res.redirect('/?tab=people'); // back to the full shell with People open, not a bare /people
   } catch (e) {
@@ -154,7 +181,17 @@ async function jwks(): Promise<any[]> {
   jwksCache = { at: Date.now(), keys: j.keys || [] };
   return jwksCache.keys;
 }
-interface IdClaims { email?: string; preferred_username?: string; upn?: string; name?: string; oid?: string; iss?: string; aud?: string; exp?: number; nonce?: string }
+interface IdClaims { email?: string; preferred_username?: string; upn?: string; name?: string; oid?: string; tid?: string; iss?: string; aud?: string; exp?: number; nonce?: string }
+/** Claim checks after the signature: our app, our tenant exactly, unexpired, and this sign-in's nonce. */
+export function checkIdClaims(payload: IdClaims, nonce: string, now = Date.now()): void {
+  const tenant = String(process.env.ENTRA_TENANT_ID || '').toLowerCase();
+  if (payload.aud !== process.env.ENTRA_CLIENT_ID) throw new Error('aud mismatch');
+  if (String(payload.iss || '').toLowerCase() !== `https://login.microsoftonline.com/${tenant}/v2.0`) throw new Error('iss mismatch');
+  if (payload.tid && payload.tid.toLowerCase() !== tenant) throw new Error('tenant mismatch');
+  if (!payload.exp || payload.exp * 1000 < now) throw new Error('token expired');
+  if (!payload.nonce || payload.nonce !== nonce) throw new Error('nonce mismatch');
+}
+
 async function validateIdToken(idToken: string, nonce: string): Promise<IdClaims> {
   const [h, p, s] = idToken.split('.');
   if (!h || !p || !s) throw new Error('malformed id_token');
@@ -165,9 +202,6 @@ async function validateIdToken(idToken: string, nonce: string): Promise<IdClaims
   const pub = crypto.createPublicKey({ key, format: 'jwk' });
   const ok = crypto.verify('RSA-SHA256', Buffer.from(`${h}.${p}`), pub, Buffer.from(s, 'base64url'));
   if (!ok) throw new Error('bad signature');
-  if (payload.aud !== process.env.ENTRA_CLIENT_ID) throw new Error('aud mismatch');
-  if (!payload.iss || !payload.iss.includes(process.env.ENTRA_TENANT_ID as string)) throw new Error('iss mismatch');
-  if (!payload.exp || payload.exp * 1000 < Date.now()) throw new Error('token expired');
-  if (payload.nonce && payload.nonce !== nonce) throw new Error('nonce mismatch');
+  checkIdClaims(payload, nonce);
   return payload;
 }

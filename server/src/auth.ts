@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { currentIdentity } from './people/identity';
+import { resolveAppUser } from './people/authz';
 
 /**
  * Simple shared-password gate for the whole app.
@@ -156,9 +157,13 @@ function readCookie(req: express.Request, name: string): string | undefined {
 }
 
 function isAuthed(req: express.Request): boolean {
-  // Either the shared-password session, or a verified Microsoft (Entra) identity. Signing in with
-  // Microsoft is a full app sign-in: a real person in the tenant, not just the office password.
-  return verifySession(readCookie(req, COOKIE)) || !!currentIdentity(req);
+  // Either the shared-password session, or a Microsoft (Entra) identity that is an active Access &
+  // roles user. Microsoft only proves who someone is; being in the tenant (a guest, a vendor, a new
+  // hire not set up yet) is not permission. Re-checked on every request so removing or deactivating
+  // someone takes effect immediately, not when their session cookie expires.
+  if (verifySession(readCookie(req, COOKIE))) return true;
+  const id = currentIdentity(req);
+  return !!(id && resolveAppUser(id.email));
 }
 
 /** Constant-time password compare (hash both to a fixed length so length never leaks). */

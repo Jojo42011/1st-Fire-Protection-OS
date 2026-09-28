@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { catalogSnapshot } from '../people/catalog';
 import { entraConfigured, devLoginEnabled, beginLogin, handleCallback, signOut, currentIdentity } from '../people/identity';
-import { currentUser, requirePeople, hasRole, canViewCompensation, canApprove, listAppUsers, upsertAppUser, setAppUserActive, ROLES, Role } from '../people/authz';
+import { currentUser, resolveAppUser, requirePeople, hasRole, canViewCompensation, canApprove, listAppUsers, upsertAppUser, setAppUserActive, ROLES, Role } from '../people/authz';
 import { getMatrix, saveRoleLevels, resetRoleLevels } from '../people/permissions';
 import * as svc from '../people/service';
 import { bambooConfigured } from '../services/bamboo';
@@ -21,6 +21,7 @@ import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
 import { godStatus, setGodPassword, clearGodPassword } from '../auth';
 import { phoneListPull, filterEntities, toPhoneCsv } from '../services/phoneList';
+import { osAudit } from '../os/audit';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || 'system';
@@ -41,7 +42,13 @@ router.get('/api/people/me', (req, res) => {
   });
 });
 router.get('/api/people/auth/login', beginLogin);
-router.get('/api/people/auth/callback', handleCallback);
+router.get('/api/people/auth/callback', (req, res) =>
+  handleCallback(req, res, {
+    authorize: (email) => !!resolveAppUser(email),
+    onDenied: (email, name) =>
+      osAudit({ actor: name || email, actor_email: email, module: 'access', action: 'auth.signin_denied', detail: 'Microsoft sign-in by an account not in Access & roles (or deactivated)' }),
+  })
+);
 router.post('/api/people/auth/logout', (_req, res) => { signOut(res); res.json({ ok: true }); });
 
 /* ─────────────────────────── catalogs + overview (any People role) ─────────────────────────── */
