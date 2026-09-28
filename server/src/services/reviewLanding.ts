@@ -21,7 +21,13 @@ const isGoogleReviewUrl = (u: string) => /^https:\/\/(g\.page|search\.google\.co
 export function resolveOffices(offices: ReviewOffice[] = REVIEW_OFFICES): ResolvedOffice[] {
   let mapped: { office_name: string | null; review_url: string | null }[] = [];
   try {
-    mapped = getDb().prepare(`SELECT office_name, review_url FROM review_targets WHERE review_url IS NOT NULL`).all() as typeof mapped;
+    mapped = getDb()
+      .prepare(
+        `SELECT COALESCE(NULLIF(t.office_name, ''), (SELECT MAX(j.office_name) FROM crm_jobs j WHERE j.office_id = t.office_id)) AS office_name,
+                t.review_url
+           FROM review_targets t WHERE t.review_url IS NOT NULL`
+      )
+      .all() as typeof mapped;
   } catch { /* table not ready: config only */ }
   const out: ResolvedOffice[] = [];
   for (const o of offices) {
@@ -101,6 +107,8 @@ export function reviewPageStats(days = 30) {
     )
     .all(since) as { badge: string; visits: number; clicked: number }[];
   const names = new Map(REVIEW_OFFICES.map((o) => [o.slug, o.name]));
+  const shown = new Set(resolveOffices().map((o) => o.slug));
+  const hidden = REVIEW_OFFICES.filter((o) => !shown.has(o.slug)).map((o) => o.name);
   return {
     ok: true as const,
     days,
@@ -110,5 +118,6 @@ export function reviewPageStats(days = 30) {
     clicked: count('review_link_clicked'),
     byOffice: byOffice.map((r) => ({ ...r, name: names.get(r.office) || r.office })),
     byBadge,
+    hidden,
   };
 }

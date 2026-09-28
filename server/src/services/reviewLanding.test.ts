@@ -10,6 +10,7 @@ import { initDb } from '../db/schema';
 import { getDb } from '../db/index';
 import { resolveOffices, renderReviewPage, recordReviewEvent, reviewPageStats } from './reviewLanding';
 import { REVIEW_OFFICES } from '../config/reviewOffices';
+import { setTarget } from './reviewRequests';
 
 initDb();
 const db = getDb();
@@ -25,9 +26,22 @@ test('every configured office link is a Google review link, and slugs are unique
 
 test('an office with no configured link falls back to the Review requests mapping, else is hidden', () => {
   assert.ok(!resolveOffices().some((o) => o.slug === 'laredo'), 'hidden while unmapped');
-  db.prepare(`INSERT INTO review_targets (office_id, office_name, review_url, active) VALUES ('lar', '1st FP Laredo LLC', 'https://g.page/r/LAREDOtest/review', 1)`).run();
+  assert.deepEqual(reviewPageStats(30).hidden, ['Laredo']);
+  // Saved from the Review requests screen, which sends no office name: ServiceTrade's name is used.
+  db.prepare(`INSERT INTO crm_jobs (st_id, status, source, office_id, office_name) VALUES ('lj1', 'Completed', 'servicetrade', 'lar', '1st FP Laredo, LLC (LAR)')`).run();
+  setTarget('lar', null, 'https://g.page/r/LAREDOtest/review');
+  assert.equal((db.prepare(`SELECT office_name FROM review_targets WHERE office_id = 'lar'`).get() as any).office_name, '1st FP Laredo, LLC (LAR)');
   const laredo = resolveOffices().find((o) => o.slug === 'laredo');
   assert.equal(laredo?.url, 'https://g.page/r/LAREDOtest/review');
+  assert.deepEqual(reviewPageStats(30).hidden, []);
+});
+
+test('a target stored with no office name is still matched through its jobs', () => {
+  db.prepare(`INSERT INTO review_targets (office_id, office_name, review_url, active) VALUES ('tmp', NULL, 'https://g.page/r/TMP/review', 1)`).run();
+  db.prepare(`INSERT INTO crm_jobs (st_id, status, source, office_id, office_name) VALUES ('tj1', 'Completed', 'servicetrade', 'tmp', '1st FP Laredo LLC')`).run();
+  const found = resolveOffices([{ slug: 'laredo', name: 'Laredo', reviewUrl: '', match: 'laredo' }]);
+  assert.equal(found.length, 1);
+  db.prepare(`DELETE FROM review_targets WHERE office_id = 'tmp'`).run();
 });
 
 test('a non-Google link is never rendered', () => {

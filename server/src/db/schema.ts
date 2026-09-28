@@ -947,6 +947,10 @@ export function initDb(): void {
     );
   `);
   addColumn('review_targets', 'phone', 'TEXT'); // per-office customer-facing number override
+  // Links saved from the Review requests screen were stored without an office name; fill it in from
+  // ServiceTrade so name lookups (review page, email preview) find them. Idempotent.
+  db.exec(`UPDATE review_targets SET office_name = (SELECT MAX(office_name) FROM crm_jobs WHERE crm_jobs.office_id = review_targets.office_id)
+           WHERE office_name IS NULL OR office_name = ''`);
   // review_requests gains routing + delivery columns (was: draft only, off the old jobs fixture).
   addColumn('review_requests', 'office_name', 'TEXT');
   addColumn('review_requests', 'review_url', 'TEXT');

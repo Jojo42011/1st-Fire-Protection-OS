@@ -90,6 +90,7 @@
         <button class="btn btn-sm" id="nfc-copy" onclick="copyNfc(this)">Copy badge link</button>
       </div>
     </div>
+    <div class="rr-note" id="nfc-hidden" style="display:none;margin:12px 18px 0"></div>
     <div class="cv-grid">
       <div class="cv-col"><div class="cv-stats" id="nfc-stats"></div></div>
       <div class="cv-col"><div class="cv-h">Opened Google, by office</div><div id="nfc-offices"></div></div>
@@ -286,6 +287,11 @@ function loadNfc(){
     document.getElementById('nfc-offices').innerHTML=(s.byOffice||[]).length?s.byOffice.map(function(o){
       return '<div class="cv-row"><span>'+esc(o.name)+'</span><span class="n">'+fmtN(o.clicked)+'</span><span class="cv-bar"><i class="good" style="width:'+Math.round(100*o.clicked/max)+'%"></i></span></div>';
     }).join(''):'<div class="cv-row"><span style="color:var(--muted)">No taps yet</span></div>';
+    if((s.hidden||[]).length){
+      var h=document.getElementById('nfc-hidden');
+      h.style.display='';
+      h.innerHTML='<b>Not on the page:</b> '+s.hidden.map(esc).join(', ')+'. No working Google review link. Add one in the office table below, or in server/src/config/reviewOffices.ts.';
+    }
     var badges=(s.byBadge||[]).filter(function(b){return b.clicked||b.visits;}).slice(0,5);
     if(badges.length){
       document.getElementById('nfc-foot').innerHTML='Top badges: '+badges.map(function(b){return esc(b.badge)+' ('+fmtN(b.clicked)+' to Google)';}).join(', ')+'. Add <span class="mono">&amp;b=first-last</span> to a badge link to credit that employee.';

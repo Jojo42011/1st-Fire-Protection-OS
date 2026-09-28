@@ -87,18 +87,26 @@ export function getTargets(): ReviewTarget[] {
   return getDb().prepare(`SELECT * FROM review_targets ORDER BY office_name`).all() as ReviewTarget[];
 }
 
+function officeNameFromJobs(officeId: string): string | null {
+  const r = getDb().prepare(`SELECT MAX(office_name) AS n FROM crm_jobs WHERE office_id = ?`).get(officeId) as { n: string | null } | undefined;
+  return r?.n || null;
+}
+
 /** Map (or re-map) an office to a Google review link, with an optional phone override. */
 export function setTarget(officeId: string, officeName: string | null, link: string, phone?: string | null): ReviewTarget {
   const { review_url, place_id } = parseReviewLink(link);
   const ph = phone != null && String(phone).trim() !== '' ? String(phone).trim() : null;
+  // The screen only sends the office id, so fall back to ServiceTrade's name for it: the review page,
+  // previews and reports look targets up by office name.
+  const name = (officeName && officeName.trim()) || officeNameFromJobs(officeId);
   getDb()
     .prepare(
       `INSERT INTO review_targets (office_id, office_name, place_id, review_url, phone, active, updated_at)
        VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
-       ON CONFLICT(office_id) DO UPDATE SET office_name=excluded.office_name, place_id=excluded.place_id,
+       ON CONFLICT(office_id) DO UPDATE SET office_name=COALESCE(excluded.office_name, review_targets.office_name), place_id=excluded.place_id,
          review_url=excluded.review_url, phone=excluded.phone, updated_at=datetime('now')`
     )
-    .run(officeId, officeName, place_id, review_url, ph);
+    .run(officeId, name, place_id, review_url, ph);
   return getDb().prepare(`SELECT * FROM review_targets WHERE office_id = ?`).get(officeId) as ReviewTarget;
 }
 
