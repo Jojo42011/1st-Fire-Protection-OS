@@ -79,6 +79,24 @@
     <div class="card-foot" id="cv-foot">Older jobs are pulled only to size campaigns. They never trigger a review request: automatic requests only cover jobs completed in the last 180 days.</div>
   </div>
 
+  <!-- NFC badge page analytics -->
+  <div class="card card-clip" style="margin-top:14px" id="nfc-card">
+    <div class="card-head" style="flex-wrap:wrap">
+      <h2>NFC badge page</h2>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">last 30 days</span>
+      <span style="flex:1"></span>
+      <div class="cv-tools">
+        <a class="btn btn-sm" id="nfc-open" href="/review" target="_blank" rel="noopener" style="text-decoration:none">Open page</a>
+        <button class="btn btn-sm" id="nfc-copy" onclick="copyNfc(this)">Copy badge link</button>
+      </div>
+    </div>
+    <div class="cv-grid">
+      <div class="cv-col"><div class="cv-stats" id="nfc-stats"></div></div>
+      <div class="cv-col"><div class="cv-h">Opened Google, by office</div><div id="nfc-offices"></div></div>
+    </div>
+    <div class="card-foot" id="nfc-foot">Program every badge with the link above. Add <span class="mono">&amp;b=first-last</span> to a badge's link to credit that employee.</div>
+  </div>
+
   <!-- office → Google link mapping -->
   <div class="card card-clip" style="margin-top:14px">
     <div class="card-head"><h2>Offices → Google review link</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">each ServiceTrade office routes to its own profile</span></div>
@@ -249,8 +267,35 @@ function pullHistory(btn){
   fetch('/api/reviews/history',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({days:Number(days)})})
     .then(function(r){return r.json();}).then(function(){loadCoverage();}).catch(function(){btn.disabled=false;btn.textContent='Pull older jobs';});
 }
+function nfcLink(){return location.origin+'/review?src=nfc';}
+function copyNfc(btn){
+  var t=nfcLink();
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy badge link';},1600);})
+    .catch(function(){window.prompt('Badge link',t);});
+}
+function loadNfc(){
+  fetch('/api/review-page/stats?days=30').then(function(r){return r.json();}).then(function(s){
+    if(!s||!s.ok)return;
+    var rate=s.visits?Math.round(100*s.clicked/s.visits)+'%':'-';
+    document.getElementById('nfc-stats').innerHTML=
+      stat(fmtN(s.visits),'page visits ('+fmtN(s.nfcVisits)+' from a badge tap)')+
+      stat(fmtN(s.selected),'offices picked')+
+      stat(fmtN(s.clicked),'opened Google to review')+
+      stat(rate,'of visits went on to Google');
+    var max=Math.max.apply(null,(s.byOffice||[]).map(function(o){return o.clicked;}).concat([1]));
+    document.getElementById('nfc-offices').innerHTML=(s.byOffice||[]).length?s.byOffice.map(function(o){
+      return '<div class="cv-row"><span>'+esc(o.name)+'</span><span class="n">'+fmtN(o.clicked)+'</span><span class="cv-bar"><i class="good" style="width:'+Math.round(100*o.clicked/max)+'%"></i></span></div>';
+    }).join(''):'<div class="cv-row"><span style="color:var(--muted)">No taps yet</span></div>';
+    var badges=(s.byBadge||[]).filter(function(b){return b.clicked||b.visits;}).slice(0,5);
+    if(badges.length){
+      document.getElementById('nfc-foot').innerHTML='Top badges: '+badges.map(function(b){return esc(b.badge)+' ('+fmtN(b.clicked)+' to Google)';}).join(', ')+'. Add <span class="mono">&amp;b=first-last</span> to a badge link to credit that employee.';
+    }
+  });
+  document.getElementById('nfc-copy').title=nfcLink();
+}
 load();
 loadCoverage();
+loadNfc();
 </script>
 </body>
 </html>

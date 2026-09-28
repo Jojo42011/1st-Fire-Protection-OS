@@ -957,6 +957,20 @@ export function initDb(): void {
   addColumn('review_requests', 'sent_at', 'TEXT');
   addColumn('review_requests', 'error', 'TEXT');
   addColumn('review_requests', 'source', "TEXT DEFAULT 'seed'"); // 'seed' | 'servicetrade'
+  // NFC review page (/review) analytics: visits, office picks, and taps through to Google. No IPs stored.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS review_page_events (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      event      TEXT NOT NULL,              -- landing_visit | office_selected | review_link_clicked
+      office     TEXT,                       -- office slug from config/reviewOffices.ts
+      src        TEXT,                       -- ?src= (nfc, qr, ...), else web/direct
+      badge      TEXT,                       -- optional ?b= employee badge id
+      session    TEXT,                       -- random per page load, to group one visitor's events
+      mobile     INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_review_page_events_at ON review_page_events(created_at);
+  `);
   addColumn('review_requests', 'token', 'TEXT'); // click-tracking token behind /r/:token
   addColumn('review_requests', 'clicked_at', 'TEXT');
   addColumn('review_requests', 'click_count', 'INTEGER DEFAULT 0');

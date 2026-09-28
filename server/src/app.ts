@@ -23,6 +23,7 @@ import health from './routes/health';
 import brain from './routes/brain';
 import invoices from './routes/invoices';
 import reviews from './routes/reviews';
+import reviewLanding from './routes/reviewLanding';
 import calls from './routes/calls';
 import impact from './routes/impact';
 import callWebhook from './routes/callWebhook';
@@ -149,6 +150,7 @@ app.use('/api/webhooks', rateLimit({ windowMs: 60_000, max: 240 }));
 app.use('/api/servicetrade/webhook', rateLimit({ windowMs: 60_000, max: 240 }));
 app.use('/api/intake', rateLimit({ windowMs: 60_000, max: 60 }));
 app.use('/r', rateLimit({ windowMs: 60_000, max: 120 }));
+app.use('/api/review-page/events', rateLimit({ windowMs: 60_000, max: 60 }));
 
 // ---- password gate (enforced only when APP_PASSWORD is set) ----
 app.use(gate);
@@ -163,6 +165,7 @@ app.post('/api/logout', handleLogout);
 app.use(health);
 app.use(brain);
 app.use(invoices);
+app.use(reviewLanding);
 app.use(reviews);
 app.use(calls);
 app.use(impact);
