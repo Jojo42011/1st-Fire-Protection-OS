@@ -38,6 +38,7 @@ function csrfExempt(p: string): boolean {
     || p.startsWith('/api/ad-agent/')
     || p.startsWith('/api/intake/')
     || p.startsWith('/api/people/auth/')
+    || p === '/api/review-page/events' // anonymous analytics beacon from 1stfpservices.com; no cookie auth
     || p === '/api/login' || p === '/api/logout';
 }
 

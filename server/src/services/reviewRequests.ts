@@ -98,15 +98,17 @@ export function setTarget(officeId: string, officeName: string | null, link: str
   const ph = phone != null && String(phone).trim() !== '' ? String(phone).trim() : null;
   // The screen only sends the office id, so fall back to ServiceTrade's name for it: the review page,
   // previews and reports look targets up by office name.
-  const name = (officeName && officeName.trim()) || officeNameFromJobs(officeId);
+  // Preference: a name passed in, else the one already stored, else ServiceTrade's.
+  const given = (officeName && officeName.trim()) || null;
+  const fromJobs = officeNameFromJobs(officeId);
   getDb()
     .prepare(
       `INSERT INTO review_targets (office_id, office_name, place_id, review_url, phone, active, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
-       ON CONFLICT(office_id) DO UPDATE SET office_name=COALESCE(excluded.office_name, review_targets.office_name), place_id=excluded.place_id,
+       VALUES (@id, COALESCE(@given, @fromJobs), @place, @url, @phone, 1, datetime('now'))
+       ON CONFLICT(office_id) DO UPDATE SET office_name=COALESCE(@given, NULLIF(review_targets.office_name, ''), @fromJobs), place_id=excluded.place_id,
          review_url=excluded.review_url, phone=excluded.phone, updated_at=datetime('now')`
     )
-    .run(officeId, name, place_id, review_url, ph);
+    .run({ id: officeId, given, fromJobs, place: place_id, url: review_url, phone: ph });
   return getDb().prepare(`SELECT * FROM review_targets WHERE office_id = ?`).get(officeId) as ReviewTarget;
 }
 

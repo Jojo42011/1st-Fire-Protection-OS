@@ -8,59 +8,21 @@ process.env.OS_REQUIRE_IDENTITY = '0';
 
 import { initDb } from '../db/schema';
 import { getDb } from '../db/index';
-import { resolveOffices, renderReviewPage, recordReviewEvent, reviewPageStats } from './reviewLanding';
-import { REVIEW_OFFICES } from '../config/reviewOffices';
+import { recordReviewEvent, reviewPageStats, parseEventBody, officeName, REVIEW_PAGE_URL } from './reviewLanding';
 import { setTarget } from './reviewRequests';
 
 initDb();
 const db = getDb();
 
-test('every configured office link is a Google review link, and slugs are unique', () => {
-  const slugs = new Set(REVIEW_OFFICES.map((o) => o.slug));
-  assert.equal(slugs.size, REVIEW_OFFICES.length);
-  for (const o of REVIEW_OFFICES) {
-    assert.match(o.slug, /^[a-z0-9-]+$/);
-    if (o.reviewUrl) assert.match(o.reviewUrl, /^https:\/\/g\.page\/r\/[A-Za-z0-9_-]+\/review$/);
-  }
+test('the badge page lives on the company website', () => {
+  assert.equal(REVIEW_PAGE_URL, 'https://1stfpservices.com/review');
 });
 
-test('an office with no configured link falls back to the Review requests mapping, else is hidden', () => {
-  assert.ok(!resolveOffices().some((o) => o.slug === 'laredo'), 'hidden while unmapped');
-  assert.deepEqual(reviewPageStats(30).hidden, ['Laredo']);
-  // Saved from the Review requests screen, which sends no office name: ServiceTrade's name is used.
-  db.prepare(`INSERT INTO crm_jobs (st_id, status, source, office_id, office_name) VALUES ('lj1', 'Completed', 'servicetrade', 'lar', '1st FP Laredo, LLC (LAR)')`).run();
-  setTarget('lar', null, 'https://g.page/r/LAREDOtest/review');
-  assert.equal((db.prepare(`SELECT office_name FROM review_targets WHERE office_id = 'lar'`).get() as any).office_name, '1st FP Laredo, LLC (LAR)');
-  const laredo = resolveOffices().find((o) => o.slug === 'laredo');
-  assert.equal(laredo?.url, 'https://g.page/r/LAREDOtest/review');
-  assert.deepEqual(reviewPageStats(30).hidden, []);
-});
-
-test('a target stored with no office name is still matched through its jobs', () => {
-  db.prepare(`INSERT INTO review_targets (office_id, office_name, review_url, active) VALUES ('tmp', NULL, 'https://g.page/r/TMP/review', 1)`).run();
-  db.prepare(`INSERT INTO crm_jobs (st_id, status, source, office_id, office_name) VALUES ('tj1', 'Completed', 'servicetrade', 'tmp', '1st FP Laredo LLC')`).run();
-  const found = resolveOffices([{ slug: 'laredo', name: 'Laredo', reviewUrl: '', match: 'laredo' }]);
-  assert.equal(found.length, 1);
-  db.prepare(`DELETE FROM review_targets WHERE office_id = 'tmp'`).run();
-});
-
-test('a non-Google link is never rendered', () => {
-  const out = resolveOffices([{ slug: 'x', name: 'X', reviewUrl: 'javascript:alert(1)', match: 'x' }, { slug: 'y', name: 'Y', reviewUrl: 'https://evil.example/review', match: 'y' }]);
-  assert.deepEqual(out, []);
-});
-
-test('the page renders one real link per office, escaped, with no leftover placeholders', () => {
-  const html = renderReviewPage([
-    { slug: 'austin', name: 'Austin', url: 'https://g.page/r/A/review' },
-    { slug: 'waco', name: 'Waco <b>', url: 'https://g.page/r/W/review?x=1&y=2' },
-  ], 2026);
-  assert.equal((html.match(/class="office"/g) || []).length, 2);
-  assert.ok(html.includes('href="https://g.page/r/A/review" data-office="austin"'));
-  assert.ok(html.includes('Waco &lt;b&gt;'));
-  assert.ok(html.includes('x=1&amp;y=2'));
-  assert.ok(!html.includes('<!--OFFICES-->') && !html.includes('<!--YEAR-->'));
-  assert.ok(html.includes('How was your experience?'));
-  assert.ok(renderReviewPage([], 2026).includes('class="empty"'));
+test('the website beacon arrives as JSON text and is parsed; junk is rejected, not thrown', () => {
+  assert.deepEqual(parseEventBody('{"event":"landing_visit","src":"nfc"}'), { event: 'landing_visit', src: 'nfc' });
+  assert.deepEqual(parseEventBody({ event: 'landing_visit' }), { event: 'landing_visit' });
+  assert.equal(parseEventBody('not json'), null);
+  assert.equal(recordReviewEvent(parseEventBody('not json')), false);
 });
 
 test('events are validated before they are stored', () => {
@@ -69,12 +31,19 @@ test('events are validated before they are stored', () => {
   assert.equal(recordReviewEvent({ event: 'landing_visit', src: 'NFC', badge: 'Marcus.S!', sid: 'abc123' }, 'Mozilla/5.0 (iPhone)'), true);
   assert.equal(recordReviewEvent({ event: 'office_selected', office: 'waco', src: 'nfc' }), true);
   assert.equal(recordReviewEvent({ event: 'review_link_clicked', office: 'waco', src: 'nfc', badge: 'marcuss' }), true);
-  assert.equal(recordReviewEvent({ event: 'review_link_clicked', office: 'nowhere' }), false);
+  assert.equal(recordReviewEvent({ event: 'review_link_clicked', office: '' }), false, 'an office event needs an office');
+  assert.equal(recordReviewEvent({ event: 'review_link_clicked', office: '-bad' }), false);
   assert.equal(recordReviewEvent({ event: 'drop table' }), false);
   assert.equal(recordReviewEvent(null), false);
   assert.equal(n(), before + 3);
   const row = db.prepare(`SELECT src, badge, mobile FROM review_page_events WHERE event = 'landing_visit' ORDER BY id DESC LIMIT 1`).get() as any;
   assert.deepEqual(row, { src: 'nfc', badge: 'marcuss', mobile: 1 });
+});
+
+test('office names come from the slug, since offices are defined on the website', () => {
+  assert.equal(officeName('college-station'), 'College Station');
+  assert.equal(officeName('mcallen'), 'McAllen');
+  assert.equal(officeName('san-antonio'), 'San Antonio');
 });
 
 test('stats roll up visits, picks, and taps through to Google by office and badge', () => {
@@ -85,4 +54,15 @@ test('stats roll up visits, picks, and taps through to Google by office and badg
   assert.equal(s.clicked, 1);
   assert.deepEqual(s.byOffice, [{ office: 'waco', selected: 1, clicked: 1, name: 'Waco' }]);
   assert.deepEqual(s.byBadge, [{ badge: 'marcuss', visits: 1, clicked: 1 }]);
+  assert.equal(s.pageUrl, 'https://1stfpservices.com/review');
+});
+
+test('a review link saved without an office name gets it from ServiceTrade, and keeps an existing one', () => {
+  db.prepare(`INSERT INTO crm_jobs (st_id, status, source, office_id, office_name) VALUES ('lj1', 'Completed', 'servicetrade', 'lar', '1st FP Laredo, LLC (LAR)')`).run();
+  setTarget('lar', null, 'https://g.page/r/LAREDOtest/review');
+  const name = () => (db.prepare(`SELECT office_name FROM review_targets WHERE office_id = 'lar'`).get() as any).office_name;
+  assert.equal(name(), '1st FP Laredo, LLC (LAR)');
+  db.prepare(`UPDATE review_targets SET office_name = 'Laredo (custom)' WHERE office_id = 'lar'`).run();
+  setTarget('lar', null, 'https://g.page/r/LAREDOtest2/review');
+  assert.equal(name(), 'Laredo (custom)');
 });

@@ -966,7 +966,7 @@ export function initDb(): void {
     CREATE TABLE IF NOT EXISTS review_page_events (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
       event      TEXT NOT NULL,              -- landing_visit | office_selected | review_link_clicked
-      office     TEXT,                       -- office slug from config/reviewOffices.ts
+      office     TEXT,                       -- office slug, as defined on the website's review page
       src        TEXT,                       -- ?src= (nfc, qr, ...), else web/direct
       badge      TEXT,                       -- optional ?b= employee badge id
       session    TEXT,                       -- random per page load, to group one visitor's events

@@ -86,11 +86,10 @@
       <span style="font-weight:500;font-size:12px;color:var(--muted)">last 30 days</span>
       <span style="flex:1"></span>
       <div class="cv-tools">
-        <a class="btn btn-sm" id="nfc-open" href="/review" target="_blank" rel="noopener" style="text-decoration:none">Open page</a>
+        <a class="btn btn-sm" id="nfc-open" href="https://1stfpservices.com/review" target="_blank" rel="noopener" style="text-decoration:none">Open page</a>
         <button class="btn btn-sm" id="nfc-copy" onclick="copyNfc(this)">Copy badge link</button>
       </div>
     </div>
-    <div class="rr-note" id="nfc-hidden" style="display:none;margin:12px 18px 0"></div>
     <div class="cv-grid">
       <div class="cv-col"><div class="cv-stats" id="nfc-stats"></div></div>
       <div class="cv-col"><div class="cv-h">Opened Google, by office</div><div id="nfc-offices"></div></div>
@@ -268,7 +267,8 @@ function pullHistory(btn){
   fetch('/api/reviews/history',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({days:Number(days)})})
     .then(function(r){return r.json();}).then(function(){loadCoverage();}).catch(function(){btn.disabled=false;btn.textContent='Pull older jobs';});
 }
-function nfcLink(){return location.origin+'/review?src=nfc';}
+var NFC_PAGE='https://1stfpservices.com/review';
+function nfcLink(){return NFC_PAGE+'?src=nfc';}
 function copyNfc(btn){
   var t=nfcLink();
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy badge link';},1600);})
@@ -287,11 +287,7 @@ function loadNfc(){
     document.getElementById('nfc-offices').innerHTML=(s.byOffice||[]).length?s.byOffice.map(function(o){
       return '<div class="cv-row"><span>'+esc(o.name)+'</span><span class="n">'+fmtN(o.clicked)+'</span><span class="cv-bar"><i class="good" style="width:'+Math.round(100*o.clicked/max)+'%"></i></span></div>';
     }).join(''):'<div class="cv-row"><span style="color:var(--muted)">No taps yet</span></div>';
-    if((s.hidden||[]).length){
-      var h=document.getElementById('nfc-hidden');
-      h.style.display='';
-      h.innerHTML='<b>Not on the page:</b> '+s.hidden.map(esc).join(', ')+'. No working Google review link. Add one in the office table below, or in server/src/config/reviewOffices.ts.';
-    }
+    if(s.pageUrl){NFC_PAGE=s.pageUrl;document.getElementById('nfc-open').href=s.pageUrl;document.getElementById('nfc-copy').title=nfcLink();}
     var badges=(s.byBadge||[]).filter(function(b){return b.clicked||b.visits;}).slice(0,5);
     if(badges.length){
       document.getElementById('nfc-foot').innerHTML='Top badges: '+badges.map(function(b){return esc(b.badge)+' ('+fmtN(b.clicked)+' to Google)';}).join(', ')+'. Add <span class="mono">&amp;b=first-last</span> to a badge link to credit that employee.';

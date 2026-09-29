@@ -1,18 +1,17 @@
-import { Router } from 'express';
-import { renderReviewPage, recordReviewEvent, reviewPageStats } from '../services/reviewLanding';
+import express, { Router } from 'express';
+import { recordReviewEvent, reviewPageStats, parseEventBody, REVIEW_PAGE_URL } from '../services/reviewLanding';
 
 const router = Router();
 
-/** Public: the page every employee NFC badge opens. */
-router.get('/review', (_req, res) => {
-  res.set('Cache-Control', 'no-cache');
-  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.type('html').send(renderReviewPage());
+/** The badge page moved to the company website. Keep old badge links (and their ?src/&b) working. */
+router.get(['/review', '/review/'], (req, res) => {
+  const q = req.originalUrl.indexOf('?');
+  res.redirect(301, REVIEW_PAGE_URL + (q >= 0 ? req.originalUrl.slice(q) : ''));
 });
 
-/** Public: analytics beacon from the page. Always 204 so a bad event never surfaces to a customer. */
-router.post('/api/review-page/events', (req, res) => {
-  try { recordReviewEvent(req.body, req.get('user-agent') || ''); } catch { /* never fail the page */ }
+/** Public: analytics beacon from the website. Always 204 so a bad event never surfaces to a customer. */
+router.post('/api/review-page/events', express.text({ type: 'text/plain', limit: '4kb' }), (req, res) => {
+  try { recordReviewEvent(parseEventBody(req.body), req.get('user-agent') || ''); } catch { /* never fail the page */ }
   res.status(204).end();
 });
 
