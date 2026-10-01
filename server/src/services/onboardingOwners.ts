@@ -75,10 +75,49 @@ import { OnboardingItem } from './onboardingAgent';
 
 const esc = (s: string) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string): string {
+export interface StartDateInfo { long: string; short: string; relative: string | null }
+
+/** Today's date in Central time (every office is in Texas), as YYYY-MM-DD. */
+function centralToday(now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+/** The hire's start date for the task emails: "Monday, October 6, 2026" / "Mon Oct 6" plus how far
+ *  away it is, so the team can see the deadline at a glance. Null when no start date was given. */
+export function startDateInfo(raw: string | null | undefined, now = new Date()): StartDateInfo | null {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (!m) return { long: v, short: v, relative: null };
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12));
+  if (isNaN(d.getTime())) return { long: v, short: v, relative: null };
+  const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', ...o }).format(d);
+  const t = centralToday(now).split('-').map(Number);
+  const days = Math.round((d.getTime() - Date.UTC(t[0], t[1] - 1, t[2], 12)) / 86400000);
+  const relative = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days === -1 ? 'yesterday'
+    : days > 1 ? `in ${days} days` : `${-days} days ago`;
+  return {
+    long: fmt({ weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+    short: fmt({ weekday: 'short', month: 'short', day: 'numeric' }),
+    relative,
+  };
+}
+
+function startLineHtml(start: StartDateInfo | null): string {
+  if (!start) return `<p style="margin:0 0 14px;padding:10px 12px;background:#FFF7E6;border-radius:8px;color:#8A5A00;font-size:14px"><b>Start date:</b> not provided yet. Check with HR before scheduling the work.</p>`;
+  return `<p style="margin:0 0 14px;padding:10px 12px;background:#F2F5F9;border-radius:8px;font-size:14px"><b>Start date:</b> ${esc(start.long)}${start.relative ? ` <span style="color:#667085">(${esc(start.relative)})</span>` : ''}. Please have these done before their first day.</p>`;
+}
+
+/** Subject for a lane's email, carrying the start date so it is visible in the inbox list. */
+function ownerSubject(hireName: string, start: StartDateInfo | null, ownerLabel?: string): string {
+  return `Onboarding tasks for ${hireName}${start ? ` (starts ${start.short})` : ''}${ownerLabel ? `: ${ownerLabel}` : ''}`;
+}
+
+function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null): string {
   const rows = items.map((it) => `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap">${esc(it.kind)}</td></tr>`).join('');
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
     <p>New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:</p>
+    ${startLineHtml(start)}
     <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${rows}</tbody></table>
     <p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>
     <p style="color:#667085;font-size:12px">You are receiving this because your team is the routing target for these onboarding tasks. Nothing provisions automatically: each item waits for the owner to act.</p>
@@ -103,10 +142,11 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   if (!byEmail.size) return { sent: 0 };
   const boardUrl = `${base}/onboarding`;
   let sent = 0;
+  const start = startDateInfo(request.start_date);
   for (const [email, its] of byEmail) {
-    const html = ownerTasksHtml(request.name, its, boardUrl);
+    const html = ownerTasksHtml(request.name, its, boardUrl, start);
     // eslint-disable-next-line no-await-in-loop
-    const out = await sendMail(email, `Onboarding tasks for ${request.name}`, html, { from: sender.address, fromName: sender.name });
+    const out = await sendMail(email, ownerSubject(request.name, start), html, { from: sender.address, fromName: sender.name });
     if (out.ok) sent++;
   }
   return { sent };
@@ -121,7 +161,7 @@ export interface OwnerEmailPreview { to: string | null; subject: string; html: s
  *  (for copy/paste), so it can be previewed and sent, or sent by hand from your own mailbox. */
 export function ownerEmailPreview(requestId: number, owner: Owner, base: string): OwnerEmailPreview | null {
   const db = getDb();
-  const request = db.prepare(`SELECT id, name FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string } | undefined;
+  const request = db.prepare(`SELECT id, name, start_date FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string; start_date: string | null } | undefined;
   if (!request) return null;
   const allItems = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = ? ORDER BY id`).all(requestId, owner) as OnboardingItem[];
   const ownerLabel = (allItems[0] && allItems[0].owner_label) || owner;
@@ -129,11 +169,14 @@ export function ownerEmailPreview(requestId: number, owner: Owner, base: string)
   // live board and shrinks as tasks are completed.
   const items = allItems.filter((it) => it.status === 'pending');
   const to = ownerEmailMap()[owner] || null;
-  const subject = `Onboarding tasks for ${request.name}: ${ownerLabel}`;
+  const start = startDateInfo(request.start_date);
+  const subject = ownerSubject(request.name, start, ownerLabel);
   const boardUrl = `${base}/onboarding`;
-  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl) : '';
+  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl, start) : '';
   const text = [
-    `Onboarding for ${request.name}: ${ownerLabel}`, '',
+    `Onboarding for ${request.name}: ${ownerLabel}`,
+    start ? `Start date: ${start.long}${start.relative ? ` (${start.relative})` : ''}` : 'Start date: not provided yet',
+    '',
     ...items.map((it) => `- ${it.label}${it.detail ? ` (${it.detail})` : ''}`),
     '', `Open the board: ${boardUrl}`,
   ].join('\n');
