@@ -486,7 +486,7 @@ function renderMetric(){
   ]);
 }
 function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
-function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops',laura:'ServiceTrade'};return m[o]||o;}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',it_manager:'IT Manager',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops',laura:'ServiceTrade'};return m[o]||o;}
 // "Due Mon, Oct 5" / "Due today" / "Overdue (Fri, Oct 2)", in Central time like the server.
 function todayCT(){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 function shortDay(ymd){var d=new Date(ymd+'T12:00:00Z');return isNaN(d)?ymd:d.toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric'});}
@@ -773,7 +773,7 @@ function submitForm(e){
 }
 
 /* ─────────────── onboarding catalog editor (computers / software / SharePoint / printers) ─────────────── */
-var CAT_OWNERS=[['it','IT'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['laura','ServiceTrade']];
+var CAT_OWNERS=[['it','IT'],['it_manager','IT manager'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['laura','ServiceTrade']];
 function ownerSelect(id,val){ return '<select class="cat-in" data-f="owner" data-id="'+id+'">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; }
 function catItemRow(kind,it){
   var rm='<button class="cat-x" data-cat-del="'+it.id+'" title="Remove">×</button>';

@@ -18,12 +18,13 @@ import { addUserToGroup, graphConfigured } from './msGraphGroups';
 /* ─────────────────────────── the owners (the color key) ─────────────────────────── */
 // 'mario' (Owner) and 'daniel' (Ops) are legacy lanes kept only so old decided items still read
 // correctly: IT now approves workstations and licensed software, and Safety takes vehicle details.
-export type Owner = 'bamboo' | 'it' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
+export type Owner = 'bamboo' | 'it' | 'it_manager' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
   { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
+  { key: 'it_manager', label: 'IT manager (approval)', tag: 'IT Manager' },
   { key: 'rebecca', label: 'Accounting (approval)', tag: 'Accounting' },
   { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
   { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
@@ -262,13 +263,13 @@ function routeItems(req: any): DraftItem[] {
     }
   }
 
-  // ── IT: new computer (IT approves the purchase; approving creates the order + setup task) ──
+  // ── IT manager: new computer (the IT manager approves the purchase; approving creates IT's order + setup task) ──
   const ct = (req.computer_type || 'none') as string;
   if (ct && ct !== 'none') {
     const comp = computerById(ct);
     if (comp) {
       const detail = [comp.label, comp.spec].filter(Boolean).join(': ');
-      items.push({ owner: 'it', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
+      items.push({ owner: 'it_manager', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
     }
   }
 

@@ -1349,6 +1349,18 @@ export function initDb(): void {
     `);
     setState('onboarding_owner_reassign_v1', '1');
   }
+  // New-computer and management-group approvals belong to the IT manager (their own lane and email),
+  // not the general IT lane. Once, for the catalog and still-open approvals.
+  if (getState('onboarding_it_manager_v1') !== '1') {
+    db.exec(`
+      UPDATE onboarding_catalog SET owner = 'it_manager'
+        WHERE kind = 'sharepoint' AND lower(name) IN ('mgmt', 'sg-sp-management', 'sg-sp-mgmt');
+      UPDATE onboarding_items SET owner = 'it_manager', owner_label = 'IT manager (approval)'
+        WHERE status = 'pending' AND kind = 'approval'
+          AND (label = 'Approve new computer' OR lower(label) IN ('approve sharepoint group: mgmt', 'approve sharepoint group: sg-sp-management', 'approve sharepoint group: sg-sp-mgmt'));
+    `);
+    setState('onboarding_it_manager_v1', '1');
+  }
   // Access items (printers, and later SharePoint) map to an Entra security group: selecting one adds
   // the hire to that group, auto-provisioned through Microsoft Graph when connected. Added by
   // ALTER so existing databases pick them up.

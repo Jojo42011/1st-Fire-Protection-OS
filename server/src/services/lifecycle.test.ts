@@ -47,7 +47,7 @@ test('Owner (Mario) and Ops (Daniel) no longer approve or own anything', () => {
   const { items } = createRequest({ name: 'Ava Field', start_date: '2026-10-19', computer_type: 'cad', company_vehicle: true, vehicle_details: 'F-150, unit 12' });
   assert.ok(items.every((i) => i.owner !== 'mario' && i.owner !== 'daniel'));
   const computer = items.find((i) => i.label === 'Approve new computer')!;
-  assert.equal(computer.owner, 'it');
+  assert.equal(computer.owner, 'it_manager', 'the IT manager approves workstations');
   assert.equal(computer.kind, 'approval');
   const policy = items.find((i) => i.label.startsWith('Add to State Auto Policy'))!;
   assert.equal(policy.owner, 'denise');
@@ -88,7 +88,9 @@ test('approving a computer, a license, or a group creates the task that delivers
 
   const lic = approveItem(find('Approve Bluebeam license').id, 'devon');
   assert.equal(lic.followUp!.label, 'Install Bluebeam');
+  assert.equal(find('Approve SharePoint group: MGMT').owner, 'it_manager', 'the IT manager approves the management group');
   const grp = approveItem(find('Approve SharePoint group: MGMT').id, 'devon');
+  assert.equal(grp.followUp!.owner, 'it', 'IT does the add once approved');
   assert.equal(grp.followUp!.label, 'Add to SharePoint group: MGMT', 'the label the Graph auto-provisioner already understands');
 
   // Clicking approve again changes nothing and adds no second task.
@@ -215,4 +217,19 @@ test('overdue offboarding steps go to each department once a day', async () => {
   outbox = [];
   await sendOffboardingOverdueReminders(BASE, new Date(TUE_10AM.getTime() + 3600_000));
   assert.equal(outbox.length, 0, 'once a day per address');
+});
+
+test('new-computer and MGMT approvals email the IT manager; the rest of IT goes to IT support', async () => {
+  const { notifyOwners } = await import('./onboardingOwners');
+  const out = createRequest({ name: 'Mia Route', start_date: '2099-06-01', computer_type: 'business', sharepoint: ['MGMT'], company_email: true, software: ['Bluebeam'] });
+  outbox = [];
+  await notifyOwners(out.request, out.items, BASE);
+  const devon = outbox.find((m) => m.to === 'devon.booker@1stfpservices.com')!;
+  const msp = outbox.find((m) => m.to === 'support@liontechlabs.com')!;
+  assert.ok(devon, 'the IT manager gets an email');
+  assert.match(devon.html, /Approve new computer/);
+  assert.match(devon.html, /Approve SharePoint group: MGMT/);
+  assert.doesNotMatch(devon.html, /Set up company email/);
+  assert.doesNotMatch(msp.html, /Approve new computer|Approve SharePoint group: MGMT/, 'IT support does not get these approvals');
+  assert.match(msp.html, /Set up company email/);
 });

@@ -15,6 +15,7 @@ export const OWNER_ROLE: Record<Owner, Role | null> = {
   bamboo: 'hr',
   sandi: 'hr',
   it: 'it',
+  it_manager: 'it', // workstation + MGMT approvals: visible to IT; routed to the IT manager by email
   rebecca: 'accounting',
   mario: 'executive_approver',
   denise: 'safety',
@@ -28,6 +29,7 @@ const DEFAULT_EMAIL: Partial<Record<Owner, string>> = {
   bamboo: 'hr@1stfpservices.com',
   sandi: 'hr@1stfpservices.com',
   it: 'support@liontechlabs.com',
+  it_manager: 'devon.booker@1stfpservices.com',
   rebecca: 'rebecca.koen@1stfpservices.com',
   denise: 'safety@1stfpservices.com',
   laura: 'laura.shannon@1stfpservices.com',

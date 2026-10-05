@@ -54,7 +54,7 @@ export function seedOnboardingCatalog(): void {
     // SharePoint groups: one per real office, plus the standard function groups.
     ...operatingOffices().map((o) => ({ kind: 'sharepoint' as CatalogKind, name: o.label, owner: 'it' })),
     { kind: 'sharepoint', name: 'SAFETY', owner: 'it' },
-    { kind: 'sharepoint', name: 'MGMT', owner: 'it', approval: 1 },
+    { kind: 'sharepoint', name: 'MGMT', owner: 'it_manager', approval: 1 },
     { kind: 'sharepoint', name: 'ACCT', owner: 'rebecca', approval: 1 },
     { kind: 'sharepoint', name: 'Payroll', owner: 'rebecca', approval: 1 },
     { kind: 'sharepoint', name: 'HR', owner: 'sandi', approval: 1 },
@@ -207,7 +207,7 @@ export function removeCatalogItem(id: number): boolean {
 const SP_ROUTING: Record<string, { owner: string; approval: boolean }> = {
   'sg-sp-accounting': { owner: 'rebecca', approval: true },
   'sg-sp-payroll': { owner: 'rebecca', approval: true },
-  'sg-sp-management': { owner: 'it', approval: true },
+  'sg-sp-management': { owner: 'it_manager', approval: true },
   'sg-sp-hr': { owner: 'sandi', approval: true },
 };
 
