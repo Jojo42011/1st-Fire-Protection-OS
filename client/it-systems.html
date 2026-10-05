@@ -438,7 +438,7 @@ function renderSwApps(){
     SW_APPS.map(function(a){ return '<tr><td style="font-weight:600;color:var(--ink)">'+OS.esc(a.name)+'</td><td>'+OS.esc(a.vendor||'')+'</td>'+
       '<td>'+OS.pill(a.licensed+' user'+(a.licensed===1?'':'s'),a.licensed?'good':'neutral')+'</td>'+
       '<td>'+(a.has_api?OS.pill('API','neutral'):OS.pill('CSV upload','warn'))+'</td>'+
-      '<td style="text-align:right"><button class="os-btn" data-sw-app="'+a.id+'" data-sw-name="'+OS.esc(a.name)+'">'+(/^servicetrade$/i.test(a.name)?'Pull / import':'Import users')+'</button></td></tr>'; }).join('')+'</tbody></table></div>';
+      '<td style="text-align:right"><button class="os-btn" data-sw-app="'+a.id+'" data-sw-name="'+OS.esc(a.name)+'">'+(/^(servicetrade|sage intacct)$/i.test(a.name)?'Pull / import':'Import users')+'</button></td></tr>'; }).join('')+'</tbody></table></div>';
 }
 function loadSoftware(){
   fetch('/api/people/software').then(function(r){return r.json();}).then(function(d){
@@ -497,24 +497,76 @@ function pdfToCsv(file){
     });
   });
 }
+// Lazy-load SheetJS the first time an Excel file is uploaded.
+var XLSX_READY=null;
+function loadXlsx(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(XLSX_READY) return XLSX_READY;
+  XLSX_READY=new Promise(function(resolve,reject){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=function(){ resolve(window.XLSX); };
+    s.onerror=function(){ XLSX_READY=null; reject(new Error('could not load the Excel reader')); };
+    document.head.appendChild(s);
+  });
+  return XLSX_READY;
+}
+// An Excel export often has a title block and several sheets (Sage: "Licenses" then "Users"). Use the
+// sheet whose header row names people (email / name / username / user id) and has the most rows under it.
+function xlsxToCsv(file){
+  return loadXlsx().then(function(X){
+    return file.arrayBuffer().then(function(buf){
+      var wb=X.read(new Uint8Array(buf),{type:'array'}), best=null;
+      wb.SheetNames.forEach(function(n){
+        var rows=X.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''});
+        for(var h=0;h<Math.min(rows.length,15);h++){
+          var head=rows[h].map(function(c){return String(c).trim().toLowerCase();});
+          if(head.some(function(c){return /^(e-?mail|email address|name|full name|display name|user ?name|user ?id|login( id)?)$/.test(c);})){
+            var body=rows.slice(h+1).filter(function(r){ return r.filter(function(c){return String(c).trim();}).length>=2; });
+            if(!best||body.length>best.body.length) best={sheet:n,head:rows[h],body:body};
+            break;
+          }
+        }
+      });
+      if(!best) return {csv:'',count:0,sheet:''};
+      var q=function(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+      var csv=[best.head].concat(best.body).map(function(r){return r.map(q).join(',');}).join('\n');
+      return {csv:csv,count:best.body.length,sheet:best.sheet};
+    });
+  });
+}
 function renderSwImporter(){
   if(!SW_ACTIVE){ document.getElementById('swImport').innerHTML=''; return; }
-  var isST=/^servicetrade$/i.test(SW_ACTIVE.name||'');
+  var isST=/^servicetrade$/i.test(SW_ACTIVE.name||''), isSage=/^sage intacct$/i.test(SW_ACTIVE.name||'');
+  var sageBlock=isSage?('<div class="os-card" style="padding:12px 14px;margin-bottom:10px">'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Pull from Sage Intacct (live API):</b>'+
+    '<button class="os-btn" id="sgPreview">Preview</button><button class="os-btn primary" id="sgPull" disabled>Pull &amp; save</button></div>'+
+    '<div class="os-filter-note" style="margin-top:6px">Works when Sage is connected. Otherwise upload the Sage user list (the Excel export works as is) below.</div>'+
+    '<div id="sgOut" style="margin-top:10px"></div></div>'):'';
   var stBlock=isST?('<div class="os-card" style="padding:12px 14px;margin-bottom:10px">'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Pull from ServiceTrade (live API):</b>'+
     '<button class="os-btn" id="stPreview">Preview</button><button class="os-btn primary" id="stPull" disabled>Pull &amp; save</button></div>'+
     '<div class="os-filter-note" style="margin-top:6px">Fetches the current ServiceTrade user list over the API and matches them to employees. No file needed. Preview first.</div>'+
     '<div id="stOut" style="margin-top:10px"></div></div>'):'';
-  document.getElementById('swImport').innerHTML=stBlock+'<div class="os-card" style="padding:12px 14px">'+
+  document.getElementById('swImport').innerHTML=stBlock+sageBlock+'<div class="os-card" style="padding:12px 14px">'+
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>'+OS.esc(SW_ACTIVE.name)+' user export:</b>'+
-    '<input id="swFile" type="file" accept=".csv,.pdf,text/csv,text/plain,application/pdf" style="font:inherit;color:inherit" />'+
+    '<input id="swFile" type="file" accept=".csv,.pdf,.xlsx,.xls,text/csv,text/plain,application/pdf" style="font:inherit;color:inherit" />'+
     '<button class="os-btn" id="swPreview" disabled>Preview</button>'+
     '<button class="os-btn primary" id="swDoImport" disabled>Import</button></div>'+
-    '<div class="os-filter-note" style="margin-top:6px">Upload the vendor’s list of users as <b>CSV or PDF</b>. From a PDF export we pull every email address (and names) and match them. Everyone matched gets the license; anyone previously listed but not in this file is marked removed. Preview first.</div>'+
+    '<div class="os-filter-note" style="margin-top:6px">Upload the vendor’s list of users as <b>Excel, CSV or PDF</b>. From a PDF export we pull every email address (and names) and match them. Everyone matched gets the license; anyone previously listed but not in this file is marked removed. Preview first.</div>'+
     '<div id="swOut" style="margin-top:10px"></div></div>';
   document.getElementById('swFile').addEventListener('change',function(e){ var f=e.target.files&&e.target.files[0]; SW_CSV='';
     document.getElementById('swPreview').disabled=true; document.getElementById('swDoImport').disabled=true; if(!f) return;
     var isPdf=/\.pdf$/i.test(f.name)||f.type==='application/pdf';
+    if(/\.xlsx?$/i.test(f.name)){
+      document.getElementById('swOut').innerHTML='<div class="os-filter-note">Reading the spreadsheet…</div>';
+      xlsxToCsv(f).then(function(res){
+        SW_CSV=res.csv; document.getElementById('swPreview').disabled=!SW_CSV;
+        document.getElementById('swOut').innerHTML=res.count?('<div class="os-filter-note">Loaded '+OS.esc(f.name)+': '+res.count+' users on the “'+OS.esc(res.sheet)+'” sheet. Click Preview to see the match.</div>'):
+          '<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">No sheet in that file has a header row with a name, username or email column.</div>';
+      }).catch(function(err){ document.getElementById('swOut').innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">Could not read the spreadsheet: '+OS.esc(String(err&&err.message||err))+'</div>'; });
+      return;
+    }
     if(isPdf){
       document.getElementById('swOut').innerHTML='<div class="os-filter-note">Reading the PDF…</div>';
       pdfToCsv(f).then(function(res){
@@ -529,24 +581,30 @@ function renderSwImporter(){
       document.getElementById('swOut').innerHTML='<div class="os-filter-note">Loaded '+OS.esc(f.name)+'. Click Preview.</div>'; }; rd.readAsText(f); });
   document.getElementById('swPreview').addEventListener('click',function(){ swRun(false); });
   document.getElementById('swDoImport').addEventListener('click',function(){ swRun(true); });
+  if(document.getElementById('sgPreview')){
+    document.getElementById('sgPreview').addEventListener('click',function(){ swPull('sage',false); });
+    document.getElementById('sgPull').addEventListener('click',function(){ swPull('sage',true); });
+  }
   if(document.getElementById('stPreview')){
-    document.getElementById('stPreview').addEventListener('click',function(){ swStPull(false); });
-    document.getElementById('stPull').addEventListener('click',function(){ swStPull(true); });
+    document.getElementById('stPreview').addEventListener('click',function(){ swPull('st',false); });
+    document.getElementById('stPull').addEventListener('click',function(){ swPull('st',true); });
   }
 }
-function swStPull(commit){
-  document.getElementById('stOut').innerHTML='<div class="os-filter-note">'+(commit?'Pulling from ServiceTrade…':'Reading from ServiceTrade…')+'</div>';
-  fetch('/api/people/software/servicetrade-pull',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({commit:commit})})
+var SW_PULL={st:{url:'/api/people/software/servicetrade-pull',out:'stOut',btn:'stPull',name:'ServiceTrade'},sage:{url:'/api/people/software/sage-pull',out:'sgOut',btn:'sgPull',name:'Sage Intacct'}};
+function swStPull(commit){ swPull('st',commit); }
+function swPull(kind,commit){ var P=SW_PULL[kind];
+  document.getElementById(P.out).innerHTML='<div class="os-filter-note">'+(commit?'Pulling from ':'Reading from ')+P.name+'…'+'</div>';
+  fetch(P.url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({commit:commit})})
     .then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok){ document.getElementById('stOut').innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">'+OS.esc((d&&d.error)||'Pull failed.')+'</div>'; return; }
-      document.getElementById('stPull').disabled=false;
+      if(!d||!d.ok){ document.getElementById(P.out).innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">'+OS.esc((d&&d.error)||'Pull failed.')+'</div>'; return; }
+      document.getElementById(P.btn).disabled=false;
       var res=d.result||{};
       var head='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">'+OS.pill((d.fetched||0)+' fetched','neutral')+' '+OS.pill((res.matched||0)+' matched',res.matched?'good':'neutral')+' '+(res.unmatched?OS.pill(res.unmatched+' unmatched','warn'):'')+(res.committed?' '+OS.pill('removed '+res.removed,'neutral'):'')+'</div>';
       var un=(res.rows||[]).filter(function(x){return !x.matched_to;}).slice(0,20);
       var unHtml=un.length?('<div class="os-filter-note" style="margin-top:6px">Unmatched: '+un.map(function(x){return OS.esc(x.value);}).join(' · ')+'</div>'):'';
-      document.getElementById('stOut').innerHTML=head+unHtml;
-      if(commit){ OS.toast((res.matched||0)+' ServiceTrade users matched'+(res.removed?(', '+res.removed+' removed'):'')+'.'); loadSoftware(); }
-    }).catch(function(){ document.getElementById('stOut').innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">The ServiceTrade pull failed.</div>'; });
+      document.getElementById(P.out).innerHTML=head+unHtml;
+      if(commit){ OS.toast((res.matched||0)+' '+P.name+' users matched'+(res.removed?(', '+res.removed+' removed'):'')+'.'); loadSoftware(); }
+    }).catch(function(){ document.getElementById(P.out).innerHTML='<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">The '+OS.esc(P.name)+' pull failed.</div>'; });
 }
 function swRun(commit){
   if(!SW_CSV){ OS.toast('Choose a CSV first.','bad'); return; }

@@ -122,6 +122,7 @@ if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into 
 // open requests created before those items existed. Idempotent.
 try { const b = require('./services/offboardingAgent').backfillOffboardingItems(); if (b.itemsAdded) console.log(`[offboarding] backfilled ${b.itemsAdded} item(s) across ${b.requestsTouched} request(s)`); } catch (e) { console.warn('[offboarding] backfill error:', (e as Error).message); }
 try { const n = require('./services/onboardingAgent').rerouteComputerApprovalsToManagers(); if (n) console.log(`[onboarding] sent ${n} open computer approval(s) to the hire's manager`); } catch (e) { console.warn('[onboarding] manager reroute error:', (e as Error).message); }
+try { const r = require('./services/offboardingAgent').reconcileAppAccessItems(); if (r.na || r.done) console.log(`[offboarding] closed ${r.na + r.done} Sage/ServiceTrade step(s) for people without that account`); } catch (e) { console.warn('[offboarding] app access reconcile error:', (e as Error).message); }
 try { const n = require('./services/onboardingAgent').backfillDueDates(); if (n) console.log(`[onboarding] dated ${n} pending item(s) from start dates`); } catch (e) { console.warn('[onboarding] due-date backfill error:', (e as Error).message); }
 // Surface production readiness warnings once at boot (live mode only). Non-fatal.
 bootReadinessWarnings();
@@ -408,6 +409,19 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+// One-time: the IT manager asked for a test of the laptop-approval email managers now receive.
+setTimeout(() => {
+  try {
+    const { getState, setState } = require('./db/schema');
+    if (getState('test_approval_email_v1') === '1') return;
+    const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+    require('./services/onboardingOwners').sendTestApprovalEmail('devon.booker@1stfpservices.com', base)
+      .then((r: { ok: boolean; error?: string }) => {
+        if (r.ok) { setState('test_approval_email_v1', '1'); console.log('[onboarding] sent the test approval email'); }
+        else console.warn('[onboarding] test approval email not sent:', r.error);
+      }).catch(() => undefined);
+  } catch (e) { console.warn('[onboarding] test approval email error:', (e as Error).message); }
+}, 1000 * 20).unref();
 setInterval(() => { void runDueSyncs(); }, SYNC_TICK_MS).unref();
 // One detection pass at boot so the exceptions queue is populated before the first sync cycle.
 setTimeout(() => { try { detectExceptions(); } catch (e) { console.warn('[exceptions] boot detect error:', (e as Error).message); } }, 1000 * 8).unref();

@@ -63,6 +63,6 @@ export async function pullServiceTradeUsers(commit: boolean): Promise<{ ok: bool
   }
   if (kept === 0) return { ok: false, error: `ServiceTrade returned ${users.length} record(s) but none had a usable email or name.`, fetched: users.length };
 
-  const result = importSoftwareCsv(app.id, lines.join('\n'), commit);
+  const result = importSoftwareCsv(app.id, lines.join('\n'), commit, 'api');
   return { ok: result.ok, error: result.error, fetched: users.length, result };
 }

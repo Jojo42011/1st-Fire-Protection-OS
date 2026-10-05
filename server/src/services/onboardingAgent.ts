@@ -1,7 +1,7 @@
 import { getDb } from '../db/index';
 import { catalogByKind, catalogAll, CatalogItem } from './onboardingCatalog';
 import { addUserToGroup, graphConfigured } from './msGraphGroups';
-import { managerEmailByName } from './offboardingAgent';
+import { managerEmailByName, managerOfByName } from './offboardingAgent';
 
 /**
  * New-hire Onboarding engine.
@@ -26,7 +26,7 @@ export const OWNERS: { key: Owner; label: string; tag: string }[] = [
   { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
   { key: 'it_manager', label: 'IT manager (approval)', tag: 'IT Manager' },
-  { key: 'manager', label: "Hire's manager (approval)", tag: 'Manager' },
+  { key: 'manager', label: 'Approving manager (one level up)', tag: 'Manager' },
   { key: 'rebecca', label: 'Accounting (approval)', tag: 'Accounting' },
   { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
   { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
@@ -162,12 +162,30 @@ export function resolveHireManager(req: { employee_id?: number | null; manager_n
   return { name: named || null, email: null, source: null };
 }
 
-/** Where a new-computer approval goes: the hire's own manager, or the IT manager when BambooHR has no
- *  manager email for them (so it is never stranded). */
-function computerApprovalRoute(req: any): { owner: Owner; email_to?: string; note: string } {
+/**
+ * Who approves a new computer: the hire's manager's own manager (one level up in BambooHR), since the
+ * hire's manager is usually the one who filled in the intake form. Falls back to the IT manager when
+ * BambooHR has no supervisor (or no email) above the hire's manager, so it is never stranded.
+ */
+export function resolveComputerApprover(req: { employee_id?: number | null; manager_name?: string | null }): { name: string | null; email: string | null; via: string | null } {
   const m = resolveHireManager(req);
-  if (m.email) return { owner: 'manager', email_to: m.email, note: `Manager: ${m.name || m.email}${m.source === 'bamboo' ? ' (from BambooHR)' : ''}` };
-  return { owner: 'it_manager', note: `No manager email found in BambooHR${m.name ? ` for "${m.name}"` : ''}, so this came to the IT manager.` };
+  if (!m.name) return { name: null, email: null, via: null };
+  const up = managerOfByName(m.name);
+  const email = up ? managerEmailByName(up) : null;
+  if (!up || !email || (m.email && email.toLowerCase() === m.email.toLowerCase())) return { name: up, email: null, via: m.name };
+  return { name: up, email, via: m.name };
+}
+
+function computerApprovalRoute(req: any): { owner: Owner; email_to?: string; note: string } {
+  const a = resolveComputerApprover(req);
+  if (a.email) return { owner: 'manager', email_to: a.email, note: `Approver: ${a.name} (${a.via}'s manager, from BambooHR)` };
+  return { owner: 'it_manager', note: a.via ? `No manager above ${a.via} found in BambooHR, so this came to the IT manager.` : 'No manager found for this hire, so this came to the IT manager.' };
+}
+
+/** Drop routing notes an earlier route appended to an approval's detail, before adding the current one. */
+function stripRouteNote(detail: string | null): string | null {
+  const keep = String(detail || '').split(/\.\s+/).filter((seg) => seg && !/^(Manager: |Approver: |No manager (email )?(found|above))/.test(seg.trim()));
+  return keep.length ? keep.join('. ').replace(/\.$/, '') : null;
 }
 
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'on';
@@ -667,21 +685,20 @@ export function setStartDate(requestId: number, startDate: string | null, now = 
  *  Once (a state flag), at boot. Returns how many moved. */
 export function rerouteComputerApprovalsToManagers(): number {
   const { getState, setState } = require('../db/schema') as typeof import('../db/schema');
-  if (getState('onboarding_computer_to_manager_v1') === '1') return 0;
+  if (getState('onboarding_computer_to_skip_level_v1') === '1') return 0;
   const db = getDb();
   const rows = db.prepare(
     `SELECT i.id, i.detail, r.employee_id, r.manager_name FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
-      WHERE i.status = 'pending' AND i.label = 'Approve new computer' AND i.owner IN ('it', 'it_manager', 'mario')`
+      WHERE i.status = 'pending' AND i.label = 'Approve new computer' AND i.owner IN ('it', 'it_manager', 'mario', 'manager')`
   ).all() as { id: number; detail: string | null; employee_id: number | null; manager_name: string | null }[];
-  const upd = db.prepare(`UPDATE onboarding_items SET owner = 'manager', owner_label = ?, email_to = ?, detail = ? WHERE id = ?`);
+  const upd = db.prepare(`UPDATE onboarding_items SET owner = ?, owner_label = ?, email_to = ?, detail = ? WHERE id = ?`);
   let moved = 0;
   for (const r of rows) {
     const route = computerApprovalRoute(r);
-    if (!route.email_to) continue;
-    upd.run(OWNER_LABEL.manager, route.email_to, [r.detail, route.note].filter(Boolean).join('. '), r.id);
+    upd.run(route.owner, OWNER_LABEL[route.owner], route.email_to || null, [stripRouteNote(r.detail), route.note].filter(Boolean).join('. '), r.id);
     moved++;
   }
-  setState('onboarding_computer_to_manager_v1', '1');
+  setState('onboarding_computer_to_skip_level_v1', '1');
   return moved;
 }
 

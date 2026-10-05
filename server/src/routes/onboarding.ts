@@ -34,7 +34,7 @@ import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings 
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
-import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange } from '../services/onboardingOwners';
+import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange, sendTestApprovalEmail } from '../services/onboardingOwners';
 import { decider, sendDenied } from '../people/decider';
 import { currentUser } from '../people/authz';
 
@@ -100,6 +100,16 @@ router.post('/api/onboarding/:id(\\d+)/owner-email/:owner/send', async (req, res
   const base = `${req.protocol}://${req.get('host')}`;
   const out = await sendOwnerEmailNow(Number(req.params.id), owner, base);
   res.status(out.ok ? 200 : 400).json(out);
+});
+
+/** Send yourself the laptop-approval email a hire's manager gets, for a made-up hire (records nothing). */
+router.post('/api/onboarding/test-approval-email', async (req, res) => {
+  const me = currentUser(req);
+  const to = String((me && me.email) || (req.body || {}).to || '').trim().toLowerCase();
+  if (!/^[^@\s]+@1stfpservices\.com$/.test(to)) return res.status(400).json({ ok: false, error: 'Sign in with your company account (or give a 1stfpservices.com address).' });
+  const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const out = await sendTestApprovalEmail(to, base);
+  res.status(out.ok ? 200 : 400).json({ ...out, to });
 });
 
 /** The owner->email routing map (HR, IT, accounting, ...) so a People admin can view and edit it. */

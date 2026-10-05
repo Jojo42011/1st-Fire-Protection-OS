@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { appAccessFor, APP_GATED_ACTIONS } from './appAccess';
 import { getState, setState } from '../db/schema';
 
 /**
@@ -267,6 +268,8 @@ export function createOffboarding(payload: OffboardingPayload): { request: any; 
 
   // No AD account and no email? The account/mailbox/cloud steps do not apply: mark them N/A up front.
   if (!hasDirectory(req)) markNonApplicable(requestId);
+  // Not a Sage Intacct or ServiceTrade user? Those removal steps do not apply either.
+  reconcileAppAccessItems(requestId);
 
   return { request: req, items: itemsFor(requestId) };
 }
@@ -282,6 +285,40 @@ function markNonApplicable(requestId: number): number {
   ).run(requestId, ...codes);
   recompute(requestId);
   return r.changes;
+}
+
+/**
+ * Close Sage Intacct / ServiceTrade steps the person has no account for, using the apps' latest user
+ * lists. Never had the app: N/A. Was on an earlier list but is gone now: done (someone already removed
+ * them). Anyone we cannot be sure about keeps the task. Runs on create, after every user-list refresh,
+ * and at boot, over pending items only, so a decision a person made is never overwritten.
+ */
+export function reconcileAppAccessItems(requestId?: number): { na: number; done: number; requests: number[] } {
+  const db = getDb();
+  const codes = Object.keys(APP_GATED_ACTIONS);
+  const items = db.prepare(
+    `SELECT i.id, i.request_id, i.action_code, r.employee_id, r.upn, r.name
+       FROM offboarding_items i JOIN offboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND r.status != 'cancelled' AND i.action_code IN (${codes.map(() => '?').join(',')})
+        ${requestId != null ? 'AND i.request_id = ?' : ''}`
+  ).all(...codes, ...(requestId != null ? [requestId] : [])) as any[];
+  const close = db.prepare(`UPDATE offboarding_items SET status = ?, decided_by = ?, decided_at = datetime('now') WHERE id = ? AND status = 'pending'`);
+  let na = 0, done = 0;
+  const touched = new Set<number>();
+  for (const it of items) {
+    const app = APP_GATED_ACTIONS[it.action_code];
+    const a = appAccessFor(it, app);
+    const asOf = (a.asOf || '').slice(0, 10);
+    if (a.state === 'none') {
+      close.run('na', `system: not on the ${app} user list (${asOf})`, it.id);
+      na++; touched.add(it.request_id);
+    } else if (a.state === 'removed') {
+      close.run('done', `system: no longer a ${app} user (${asOf})`, it.id);
+      done++; touched.add(it.request_id);
+    }
+  }
+  for (const id of touched) recompute(id);
+  return { na, done, requests: [...touched] };
 }
 
 function itemsFor(requestId: number): any[] {
@@ -525,6 +562,21 @@ const flipComma = (s: string) => {
 /** A manager's work email from their name as BambooHR stores it ("First Last" or "Last, First"). */
 export function managerEmailByName(name: string | null | undefined): string | null {
   return mgrEmail(nameToEmail(), name);
+}
+
+/** A person's own manager (BambooHR supervisor name), looked up by their name in either order. */
+export function managerOfByName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const want = new Set([lc(name), lc(flipComma(name))]);
+  const rows = getDb().prepare(
+    `SELECT legal_first_name, legal_last_name, preferred_name, entra_display_name, manager FROM employees
+      WHERE manager IS NOT NULL AND manager != '' AND employment_status NOT IN ('terminated')`
+  ).all() as any[];
+  for (const r of rows) {
+    const names = [empFullName(r), `${r.legal_first_name || ''} ${r.legal_last_name || ''}`.trim(), r.entra_display_name].filter(Boolean).map(lc);
+    if (names.some((n) => want.has(n))) return r.manager;
+  }
+  return null;
 }
 
 function mgrEmail(n2e: Map<string, string>, name: string | null | undefined): string | null {

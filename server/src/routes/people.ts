@@ -16,6 +16,8 @@ import { catalogAll, addCatalogItem, updateCatalogItem, removeCatalogItem } from
 import { importComputers } from '../services/rmmImport';
 import * as sw from '../services/softwareLicenses';
 import { pullServiceTradeUsers } from '../services/servicetradeUsers';
+import { pullSageUsers } from '../services/appAccessSync';
+import { reconcileAppAccessItems } from '../services/offboardingAgent';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
@@ -232,11 +234,20 @@ router.post('/api/people/software/apps', requirePeople('people_admin', 'it'), (r
 });
 router.post('/api/people/software/import', requirePeople('people_admin', 'it'), (req, res) => {
   const b = req.body || {};
-  res.json(sw.importSoftwareCsv(Number(b.app_id), String(b.csv || ''), !!b.commit));
+  const out = sw.importSoftwareCsv(Number(b.app_id), String(b.csv || ''), !!b.commit);
+  if (out.ok && out.committed) reconcileAppAccessItems(); // a new user list can close Sage / ServiceTrade offboarding steps
+  res.json(out);
 });
 // ServiceTrade access: pull users live from the ServiceTrade REST API and record who has access.
 router.post('/api/people/software/servicetrade-pull', requirePeople('people_admin', 'it'), async (req, res) => {
   const out = await pullServiceTradeUsers(!!(req.body || {}).commit);
+  if (out.ok && out.result?.committed) reconcileAppAccessItems();
+  res.status(out.ok ? 200 : 400).json(out);
+});
+// Sage Intacct access: the same, from the Sage API when it is connected.
+router.post('/api/people/software/sage-pull', requirePeople('people_admin', 'it', 'accounting'), async (req, res) => {
+  const out = await pullSageUsers(!!(req.body || {}).commit);
+  if (out.ok && out.result?.committed) reconcileAppAccessItems();
   res.status(out.ok ? 200 : 400).json(out);
 });
 // Stamp each employee's authoritative UPN/email from Entra so identity comes from Microsoft 365, not

@@ -1271,6 +1271,11 @@ export function initDb(): void {
   addColumn('onboarding_items', 'parent_id', 'INTEGER'); // the approval this follow-up task came from
   addColumn('onboarding_items', 'note', 'TEXT');        // e.g. the reason an approval was rejected
   addColumn('onboarding_items', 'email_to', 'TEXT');    // a per-item recipient (the hire's own manager), over the lane address
+  // When each app's user list was last loaded (upload or API), and the rows that matched no employee,
+  // so offboarding only skips an app's removal task when the list is trustworthy for that person.
+  addColumn('software_apps', 'last_import_at', 'TEXT');
+  addColumn('software_apps', 'last_unmatched_json', 'TEXT');
+  addColumn('employee_software', 'access_level', 'TEXT');
   // Live Google reviews: the Google review id (for dedupe + posting a reply), the location it is on,
   // whether the reply was auto-published, and when it published.
   addColumn('reviews', 'ext_id', 'TEXT');

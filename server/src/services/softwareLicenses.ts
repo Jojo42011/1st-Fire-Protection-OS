@@ -16,6 +16,7 @@ const SEED_APPS: { name: string; vendor: string; has_api?: boolean; cost?: numbe
   { name: 'HydraCAD', vendor: 'Hydratec', cost: 2880 },
   { name: 'AutoCAD', vendor: 'Autodesk', has_api: true, cost: 2095 },
   { name: 'ServiceTrade', vendor: 'ServiceTrade', has_api: true },        // platform subscription, not per-seat
+  { name: 'Sage Intacct', vendor: 'Sage', has_api: true },                 // priced per user type (Business / Construction manager / Employee)
 ];
 
 export function seedSoftwareApps(): void {
@@ -73,13 +74,23 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
 }
 
 const EMAIL_ALIASES = ['email', 'e-mail', 'mail', 'email address', 'user email', 'upn', 'user principal name', 'username', 'user name', 'login', 'account', 'user'];
-const NAME_ALIASES = ['name', 'full name', 'display name', 'user', 'user name', 'first and last name', 'member'];
-function findCol(headers: string[], aliases: string[]): number {
-  for (const a of aliases) { const i = headers.indexOf(a); if (i >= 0) return i; }
+const NAME_ALIASES = ['name', 'full name', 'display name', 'username', 'user name', 'first and last name', 'member', 'user'];
+const REF_ALIASES = ['user id', 'userid', 'login id', 'loginid', 'login'];
+const LEVEL_ALIASES = ['user type', 'license type', 'role', 'access level'];
+function findCol(headers: string[], aliases: string[], ok: (i: number) => boolean = () => true): number {
+  for (const a of aliases) { const i = headers.indexOf(a); if (i >= 0 && ok(i)) return i; }
   // loose contains-match
-  for (let i = 0; i < headers.length; i++) if (aliases.some((a) => headers[i].includes(a))) return i;
+  for (let i = 0; i < headers.length; i++) if (ok(i) && aliases.some((a) => headers[i].includes(a))) return i;
   return -1;
 }
+/** Share of a column's non-blank values that pass a test, so a "Username" column holding "Allie Call"
+ *  is read as names and one holding addresses is read as emails (vendors label these inconsistently). */
+function share(rows: string[][], col: number, test: (v: string) => boolean): number {
+  const vals = rows.map((r) => (r[col] || '').trim()).filter(Boolean);
+  return vals.length ? vals.filter(test).length / vals.length : 0;
+}
+const looksEmail = (v: string) => /@/.test(v);
+const looksName = (v: string) => !/@/.test(v) && /[A-Za-z]+[\s,]+[A-Za-z]/.test(v);
 
 const localPart = (s: string) => String(s || '').split('@')[0].trim().toLowerCase();
 
@@ -104,19 +115,22 @@ export interface SoftwareImportResult {
   recognized: string[]; rows: { value: string; matched_to: string | null }[];
 }
 
-export function importSoftwareCsv(appId: number, csv: string, commit: boolean): SoftwareImportResult {
+export function importSoftwareCsv(appId: number, csv: string, commit: boolean, source: 'csv' | 'api' = 'csv'): SoftwareImportResult {
   const db = getDb();
   const app = db.prepare(`SELECT * FROM software_apps WHERE id = ?`).get(appId) as SoftwareApp | undefined;
   if (!app) return { ok: false, error: 'unknown_app', committed: false, app: '', total: 0, matched: 0, unmatched: 0, removed: 0, recognized: [], rows: [] };
   const { headers, rows } = parseCsv(csv);
   if (!rows.length) return { ok: false, error: 'No data rows found in the file.', committed: false, app: app.name, total: 0, matched: 0, unmatched: 0, removed: 0, recognized: [], rows: [] };
-  const emailCol = findCol(headers, EMAIL_ALIASES);
-  const nameCol = findCol(headers, NAME_ALIASES);
+  const emailCol = findCol(headers, EMAIL_ALIASES, (i) => share(rows, i, looksEmail) >= 0.5);
+  const nameCol = findCol(headers, NAME_ALIASES, (i) => i !== emailCol && share(rows, i, looksName) >= 0.5);
+  const refCol = findCol(headers, REF_ALIASES, (i) => i !== emailCol && i !== nameCol);
+  const levelCol = findCol(headers, LEVEL_ALIASES, (i) => i !== emailCol && i !== nameCol && i !== refCol);
   if (emailCol < 0 && nameCol < 0) return { ok: false, error: 'Could not find an email or name column. Check the header row.', committed: false, app: app.name, total: rows.length, matched: 0, unmatched: 0, removed: 0, recognized: [], rows: [] };
-  const recognized = [emailCol >= 0 ? 'email' : '', nameCol >= 0 ? 'name' : ''].filter(Boolean);
+  const recognized = [emailCol >= 0 ? 'email' : '', nameCol >= 0 ? 'name' : '', refCol >= 0 ? 'login' : '', levelCol >= 0 ? 'user type' : ''].filter(Boolean);
 
   const idx = buildIndex();
-  const seen = new Set<number>();
+  const seen = new Map<number, { ref: string | null; level: string | null }>();
+  const unmatchedNames: string[] = [];
   const preview: { value: string; matched_to: string | null }[] = [];
   let matched = 0, unmatched = 0;
   for (const r of rows) {
@@ -125,20 +139,23 @@ export function importSoftwareCsv(appId: number, csv: string, commit: boolean): 
     let empId: number | undefined;
     if (email) { empId = idx.byEmail.get(email.toLowerCase()) ?? idx.byEmail.get(localPart(email)); }
     if (empId == null && name) { for (const k of nameKeyVariants({ display: name })) { const hit = idx.byName.get(k); if (hit) { empId = hit; break; } } }
-    if (empId != null) { matched++; seen.add(empId); } else unmatched++;
+    if (empId != null) { matched++; seen.set(empId, { ref: (refCol >= 0 ? r[refCol] : '') || email || null, level: (levelCol >= 0 ? r[levelCol] : '') || null }); }
+    else { unmatched++; unmatchedNames.push(name || email); }
     preview.push({ value: email || name || '(blank)', matched_to: empId != null ? idx.byId.get(empId)!.name : null });
   }
 
   let removed = 0;
   if (commit) {
     const now = new Date().toISOString();
-    const up = db.prepare(`INSERT INTO employee_software (employee_id, app_id, status, source, external_ref, assigned_at) VALUES (?, ?, 'active', 'csv', ?, ?)
-      ON CONFLICT(employee_id, app_id) DO UPDATE SET status='active', source='csv', assigned_at=COALESCE(employee_software.assigned_at, excluded.assigned_at), removed_at=NULL`);
+    const up = db.prepare(`INSERT INTO employee_software (employee_id, app_id, status, source, external_ref, access_level, assigned_at) VALUES (?, ?, 'active', ?, ?, ?, ?)
+      ON CONFLICT(employee_id, app_id) DO UPDATE SET status='active', source=excluded.source, external_ref=COALESCE(excluded.external_ref, employee_software.external_ref),
+        access_level=COALESCE(excluded.access_level, employee_software.access_level), assigned_at=COALESCE(employee_software.assigned_at, excluded.assigned_at), removed_at=NULL`);
     // People present in a prior import but absent now are marked removed (the vendor no longer lists them).
     const existing = db.prepare(`SELECT employee_id FROM employee_software WHERE app_id = ? AND status = 'active'`).all(appId) as { employee_id: number }[];
     const tx = db.transaction(() => {
-      for (const empId of seen) up.run(empId, appId, null, now);
+      for (const [empId, v] of seen) up.run(empId, appId, source, v.ref, v.level, now);
       for (const e of existing) if (!seen.has(e.employee_id)) { db.prepare(`UPDATE employee_software SET status='removed', removed_at=? WHERE app_id=? AND employee_id=?`).run(now, appId, e.employee_id); removed++; }
+      db.prepare(`UPDATE software_apps SET last_import_at = ?, last_unmatched_json = ? WHERE id = ?`).run(now, JSON.stringify(unmatchedNames.filter(Boolean)), appId);
     });
     tx();
     audit('software_imported', `${app.name}: ${matched} licensed, ${removed} removed`, {});

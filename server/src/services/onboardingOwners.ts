@@ -178,6 +178,36 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   return { sent };
 }
 
+/* ─────────────────────────── test approval email ─────────────────────────── */
+
+/** A made-up hire and laptop approval for the test email. Its link signs item 0, which the approval
+ *  page treats as a test: it looks and behaves like the real one but records nothing. */
+export function testApproval(email: string, now = new Date()): { item: OnboardingItem; hire: { name: string; start_date: string; job_position: string } } {
+  const start = new Date(now.getTime() + 14 * 86400000).toISOString().slice(0, 10);
+  return {
+    hire: { name: 'Test Hire', start_date: start, job_position: 'Fire Sprinkler Inspector' },
+    item: {
+      id: 0, request_id: 0, owner: 'manager', owner_label: 'Approving manager (one level up)', kind: 'approval',
+      label: 'Approve new computer', detail: 'Standard laptop. Approver: you (this is a test)', status: 'pending',
+      email_to: email, due_at: start, decided_by: null, decided_at: null, created_at: now.toISOString(),
+    },
+  };
+}
+
+/** Send the laptop-approval email a manager gets, for a made-up hire, so it can be checked end to end. */
+export async function sendTestApprovalEmail(to: string, base: string): Promise<{ ok: boolean; error?: string }> {
+  if (!mailCredsPresent()) return { ok: false, error: 'Mail is not connected.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No onboarding sender is set.' };
+  const { item, hire } = testApproval(to);
+  const start = startDateInfo(hire.start_date);
+  const html = ownerTasksHtml(hire.name, [item], `${base}/onboarding`, start,
+    'TEST: this is the laptop approval email the approving manager (the hire\'s manager\'s manager) gets. Try the button: approving or declining a test records nothing.',
+    { email: to, base });
+  const out = await sendMail(to, '[Test] ' + ownerSubject(hire.name, start), html, { from: sender.address, fromName: sender.name });
+  return out.ok ? { ok: true } : { ok: false, error: (out as any).error || 'send failed' };
+}
+
 /* ─────────────────────────── manual per-lane email (generate + send) ─────────────────────────── */
 import { getDb } from '../db/index';
 

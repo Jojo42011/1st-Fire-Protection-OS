@@ -18,6 +18,7 @@ import { detectExceptions } from '../os/exceptions';
 import { syncReviews, googleConnected } from './googleBusiness';
 import { sendOnboardingReminders } from './onboardingOwners';
 import { sendOffboardingOverdueReminders } from './offboardingAgent';
+import { refreshAppAccess } from './appAccessSync';
 
 export interface SyncDef {
   key: string;
@@ -92,6 +93,13 @@ export const SYNC_DEFS: SyncDef[] = [
       if (r && r.error) return `error: ${r.error}`;
       return r && r.synced ? `${r.synced} call(s) synced` : 'no new calls';
     },
+  },
+  {
+    key: 'app_access',
+    label: 'App access (ServiceTrade, Sage Intacct)',
+    detail: 'Who has a ServiceTrade or Sage Intacct account, shown on each person; offboarding skips removal steps for people without one',
+    defaultInterval: 720,
+    run: refreshAppAccess,
   },
   {
     key: 'lifecycle_reminders',
