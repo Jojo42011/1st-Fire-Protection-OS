@@ -15,7 +15,8 @@ export const OWNER_ROLE: Record<Owner, Role | null> = {
   bamboo: 'hr',
   sandi: 'hr',
   it: 'it',
-  it_manager: 'it', // workstation + MGMT approvals: visible to IT; routed to the IT manager by email
+  it_manager: 'it', // MGMT approvals (and computers with no manager on file): routed to the IT manager by email
+  manager: 'manager', // new-computer approvals: each one emailed to that hire's own manager (item email_to)
   rebecca: 'accounting',
   mario: 'executive_approver',
   denise: 'safety',
@@ -123,11 +124,22 @@ export function dueLabel(dueAt: string | null | undefined, now = new Date()): { 
   return { text: d.relative === 'today' ? 'Due today' : `Due ${d.short}`, late: false };
 }
 
-function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string): string {
+/** Who an item's email goes to: its own recipient (a hire's manager) when set, else its lane address. */
+export function recipientFor(it: { owner: string; email_to?: string | null }, map: Partial<Record<Owner, string>> = ownerEmailMap()): string | null {
+  return (it.email_to && it.email_to.trim()) || map[it.owner as Owner] || null;
+}
+
+/** Approve/Reject link for an approval sent to `email`, so they can decide without signing in. */
+function approveButton(it: OnboardingItem, email: string | null, base: string): string {
+  if (it.kind !== 'approval' || it.status !== 'pending' || !email) return '';
+  return `<div style="margin-top:8px"><a href="${esc(approvalUrl(base, it.id, email))}" style="background:#101828;color:#fff;text-decoration:none;padding:7px 12px;border-radius:7px;font-size:13px;display:inline-block">Review and approve</a></div>`;
+}
+
+function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string, approver?: { email: string; base: string }): string {
   const rows = items.map((it) => {
     const due = dueLabel(it.due_at);
     const dueHtml = due ? `<div style="color:${due.late ? '#B42318;font-weight:600' : '#667085'};font-size:12px;margin-top:2px">${esc(due.text)}</div>` : '';
-    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap;text-align:right">${esc(it.kind)}${dueHtml}</td></tr>`;
+    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}${approver ? approveButton(it, approver.email, approver.base) : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap;text-align:right">${esc(it.kind)}${dueHtml}</td></tr>`;
   }).join('');
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
     <p>${intro ? esc(intro) : `New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:`}</p>
@@ -148,7 +160,7 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   const byEmail = new Map<string, OnboardingItem[]>();
   for (const it of items) {
     if (it.status !== 'pending') continue; // only notify about work still to do
-    const email = map[it.owner as Owner];
+    const email = recipientFor(it, map);
     if (!email) continue;
     if (!byEmail.has(email)) byEmail.set(email, []);
     byEmail.get(email)!.push(it);
@@ -158,7 +170,7 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   let sent = 0;
   const start = startDateInfo(request.start_date);
   for (const [email, its] of byEmail) {
-    const html = ownerTasksHtml(request.name, its, boardUrl, start, opts.intro);
+    const html = ownerTasksHtml(request.name, its, boardUrl, start, opts.intro, { email, base });
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(email, (opts.subjectPrefix || '') + ownerSubject(request.name, start), html, { from: sender.address, fromName: sender.name });
     if (out.ok) sent++;
@@ -182,11 +194,11 @@ export function ownerEmailPreview(requestId: number, owner: Owner, base: string)
   // Only email what's still to do: drop items already done or discarded, so the email reflects the
   // live board and shrinks as tasks are completed.
   const items = allItems.filter((it) => it.status === 'pending');
-  const to = ownerEmailMap()[owner] || null;
+  const to = (items[0] && recipientFor(items[0])) || ownerEmailMap()[owner] || null;
   const start = startDateInfo(request.start_date);
   const subject = ownerSubject(request.name, start, ownerLabel);
   const boardUrl = `${base}/onboarding`;
-  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl, start) : '';
+  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl, start, undefined, to ? { email: to, base } : undefined) : '';
   const text = [
     `Onboarding for ${request.name}: ${ownerLabel}`,
     start ? `Start date: ${start.long}${start.relative ? ` (${start.relative})` : ''}` : 'Start date: not provided yet',
@@ -212,6 +224,7 @@ export async function sendOwnerEmailNow(requestId: number, owner: Owner, base: s
 
 /* ─────────────────────────── follow-ups, start-date changes, rejections, reminders ─────────────────────────── */
 import { managerEmailFor } from './onboardingAgent';
+import { approvalUrl } from './approvalLinks';
 import { inSendWindow } from './reviewRequests';
 import { getState as getS, setState as setS } from '../db/schema';
 
@@ -251,7 +264,9 @@ export async function notifyRejection(item: OnboardingItem, by: string, base: st
   const sender = senderFor('onboarding');
   if (!sender) return { ok: false, error: 'no onboarding sender' };
   const req = requestRow(item.request_id);
-  const to = req ? managerEmailFor(req.id) : null;
+  let to = req ? managerEmailFor(req.id) : null;
+  // The manager turned it down themselves: tell IT (who would have ordered it), not the manager.
+  if (to && to.toLowerCase() === String(by).toLowerCase()) to = ownerEmailMap().it_manager || ownerEmailMap().it || null;
   if (!req || !to) return { ok: false, error: 'no manager email on file' };
   const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
     <p>For <b>${esc(req.name)}</b>'s onboarding, <b>${esc(item.label.replace(/^Approve /, ''))}</b> was not approved by ${esc(by)}.</p>
@@ -283,7 +298,7 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
   const map = ownerEmailMap();
   const byEmail = new Map<string, typeof rows>();
   for (const r of rows) {
-    const email = map[r.owner as Owner];
+    const email = recipientFor(r, map);
     if (!email) continue;
     if (!byEmail.has(email)) byEmail.set(email, []);
     byEmail.get(email)!.push(r);
@@ -300,7 +315,7 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
       return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#667085;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` +
         `<table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${its.map((it) => {
           const due = dueLabel(it.due_at, now);
-          return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#667085'}">${esc(due ? due.text : '')}</td></tr>`;
+          return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${approveButton(it, email, base)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#667085'}">${esc(due ? due.text : '')}</td></tr>`;
         }).join('')}</tbody></table>`;
     }).join('');
     const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">

@@ -522,6 +522,11 @@ const flipComma = (s: string) => {
   return t;
 };
 /** Resolve a manager name (either order) to a work email via the name->email map. */
+/** A manager's work email from their name as BambooHR stores it ("First Last" or "Last, First"). */
+export function managerEmailByName(name: string | null | undefined): string | null {
+  return mgrEmail(nameToEmail(), name);
+}
+
 function mgrEmail(n2e: Map<string, string>, name: string | null | undefined): string | null {
   if (!name) return null;
   return n2e.get(lc(name)) || n2e.get(lc(flipComma(name))) || null;

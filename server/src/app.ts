@@ -24,6 +24,7 @@ import brain from './routes/brain';
 import invoices from './routes/invoices';
 import reviews from './routes/reviews';
 import reviewLanding from './routes/reviewLanding';
+import approvalLinks from './routes/approvalLinks';
 import calls from './routes/calls';
 import impact from './routes/impact';
 import callWebhook from './routes/callWebhook';
@@ -120,6 +121,7 @@ if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into 
 // Backfill newly-defined offboarding checklist items (HR/Accounting/IT-device tasks) onto existing
 // open requests created before those items existed. Idempotent.
 try { const b = require('./services/offboardingAgent').backfillOffboardingItems(); if (b.itemsAdded) console.log(`[offboarding] backfilled ${b.itemsAdded} item(s) across ${b.requestsTouched} request(s)`); } catch (e) { console.warn('[offboarding] backfill error:', (e as Error).message); }
+try { const n = require('./services/onboardingAgent').rerouteComputerApprovalsToManagers(); if (n) console.log(`[onboarding] sent ${n} open computer approval(s) to the hire's manager`); } catch (e) { console.warn('[onboarding] manager reroute error:', (e as Error).message); }
 try { const n = require('./services/onboardingAgent').backfillDueDates(); if (n) console.log(`[onboarding] dated ${n} pending item(s) from start dates`); } catch (e) { console.warn('[onboarding] due-date backfill error:', (e as Error).message); }
 // Surface production readiness warnings once at boot (live mode only). Non-fatal.
 bootReadinessWarnings();
@@ -152,6 +154,7 @@ app.use('/api/servicetrade/webhook', rateLimit({ windowMs: 60_000, max: 240 }));
 app.use('/api/intake', rateLimit({ windowMs: 60_000, max: 60 }));
 app.use('/r', rateLimit({ windowMs: 60_000, max: 120 }));
 app.use('/api/review-page/events', rateLimit({ windowMs: 60_000, max: 60 }));
+app.use('/approve', rateLimit({ windowMs: 60_000, max: 30 }));
 
 // ---- password gate (enforced only when APP_PASSWORD is set) ----
 app.use(gate);
@@ -166,6 +169,7 @@ app.post('/api/logout', handleLogout);
 app.use(health);
 app.use(brain);
 app.use(invoices);
+app.use(approvalLinks);
 app.use(reviewLanding);
 app.use(reviews);
 app.use(calls);

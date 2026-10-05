@@ -197,10 +197,10 @@ function isAsset(p: string): boolean {
 function isPublicIntake(p: string): boolean {
   return p.startsWith('/intake/') || p.startsWith('/api/intake/');
 }
-// Customer-facing review surfaces: /r/<token> email links and the NFC badge page with its analytics
-// beacon. They only lead to each office's public Google review page, so nothing private is exposed.
+// Token links that work without an OS login: /r/<token> review-request links, the NFC page and its
+// beacon, and /approve/<token> (a signed link for one approval, sent to the person who must decide).
 function isReviewLink(p: string): boolean {
-  return p.startsWith('/r/') || p === '/review' || p === '/review/' || p === '/api/review-page/events';
+  return p.startsWith('/r/') || p === '/review' || p === '/review/' || p === '/api/review-page/events' || p.startsWith('/approve/');
 }
 // The on-prem AD agent authenticates with its own bearer token (checked in routes/agent.ts), not an
 // app session: the domain controller has no OS login. Let its endpoints past the session gate so the

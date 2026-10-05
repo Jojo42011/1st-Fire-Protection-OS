@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { catalogByKind, catalogAll, CatalogItem } from './onboardingCatalog';
 import { addUserToGroup, graphConfigured } from './msGraphGroups';
+import { managerEmailByName } from './offboardingAgent';
 
 /**
  * New-hire Onboarding engine.
@@ -18,13 +19,14 @@ import { addUserToGroup, graphConfigured } from './msGraphGroups';
 /* ─────────────────────────── the owners (the color key) ─────────────────────────── */
 // 'mario' (Owner) and 'daniel' (Ops) are legacy lanes kept only so old decided items still read
 // correctly: IT now approves workstations and licensed software, and Safety takes vehicle details.
-export type Owner = 'bamboo' | 'it' | 'it_manager' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
+export type Owner = 'bamboo' | 'it' | 'it_manager' | 'manager' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
   { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
   { key: 'it_manager', label: 'IT manager (approval)', tag: 'IT Manager' },
+  { key: 'manager', label: "Hire's manager (approval)", tag: 'Manager' },
   { key: 'rebecca', label: 'Accounting (approval)', tag: 'Accounting' },
   { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
   { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
@@ -118,6 +120,7 @@ export interface OnboardingPayload {
 export interface OnboardingItem {
   id: number;
   request_id: number;
+  email_to?: string | null;
   due_at?: string | null;
   parent_id?: number | null;
   note?: string | null;
@@ -137,6 +140,34 @@ interface DraftItem {
   kind: 'task' | 'approval';
   label: string;
   detail?: string;
+  email_to?: string;
+}
+
+/** The hire's manager, from BambooHR: the bound employee's supervisor, else the manager named on the
+ *  intake, matched to a work email on the roster. */
+export function resolveHireManager(req: { employee_id?: number | null; manager_name?: string | null }): { name: string | null; email: string | null; source: 'bamboo' | 'intake' | null } {
+  const db = getDb();
+  if (req.employee_id) {
+    const e = db.prepare(`SELECT manager FROM employees WHERE id = ?`).get(req.employee_id) as { manager: string | null } | undefined;
+    if (e?.manager) {
+      const email = managerEmailByName(e.manager);
+      if (email) return { name: e.manager, email, source: 'bamboo' };
+    }
+  }
+  const named = String(req.manager_name || '').trim();
+  if (named) {
+    const email = managerEmailByName(named);
+    if (email) return { name: named, email, source: 'intake' };
+  }
+  return { name: named || null, email: null, source: null };
+}
+
+/** Where a new-computer approval goes: the hire's own manager, or the IT manager when BambooHR has no
+ *  manager email for them (so it is never stranded). */
+function computerApprovalRoute(req: any): { owner: Owner; email_to?: string; note: string } {
+  const m = resolveHireManager(req);
+  if (m.email) return { owner: 'manager', email_to: m.email, note: `Manager: ${m.name || m.email}${m.source === 'bamboo' ? ' (from BambooHR)' : ''}` };
+  return { owner: 'it_manager', note: `No manager email found in BambooHR${m.name ? ` for "${m.name}"` : ''}, so this came to the IT manager.` };
 }
 
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'on';
@@ -263,13 +294,15 @@ function routeItems(req: any): DraftItem[] {
     }
   }
 
-  // ── IT manager: new computer (the IT manager approves the purchase; approving creates IT's order + setup task) ──
+  // ── new computer: the hire's manager approves the purchase (IT manager if none is on file);
+  //    approving creates IT's order + setup task ──
   const ct = (req.computer_type || 'none') as string;
   if (ct && ct !== 'none') {
     const comp = computerById(ct);
     if (comp) {
       const detail = [comp.label, comp.spec].filter(Boolean).join(': ');
-      items.push({ owner: 'it_manager', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
+      const route = computerApprovalRoute(req);
+      items.push({ owner: route.owner, kind: 'approval', label: 'Approve new computer', detail: [detail, route.note].filter(Boolean).join('. '), email_to: route.email_to });
     }
   }
 
@@ -363,11 +396,11 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
 
   const drafts = routeItems(req);
   const insItem = db.prepare(
-    `INSERT INTO onboarding_items (request_id, owner, owner_label, kind, label, detail, due_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO onboarding_items (request_id, owner, owner_label, kind, label, detail, due_at, email_to)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const startDate = (req as any).start_date as string | null;
-  for (const d of drafts) insItem.run(requestId, d.owner, OWNER_LABEL[d.owner], d.kind, d.label, d.detail || null, dueFor(d.kind, startDate));
+  for (const d of drafts) insItem.run(requestId, d.owner, OWNER_LABEL[d.owner], d.kind, d.label, d.detail || null, dueFor(d.kind, startDate), d.email_to || null);
 
   return { request: req, items: itemsFor(requestId) };
 }
@@ -628,6 +661,28 @@ export function setStartDate(requestId: number, startDate: string | null, now = 
   const upd = db.prepare(`UPDATE onboarding_items SET due_at = ? WHERE id = ?`);
   for (const it of pending) upd.run(dueFor(it.kind, v, now), it.id);
   return db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId);
+}
+
+/** Open "Approve new computer" items made before manager routing: send each to the hire's manager.
+ *  Once (a state flag), at boot. Returns how many moved. */
+export function rerouteComputerApprovalsToManagers(): number {
+  const { getState, setState } = require('../db/schema') as typeof import('../db/schema');
+  if (getState('onboarding_computer_to_manager_v1') === '1') return 0;
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT i.id, i.detail, r.employee_id, r.manager_name FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND i.label = 'Approve new computer' AND i.owner IN ('it', 'it_manager', 'mario')`
+  ).all() as { id: number; detail: string | null; employee_id: number | null; manager_name: string | null }[];
+  const upd = db.prepare(`UPDATE onboarding_items SET owner = 'manager', owner_label = ?, email_to = ?, detail = ? WHERE id = ?`);
+  let moved = 0;
+  for (const r of rows) {
+    const route = computerApprovalRoute(r);
+    if (!route.email_to) continue;
+    upd.run(OWNER_LABEL.manager, route.email_to, [r.detail, route.note].filter(Boolean).join('. '), r.id);
+    moved++;
+  }
+  setState('onboarding_computer_to_manager_v1', '1');
+  return moved;
 }
 
 /** Give pending items on open requests a due date when they have none yet (requests made before due

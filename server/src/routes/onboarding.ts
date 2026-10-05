@@ -137,10 +137,13 @@ router.get('/api/onboarding/:id(\\d+)', (req, res) => {
 
 /** The signed-in person allowed to decide this item (its lane must be one they can see). */
 function itemDecider(req: any, itemId: number) {
-  const row = getDb().prepare(`SELECT owner FROM onboarding_items WHERE id = ?`).get(itemId) as { owner: string } | undefined;
+  const row = getDb().prepare(`SELECT owner, email_to FROM onboarding_items WHERE id = ?`).get(itemId) as { owner: string; email_to: string | null } | undefined;
   return decider(req, (u) => {
     const vis = visibleOwners(u);
-    return !vis || !row || vis.has(row.owner as any);
+    if (!vis || !row) return true; // admins and executive approvers
+    // A hire's-manager approval is that manager's call, not every manager's.
+    if (row.owner === 'manager') return !!row.email_to && row.email_to.toLowerCase() === u.email.toLowerCase();
+    return vis.has(row.owner as any);
   });
 }
 const baseUrl = (req: any) => `${req.protocol}://${req.get('host')}`;

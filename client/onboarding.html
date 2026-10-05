@@ -486,7 +486,7 @@ function renderMetric(){
   ]);
 }
 function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
-function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',it_manager:'IT Manager',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops',laura:'ServiceTrade'};return m[o]||o;}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',it_manager:'IT Manager',manager:'Manager',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops',laura:'ServiceTrade'};return m[o]||o;}
 // "Due Mon, Oct 5" / "Due today" / "Overdue (Fri, Oct 2)", in Central time like the server.
 function todayCT(){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 function shortDay(ymd){var d=new Date(ymd+'T12:00:00Z');return isNaN(d)?ymd:d.toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric'});}
