@@ -90,7 +90,7 @@ export interface OffboardingPayload {
   last_working_date?: string;
   forward_to?: string;
   mailbox_action?: 'delete' | 'hold';
-  source?: 'manual' | 'backlog';
+  source?: 'manual' | 'backlog' | 'bamboo';
   created_by?: string;
 }
 
@@ -117,7 +117,23 @@ export function hasDirectory(req: { upn?: string | null; sam?: string | null; ob
 const DIRECTORY_ACTIONS = new Set<string>([
   'ad_disable', 'revoke_sessions', 'groups_remove', 'fwd_set', 'autoreply_set', 'data_reassign',
   'mbx_shared', 'license_remove', 'fwd_stop', 'ad_delete', 'mbx_delete', 'mbx_hold', 'it_icloud_logoff',
+  'it_teams_phone',
 ]);
+
+/** Which paid seats to reclaim: the licensed software chosen on this person's onboarding, if any. */
+function paidSoftwareDetail(req: any): string {
+  const generic = 'Bluebeam, AutoCAD, HydraCAD and any other paid seat: release it so the next hire can use it.';
+  try {
+    const db = getDb();
+    const ob = db.prepare(
+      `SELECT software_json FROM onboarding_requests WHERE (employee_id IS NOT NULL AND employee_id = ?) OR lower(name) = lower(?) ORDER BY id DESC LIMIT 1`
+    ).get(req.employee_id ?? -1, req.name || '') as { software_json: string | null } | undefined;
+    const chosen: string[] = ob && ob.software_json ? JSON.parse(ob.software_json) : [];
+    const paid = new Set((db.prepare(`SELECT name FROM onboarding_catalog WHERE kind = 'software' AND approval = 1`).all() as { name: string }[]).map((r) => r.name));
+    const seats = chosen.filter((n) => paid.has(n));
+    return seats.length ? `From onboarding: ${seats.join(', ')}. Release each seat so the next hire can use it.` : generic;
+  } catch { return generic; }
+}
 
 /* ─────────────────────────── the plan ─────────────────────────── */
 function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftItem[] {
@@ -149,7 +165,7 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_keyfob_collect', label: 'Collect physical key fobs', due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_badge_collect', label: 'Collect the company ID badge', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: `Emails ${SAFETY_MBX}. Pull the departing employee from the fire-marshal license and insurance filings.`, due_at: base, email_to: SAFETY_MBX },
-    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', detail: `Emails ${ACCT_MBX} to remove the Sage Intacct user.`, due_at: base, email_to: ACCT_MBX },
+    { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', detail: `Emails ${ACCT_MBX} to remove the Sage Intacct user (Accounting grants Sage, so Accounting removes it).`, due_at: base, email_to: ACCT_MBX },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: `Emails ${LAURA_MBX}.`, due_at: base, email_to: LAURA_MBX },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
@@ -161,6 +177,13 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'acct_bank_access', label: 'Remove the user\'s access to bank and payment portals', detail: 'If the departing employee was an authorized user or signer.', due_at: base, email_to: ACCT_MBX },
 
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'mbx_shared', label: 'Convert the mailbox to a shared mailbox', due_at: s2 },
+    // Things onboarding hands out that cost money or carry access until someone takes them back.
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_software_reclaim', label: 'Reclaim paid software seats', detail: paidSoftwareDetail(req), due_at: base },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_cell_line', label: 'Cancel or reassign the company cell line', detail: 'The returned phone still has an active line and number. Skip if no company phone was issued.', due_at: base },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'safety_vehicle_collect', label: 'Collect the company vehicle and keys', detail: `Emails ${SAFETY_MBX}. Skip if no vehicle was assigned.`, due_at: base, email_to: SAFETY_MBX },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'safety_wex_cancel', label: 'Cancel the WEX fuel card', detail: `Emails ${SAFETY_MBX}. Skip if no fuel card was issued.`, due_at: base, email_to: SAFETY_MBX },
+    { owner: 'hr', stage: 's1', kind: 'task', action_code: 'safety_auto_policy', label: 'Remove from the State Auto policy', detail: `Emails ${SAFETY_MBX}. Skip if they were not a listed driver.`, due_at: base, email_to: SAFETY_MBX },
+    { owner: 'it', stage: 's2', kind: 'task', action_code: 'it_teams_phone', label: 'Release the Teams phone number and remove the Teams Phone license', detail: 'Teams Phone with Calling Plan is a separate paid license from Microsoft 365. Reassign the number or release it.', due_at: s2 },
     { owner: 'it', stage: 's2', kind: 'task', action_code: 'license_remove', label: 'Remove the Microsoft 365 license', detail: 'Frees the paid seat once the mailbox is shared. IT handles this (Accounting has no 365 admin access).', due_at: s2 },
 
     { owner: 'it', stage: 's3', kind: 'timed', action_code: 'fwd_stop', label: `Stop forwarding and auto-reply (on ${fwd})`, due_at: fwd },
@@ -221,7 +244,7 @@ export function createOffboarding(payload: OffboardingPayload): { request: any; 
       forward_until,
       retain_until,
       mailbox_action,
-      source: payload.source === 'backlog' ? 'backlog' : 'manual',
+      source: payload.source === 'backlog' || payload.source === 'bamboo' ? payload.source : 'manual',
       created_by: payload.created_by || 'operator',
     });
 
@@ -298,7 +321,11 @@ export function backfillOffboardingItems(): { requestsTouched: number; itemsAdde
       if (existing.has(d.action_code)) reconcile.run(d.owner, OWNER_LABEL[d.owner], d.email_to || null, d.detail || null, req.id, d.action_code);
     }
     const drafts = planned.filter((d) => !existing.has(d.action_code));
-    for (const d of drafts) ins.run(req.id, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null, d.email_to || null);
+    for (const d of drafts) {
+      const r = ins.run(req.id, d.owner, OWNER_LABEL[d.owner], d.stage, d.kind, d.action_code, d.label, d.detail || null, d.due_at, d.snapshot_json || null, d.email_to || null);
+      // A finished offboarding is not reopened by a checklist item added later: record it as N/A.
+      if (req.status === 'complete') db.prepare(`UPDATE offboarding_items SET status='na', decided_by='system (added after completion)', decided_at=datetime('now') WHERE id = ?`).run(Number(r.lastInsertRowid));
+    }
     if (drafts.length) { requestsTouched++; itemsAdded += drafts.length; }
     if (!hasDirectory(req)) markNonApplicable(req.id); // catch no-directory requests created before this rule
     recompute(req.id); // an added pending item may reopen a request that had shown complete
@@ -655,4 +682,98 @@ export function applyOffboardingJobResult(itemId: number, _kind: string, _result
   db.prepare(`UPDATE offboarding_items SET status = 'done', decided_by = 'dc-agent', decided_at = datetime('now') WHERE id = ?`).run(itemId);
   const reqRow = db.prepare(`SELECT request_id FROM offboarding_items WHERE id = ?`).get(itemId) as { request_id: number } | undefined;
   if (reqRow) recompute(reqRow.request_id);
+}
+
+/* ─────────────────────────── automatic start from BambooHR ─────────────────────────── */
+const HR_MBX = 'hr@1stfpservices.com';
+
+/**
+ * People BambooHR just marked terminated get an offboarding right away, instead of waiting for someone
+ * to notice. Skips anyone who already has one (including a cancelled one: a person decided that).
+ * The last day is the day the termination was seen, since BambooHR's roster feed carries no date.
+ */
+export function autoStartOffboardings(employeeIds: number[], now = new Date()): { id: number; name: string }[] {
+  const created: { id: number; name: string }[] = [];
+  const day = now.toISOString().slice(0, 10);
+  for (const employeeId of employeeIds) {
+    const who = resolveOffboardingFromEmployee(employeeId);
+    if (!who.name) continue;
+    if (hasOffboarding({ employee_id: employeeId, upn: who.upn, object_guid: who.object_guid })) continue;
+    const out = createOffboarding({ ...who, name: who.name, employee_id: employeeId, termination_date: day, source: 'bamboo', created_by: 'BambooHR sync' });
+    created.push({ id: out.request.id, name: out.request.name });
+  }
+  return created;
+}
+
+/** Tell IT (and HR) an offboarding started on its own, so the day-one access steps happen today. */
+export async function notifyAutoStarted(created: { id: number; name: string }[], base: string): Promise<number> {
+  if (!created.length) return 0;
+  const { sendMail, mailCredsPresent } = require('./msGraphMail') as typeof import('./msGraphMail');
+  if (!mailCredsPresent()) return 0;
+  const esc = (t: string) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const names = created.map((c) => esc(c.name)).join(', ');
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
+    <p><b>${names}</b> ${created.length === 1 ? 'was' : 'were'} marked terminated in BambooHR, so offboarding started automatically.</p>
+    <p>Day-one steps are due today: disable the AD account, revoke sessions, remove groups, and collect devices.</p>
+    <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p></div>`;
+  let sent = 0;
+  for (const to of [IT_MBX, HR_MBX]) {
+    // eslint-disable-next-line no-await-in-loop
+    const out = await sendMail(to, `Offboarding started: ${created.map((c) => c.name).join(', ')}`, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
+    if (out.ok) sent++;
+  }
+  return sent;
+}
+
+/* ─────────────────────────── overdue reminders ─────────────────────────── */
+const REMINDER_LIST_CAP = 25;
+
+/** Where a department's overdue reminder goes. Managers get their own address. */
+function reminderAddress(dept: Dept, managerEmail: string | null): string | null {
+  if (dept === 'manager') return managerEmail || null;
+  if (dept === 'hr') return HR_MBX;
+  return DEPT_MAILBOX[dept] || null;
+}
+
+/**
+ * Once a weekday, one email per department (and per manager) listing every open offboarding step that
+ * is past due. Access left on after someone leaves is the risk, so this does not wait to be asked.
+ */
+export async function sendOffboardingOverdueReminders(base: string, now = new Date()): Promise<{ sent: number; items: number; waiting?: boolean }> {
+  const { inSendWindow } = require('./reviewRequests') as typeof import('./reviewRequests');
+  if (!inSendWindow(now)) return { sent: 0, items: 0, waiting: true };
+  const { sendMail, mailCredsPresent } = require('./msGraphMail') as typeof import('./msGraphMail');
+  if (!mailCredsPresent()) return { sent: 0, items: 0 };
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const rows = getDb().prepare(
+    `SELECT i.*, r.name AS person, r.manager_email FROM offboarding_items i JOIN offboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND i.due_at < ? AND r.status = 'open' ORDER BY i.due_at, r.name`
+  ).all(today) as any[];
+  const byTo = new Map<string, any[]>();
+  for (const r of rows) {
+    const to = reminderAddress(itemDept(r), r.manager_email);
+    if (!to) continue;
+    if (!byTo.has(to)) byTo.set(to, []);
+    byTo.get(to)!.push(r);
+  }
+  const esc = (t: string) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let sent = 0;
+  for (const [to, items] of byTo) {
+    const key = `offboarding_overdue_sent:${to.toLowerCase()}`;
+    if (getState(key) === today) continue;
+    const shown = items.slice(0, REMINDER_LIST_CAP);
+    const lines = shown.map((it) => {
+      const days = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${String(it.due_at).slice(0, 10)}T12:00:00Z`)) / 86400000);
+      return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1"><b>${esc(it.person)}</b>: ${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;color:#B42318;font-size:12px;font-weight:600">${days} day${days === 1 ? '' : 's'} overdue</td></tr>`;
+    }).join('');
+    const more = items.length > shown.length ? `<p style="color:#667085;font-size:13px">And ${items.length - shown.length} more on the board.</p>` : '';
+    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
+      <p><b>${items.length} offboarding step${items.length === 1 ? ' is' : 's are'} past due.</b> Until they are done, a former employee may still have access or a paid seat.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${lines}</tbody></table>${more}
+      <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p></div>`;
+    // eslint-disable-next-line no-await-in-loop
+    const out = await sendMail(to, `${items.length} offboarding step${items.length === 1 ? '' : 's'} overdue`, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
+    if (out.ok) { setState(key, today); sent++; }
+  }
+  return { sent, items: rows.length };
 }

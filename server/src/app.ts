@@ -120,6 +120,7 @@ if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into 
 // Backfill newly-defined offboarding checklist items (HR/Accounting/IT-device tasks) onto existing
 // open requests created before those items existed. Idempotent.
 try { const b = require('./services/offboardingAgent').backfillOffboardingItems(); if (b.itemsAdded) console.log(`[offboarding] backfilled ${b.itemsAdded} item(s) across ${b.requestsTouched} request(s)`); } catch (e) { console.warn('[offboarding] backfill error:', (e as Error).message); }
+try { const n = require('./services/onboardingAgent').backfillDueDates(); if (n) console.log(`[onboarding] dated ${n} pending item(s) from start dates`); } catch (e) { console.warn('[onboarding] due-date backfill error:', (e as Error).message); }
 // Surface production readiness warnings once at boot (live mode only). Non-fatal.
 bootReadinessWarnings();
 

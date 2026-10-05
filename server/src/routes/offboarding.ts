@@ -19,6 +19,7 @@ import { getDb } from '../db/index';
 import { currentContext } from '../os/scope';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { completeItemByScript } from '../services/offboardingAgent';
+import { decider, sendDenied } from '../people/decider';
 import { isCloudExecutable, cloudActionLabel, runCloudAction, graphOffboardConfigured, offboardingPermissionCheck } from '../services/msGraphOffboard';
 import { osAudit, actorLabel } from '../os/audit';
 
@@ -213,11 +214,15 @@ router.post('/api/offboarding/:id(\\d+)/cancel', (req, res) => {
   res.json({ ok: cancelOffboarding(Number(req.params.id), actor(req)) });
 });
 
-/** Decide an item: complete a task, approve/reject an approval, or skip a step. */
+/** Decide an item: complete a task, approve/reject an approval, or skip a step. Only a signed-in
+ *  person whose department owns the item may decide it, and it is recorded under their email. */
 for (const verb of ['complete', 'approve', 'reject', 'skip'] as const) {
   router.post(`/api/offboarding/items/:id/${verb}`, (req, res) => {
+    const row = getDb().prepare(`SELECT owner FROM offboarding_items WHERE id = ?`).get(Number(req.params.id)) as { owner: string } | undefined;
+    const d = decider(req, (u) => { const allowed = ownersForRoles(u.roles); return !allowed || !row || allowed.includes(row.owner); });
+    if (!d.ok) return sendDenied(res, d);
     try {
-      res.json({ ok: true, item: decideItem(Number(req.params.id), verb, actor(req)) });
+      res.json({ ok: true, item: decideItem(Number(req.params.id), verb, d.actor) });
     } catch (err) {
       res.status(400).json({ ok: false, error: (err as Error).message });
     }

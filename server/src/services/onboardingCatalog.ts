@@ -42,19 +42,19 @@ export function seedOnboardingCatalog(): void {
     { kind: 'computer', name: 'Standard', spec: 'Everyday laptop for office and field work' },
     { kind: 'computer', name: 'Business', spec: 'Heavier multitasking for power users' },
     { kind: 'computer', name: 'CAD', spec: 'Design workstation with dedicated graphics' },
-    // Software: the common set, routed to IT unless it needs an owner license approval. Napco added;
+    // Software: the common set. Licensed seats need IT's approval before install. Napco added;
     // the admin adds the rest of the company's software from the editor.
     { kind: 'software', name: 'Microsoft 365 desktop apps', owner: 'it' },
     { kind: 'software', name: 'Adobe Acrobat', owner: 'it' },
     { kind: 'software', name: 'HFSS', owner: 'it' },
     { kind: 'software', name: 'Napco', owner: 'it' },
-    { kind: 'software', name: 'Bluebeam', owner: 'mario', approval: 1 },
-    { kind: 'software', name: 'AutoCAD', owner: 'mario', approval: 1 },
-    { kind: 'software', name: 'HydraCAD', owner: 'mario', approval: 1 },
+    { kind: 'software', name: 'Bluebeam', owner: 'it', approval: 1 },
+    { kind: 'software', name: 'AutoCAD', owner: 'it', approval: 1 },
+    { kind: 'software', name: 'HydraCAD', owner: 'it', approval: 1 },
     // SharePoint groups: one per real office, plus the standard function groups.
     ...operatingOffices().map((o) => ({ kind: 'sharepoint' as CatalogKind, name: o.label, owner: 'it' })),
     { kind: 'sharepoint', name: 'SAFETY', owner: 'it' },
-    { kind: 'sharepoint', name: 'MGMT', owner: 'mario', approval: 1 },
+    { kind: 'sharepoint', name: 'MGMT', owner: 'it', approval: 1 },
     { kind: 'sharepoint', name: 'ACCT', owner: 'rebecca', approval: 1 },
     { kind: 'sharepoint', name: 'Payroll', owner: 'rebecca', approval: 1 },
     { kind: 'sharepoint', name: 'HR', owner: 'sandi', approval: 1 },
@@ -207,7 +207,7 @@ export function removeCatalogItem(id: number): boolean {
 const SP_ROUTING: Record<string, { owner: string; approval: boolean }> = {
   'sg-sp-accounting': { owner: 'rebecca', approval: true },
   'sg-sp-payroll': { owner: 'rebecca', approval: true },
-  'sg-sp-management': { owner: 'mario', approval: true },
+  'sg-sp-management': { owner: 'it', approval: true },
   'sg-sp-hr': { owner: 'sandi', approval: true },
 };
 

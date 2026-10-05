@@ -16,22 +16,22 @@ import { addUserToGroup, graphConfigured } from './msGraphGroups';
  */
 
 /* ─────────────────────────── the owners (the color key) ─────────────────────────── */
+// 'mario' (Owner) and 'daniel' (Ops) are legacy lanes kept only so old decided items still read
+// correctly: IT now approves workstations and licensed software, and Safety takes vehicle details.
 export type Owner = 'bamboo' | 'it' | 'mario' | 'rebecca' | 'sandi' | 'denise' | 'daniel' | 'laura';
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
   { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
-  { key: 'mario', label: 'Owner (approval)', tag: 'Owner' },
   { key: 'rebecca', label: 'Accounting (approval)', tag: 'Accounting' },
   { key: 'sandi', label: 'HR (approval)', tag: 'HR' },
   { key: 'denise', label: 'Safety (approval)', tag: 'Safety' },
-  { key: 'daniel', label: 'Ops (approval)', tag: 'Ops' },
   { key: 'laura', label: 'ServiceTrade (provisioning)', tag: 'ServiceTrade' },
 ];
 const OWNER_LABEL: Record<Owner, string> = OWNERS.reduce(
   (m, o) => ((m[o.key] = o.label), m),
-  {} as Record<Owner, string>
+  { mario: 'Owner (approval)', daniel: 'Ops (approval)' } as Record<Owner, string>
 );
 const OWNER_ORDER: Owner[] = OWNERS.map((o) => o.key);
 
@@ -117,6 +117,9 @@ export interface OnboardingPayload {
 export interface OnboardingItem {
   id: number;
   request_id: number;
+  due_at?: string | null;
+  parent_id?: number | null;
+  note?: string | null;
   owner: Owner;
   owner_label: string;
   kind: 'task' | 'approval';
@@ -136,6 +139,34 @@ interface DraftItem {
 }
 
 const bool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'on';
+
+/* ─────────────────────────── due dates (from the hire's start date) ───────────────────────────
+ * Approvals are due a week of business days before the start (so the follow-up work has time);
+ * tasks are due the business day before. Never earlier than today, so a late request is "due today"
+ * rather than born overdue. No start date, no due date. */
+const APPROVAL_LEAD_DAYS = 5;
+const TASK_LEAD_DAYS = 1;
+
+function todayCentral(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+function minusBusinessDays(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  let left = n;
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() - 1);
+    const wd = d.getUTCDay();
+    if (wd !== 0 && wd !== 6) left--;
+  }
+  return d.toISOString().slice(0, 10);
+}
+export function dueFor(kind: 'task' | 'approval', startDate: string | null | undefined, now = new Date()): string | null {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(startDate || ''));
+  if (!m) return null;
+  const due = minusBusinessDays(m[1], kind === 'approval' ? APPROVAL_LEAD_DAYS : TASK_LEAD_DAYS);
+  const today = todayCentral(now);
+  return due < today ? today : due;
+}
 
 /* ─────────────────────────── the routing map ───────────────────────────
  * Given the stored request, produce the list of items. A field only generates an item when
@@ -179,7 +210,7 @@ function routeItems(req: any): DraftItem[] {
     const s = catalogRoute('software', name);
     if (!s) continue;
     if (s.kind === 'approval')
-      items.push({ owner: s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Licensed software - needs an owner sign-off.' });
+      items.push({ owner: s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Licensed software: needs IT sign-off before the seat is bought or assigned.' });
     else items.push({ owner: s.owner, kind: 'task', label: `Install ${name}` });
   }
 
@@ -231,13 +262,13 @@ function routeItems(req: any): DraftItem[] {
     }
   }
 
-  // ── Mario: new computer (approval, carrying the label + spec) ──
+  // ── IT: new computer (IT approves the purchase; approving creates the order + setup task) ──
   const ct = (req.computer_type || 'none') as string;
   if (ct && ct !== 'none') {
     const comp = computerById(ct);
     if (comp) {
       const detail = [comp.label, comp.spec].filter(Boolean).join(': ');
-      items.push({ owner: 'mario', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
+      items.push({ owner: 'it', kind: 'approval', label: 'Approve new computer', detail: detail || undefined });
     }
   }
 
@@ -251,17 +282,11 @@ function routeItems(req: any): DraftItem[] {
   if (bool(req.vehicle_transfer)) items.push({ owner: 'denise', kind: 'task', label: 'Company vehicle transfer' });
   if (bool(req.wex_card)) items.push({ owner: 'denise', kind: 'task', label: 'Issue WEX fuel card' });
 
-  // ── company vehicle needed -> THREE items across Sandi, Denise, Daniel ──
+  // ── company vehicle needed -> HR runs the MVR, Safety adds them to the policy (with the vehicle details) ──
   if (bool(req.company_vehicle)) {
     const vd = (req.vehicle_details || '').trim();
     items.push({ owner: 'sandi', kind: 'task', label: "Send driver's license to Denise + run motor vehicle report" });
-    items.push({ owner: 'denise', kind: 'task', label: 'Add to State Auto Policy (after the MVR clears)' });
-    items.push({
-      owner: 'daniel',
-      kind: 'task',
-      label: 'Confirm the vehicle / new-vehicle details',
-      detail: vd || undefined,
-    });
+    items.push({ owner: 'denise', kind: 'task', label: 'Add to State Auto Policy (after the MVR clears)', detail: vd ? `Vehicle: ${vd}` : undefined });
   }
 
   return items;
@@ -337,10 +362,11 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
 
   const drafts = routeItems(req);
   const insItem = db.prepare(
-    `INSERT INTO onboarding_items (request_id, owner, owner_label, kind, label, detail)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO onboarding_items (request_id, owner, owner_label, kind, label, detail, due_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
-  for (const d of drafts) insItem.run(requestId, d.owner, OWNER_LABEL[d.owner], d.kind, d.label, d.detail || null);
+  const startDate = (req as any).start_date as string | null;
+  for (const d of drafts) insItem.run(requestId, d.owner, OWNER_LABEL[d.owner], d.kind, d.label, d.detail || null, dueFor(d.kind, startDate));
 
   return { request: req, items: itemsFor(requestId) };
 }
@@ -530,23 +556,126 @@ function decide(id: number, next: 'done' | 'approved' | 'rejected', requireKind:
 export function completeItem(id: number, by = 'operator'): OnboardingItem {
   return decide(id, 'done', 'task', by);
 }
-/** Approve an approval (the human gate; approval -> approved). */
-export function approveItem(id: number, by = 'operator'): OnboardingItem {
-  return decide(id, 'approved', 'approval', by);
-}
-/** Reject an approval (the human gate; approval -> rejected). */
-export function rejectItem(id: number, by = 'operator'): OnboardingItem {
-  return decide(id, 'rejected', 'approval', by);
+
+/** The work an approval unlocks: approving a purchase or access is not the same as delivering it. */
+export function followUpFor(approval: { label: string; detail: string | null; owner: string }, hireName: string): DraftItem | null {
+  let m: RegExpExecArray | null;
+  if (approval.label === 'Approve new computer') {
+    return { owner: 'it', kind: 'task', label: `Order and set up new computer for ${hireName}`, detail: [approval.detail, 'Order it, image it, encrypt it, install the standard apps, and have it ready on day one.'].filter(Boolean).join('. ') };
+  }
+  if ((m = /^Approve (.+) license$/.exec(approval.label))) return { owner: 'it', kind: 'task', label: `Install ${m[1]}`, detail: 'License approved: buy or assign the seat, then install.' };
+  if ((m = /^Approve SharePoint group:\s*(.+)$/.exec(approval.label))) return { owner: 'it', kind: 'task', label: `Add to SharePoint group: ${m[1].trim()}`, detail: 'Access approved.' };
+  if ((m = /^Approve Sage access:\s*(.+)$/.exec(approval.label))) return { owner: approval.owner as Owner, kind: 'task', label: `Set up Sage access: ${m[1].replace(/\s*\(\$[^)]*\)\s*$/, '').trim()}`, detail: 'Seat approved: create the Sage user.' };
+  if ((m = /^Grant ServiceTrade access:\s*(.+)$/.exec(approval.label))) return { owner: 'laura', kind: 'task', label: `Set up ServiceTrade access: ${m[1].trim()}` };
+  return null;
 }
 
-/** A request flips to 'complete' once no item is still pending (nothing is owed). */
+/** Approve an approval (the human gate; approval -> approved), then create the task that delivers it.
+ *  Idempotent: a follow-up is only created once per approval. */
+export function approveItem(id: number, by = 'operator'): OnboardingItem & { followUp?: OnboardingItem | null } {
+  const item = decide(id, 'approved', 'approval', by);
+  const db = getDb();
+  const req = db.prepare(`SELECT name, start_date FROM onboarding_requests WHERE id = ?`).get(item.request_id) as { name: string; start_date: string | null } | undefined;
+  const existing = db.prepare(`SELECT * FROM onboarding_items WHERE parent_id = ?`).get(id) as OnboardingItem | undefined;
+  if (existing || item.status !== 'approved' || !req) return { ...item, followUp: existing || null };
+  const f = followUpFor(item, req.name);
+  if (!f) return { ...item, followUp: null };
+  const r = db.prepare(
+    `INSERT INTO onboarding_items (request_id, owner, owner_label, kind, label, detail, due_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(item.request_id, f.owner, OWNER_LABEL[f.owner] || f.owner, f.kind, f.label, f.detail || null, dueFor('task', req.start_date), id);
+  recomputeRequestStatus(item.request_id);
+  const followUp = db.prepare(`SELECT * FROM onboarding_items WHERE id = ?`).get(Number(r.lastInsertRowid)) as OnboardingItem;
+  return { ...(db.prepare(`SELECT * FROM onboarding_items WHERE id = ?`).get(id) as OnboardingItem), followUp };
+}
+
+/** Reject an approval (the human gate; approval -> rejected), keeping the reason when one is given. */
+export function rejectItem(id: number, by = 'operator', reason?: string | null): OnboardingItem {
+  const item = decide(id, 'rejected', 'approval', by);
+  const note = String(reason || '').trim().slice(0, 500);
+  if (note && item.status === 'rejected') {
+    getDb().prepare(`UPDATE onboarding_items SET note = ? WHERE id = ? AND note IS NULL`).run(note, id);
+  }
+  return getDb().prepare(`SELECT * FROM onboarding_items WHERE id = ?`).get(id) as OnboardingItem;
+}
+
+/** A request is 'complete' once nothing is pending, unless something was rejected: then it needs a
+ *  person to sort it out with the manager ('needs_attention'), not a green "complete". */
 function recomputeRequestStatus(requestId: number): void {
   const db = getDb();
-  const pending = db
-    .prepare(`SELECT COUNT(*) AS c FROM onboarding_items WHERE request_id = ? AND status = 'pending'`)
-    .get(requestId) as { c: number };
-  const status = pending.c === 0 ? 'complete' : 'open';
+  const cur = db.prepare(`SELECT status FROM onboarding_requests WHERE id = ?`).get(requestId) as { status: string | null } | undefined;
+  if (cur && cur.status === 'discarded') return;
+  const c = db
+    .prepare(`SELECT SUM(status = 'pending') AS pending, SUM(status = 'rejected') AS rejected FROM onboarding_items WHERE request_id = ?`)
+    .get(requestId) as { pending: number | null; rejected: number | null };
+  const status = (c.pending || 0) > 0 ? 'open' : (c.rejected || 0) > 0 ? 'needs_attention' : 'complete';
   db.prepare(`UPDATE onboarding_requests SET status = ? WHERE id = ?`).run(status, requestId);
+}
+
+/** Move a hire's start date: re-date every pending item. Returns the request (or null if missing). */
+export function setStartDate(requestId: number, startDate: string | null, now = new Date()): any | null {
+  const db = getDb();
+  const req = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
+  if (!req) return null;
+  const v = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : null;
+  db.prepare(`UPDATE onboarding_requests SET start_date = ? WHERE id = ?`).run(v, requestId);
+  // The BambooHR record task carries the date in its text; keep it in step.
+  if (req.start_date && v && req.start_date !== v) {
+    db.prepare(`UPDATE onboarding_items SET detail = replace(detail, ?, ?) WHERE request_id = ? AND status = 'pending' AND detail LIKE ?`)
+      .run(`Start date: ${req.start_date}`, `Start date: ${v}`, requestId, `%Start date: ${req.start_date}%`);
+  }
+  const pending = db.prepare(`SELECT id, kind FROM onboarding_items WHERE request_id = ? AND status = 'pending'`).all(requestId) as { id: number; kind: 'task' | 'approval' }[];
+  const upd = db.prepare(`UPDATE onboarding_items SET due_at = ? WHERE id = ?`);
+  for (const it of pending) upd.run(dueFor(it.kind, v, now), it.id);
+  return db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId);
+}
+
+/** Give pending items on open requests a due date when they have none yet (requests made before due
+ *  dates existed). Idempotent; runs at boot. */
+export function backfillDueDates(now = new Date()): number {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT i.id, i.kind, r.start_date FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND i.due_at IS NULL AND r.start_date IS NOT NULL AND (r.status = 'open' OR r.status IS NULL)`
+  ).all() as { id: number; kind: 'task' | 'approval'; start_date: string }[];
+  const upd = db.prepare(`UPDATE onboarding_items SET due_at = ? WHERE id = ?`);
+  let n = 0;
+  for (const r of rows) { const d = dueFor(r.kind, r.start_date, now); if (d) { upd.run(d, r.id); n++; } }
+  return n;
+}
+
+/** Open requests whose BambooHR start date changed since the intake: returns the ones it re-dated. */
+export function syncStartDatesFromEmployees(now = new Date()): { id: number; name: string; from: string | null; to: string }[] {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT r.id, r.name, r.start_date, COALESCE(e.actual_start_date, e.anticipated_start_date) AS emp_start
+       FROM onboarding_requests r JOIN employees e ON e.id = r.employee_id
+      WHERE r.status = 'open' OR r.status IS NULL`
+  ).all() as { id: number; name: string; start_date: string | null; emp_start: string | null }[];
+  const changed: { id: number; name: string; from: string | null; to: string }[] = [];
+  for (const r of rows) {
+    const to = (r.emp_start || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(to) || to === (r.start_date || '').slice(0, 10)) continue;
+    setStartDate(r.id, to, now);
+    changed.push({ id: r.id, name: r.name, from: r.start_date, to });
+  }
+  return changed;
+}
+
+/** Best address for the hire's manager: the person who filled the intake link, else the manager's
+ *  work email from the roster. Null when neither is known. */
+export function managerEmailFor(requestId: number): string | null {
+  const db = getDb();
+  const link = db.prepare(`SELECT recipient_email FROM intake_links WHERE request_id = ? AND recipient_email IS NOT NULL ORDER BY id DESC LIMIT 1`).get(requestId) as { recipient_email: string } | undefined;
+  if (link?.recipient_email) return link.recipient_email;
+  const req = db.prepare(`SELECT manager_name FROM onboarding_requests WHERE id = ?`).get(requestId) as { manager_name: string | null } | undefined;
+  const mgr = String(req?.manager_name || '').trim().toLowerCase();
+  if (!mgr) return null;
+  const e = db.prepare(
+    `SELECT work_email FROM employees WHERE work_email IS NOT NULL AND employment_status NOT IN ('terminated')
+       AND (lower(trim(COALESCE(preferred_name, legal_first_name) || ' ' || legal_last_name)) = ? OR lower(trim(legal_first_name || ' ' || legal_last_name)) = ?)
+      LIMIT 1`
+  ).get(mgr, mgr) as { work_email: string } | undefined;
+  return e?.work_email || null;
 }
 
 /** The catalogs the form needs to render, read live from the editable onboarding_catalog table. */

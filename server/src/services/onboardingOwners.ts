@@ -113,10 +113,22 @@ function ownerSubject(hireName: string, start: StartDateInfo | null, ownerLabel?
   return `Onboarding tasks for ${hireName}${start ? ` (starts ${start.short})` : ''}${ownerLabel ? `: ${ownerLabel}` : ''}`;
 }
 
-function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null): string {
-  const rows = items.map((it) => `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap">${esc(it.kind)}</td></tr>`).join('');
+/** "Due Mon, Oct 5" / "Due today" / "Overdue (Fri, Oct 2)" for one item. */
+export function dueLabel(dueAt: string | null | undefined, now = new Date()): { text: string; late: boolean } | null {
+  const d = startDateInfo(dueAt, now);
+  if (!d || !d.relative) return null;
+  if (/ago$|^yesterday$/.test(d.relative)) return { text: `Overdue (${d.short})`, late: true };
+  return { text: d.relative === 'today' ? 'Due today' : `Due ${d.short}`, late: false };
+}
+
+function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string): string {
+  const rows = items.map((it) => {
+    const due = dueLabel(it.due_at);
+    const dueHtml = due ? `<div style="color:${due.late ? '#B42318;font-weight:600' : '#667085'};font-size:12px;margin-top:2px">${esc(due.text)}</div>` : '';
+    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap;text-align:right">${esc(it.kind)}${dueHtml}</td></tr>`;
+  }).join('');
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
-    <p>New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:</p>
+    <p>${intro ? esc(intro) : `New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:`}</p>
     ${startLineHtml(start)}
     <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${rows}</tbody></table>
     <p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>
@@ -126,7 +138,7 @@ function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: str
 
 /** Email each owner lane's tasks to its routed address (hr@, IT MSP, accounting). Best-effort and
  *  keyless-safe: a no-op when mail is not connected or no owner has a mapped address. */
-export async function notifyOwners(request: any, items: OnboardingItem[], base: string): Promise<{ sent: number }> {
+export async function notifyOwners(request: any, items: OnboardingItem[], base: string, opts: { intro?: string; subjectPrefix?: string } = {}): Promise<{ sent: number }> {
   if (!mailCredsPresent()) return { sent: 0 };
   const sender = senderFor('onboarding');
   if (!sender) return { sent: 0 };
@@ -144,9 +156,9 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   let sent = 0;
   const start = startDateInfo(request.start_date);
   for (const [email, its] of byEmail) {
-    const html = ownerTasksHtml(request.name, its, boardUrl, start);
+    const html = ownerTasksHtml(request.name, its, boardUrl, start, opts.intro);
     // eslint-disable-next-line no-await-in-loop
-    const out = await sendMail(email, ownerSubject(request.name, start), html, { from: sender.address, fromName: sender.name });
+    const out = await sendMail(email, (opts.subjectPrefix || '') + ownerSubject(request.name, start), html, { from: sender.address, fromName: sender.name });
     if (out.ok) sent++;
   }
   return { sent };
@@ -194,4 +206,107 @@ export async function sendOwnerEmailNow(requestId: number, owner: Owner, base: s
   if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding.' };
   const out = await sendMail(p.to, p.subject, p.html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true, to: p.to } : { ok: false, error: out.error };
+}
+
+/* ─────────────────────────── follow-ups, start-date changes, rejections, reminders ─────────────────────────── */
+import { managerEmailFor } from './onboardingAgent';
+import { inSendWindow } from './reviewRequests';
+import { getState as getS, setState as setS } from '../db/schema';
+
+function requestRow(requestId: number): any {
+  return getDb().prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId);
+}
+function pendingItems(requestId: number): OnboardingItem[] {
+  return getDb().prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND status = 'pending' ORDER BY id`).all(requestId) as OnboardingItem[];
+}
+
+/** An approval unlocked work: tell the team that now has to deliver it. */
+export async function notifyFollowUp(approval: OnboardingItem, followUp: OnboardingItem, by: string, base: string): Promise<{ sent: number }> {
+  const req = requestRow(followUp.request_id);
+  if (!req) return { sent: 0 };
+  return notifyOwners(req, [followUp], base, {
+    intro: `${approval.label.replace(/^Approve /, '')} was approved by ${by} for ${req.name}. Next step for your team:`,
+    subjectPrefix: 'Approved, next step: ',
+  });
+}
+
+/** The start date moved: re-send each lane its still-open tasks with the new dates. */
+export async function notifyStartDateChange(requestId: number, from: string | null, base: string): Promise<{ sent: number }> {
+  const req = requestRow(requestId);
+  if (!req) return { sent: 0 };
+  const items = pendingItems(requestId);
+  if (!items.length) return { sent: 0 };
+  const was = startDateInfo(from);
+  return notifyOwners(req, items, base, {
+    intro: `The start date for ${req.name} changed${was ? ` from ${was.long}` : ''}. Your open tasks are re-dated:`,
+    subjectPrefix: 'Start date changed: ',
+  });
+}
+
+/** An approval was turned down: tell the hire's manager, with the reason, so it can be sorted out. */
+export async function notifyRejection(item: OnboardingItem, by: string, base: string): Promise<{ ok: boolean; to?: string; error?: string }> {
+  if (!mailCredsPresent()) return { ok: false, error: 'mail not connected' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'no onboarding sender' };
+  const req = requestRow(item.request_id);
+  const to = req ? managerEmailFor(req.id) : null;
+  if (!req || !to) return { ok: false, error: 'no manager email on file' };
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
+    <p>For <b>${esc(req.name)}</b>'s onboarding, <b>${esc(item.label.replace(/^Approve /, ''))}</b> was not approved by ${esc(by)}.</p>
+    ${item.detail ? `<p style="color:#667085;font-size:13px">${esc(item.detail)}</p>` : ''}
+    <p style="padding:10px 12px;background:#FEF3F2;border-radius:8px;font-size:14px"><b>Reason:</b> ${esc(item.note || 'No reason given.')}</p>
+    <p>Reply to this email or talk to ${esc(by)} if something else is needed instead.</p>
+    <p style="margin-top:16px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>
+  </div>`;
+  const out = await sendMail(to, `Not approved: ${item.label.replace(/^Approve /, '')} for ${req.name}`, html, { from: sender.address, fromName: sender.name });
+  return out.ok ? { ok: true, to } : { ok: false, error: out.error };
+}
+
+/**
+ * The daily nudge: one email per lane address listing every open onboarding task that is overdue or
+ * due within two days, across all hires. Weekdays in business hours, at most once a day per address.
+ */
+export async function sendOnboardingReminders(base: string, now = new Date()): Promise<{ sent: number; addresses: number; items: number; waiting?: boolean }> {
+  if (!inSendWindow(now)) return { sent: 0, addresses: 0, items: 0, waiting: true };
+  if (!mailCredsPresent()) return { sent: 0, addresses: 0, items: 0 };
+  const sender = senderFor('onboarding');
+  if (!sender) return { sent: 0, addresses: 0, items: 0 };
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const soon = new Date(Date.parse(`${today}T12:00:00Z`) + 2 * 86400000).toISOString().slice(0, 10);
+  const rows = getDb().prepare(
+    `SELECT i.*, r.name AS hire, r.start_date AS start_date FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND i.due_at IS NOT NULL AND i.due_at <= ? AND (r.status = 'open' OR r.status IS NULL)
+      ORDER BY i.due_at, r.name, i.id`
+  ).all(soon) as (OnboardingItem & { hire: string; start_date: string | null })[];
+  const map = ownerEmailMap();
+  const byEmail = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const email = map[r.owner as Owner];
+    if (!email) continue;
+    if (!byEmail.has(email)) byEmail.set(email, []);
+    byEmail.get(email)!.push(r);
+  }
+  let sent = 0;
+  for (const [email, items] of byEmail) {
+    const key = `onboarding_reminder_sent:${email.toLowerCase()}`;
+    if (getS(key) === today) continue;
+    const late = items.filter((i) => (i.due_at as string) < today).length;
+    const hires = new Map<string, typeof items>();
+    for (const i of items) { const k = `${i.request_id}`; if (!hires.has(k)) hires.set(k, []); hires.get(k)!.push(i); }
+    const sections = [...hires.values()].map((its) => {
+      const st = startDateInfo(its[0].start_date);
+      return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#667085;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` +
+        `<table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${its.map((it) => {
+          const due = dueLabel(it.due_at, now);
+          return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#667085'}">${esc(due ? due.text : '')}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    }).join('');
+    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
+      <p>${late ? `<b>${late} onboarding task${late === 1 ? ' is' : 's are'} overdue.</b> ` : ''}Here is everything your team has due in the next two days for new hires:</p>${sections}
+      <p style="margin-top:18px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p></div>`;
+    // eslint-disable-next-line no-await-in-loop
+    const out = await sendMail(email, `${late ? `${late} overdue, ` : ''}${items.length} onboarding task${items.length === 1 ? '' : 's'} due`, html, { from: sender.address, fromName: sender.name });
+    if (out.ok) { setS(key, today); sent++; }
+  }
+  return { sent, addresses: byEmail.size, items: rows.length };
 }

@@ -11,6 +11,11 @@ import { getDb } from '../db/index';
 import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
+import { autoStartOffboardings, notifyAutoStarted } from '../services/offboardingAgent';
+import { syncStartDatesFromEmployees } from '../services/onboardingAgent';
+import { notifyStartDateChange } from '../services/onboardingOwners';
+
+const publicBase = () => (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
 import { addUserToGroup, removeUserFromGroup, graphConfigured, listUserGroups } from '../services/msGraphGroups';
 import { listAllUsers, graphUsersConfigured, listSubscribedSkus } from '../services/msGraphUsers';
 
@@ -494,6 +499,8 @@ export interface ImportResult {
   skipped?: number;
   active?: number;
   terminated?: number;
+  offboardingsStarted?: number;
+  startDatesMoved?: number;
 }
 
 /**
@@ -529,6 +536,7 @@ export async function importFromBamboo(actor: string): Promise<ImportResult> {
   );
 
   let created = 0, updated = 0, skipped = 0, active = 0, terminated = 0;
+  const newlyTerminated: number[] = [];
   const tx = db.transaction(() => {
     for (const raw of rows) {
       const m = mapBambooRow(raw);
@@ -538,6 +546,7 @@ export async function importFromBamboo(actor: string): Promise<ImportResult> {
       if (existing) {
         // Keep an in-flight status we're managing; otherwise follow Bamboo.
         const status = IN_FLIGHT_STATUSES.has(existing.employment_status) ? existing.employment_status : m.bamboo_status;
+        if (existing.employment_status === 'active' && status === 'terminated') newlyTerminated.push(existing.id);
         update.run({ ...m, id: existing.id, employment_status: status });
         updated++;
       } else {
@@ -549,7 +558,27 @@ export async function importFromBamboo(actor: string): Promise<ImportResult> {
   tx();
 
   audit('bamboo_import', `Imported ${rows.length} Bamboo rows: ${created} new, ${updated} updated, ${skipped} skipped (${active} active, ${terminated} inactive)`, { actor });
-  return { ok: true, total: rows.length, created, updated, skipped, active, terminated };
+
+  // A termination in BambooHR starts offboarding now, rather than when someone notices.
+  let offboardingsStarted = 0;
+  if (newlyTerminated.length) {
+    try {
+      const started = autoStartOffboardings(newlyTerminated);
+      offboardingsStarted = started.length;
+      for (const s of started) audit('offboarding_auto_started', `Offboarding started automatically: ${s.name} was marked terminated in BambooHR`, { actor: 'system' });
+      if (started.length) void notifyAutoStarted(started, publicBase()).catch(() => {});
+    } catch (e) {
+      audit('offboarding_auto_start_failed', (e as Error).message, { actor: 'system' });
+    }
+  }
+  // An open onboarding follows a start date that moved in BambooHR, and its owners hear about it.
+  let startDatesMoved = 0;
+  try {
+    const moved = syncStartDatesFromEmployees();
+    startDatesMoved = moved.length;
+    for (const m of moved) void notifyStartDateChange(m.id, m.from, publicBase()).catch(() => {});
+  } catch { /* best-effort */ }
+  return { ok: true, total: rows.length, created, updated, skipped, active, terminated, offboardingsStarted, startDatesMoved };
 }
 
 /* ─────────────────────────── manual record edits (assets / access / credentials / notes) ───────────────────────────

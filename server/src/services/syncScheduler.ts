@@ -16,6 +16,8 @@ import { importFromBamboo } from '../people/service';
 import { fetchAllVendorSeats } from './licenseSources';
 import { detectExceptions } from '../os/exceptions';
 import { syncReviews, googleConnected } from './googleBusiness';
+import { sendOnboardingReminders } from './onboardingOwners';
+import { sendOffboardingOverdueReminders } from './offboardingAgent';
 
 export interface SyncDef {
   key: string;
@@ -89,6 +91,19 @@ export const SYNC_DEFS: SyncDef[] = [
       const r: any = await syncFromVapi();
       if (r && r.error) return `error: ${r.error}`;
       return r && r.synced ? `${r.synced} call(s) synced` : 'no new calls';
+    },
+  },
+  {
+    key: 'lifecycle_reminders',
+    label: 'Onboarding & offboarding reminders',
+    detail: 'Daily email to each team: onboarding tasks due in two days or overdue, and overdue offboarding steps (weekdays, business hours)',
+    defaultInterval: 60,
+    run: async () => {
+      const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+      const on = await sendOnboardingReminders(base);
+      const off = await sendOffboardingOverdueReminders(base);
+      if (on.waiting && off.waiting) return 'outside business hours';
+      return `onboarding: ${on.sent} email(s) for ${on.items} due item(s); offboarding: ${off.sent} email(s) for ${off.items} overdue step(s)`;
     },
   },
   {

@@ -427,7 +427,7 @@ export function initDb(): void {
     CREATE TABLE IF NOT EXISTS onboarding_items (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       request_id  INTEGER NOT NULL,
-      owner       TEXT NOT NULL,               -- bamboo|it|mario|rebecca|sandi|denise|daniel
+      owner       TEXT NOT NULL,               -- bamboo|it|rebecca|sandi|denise|laura (legacy: mario|daniel)
       owner_label TEXT NOT NULL,               -- display name for the owner
       kind        TEXT NOT NULL,               -- task|approval
       label       TEXT NOT NULL,               -- what needs doing
@@ -1267,6 +1267,9 @@ export function initDb(): void {
   addColumn('onboarding_requests', 'sage', 'TEXT');                // selected Sage role (routed to Accounting/Rebecca)
   addColumn('onboarding_requests', 'servicetrade', 'TEXT');         // selected ServiceTrade role (routed to Laura)
   addColumn('onboarding_requests', 'existing_computer', 'TEXT');    // name/asset tag of a machine being transferred to this hire
+  addColumn('onboarding_items', 'due_at', 'TEXT');      // YYYY-MM-DD, from the hire's start date
+  addColumn('onboarding_items', 'parent_id', 'INTEGER'); // the approval this follow-up task came from
+  addColumn('onboarding_items', 'note', 'TEXT');        // e.g. the reason an approval was rejected
   // Live Google reviews: the Google review id (for dedupe + posting a reply), the location it is on,
   // whether the reply was auto-published, and when it published.
   addColumn('reviews', 'ext_id', 'TEXT');
@@ -1328,13 +1331,24 @@ export function initDb(): void {
       kind     TEXT NOT NULL,                 -- computer | software | sharepoint | printer
       name     TEXT NOT NULL,                 -- display name (Standard, Bluebeam, Austin, ...)
       spec     TEXT,                          -- computers: the spec/description line
-      owner    TEXT DEFAULT 'it',             -- routing owner (it|mario|rebecca|sandi|denise|daniel)
+      owner    TEXT DEFAULT 'it',             -- routing owner (it|rebecca|sandi|denise|laura)
       approval INTEGER DEFAULT 0,             -- 1 = needs an approval before it is granted
       sort     INTEGER DEFAULT 0,
       active   INTEGER DEFAULT 1
     );
     CREATE INDEX IF NOT EXISTS idx_onboarding_catalog_kind ON onboarding_catalog(kind, active, sort);
   `);
+  // Owner (Mario) and Ops (Daniel) no longer approve onboarding items: IT approves workstations,
+  // licensed software and the management group; vehicle details go to Safety. Once, for open work
+  // and the editable catalog; decided history keeps who decided it.
+  if (getState('onboarding_owner_reassign_v1') !== '1') {
+    db.exec(`
+      UPDATE onboarding_catalog SET owner = 'it' WHERE owner IN ('mario', 'daniel');
+      UPDATE onboarding_items SET owner = 'it', owner_label = 'IT (provisioning)' WHERE owner = 'mario' AND status = 'pending';
+      UPDATE onboarding_items SET owner = 'denise', owner_label = 'Safety (approval)' WHERE owner = 'daniel' AND status = 'pending';
+    `);
+    setState('onboarding_owner_reassign_v1', '1');
+  }
   // Access items (printers, and later SharePoint) map to an Entra security group: selecting one adds
   // the hire to that group, auto-provisioned through Microsoft Graph when connected. Added by
   // ALTER so existing databases pick them up.

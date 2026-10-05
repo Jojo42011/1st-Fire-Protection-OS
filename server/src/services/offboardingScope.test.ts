@@ -22,10 +22,10 @@ test('backfill re-adds newly-defined items to existing requests, without duplica
   assert.equal(before.items.filter((i: any) => i.owner === 'hr' || i.owner === 'accounting').length, 0);
 
   const r1 = backfillOffboardingItems();
-  assert.ok(r1.itemsAdded >= 9, 'the 5 HR + 4 accounting tasks are added back');
+  assert.ok(r1.itemsAdded >= 12, 'the 7 HR + 5 accounting tasks are added back');
   const after = getOffboarding(id, null)!;
-  assert.equal(after.items.filter((i: any) => i.owner === 'hr').length, 5);
-  assert.equal(after.items.filter((i: any) => i.owner === 'accounting').length, 4);
+  assert.equal(after.items.filter((i: any) => i.owner === 'hr').length, 7);
+  assert.equal(after.items.filter((i: any) => i.owner === 'accounting').length, 5);
 
   // Idempotent: a second run adds nothing for this request.
   const countBefore = getOffboarding(id, null)!.items.length;
@@ -63,7 +63,7 @@ test('items map to departments, getOffboarding summarizes them, and digests targ
   assert.ok(depts.includes('it') && depts.includes('safety') && depts.includes('accounting') && depts.includes('hr'));
   const safety = full.departments.find((d) => d.key === 'safety')!;
   assert.equal(safety.mailbox, 'safety@1stfpservices.com');
-  assert.equal(safety.open, 2, 'the two safety-notify tasks are open');
+  assert.equal(safety.open, 5, 'notify Safety, fire-marshal licensing, vehicle, WEX card, and auto policy are open');
   assert.equal(full.departments.find((d) => d.key === 'hr')!.mailbox, null, 'HR has no shared mailbox');
 
   // HR/Manager have no mailbox to send to.
@@ -85,13 +85,22 @@ test('ownersForRoles maps each department to its own owner, admins see all', () 
   assert.equal(ownersForRoles([]), null, 'legacy / no identity sees all');
 });
 
-test('offboarding includes the nine HR tasks and scopes items by department', () => {
+test('offboarding includes the HR tasks and scopes items by department', () => {
   const out = createOffboarding({ name: 'Jane Tech', upn: 'jane@1stfpservices.com', office: 'lubbock', termination_date: '2026-09-15' } as any);
   const id = out.request.id;
 
-  const hrCodes = new Set(['hr_notify_safety', 'hr_vehicle_licensing', 'hr_sage_remove', 'hr_bamboo_inactivate', 'hr_empnav_terminate']);
+  const hrCodes = new Set(['hr_notify_safety', 'hr_vehicle_licensing', 'hr_bamboo_inactivate', 'hr_empnav_terminate', 'safety_vehicle_collect', 'safety_wex_cancel', 'safety_auto_policy']);
   const hrItems = out.items.filter((i: any) => i.owner === 'hr');
-  assert.equal(hrItems.length, 5);
+  assert.equal(hrItems.length, 7);
+  // Accounting grants Sage at onboarding, so Accounting removes it.
+  assert.ok(out.items.some((i: any) => i.action_code === 'hr_sage_remove' && i.owner === 'accounting'), 'Sage removal under Accounting');
+  // What onboarding hands out that costs money is taken back.
+  for (const c of ['it_software_reclaim', 'it_cell_line', 'it_teams_phone']) {
+    assert.ok(out.items.some((i: any) => i.action_code === c && i.owner === 'it'), `${c} under IT`);
+  }
+  for (const c of ['safety_vehicle_collect', 'safety_wex_cancel', 'safety_auto_policy']) {
+    assert.equal(out.items.find((i: any) => i.action_code === c)?.email_to, 'safety@1stfpservices.com', `${c} notifies Safety`);
+  }
   for (const c of hrCodes) assert.ok(out.items.some((i: any) => i.action_code === c && i.owner === 'hr'), `${c} under HR`);
   // ServiceTrade removal moved to IT; the device + physical-access tasks are IT.
   for (const c of ['it_receive_devices', 'it_icloud_logoff', 'it_remove_pins', 'it_keyfob_deactivate', 'it_keyfob_collect', 'it_badge_collect', 'hr_servicetrade_remove']) {
@@ -114,11 +123,11 @@ test('offboarding includes the nine HR tasks and scopes items by department', ()
 
   // Each department viewer sees only its own tasks; admin sees everything.
   const hrView = getOffboarding(id, ['hr'])!;
-  assert.ok(hrView.items.length === 5 && hrView.items.every((i: any) => i.owner === 'hr'));
+  assert.ok(hrView.items.length === 7 && hrView.items.every((i: any) => i.owner === 'hr'));
   const itView = getOffboarding(id, ['it'])!;
   assert.ok(itView.items.length > 0 && itView.items.every((i: any) => i.owner === 'it'));
   const acctView = getOffboarding(id, ['accounting'])!;
-  assert.ok(acctView.items.length === 4 && acctView.items.every((i: any) => i.owner === 'accounting'));
+  assert.ok(acctView.items.length === 5 && acctView.items.every((i: any) => i.owner === 'accounting'));
   const all = getOffboarding(id, null)!;
   assert.ok(all.items.length >= hrView.items.length + itView.items.length);
 });

@@ -130,3 +130,27 @@ test('a token from another tenant is refused at the callback', async () => {
   assert.equal(res.statusCode, 401);
   assert.doesNotMatch(cookie, /^fpos_people=[^;]+\./);
 });
+
+test('only a signed-in person whose lane it is can decide an onboarding item, under their own email', async () => {
+  const { decider } = await import('./decider');
+  const { visibleOwners } = await import('../services/onboardingOwners');
+  const lane = (owner: string) => (u: any) => { const v = visibleOwners(u); return !v || v.has(owner as any); };
+
+  const anon = decider({ headers: {} } as any, lane('it'));
+  assert.equal(anon.ok, false);
+  assert.equal((anon as any).status, 401);
+
+  upsertAppUser('hr.person@1stfpservices.com', ['hr'], 'HR Person');
+  const { cookie } = await signInAs('hr.person@1stfpservices.com');
+  const req = { headers: { cookie: peopleCookie(cookie) } } as any;
+  const own = decider(req, lane('sandi'));
+  assert.deepEqual(own.ok && { actor: own.actor }, { actor: 'hr.person@1stfpservices.com' }, 'recorded under the real email');
+  const other = decider(req, lane('it'));
+  assert.equal(other.ok, false);
+  assert.equal((other as any).status, 403, "HR cannot approve IT's lane");
+
+  upsertAppUser('no.role@1stfpservices.com', [], 'No Role');
+  const nr = await signInAs('no.role@1stfpservices.com');
+  const noRole = decider({ headers: { cookie: peopleCookie(nr.cookie) } } as any, lane('it'));
+  assert.equal(noRole.ok, false, 'a mapped account with no role cannot decide');
+});

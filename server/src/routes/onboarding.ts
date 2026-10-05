@@ -11,6 +11,7 @@ import {
   DOCK_PRICE,
   provisionRequestGroups,
   discardRequest,
+  setStartDate,
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
@@ -33,7 +34,8 @@ import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings 
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
-import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow } from '../services/onboardingOwners';
+import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange } from '../services/onboardingOwners';
+import { decider, sendDenied } from '../people/decider';
 import { currentUser } from '../people/authz';
 
 const router = Router();
@@ -133,31 +135,68 @@ router.get('/api/onboarding/:id(\\d+)', (req, res) => {
   res.json({ ok: true, ...out });
 });
 
+/** The signed-in person allowed to decide this item (its lane must be one they can see). */
+function itemDecider(req: any, itemId: number) {
+  const row = getDb().prepare(`SELECT owner FROM onboarding_items WHERE id = ?`).get(itemId) as { owner: string } | undefined;
+  return decider(req, (u) => {
+    const vis = visibleOwners(u);
+    return !vis || !row || vis.has(row.owner as any);
+  });
+}
+const baseUrl = (req: any) => `${req.protocol}://${req.get('host')}`;
+
 /** Complete a task (task -> done). */
 router.post('/api/onboarding/items/:id/complete', (req, res) => {
+  const d = itemDecider(req, Number(req.params.id));
+  if (!d.ok) return sendDenied(res, d);
   try {
-    res.json({ ok: true, item: completeItem(Number(req.params.id), (req.body && req.body.by) || 'operator') });
+    res.json({ ok: true, item: completeItem(Number(req.params.id), d.actor) });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
 });
 
-/** Approve an approval (the human gate). */
+/** Approve an approval (the human gate), which also creates and emails the task that delivers it. */
 router.post('/api/onboarding/items/:id/approve', (req, res) => {
+  const d = itemDecider(req, Number(req.params.id));
+  if (!d.ok) return sendDenied(res, d);
   try {
-    res.json({ ok: true, item: approveItem(Number(req.params.id), (req.body && req.body.by) || 'operator') });
+    const before = getDb().prepare(`SELECT id FROM onboarding_items WHERE parent_id = ?`).get(Number(req.params.id));
+    const item = approveItem(Number(req.params.id), d.actor);
+    res.json({ ok: true, item, followUp: item.followUp || null });
+    if (item.followUp && !before) void notifyFollowUp(item, item.followUp, d.actor, baseUrl(req)).catch(() => {});
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
 });
 
-/** Reject an approval (the human gate). */
-router.post('/api/onboarding/items/:id/reject', (req, res) => {
+/** Reject an approval (the human gate), with a reason that goes to the hire's manager. */
+router.post('/api/onboarding/items/:id/reject', async (req, res) => {
+  const d = itemDecider(req, Number(req.params.id));
+  if (!d.ok) return sendDenied(res, d);
   try {
-    res.json({ ok: true, item: rejectItem(Number(req.params.id), (req.body && req.body.by) || 'operator') });
+    const wasPending = (getDb().prepare(`SELECT status FROM onboarding_items WHERE id = ?`).get(Number(req.params.id)) as any)?.status === 'pending';
+    const item = rejectItem(Number(req.params.id), d.actor, req.body && req.body.reason);
+    const notified = wasPending ? await notifyRejection(item, d.actor, baseUrl(req)).catch((e) => ({ ok: false, error: (e as Error).message })) : null;
+    res.json({ ok: true, item, managerNotified: notified });
   } catch (err) {
     res.status(400).json({ ok: false, error: (err as Error).message });
   }
+});
+
+/** Change a hire's start date: re-dates every open task and re-sends each lane its updated list. */
+router.put('/api/onboarding/:id(\\d+)/start-date', async (req, res) => {
+  const user = currentUser(req);
+  if (!user || !user.roles.length) return res.status(401).json({ ok: false, error: 'Sign in with Microsoft to change the start date.' });
+  const raw = String((req.body && req.body.start_date) || '').trim();
+  if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return res.status(400).json({ ok: false, error: 'Use a date like 2026-10-12.' });
+  const id = Number(req.params.id);
+  const before = (getDb().prepare(`SELECT start_date FROM onboarding_requests WHERE id = ?`).get(id) as any)?.start_date ?? null;
+  const request = setStartDate(id, raw || null);
+  if (!request) return res.status(404).json({ ok: false, error: 'request not found' });
+  const changed = (before || '') !== (raw || '');
+  const notified = changed && raw ? await notifyStartDateChange(id, before, baseUrl(req)).catch(() => ({ sent: 0 })) : { sent: 0 };
+  res.json({ ok: true, request, notified: notified.sent });
 });
 
 /* ─────────────────────────── intake links (tokenised invites) ─────────────────────────── */

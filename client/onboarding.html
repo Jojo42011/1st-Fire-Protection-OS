@@ -463,7 +463,7 @@ function loadBoard(){
       {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
       {as:'starts',label:'Starts',render:function(v,r){return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
       {as:'prog',label:'Progress',render:function(v,r){var ru=r.rollup||{},done=r.status==='complete';return '<div style="display:flex;align-items:center;gap:9px"><span class="ob-bar'+(done?' done':'')+'"><span style="width:'+(ru.progress||0)+'%"></span></span><span class="muted" style="font-size:11.5px;white-space:nowrap">'+(ru.done||0)+'/'+(ru.total||0)+'</span></div>';}},
-      {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
+      {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):r.status==='needs_attention'?OS.pill('Needs attention','bad'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
     ];
     document.getElementById('board').innerHTML=OS.table(cols, REQS.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id};}), {onRow:true});
     if(OPEN_ID) openReq(OPEN_ID);
@@ -486,7 +486,17 @@ function renderMetric(){
   ]);
 }
 function ownerClass(o){return (o==='denise'||o==='daniel')?'safety':o;}
-function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops'};return m[o]||o;}
+function ownerTag(o){var m={bamboo:'BambooHR',it:'IT',mario:'Owner',rebecca:'Accounting',sandi:'HR',denise:'Safety',daniel:'Ops',laura:'ServiceTrade'};return m[o]||o;}
+// "Due Mon, Oct 5" / "Due today" / "Overdue (Fri, Oct 2)", in Central time like the server.
+function todayCT(){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function shortDay(ymd){var d=new Date(ymd+'T12:00:00Z');return isNaN(d)?ymd:d.toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric'});}
+function dueChip(it){
+  if(!it.due_at||it.status!=='pending') return '';
+  var t=todayCT(), d=String(it.due_at).slice(0,10);
+  if(d<t) return OS.pill('Overdue ('+shortDay(d)+')','bad');
+  if(d===t) return OS.pill('Due today','warn');
+  return '<span class="dl" style="font-size:11px">Due '+esc(shortDay(d))+'</span>';
+}
 function openReq(id){
   OPEN_ID=id;
   fetch('/api/onboarding/'+id).then(function(r){return r.json();}).then(function(d){
@@ -504,7 +514,8 @@ function openReq(id){
     var createBtn=canProv?'<button class="os-btn primary" id="createReq" title="Queue the account for the DC agent to create automatically">Create account on DC</button>':'';
     var provBtn=canProv?'<button class="os-btn" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run by hand">Script instead</button>':'';
     document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
-      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div></div>'+
+      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div>'+
+      '<div class="sum">Starts <b>'+(req.start_date?esc(new Date(String(req.start_date).slice(0,10)+'T12:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric',year:'numeric'})):'(no start date)')+'</b> <button class="il-btn" id="changeStart" data-current="'+esc(req.start_date||'')+'" style="margin-left:6px">Change</button></div></div>'+
       '<div style="display:flex;gap:9px">'+createBtn+provBtn+'<button class="os-btn" id="discardReq" title="Remove this request from the board">Discard</button><button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
     document.getElementById('closeReq').addEventListener('click',closeReq);
     document.getElementById('discardReq').addEventListener('click',function(){
@@ -537,6 +548,18 @@ function openReq(id){
   });
 }
 function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; }
+// Move the start date: every open task is re-dated and each team is emailed its updated list.
+function changeStartDate(id,current){
+  var v=prompt('New start date (YYYY-MM-DD). Open tasks are re-dated and each team is emailed.',current||'');
+  if(v===null) return;
+  v=v.trim();
+  fetch('/api/onboarding/'+id+'/start-date',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({start_date:v})})
+    .then(function(r){return r.json();}).then(function(res){
+      if(!res||!res.ok){ OS.toast((res&&res.error)||'Could not change the start date.',{tone:'bad',ms:7000}); return; }
+      OS.toast('Start date '+(v?'set to '+v:'cleared')+(res.notified?'. Emailed '+res.notified+' team'+(res.notified===1?'':'s')+'.':'.'),{ms:5000});
+      openReq(id); loadBoard();
+    }).catch(function(){ OS.toast('Could not reach the server.',{tone:'bad'}); });
+}
 // Account queued for the DC agent: show the UPN and the one-time password once, for the admin to relay.
 function showQueued(res){
   var warn=(res.warnings||[]).map(function(w){return '<div style="font-weight:600;font-size:12px;color:var(--critical,#8C1D18);margin:4px 0">'+esc(w)+'</div>';}).join('');
@@ -604,17 +627,30 @@ function itemRow(it){
   else { st=OS.pill('Rejected','bad'); }
   return '<div class="ob-item"><div class="il-x"><div class="lab">'+esc(it.label)+'</div>'+
     (it.detail?'<div class="dl">'+esc(it.detail)+'</div>':'')+
-    '<div class="dl" style="font-size:11px">'+esc(it.kind)+(it.decided_by&&it.status!=='pending'?(' · '+esc(it.status)+' by '+esc(it.decided_by)):'')+'</div></div>'+
-    '<div class="ax">'+st+act+'</div></div>';
+    (it.note?'<div class="dl" style="color:var(--critical,#8C1D18)">Reason: '+esc(it.note)+'</div>':'')+
+    '<div class="dl" style="font-size:11px">'+esc(it.kind)+(it.parent_id?' · created when its approval was granted':'')+(it.decided_by&&it.status!=='pending'?(' · '+esc(it.status)+' by '+esc(it.decided_by)):'')+'</div></div>'+
+    '<div class="ax">'+dueChip(it)+st+act+'</div></div>';
 }
 document.getElementById('detail').addEventListener('click',function(e){
   var eb=e.target.closest('[data-emailowner]');
   if(eb){ openOwnerEmail(OPEN_ID, eb.getAttribute('data-emailowner')); return; }
+  var sd=e.target.closest('#changeStart');
+  if(sd){ changeStartDate(OPEN_ID, sd.getAttribute('data-current')||''); return; }
   var b=e.target.closest('[data-item]'); if(!b) return;
-  var id=b.getAttribute('data-item'), verb=b.getAttribute('data-verb');
-  b.disabled=true; b.textContent='…';
-  fetch('/api/onboarding/items/'+id+'/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
-    .then(function(r){return r.json();}).then(function(){ OS.toast('Item '+(verb==='complete'?'completed':verb==='approve'?'approved':'rejected')+'.'); loadBoard(); });
+  var id=b.getAttribute('data-item'), verb=b.getAttribute('data-verb'), body={};
+  if(verb==='reject'){
+    var reason=prompt('Why is this not approved? The hire\'s manager is emailed this reason.');
+    if(reason===null) return;
+    body.reason=reason;
+  }
+  var label=b.textContent; b.disabled=true; b.textContent='…';
+  fetch('/api/onboarding/items/'+id+'/'+verb,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(res){
+      if(!res||!res.ok){ b.disabled=false; b.textContent=label; OS.toast((res&&res.error)||'Could not save that.',{tone:'bad',ms:7000}); return; }
+      var msg=verb==='complete'?'Completed.':verb==='approve'?(res.followUp?'Approved. Created "'+res.followUp.label+'" and emailed that team.':'Approved.'):
+        ('Rejected.'+(res.managerNotified&&res.managerNotified.ok?' Emailed '+res.managerNotified.to+'.':' No manager email on file, so let them know directly.'));
+      OS.toast(msg,{ms:5000}); openReq(OPEN_ID); loadBoard();
+    }).catch(function(){ b.disabled=false; b.textContent=label; OS.toast('Could not reach the server.',{tone:'bad'}); });
 });
 // Generate/preview the email for one owner lane: shows To/Subject/Body to copy or open in your mail
 // app, plus a Send now (via the OS mailbox).
@@ -737,7 +773,7 @@ function submitForm(e){
 }
 
 /* ─────────────── onboarding catalog editor (computers / software / SharePoint / printers) ─────────────── */
-var CAT_OWNERS=[['it','IT'],['mario','Owner'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['daniel','Ops'],['laura','ServiceTrade']];
+var CAT_OWNERS=[['it','IT'],['rebecca','Accounting'],['sandi','HR'],['denise','Safety'],['laura','ServiceTrade']];
 function ownerSelect(id,val){ return '<select class="cat-in" data-f="owner" data-id="'+id+'">'+CAT_OWNERS.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; }
 function catItemRow(kind,it){
   var rm='<button class="cat-x" data-cat-del="'+it.id+'" title="Remove">×</button>';

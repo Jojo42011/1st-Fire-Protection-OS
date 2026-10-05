@@ -90,7 +90,7 @@ function loadBoard(){
         '<td class="mono">'+ru.done+'/'+ru.total+'</td>'+
         '<td class="mono">'+esc(r.forward_until||'')+'</td>'+
         '<td class="mono">'+esc(r.retain_until||'')+'</td>'+
-        '<td>'+(r.source==='backlog'?OS.pill('backlog','neutral'):'')+'</td></tr>';
+        '<td>'+(r.source==='backlog'?OS.pill('backlog','neutral'):r.source==='bamboo'?OS.pill('from BambooHR','neutral'):'')+'</td></tr>';
     }).join('');
     var table=reqs.length?'<div class="card"><table><thead><tr><th>Person</th><th>Status</th><th>Done</th><th>Forward until</th><th>Retain until</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<div class="empty">No offboarding requests yet. Start one under New offboarding, or pull from the Backlog sweep.</div>';
     var deptBar = CAN_ALL
@@ -196,7 +196,7 @@ function itemRow(it){
     '<div class="meta">'+esc(it.owner_label||it.owner)+' · due '+esc(it.due_at||'')+(it.decided_by&&it.status!=='pending'?(' · '+esc(it.status)+' by '+esc(it.decided_by)):'')+'</div></div>'+
     '<div class="ax">'+st+ax+'</div></div>';
 }
-function decide(id,verb){fetch('/api/offboarding/items/'+id+'/'+verb,{method:'POST'}).then(function(r){return r.json();}).then(function(){if(OPEN)openReq(OPEN);});}
+function decide(id,verb){fetch('/api/offboarding/items/'+id+'/'+verb,{method:'POST'}).then(function(r){return r.json();}).then(function(d){if(!d||!d.ok){OS.toast((d&&d.error)||'Could not save that.',{tone:'bad',ms:7000});return;}if(OPEN)openReq(OPEN);}).catch(function(){OS.toast('Could not reach the server.',{tone:'bad'});});}
 function runOnDc(id,btn){
   if(!confirm('Queue this action for the domain controller to run?'))return;
   btn.disabled=true; btn.textContent='Queuing…';
