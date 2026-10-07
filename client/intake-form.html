@@ -4,32 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>New hire setup · 1st Fire Protection</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="/brand/logo-240.png">
 <style>
+  @font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url('/brand/fonts/InterVariable-latin.woff2') format('woff2');}
   :root{
     /* This public onboarding form is intentionally light-only (no dark tokens); pin the scheme so a
        viewer's dark OS/browser never force-darkens its inputs or ground. */
     color-scheme:light;
-    --ink:#0B111C; --ink-2:#3A4557; --muted:#697588; --faint:#9AA4B3;
-    --line:#E7E9EE; --line-2:#DCDFE7; --bg-card:#FFFFFF;
-    --accent:#0E6B4D; --accent-soft:#E7F4EE; --accent-line:#BFE3D3;
-    --wash:#FAFBFC; --wash-2:#F4F6F8;
-    --shadow:0 1px 2px rgba(11,17,28,.04), 0 24px 60px -28px rgba(11,17,28,.35);
-    --radius:20px;
+    --ink:#1d1d1f; --ink-2:#424245; --muted:#6e6e73; --faint:#86868b;
+    --line:#e8e8ed; --line-2:#d2d2d7; --bg-card:#FFFFFF;
+    --accent:#d62d2a; --accent-hover:#e0332f; --accent-soft:#fff1f0; --accent-line:#ffd2cf;
+    --ok:#1a8a4a; --ok-soft:#e8f7ee;
+    --wash:#fbfbfd; --wash-2:#f5f5f7;
+    --shadow:0 0 0 1px rgba(0,0,0,.06), 0 40px 80px -40px rgba(29,29,31,.35);
+    --radius:28px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:transparent;font-family:'Geist','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color:var(--ink)}
+  body{margin:0;background:transparent;font-family:'Inter',ui-sans-serif,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.005em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;color:var(--ink)}
   /* Opened directly (not inside the app overlay): give the card room to breathe from the top. The
      overlay host sizes the iframe to the card, so this padding is only added when standalone. */
-  body.standalone{padding:28px 16px 40px;background:var(--wash);min-height:100vh}
-  .card{width:100%;max-width:564px;margin:0 auto;background:var(--bg-card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  body.standalone{padding:32px 16px 48px;background:linear-gradient(160deg,#fff7f6 0%,#fbfbfd 45%,#fffaf1 100%);min-height:100vh}
+  .card{width:100%;max-width:564px;margin:0 auto;background:var(--bg-card);border:0;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
   .head{padding:22px 26px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
   .emblem{width:34px;height:34px;border-radius:50%;object-fit:contain;flex:none;background:#fff;padding:2px;box-shadow:0 0 0 1px var(--line)}
   .h-name{font-weight:800;font-size:14.5px;letter-spacing:-.015em}
   .h-sub{font-weight:500;font-size:12px;color:var(--muted);margin-top:1px}
-  .h-step{font-family:'Geist Mono',monospace;font-weight:500;font-size:11px;letter-spacing:.02em;color:var(--faint);flex:none}
+  .h-step{font-weight:600;font-size:11px;letter-spacing:.02em;color:var(--faint);flex:none}
   /* who you're setting up */
   .hire{display:flex;gap:13px;align-items:center;margin:16px 26px 2px;padding:14px 15px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#FCFDFD,#F6F8FA)}
   .hire-av{width:42px;height:42px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-line)}
@@ -39,23 +39,24 @@
   .dots{display:flex;gap:5px;padding:16px 26px 0}
   .dots button{flex:1;height:5px;border-radius:999px;border:none;padding:0;cursor:pointer;background:var(--line-2);transition:background .25s ease}
   .dots button.done{background:var(--accent)}
+  .dots button:focus-visible,.chip:focus-visible,.rcard:focus-visible,.btn:focus-visible,.btn-primary:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(214,45,42,.18)}
   .dots button.now{background:var(--ink)}
-  h2{font-weight:800;font-size:21px;letter-spacing:-.025em;margin:0;line-height:1.25;text-wrap:balance}
+  h2{font-weight:800;font-size:23px;letter-spacing:-.035em;margin:0;line-height:1.25;text-wrap:balance}
   .blurb{font-weight:500;font-size:13.5px;line-height:1.6;color:var(--muted);margin:8px 0 0}
   .body{padding:20px 26px 2px}
   .fields{display:flex;flex-direction:column;gap:18px;padding:16px 26px 4px}
   label{display:block;font-weight:700;font-size:13px;letter-spacing:-.01em}
   .help{font-weight:500;font-size:12px;color:var(--muted);margin-top:3px}
   .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-  .chip{min-height:44px;display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink-2);background:#fff;border:1px solid var(--line-2);border-radius:11px;padding:10px 14px;cursor:pointer;transition:background .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
+  .chip{min-height:44px;display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-weight:600;font-size:13px;color:var(--ink-2);background:#fff;border:1px solid var(--line-2);border-radius:980px;padding:10px 16px;cursor:pointer;transition:background .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
   .chip:hover{border-color:#B7BEC9;background:var(--wash)}
   .chip::before{content:"";width:15px;height:15px;border-radius:5px;border:1.5px solid var(--line-2);flex:none;transition:background .18s ease,border-color .18s ease;background-position:center;background-repeat:no-repeat;background-size:11px}
-  .chip[aria-pressed="true"]{color:#fff;background:var(--ink);border-color:var(--ink);box-shadow:0 6px 16px -8px rgba(11,17,28,.5)}
-  .chip[aria-pressed="true"]::before{background-color:#fff;border-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B111C' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")}
+  .chip[aria-pressed="true"]{color:#fff;background:var(--accent);border-color:var(--accent);box-shadow:0 8px 20px -6px rgba(214,45,42,.55)}
+  .chip[aria-pressed="true"]::before{background-color:#fff;border-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d62d2a' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")}
   .rcards{display:flex;flex-direction:column;gap:9px;margin-top:10px}
-  .rcard{text-align:left;font-family:inherit;background:#fff;border:1px solid var(--line-2);border-radius:14px;padding:14px 15px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+  .rcard{text-align:left;font-family:inherit;background:#fff;border:1px solid var(--line-2);border-radius:16px;padding:14px 15px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
   .rcard:hover{border-color:#B7BEC9;background:var(--wash)}
-  .rcard[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-line) inset}
+  .rcard[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent-line)}
   .rc-radio{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);flex:none;position:relative;transition:border-color .18s ease}
   .rcard[aria-pressed="true"] .rc-radio{border-color:var(--accent)}
   .rcard[aria-pressed="true"] .rc-radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
@@ -64,19 +65,23 @@
   .rc-s{font-weight:500;font-size:12px;color:var(--muted)}
   .rc-price{font-weight:800;font-size:14px;color:var(--ink);flex:none;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .rcard[aria-pressed="true"] .rc-price{color:var(--accent)}
-  .textwrap{margin-top:10px;border:1px solid var(--line-2);border-radius:11px;padding:12px 14px;transition:border-color .18s ease,box-shadow .18s ease}
-  .textwrap:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px rgba(11,17,28,.06)}
-  .textwrap input{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:var(--ink);background:none}
+  .textwrap{margin-top:10px;border:1px solid var(--line-2);border-radius:12px;padding:12px 14px;transition:border-color .18s ease,box-shadow .18s ease}
+  .textwrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px rgba(214,45,42,.14)}
+  .textwrap.bad{border-color:var(--accent);background:var(--accent-soft)}
+  .err{font-weight:600;font-size:12px;color:#b8231f;margin-top:6px}
+  .textwrap input{width:100%;min-height:22px;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:var(--ink);background:none}
   .textwrap select{width:100%;border:none;outline:none;font-family:inherit;font-weight:500;font-size:14px;color:var(--ink);background:none;-webkit-appearance:none;appearance:none;cursor:pointer}
-  .note{display:flex;gap:11px;margin:20px 26px 0;padding:14px 16px;background:var(--wash);border:1px solid var(--line);border-radius:12px}
-  .note .shield{flex:none;width:18px;height:18px;color:var(--accent);margin-top:1px}
+  .textwrap select:has(option[value=""]:checked){color:var(--faint)}
+  .note{display:flex;gap:11px;margin:20px 26px 0;padding:14px 16px;background:var(--wash-2);border:0;border-radius:16px}
+  .note .shield{flex:none;width:18px;height:18px;color:var(--ok);margin-top:1px}
   .note b{display:block;font-weight:700;font-size:12.5px}
   .note p{font-weight:500;font-size:12px;line-height:1.55;color:var(--muted);margin:4px 0 0}
   .actions{display:flex;align-items:center;gap:10px;padding:20px 26px 24px}
-  .btn{font-family:inherit;font-weight:600;font-size:13.5px;color:var(--ink-2);background:#fff;border:1px solid var(--line-2);border-radius:12px;padding:13px 18px;cursor:pointer;transition:border-color .18s ease,background .18s ease}
+  .btn{font-family:inherit;font-weight:600;font-size:13.5px;color:var(--ink-2);background:#fff;border:1px solid var(--line-2);border-radius:980px;padding:13px 20px;cursor:pointer;transition:border-color .18s ease,background .18s ease}
   .btn:hover{border-color:#B7BEC9;background:var(--wash)}
-  .btn-primary{flex:1;font-family:inherit;font-weight:700;font-size:13.5px;letter-spacing:-.01em;color:#fff;background:var(--ink);border:none;border-radius:12px;padding:13px 18px;cursor:pointer;box-shadow:0 10px 24px -12px rgba(11,17,28,.7);transition:transform .12s ease,background .18s ease}
-  .btn-primary:hover{background:#1B2434}
+  .btn-primary{flex:1;font-family:inherit;font-weight:700;font-size:13.5px;letter-spacing:-.01em;color:#fff;background:var(--accent);border:none;border-radius:980px;padding:14px 20px;cursor:pointer;box-shadow:0 10px 24px -12px rgba(214,17,28,.7);transition:transform .12s ease,background .18s ease}
+  .btn-primary:hover{background:var(--accent-hover)}
+  .btn-primary:disabled{opacity:.6;cursor:default}
   .btn-primary:active{transform:translateY(1px)}
   .foot{padding:2px 26px 22px;font-weight:500;font-size:11.5px;color:var(--muted);text-align:center}
   .done-head{padding:30px 26px 18px;text-align:center}
@@ -87,7 +92,7 @@
   .srow{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;background:#fff}
   .srow .l{display:block;font-weight:700;font-size:12.5px}
   .srow .n{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px}
-  .srow .v{font-weight:700;font-size:12.5px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+  .srow .v{font-weight:700;font-size:12.5px;text-align:right;flex:0 1 auto;max-width:55%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
   .hidden{display:none!important}
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
@@ -122,19 +127,19 @@
       <button class="btn" id="back">Cancel</button>
       <button class="btn-primary" id="next">Continue</button>
     </div>
-    <div class="foot" id="foot">Your answers save as you go. The link expires Aug 21.</div>
+    <div class="foot" id="foot">This link works once and expires in 7 days.</div>
   </div>
 
   <div id="done" class="hidden">
-    <div class="done-head">
-      <span class="tick">✓</span>
-      <h2 style="margin-top:14px">Sent to 1st Fire Protection</h2>
-      <p>You are done. Here is exactly what your answers created. Nothing gets access until the owning team completes its task.</p>
+    <div class="done-head" style="text-align:left;padding:24px 26px 14px">
+      <h2>Review and submit</h2>
+      <p style="margin:8px 0 0">Check everything below. Nothing is sent until you press Submit, and nobody gets access until the team that owns it does its part.</p>
     </div>
     <div class="summary" id="summary"></div>
+    <div class="err" id="submitErr" role="alert" style="display:none;margin:12px 26px 0"></div>
     <div class="actions">
-      <button class="btn" id="restart">Start over</button>
-      <button class="btn-primary" id="finish">Done</button>
+      <button class="btn" id="restart">Back</button>
+      <button class="btn-primary" id="finish">Submit</button>
     </div>
   </div>
 </div>
@@ -149,15 +154,15 @@
     { label: 'the role', title: 'Who are you hiring, and when do they start?',
       blurb: 'This decides which tasks get created and who they route to.',
       fields: [
-        { key: 'title', label: 'Job title', help: 'The role behind it sets the defaults.', opts: [], select: true },
-        { key: 'office', label: 'Office', help: 'Scopes every task and report for this person.', opts: [], select: true },
-        { key: 'start', label: 'First day', help: 'IT needs five working days for a clean start.', text: true, placeholder: 'Monday, Aug 24' },
+        { key: 'title', label: 'Job title', help: 'The role behind it sets the defaults.', opts: [], select: true, required: true, errMsg: 'Pick their job title.' },
+        { key: 'office', label: 'Office', help: 'Scopes every task and report for this person.', opts: [], select: true, required: true, errMsg: 'Pick their office.' },
+        { key: 'start', label: 'First day', help: 'Give IT at least five working days to have everything ready.', date: true, required: true },
         { key: 'manager', label: 'Their manager', help: 'You, unless someone else runs their day to day.', text: true, placeholder: 'Ray Ellis' }
       ] },
     { label: 'the person', title: 'Who is it?',
       blurb: 'Legal name has to match their ID for the record.',
       fields: [
-        { key: 'legal', label: 'Legal first and last name', help: 'As it appears on their licence.', text: true, placeholder: 'John Smith' },
+        { key: 'legal', label: 'Legal first and last name', help: 'As it appears on their driver\'s license or ID.', text: true, placeholder: 'John Smith', required: true },
         { key: 'preferred', label: 'What they go by', help: 'Optional. Used everywhere except the legal record.', text: true, placeholder: 'Johnny' },
         { key: 'email', label: 'Personal email', help: 'Where we send their first-day instructions.', text: true, placeholder: 'name@email.com' },
         { key: 'mobile', label: 'Mobile', help: 'For the first-day text only.', text: true, placeholder: '(210) 555-0142' }
@@ -168,16 +173,16 @@
         { key: 'accounts', label: 'Accounts', help: 'Tap to add or remove.', opts: ['Company email', 'Teams number'], def: ['Company email'], multi: true },
         { key: 'sharepoint', label: 'SharePoint groups', help: 'Tap the groups they need. Some need an owner to approve them.', opts: [], def: [], multi: true },
         { key: 'printers', label: 'Printers', help: 'Tap any they should be connected to.', opts: [], def: [], multi: true, hideIfEmpty: true },
-        { key: 'sage', label: 'Sage Intacct access', help: 'Priced seat — Accounting approves before access is set up.', radio: true, opts: [], def: 'none', noneLabel: 'No Sage access needed', noneSpec: 'Skip this application', hideIfEmpty: true },
-        { key: 'servicetrade', label: 'ServiceTrade access', help: 'Pick the role they will use. Provisioned by Laura.', radio: true, opts: [], def: 'none', noneLabel: 'No ServiceTrade access', noneSpec: 'Skip this application', hideIfEmpty: true }
+        { key: 'sage', label: 'Sage Intacct access', help: 'A paid seat. Accounting approves it before access is set up.', radio: true, opts: [], def: 'none', noneLabel: 'No Sage access needed', noneSpec: 'Skip this application', hideIfEmpty: true },
+        { key: 'servicetrade', label: 'ServiceTrade access', help: 'Pick the role they will use. Laura sets it up in ServiceTrade.', radio: true, opts: [], def: 'none', noneLabel: 'No ServiceTrade access', noneSpec: 'Skip this application', hideIfEmpty: true }
       ] },
     { label: 'equipment', title: 'What will they need to do the job?',
-      blurb: 'A new computer needs an owner approval. IT confirms before anything is ordered.',
+      blurb: 'Your manager approves a new computer before IT orders it. Paid software licenses are approved by the IT manager.',
       fields: [
         { key: 'computer_type', label: 'New computer', help: 'Pick the closest fit, or none. Price is the company\'s cost.', radio: true, opts: [], def: 'none' },
         { key: 'existing_computer', label: 'Existing computer', help: 'If they are taking over a computer already in service instead of getting a new one, enter the computer name or asset tag here. IT will wipe and set it up for them.', text: true, placeholder: 'e.g. DESKTOP-1FP042 or serial number' },
         { key: 'dock', label: 'Docking station', help: 'A desk dock for their laptop.', toggle: true, toggleLabel: 'Add a docking station', def: false },
-        { key: 'software', label: 'Software', help: 'Tap to add or remove. Some need a licence owner to approve.', opts: [], def: [], multi: true },
+        { key: 'software', label: 'Software', help: 'Tap to add or remove. Bluebeam, AutoCAD and HydraCAD need IT manager approval.', opts: [], def: [], multi: true },
         { key: 'safety_gear', label: 'Safety-issued equipment', help: 'Company phone, iPad, a vehicle transfer, or a fuel card.', opts: ['Company cell phone', 'Company iPad', 'Company vehicle transfer', 'WEX fuel card'], def: [], multi: true }
       ] },
     { label: 'vehicle', title: 'Last part: do they need a company vehicle?',
@@ -226,7 +231,8 @@
   // text fields not declared with def in STEPS need an explicit blank so vals always has the key
   vals.existing_computer = vals.existing_computer || '';
   var el = function (id) { return document.getElementById(id); };
-  var HIRE = null, DOCK_PRICE = 200;
+  var HIRE = null, DOCK_PRICE = 200, SHOW_ERR = false;
+  var STANDALONE = document.body.classList.contains('standalone');
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   // Bind the form to a confirmed hire: prefill their known facts, drop the identity/role steps, and
   // show them as a read-only header. Only the operational steps remain.
@@ -238,7 +244,9 @@
     step = 0;
     var hs = el('hsub'); if (hs) hs.textContent = 'Setting up a confirmed hire';
     var initials = (h.name || '').replace(/[^A-Za-z ]/g, '').split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase() || '1F';
-    var meta = [h.job_position, h.office].filter(Boolean).join(' · ') + (h.start_date ? (' · starts ' + h.start_date) : '') + (h.manager ? (' · manager ' + h.manager) : '');
+    var nice = function (d) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ''); if (!m) return d; return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); };
+    var flip = function (n) { n = String(n || ''); if (n.indexOf(',') < 0) return n; var p = n.split(','); return (p.slice(1).join(',').trim() + ' ' + p[0].trim()).trim(); };
+    var meta = [h.job_position, h.office].filter(Boolean).join(' · ') + (h.start_date ? (' · starts ' + nice(h.start_date)) : '') + (h.manager ? (' · reports to ' + flip(h.manager)) : '');
     var hb = el('hireHead');
     if (hb) hb.innerHTML = '<div class="hire">' +
       '<div class="hire-av">' + esc(initials) + '</div>' +
@@ -257,13 +265,15 @@
   var pathMatch = location.pathname.match(/\/intake\/([^\/?#]+)/);
   var TOKEN = pathMatch ? pathMatch[1] : null;
   var PREVIEW = !TOKEN;
-  function showFatal(msg) {
+  function showResult(title, msg, ok) {
     var c = document.querySelector('.card');
-    if (c) c.innerHTML = '<div style="padding:30px 26px;text-align:center">' +
-      '<div style="font-weight:800;font-size:17px;color:#0E1420;margin-bottom:8px">This link cannot be used</div>' +
-      '<div style="font-weight:500;font-size:13.5px;color:#5E6779;line-height:1.5">' + msg + '</div></div>';
+    if (c) c.innerHTML = '<div style="padding:34px 28px;text-align:center">' +
+      (ok ? '<span class="tick" style="background:var(--ok-soft);color:var(--ok);box-shadow:0 0 0 1px #bfe3cb">✓</span>' : '') +
+      '<div style="font-weight:800;font-size:20px;letter-spacing:-.03em;color:var(--ink);margin:' + (ok ? '16px' : '0') + ' 0 8px">' + title + '</div>' +
+      '<div style="font-weight:500;font-size:14px;color:var(--muted);line-height:1.55;max-width:42ch;margin:0 auto">' + msg + '</div></div>';
     try { reportHeight(); } catch (e) {}
   }
+  function showFatal(msg) { showResult('This link cannot be used', msg, false); }
   if (TOKEN) {
     fetch('/api/intake/' + encodeURIComponent(TOKEN)).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
@@ -285,7 +295,10 @@
         // Bound to a confirmed BambooHR hire: their identity/role is known, so drop those steps and
         // show the person read-only. The manager only fills the operational setup.
         if (res.d.hire) applyHire(res.d.hire);
-        else if (res.d.recipient_name) { var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name; }
+        else if (res.d.recipient_name) {
+          var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name;
+          if (!vals.manager) vals.manager = res.d.recipient_name; // the person the link went to is usually the manager
+        }
         render();
       }).catch(function () { /* offline: let them fill; submit will re-check */ });
   } else {
@@ -324,6 +337,10 @@
     });
   }
 
+  // A required pick-list with nothing loaded cannot be answered, so it never blocks the step.
+  function isRequired(f) { return !!f.required && !((f.select || f.opts) && !f.text && !f.date && !(f.opts || []).length); }
+  function needsAnswer(f) { return SHOW_ERR && isRequired(f) && !String(vals[f.key] || '').trim(); }
+  function errLine(box, f) { if (needsAnswer(f)) { var e = document.createElement('div'); e.className = 'err'; e.textContent = f.errMsg || 'This is needed.'; box.appendChild(e); } }
   function renderFields() {
     var wrap = el('fields');
     wrap.innerHTML = '';
@@ -340,15 +357,27 @@
         h.textContent = f.help;
         box.appendChild(h);
       }
-      if (f.text) {
+      if (f.date) {
+        var dw = document.createElement('div');
+        dw.className = 'textwrap' + (SHOW_ERR && f.required && !vals[f.key] ? ' bad' : '');
+        var di = document.createElement('input');
+        di.type = 'date';
+        di.value = /^\d{4}-\d{2}-\d{2}$/.test(vals[f.key] || '') ? vals[f.key] : '';
+        di.min = new Date().toISOString().slice(0, 10);
+        di.oninput = function () { vals[f.key] = di.value; };
+        dw.appendChild(di);
+        box.appendChild(dw);
+        if (SHOW_ERR && f.required && !vals[f.key]) { var de = document.createElement('div'); de.className = 'err'; de.textContent = 'Pick their first day.'; box.appendChild(de); }
+      } else if (f.text) {
         var tw = document.createElement('div');
-        tw.className = 'textwrap';
+        tw.className = 'textwrap' + (SHOW_ERR && f.required && !String(vals[f.key] || '').trim() ? ' bad' : '');
         var inp = document.createElement('input');
         inp.placeholder = f.placeholder || '';
         inp.value = vals[f.key] || '';
         inp.oninput = function () { vals[f.key] = inp.value; };
         tw.appendChild(inp);
         box.appendChild(tw);
+        if (SHOW_ERR && f.required && !String(vals[f.key] || '').trim()) { var te = document.createElement('div'); te.className = 'err'; te.textContent = 'This is needed.'; box.appendChild(te); }
       } else if (f.toggle) {
         var trow = document.createElement('div');
         trow.className = 'chips';
@@ -372,15 +401,20 @@
           rb.innerHTML = '<span class="rc-radio"></span><span class="rc-body"><span class="rc-t"></span><span class="rc-s"></span></span><span class="rc-price"></span>';
           rb.querySelector('.rc-t').textContent = o.label;
           rb.querySelector('.rc-s').textContent = o.spec || '';
-          rb.querySelector('.rc-price').textContent = (o.price != null) ? ('$' + Number(o.price).toLocaleString()) : '';
+          rb.querySelector('.rc-price').textContent = (o.price != null) ? ('$' + Number(o.price).toLocaleString('en-US', Number(o.price) % 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : {})) : '';
           rb.onclick = function () { vals[f.key] = o.key; renderFields(); };
           rw.appendChild(rb);
         });
         box.appendChild(rw);
       } else if (f.select) {
         var sw = document.createElement('div');
-        sw.className = 'textwrap';
+        sw.className = 'textwrap' + (needsAnswer(f) ? ' bad' : '');
         var sel = document.createElement('select');
+        // No silent default: a blank first option makes the manager choose, so a skipped field is
+        // caught instead of filing the first title in the list.
+        var ph = document.createElement('option'); ph.value = ''; ph.textContent = 'Pick one'; ph.disabled = true;
+        if (!vals[f.key]) ph.selected = true;
+        sel.appendChild(ph);
         f.opts.forEach(function (o) {
           var opt = document.createElement('option');
           opt.value = o;
@@ -388,10 +422,10 @@
           if (vals[f.key] === o) opt.selected = true;
           sel.appendChild(opt);
         });
-        if (!vals[f.key] && f.opts.length) vals[f.key] = f.opts[0];
         sel.onchange = function () { vals[f.key] = sel.value; };
         sw.appendChild(sel);
         box.appendChild(sw);
+        errLine(box, f);
       } else {
         var row = document.createElement('div');
         row.className = 'chips';
@@ -416,6 +450,7 @@
           row.appendChild(b);
         });
         box.appendChild(row);
+        errLine(box, f);
       }
       wrap.appendChild(box);
     });
@@ -430,16 +465,20 @@
     var o = computerOpt();
     return o ? (o.label + (o.price != null ? ' · $' + Number(o.price).toLocaleString() : '')) : 'A computer';
   }
+  function flipName(n) { n = String(n || ''); if (n.indexOf(',') < 0) return n; var p = n.split(','); return (p.slice(1).join(',').trim() + ' ' + p[0].trim()).trim(); }
+  function niceDate(d) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ''); if (!m) return d || ''; return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }); }
   function renderSummary() {
     var accounts = vals.accounts || [], sp = vals.sharepoint || [], sw = vals.software || [], gear = vals.safety_gear || [];
     var access = accounts.concat(sp);
     var hasComp = vals.computer_type && vals.computer_type !== 'none';
     var rows = [
-      ['New hire', (HIRE ? HIRE.name : (vals.preferred || vals.legal || 'Unnamed hire')) + ' · ' + (vals.title || 'a role'), HIRE ? 'from your HR record' : 'created as a pending record'],
-      ['Office', vals.office || 'their office', 'scopes everything downstream'],
+      ['New hire', HIRE ? HIRE.name : (vals.legal || 'Unnamed hire'), HIRE ? 'from your HR record' : (vals.preferred ? 'goes by ' + vals.preferred : 'legal name')],
+      ['Role', vals.title || 'Not picked', vals.office || 'no office picked'],
+      ['First day', niceDate(vals.start) || 'Not set', 'IT needs five working days'],
+      ['Manager', flipName(vals.manager) || 'Not set', 'runs their day to day'],
       ['Accounts and SharePoint', access.length + ' item' + (access.length === 1 ? '' : 's'), access.join(', ') || 'none selected'],
       ['Software', sw.length + ' app' + (sw.length === 1 ? '' : 's'), sw.join(', ') || 'none selected'],
-      ['New computer', computerLabel(), hasComp ? 'routes to an owner approval' : 'nothing ordered']
+      ['New computer', computerLabel(), hasComp ? 'your manager approves, then IT orders it' : 'nothing ordered']
     ];
     if (vals.existing_computer && vals.existing_computer.trim()) rows.push(['Existing computer', vals.existing_computer.trim(), 'IT will wipe and set it up']);
     if (vals.dock) rows.push(['Docking station', 'Yes' + (DOCK_PRICE != null ? ' · $' + Number(DOCK_PRICE).toLocaleString() : ''), 'routes to IT']);
@@ -466,10 +505,11 @@
     el('title').textContent = s.title;
     el('blurb').textContent = s.blurb;
     el('back').textContent = step === 0 ? 'Cancel' : 'Back';
-    el('next').textContent = last ? 'Submit to 1st Fire Protection' : 'Continue to ' + STEPS[step + 1].label;
+    el('back').style.display = (step === 0 && STANDALONE) ? 'none' : '';
+    el('next').textContent = last ? 'Review' : 'Continue to ' + STEPS[step + 1].label;
     el('foot').textContent = last
-      ? 'Nothing is created until you submit. This link is single-use and expires in 7 days.'
-      : 'Your answers save as you go. This link is single-use and expires in 7 days.';
+      ? 'Nothing is sent until you review and submit. This link works once and expires in 7 days.'
+      : 'This link works once and expires in 7 days.';
     renderDots();
     renderFields();
     reportHeight();
@@ -479,39 +519,51 @@
     if (step === 0) return post('close');
     step--; render();
   };
+  function stepValid() {
+    return STEPS[step].fields.every(function (f) { return !isRequired(f) || String(vals[f.key] || '').trim(); });
+  }
   el('next').onclick = function () {
+    if (!stepValid()) { SHOW_ERR = true; renderFields(); reportHeight(); return; }
+    SHOW_ERR = false;
     if (step < STEPS.length - 1) { step++; render(); return; }
     renderSummary();
     el('form').classList.add('hidden');
     el('done').classList.remove('hidden');
-    el('stepLabel').textContent = 'Submitted';
+    el('stepLabel').textContent = 'Review';
+    window.scrollTo(0, 0);
     reportHeight();
   };
+  // Back from the review goes to the last step with every answer kept (a confirmed hire stays bound).
   el('restart').onclick = function () {
-    vals = defaults(); step = 0;
     el('done').classList.add('hidden');
     el('form').classList.remove('hidden');
     render();
   };
+  function submitErr(msg) { var e = el('submitErr'); e.textContent = msg; e.style.display = msg ? '' : 'none'; reportHeight(); }
   el('finish').onclick = function () {
     if (!TOKEN) { post('submitted'); return; }   // preview: hand back to the host, create nothing
-    var btn = el('finish'); btn.disabled = true; btn.textContent = 'Submitting...';
+    var btn = el('finish'); btn.disabled = true; btn.textContent = 'Submitting...'; submitErr('');
     fetch('/api/intake/' + encodeURIComponent(TOKEN), {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ vals: vals })
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
         if (!res.ok || !res.d || !res.d.ok) {
-          btn.disabled = false; btn.textContent = 'Done';
+          btn.disabled = false; btn.textContent = 'Submit';
           var reason = res.d && res.d.reason;
+          // A failed save keeps the link open: stay on the review with the answers so Submit can be retried.
+          if (reason === 'create_failed' || reason === 'name_required' || !reason) {
+            return submitErr(reason === 'name_required' ? 'The legal name is missing. Press Back and fill it in, then submit again.'
+              : 'Something went wrong saving this. Your answers are still here, so press Submit again in a moment.');
+          }
           showFatal(reason === 'already_submitted' ? 'This form was already submitted. Nothing further is needed.'
-            : reason === 'create_failed' ? 'Something went wrong saving this. Your link is still valid, please try Submit again in a moment.'
-            : 'Submission failed. Ask for a fresh link and try again.');
+            : reason === 'expired' ? 'This link expired before it was submitted. Ask your contact at 1st Fire Protection for a new one.'
+            : 'This link was replaced by a newer one. Ask for the current link.');
           return;
         }
         var teams = (res.d.teams || []);
         var teamTxt = teams.length ? (teams.length === 1 ? teams[0] : teams.slice(0, -1).join(', ') + ' and ' + teams[teams.length - 1]) : 'the right teams';
-        showFatal('Thank you. ' + (vals.preferred || vals.legal || 'The new hire') + ' has been submitted for ' + (vals.office || 'their office') + '. Onboarding tasks were routed to ' + teamTxt + '. No pay, Social Security number or bank details were collected. You can close this window.');
-      }).catch(function () { btn.disabled = false; btn.textContent = 'Done'; showFatal('Could not reach the server. Check your connection and try again.'); });
+        showResult('Submitted', esc(HIRE ? HIRE.name : vals.preferred || vals.legal || 'The new hire') + ' is set up for ' + esc(vals.office || 'their office') + '. Onboarding tasks went to ' + esc(teamTxt) + '. No pay, Social Security number or bank details were collected. You can close this window.', true);
+      }).catch(function () { btn.disabled = false; btn.textContent = 'Submit'; submitErr('Could not reach the server, so nothing was sent. Check your connection and press Submit again.'); });
   };
 
   render();
