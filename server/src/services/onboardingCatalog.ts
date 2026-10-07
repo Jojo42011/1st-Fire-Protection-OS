@@ -42,15 +42,15 @@ export function seedOnboardingCatalog(): void {
     { kind: 'computer', name: 'Standard', spec: 'Everyday laptop for office and field work' },
     { kind: 'computer', name: 'Business', spec: 'Heavier multitasking for power users' },
     { kind: 'computer', name: 'CAD', spec: 'Design workstation with dedicated graphics' },
-    // Software: the common set. Licensed seats need IT's approval before install. Napco added;
+    // Software: the common set. Licensed seats need the IT manager's approval before install. Napco added;
     // the admin adds the rest of the company's software from the editor.
     { kind: 'software', name: 'Microsoft 365 desktop apps', owner: 'it' },
     { kind: 'software', name: 'Adobe Acrobat', owner: 'it' },
     { kind: 'software', name: 'HFSS', owner: 'it' },
     { kind: 'software', name: 'Napco', owner: 'it' },
-    { kind: 'software', name: 'Bluebeam', owner: 'it', approval: 1 },
-    { kind: 'software', name: 'AutoCAD', owner: 'it', approval: 1 },
-    { kind: 'software', name: 'HydraCAD', owner: 'it', approval: 1 },
+    { kind: 'software', name: 'Bluebeam', owner: 'it_manager', approval: 1 },
+    { kind: 'software', name: 'AutoCAD', owner: 'it_manager', approval: 1 },
+    { kind: 'software', name: 'HydraCAD', owner: 'it_manager', approval: 1 },
     // SharePoint groups: one per real office, plus the standard function groups.
     ...operatingOffices().map((o) => ({ kind: 'sharepoint' as CatalogKind, name: o.label, owner: 'it' })),
     { kind: 'sharepoint', name: 'SAFETY', owner: 'it' },

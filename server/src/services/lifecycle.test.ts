@@ -244,6 +244,8 @@ test('new-computer and MGMT approvals email the IT manager; the rest of IT goes 
   assert.match(devon.html, /Approve new computer/);
   assert.match(devon.html, /Approve SharePoint group: MGMT/);
   assert.doesNotMatch(devon.html, /Set up company email/);
+  assert.match(devon.html, /Approve Bluebeam license/, 'paid licenses are the IT manager\'s call too');
+  assert.doesNotMatch(msp.html, /Approve Bluebeam license/);
   assert.doesNotMatch(msp.html, /Approve new computer|Approve SharePoint group: MGMT/, 'IT support does not get these approvals');
   assert.match(msp.html, /Set up company email/);
 });

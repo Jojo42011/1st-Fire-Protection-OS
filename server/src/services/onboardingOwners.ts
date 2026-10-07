@@ -15,7 +15,7 @@ export const OWNER_ROLE: Record<Owner, Role | null> = {
   bamboo: 'hr',
   sandi: 'hr',
   it: 'it',
-  it_manager: 'it', // MGMT approvals (and computers with no manager on file): routed to the IT manager by email
+  it_manager: 'it', // MGMT and paid-license approvals (and computers with no manager on file): routed to the IT manager by email
   manager: 'manager', // new-computer approvals: each one emailed to that hire's own manager (item email_to)
   rebecca: 'accounting',
   mario: 'executive_approver',

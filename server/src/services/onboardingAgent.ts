@@ -260,8 +260,9 @@ function routeItems(req: any): DraftItem[] {
   for (const name of software) {
     const s = catalogRoute('software', name);
     if (!s) continue;
+    // A paid license is the IT manager's call (like a new computer); IT support installs it once approved.
     if (s.kind === 'approval')
-      items.push({ owner: s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Licensed software: needs IT sign-off before the seat is bought or assigned.' });
+      items.push({ owner: s.owner === 'it' ? 'it_manager' : s.owner, kind: 'approval', label: `Approve ${name} license`, detail: 'Licensed software: needs the IT manager\'s sign-off before the seat is bought or assigned.' });
     else items.push({ owner: s.owner, kind: 'task', label: `Install ${name}` });
   }
 

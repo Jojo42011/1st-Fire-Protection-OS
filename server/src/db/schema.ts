@@ -1367,6 +1367,15 @@ export function initDb(): void {
     `);
     setState('onboarding_it_manager_v1', '1');
   }
+  // Paid software licenses (Bluebeam, AutoCAD, HydraCAD, ...) are approved by the IT manager too. Once.
+  if (getState('onboarding_license_it_manager_v1') !== '1') {
+    db.exec(`
+      UPDATE onboarding_catalog SET owner = 'it_manager' WHERE kind = 'software' AND approval = 1 AND owner = 'it';
+      UPDATE onboarding_items SET owner = 'it_manager', owner_label = 'IT manager (approval)'
+        WHERE status = 'pending' AND kind = 'approval' AND owner = 'it' AND label LIKE 'Approve % license';
+    `);
+    setState('onboarding_license_it_manager_v1', '1');
+  }
   // Access items (printers, and later SharePoint) map to an Entra security group: selecting one adds
   // the hire to that group, auto-provisioned through Microsoft Graph when connected. Added by
   // ALTER so existing databases pick them up.
