@@ -404,3 +404,52 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
   }
   return { sent, addresses: byEmail.size, items: rows.length };
 }
+
+/* ─────────────────────────── example IT support email ─────────────────────────── */
+import { createRequest, computerTierList } from './onboardingAgent';
+import { catalogByKind } from './onboardingCatalog';
+import { boundHire } from './intakeLinks';
+
+/** Build the email IT support gets for a new hire, for the newest BambooHR hire on the roster with a
+ *  typical setup. The request is built inside a rolled-back transaction, so nothing is saved, and the
+ *  hiring manager line runs the real lookup. No action buttons: the tasks never existed. */
+export function exampleItEmail(base: string): { subject: string; html: string; manager: HiringManager | null } | null {
+  const db = getDb();
+  const row = db.prepare(
+    `SELECT id FROM employees WHERE employment_status IN ('onboarding','active')
+      ORDER BY (COALESCE(manager, '') != '') DESC, COALESCE(actual_start_date, anticipated_start_date, '') DESC, id DESC LIMIT 1`
+  ).get() as { id: number } | undefined; // prefer a hire whose BambooHR record names a manager
+  const hire = row ? boundHire({ employee_id: row.id }) : null;
+  if (!hire) return null;
+  const printer = catalogByKind('printer')[0];
+  const group = catalogByKind('sharepoint')[0];
+  const laptop = computerTierList()[0];
+  let items: OnboardingItem[] = [];
+  const ROLLBACK = new Error('example rollback');
+  try {
+    db.transaction(() => {
+      items = createRequest({
+        name: hire.name, employee_id: hire.id, start_date: hire.start_date || undefined,
+        job_position: hire.job_position || undefined, manager_name: hire.manager || undefined,
+        company_email: true, computer_type: laptop ? laptop.key : 'none', dock: true,
+        printers: printer ? [printer.name] : [], sharepoint: group ? [group.name] : [], software: [],
+      }).items.filter((it) => it.owner === 'it');
+      throw ROLLBACK;
+    })();
+  } catch (e) { if (e !== ROLLBACK) throw e; }
+  if (!items.length) return null;
+  const start = startDateInfo(hire.start_date);
+  const manager = hiringManagerFor({ employee_id: hire.id, manager_name: hire.manager });
+  const html = ownerTasksHtml(hire.name, items, `${base}/onboarding`, start, undefined, undefined, { manager, board: true });
+  return { subject: '[Example] ' + ownerSubject(hire.name, start, items[0].owner_label || undefined), html, manager };
+}
+
+export async function sendExampleItEmail(to: string, base: string): Promise<{ ok: boolean; error?: string }> {
+  if (!mailCredsPresent()) return { ok: false, error: 'Mail is not connected.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No onboarding sender is set.' };
+  const ex = exampleItEmail(base);
+  if (!ex) return { ok: false, error: 'No hire on the roster to build the example from.' };
+  const out = await sendMail(to, ex.subject, ex.html, { from: sender.address, fromName: sender.name });
+  return out.ok ? { ok: true } : { ok: false, error: (out as any).error || 'send failed' };
+}

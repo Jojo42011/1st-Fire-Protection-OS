@@ -428,6 +428,22 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+// One-time example of the email IT support gets for a new hire (hiring manager line included), sent
+// to the IT manager only. Built from a rolled-back request, so nothing is saved.
+setTimeout(() => {
+  const { getState, setState } = require('./db/schema');
+  const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+  const flag = 'example_it_email_v1';
+  try {
+    if (getState(flag) === '1') return;
+    setState(flag, '1'); // claim first so a restart mid-send never sends twice
+    require('./services/onboardingOwners').sendExampleItEmail('devon.booker@1stfpservices.com', base)
+      .then((r: { ok: boolean; error?: string }) => {
+        if (r.ok) console.log('[onboarding] sent the example IT support email');
+        else { setState(flag, '0'); console.warn('[onboarding] example IT support email not sent:', r.error); }
+      }).catch(() => setState(flag, '0'));
+  } catch (e) { console.warn('[onboarding] example IT support email error:', (e as Error).message); }
+}, 1000 * 55).unref();
 // One-time test intake link for the IT manager: the full manager form, but submitting creates nothing.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');

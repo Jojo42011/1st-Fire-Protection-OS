@@ -266,3 +266,15 @@ test("IT support sees the hire's hiring manager; Laura's emails have no board bu
   assert.doesNotMatch(laura.html, /Open the onboarding board/);
   assert.doesNotMatch(laura.html, /Hiring manager/, 'only IT support gets the manager line');
 });
+
+test('the example IT support email carries the hiring manager and leaves nothing behind', () => {
+  const { exampleItEmail } = require('./onboardingOwners');
+  const db = require('../db/index').getDb();
+  const before = db.prepare(`SELECT COUNT(*) AS n FROM onboarding_requests`).get().n;
+  const ex = exampleItEmail('https://os.example');
+  assert.ok(ex, 'built from the newest roster hire');
+  assert.match(ex.subject, /^\[Example\] Onboarding tasks for /);
+  assert.match(ex.html, /Hiring manager:/);
+  assert.doesNotMatch(ex.html, /Review and approve/, 'no action buttons on an example');
+  assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM onboarding_requests`).get().n, before, 'nothing saved');
+});
