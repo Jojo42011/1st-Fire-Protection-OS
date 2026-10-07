@@ -108,7 +108,7 @@ router.post('/api/onboarding/test-approval-email', async (req, res) => {
   const to = String((me && me.email) || (req.body || {}).to || '').trim().toLowerCase();
   if (!/^[^@\s]+@1stfpservices\.com$/.test(to)) return res.status(400).json({ ok: false, error: 'Sign in with your company account (or give a 1stfpservices.com address).' });
   const base = (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  const out = await sendTestApprovalEmail(to, base);
+  const out = await sendTestApprovalEmail(to, base, (req.body || {}).kind === 'license' ? 'license' : 'computer');
   res.status(out.ok ? 200 : 400).json({ ...out, to });
 });
 

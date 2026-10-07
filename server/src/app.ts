@@ -409,18 +409,20 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
-// One-time: the IT manager asked for a test of the laptop-approval email managers now receive.
+// One-time test emails the IT manager asked for: the laptop approval, then the paid-license approval.
 setTimeout(() => {
-  try {
-    const { getState, setState } = require('./db/schema');
-    if (getState('test_approval_email_v1') === '1') return;
-    const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
-    require('./services/onboardingOwners').sendTestApprovalEmail('devon.booker@1stfpservices.com', base)
-      .then((r: { ok: boolean; error?: string }) => {
-        if (r.ok) { setState('test_approval_email_v1', '1'); console.log('[onboarding] sent the test approval email'); }
-        else console.warn('[onboarding] test approval email not sent:', r.error);
-      }).catch(() => undefined);
-  } catch (e) { console.warn('[onboarding] test approval email error:', (e as Error).message); }
+  const { getState, setState } = require('./db/schema');
+  const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+  for (const [flag, kind] of [['test_approval_email_v1', 'computer'], ['test_license_approval_email_v1', 'license']] as const) {
+    try {
+      if (getState(flag) === '1') continue;
+      require('./services/onboardingOwners').sendTestApprovalEmail('devon.booker@1stfpservices.com', base, kind)
+        .then((r: { ok: boolean; error?: string }) => {
+          if (r.ok) { setState(flag, '1'); console.log(`[onboarding] sent the ${kind} test approval email`); }
+          else console.warn(`[onboarding] ${kind} test approval email not sent:`, r.error);
+        }).catch(() => undefined);
+    } catch (e) { console.warn('[onboarding] test approval email error:', (e as Error).message); }
+  }
 }, 1000 * 20).unref();
 setInterval(() => { void runDueSyncs(); }, SYNC_TICK_MS).unref();
 // One detection pass at boot so the exceptions queue is populated before the first sync cycle.

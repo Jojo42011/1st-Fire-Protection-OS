@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import { getDb } from '../db/index';
 import { verifyApproval } from '../services/approvalLinks';
 import { approveItem, rejectItem, OnboardingItem } from '../services/onboardingAgent';
-import { notifyFollowUp, notifyRejection, startDateInfo, testApproval } from '../services/onboardingOwners';
+import { notifyFollowUp, notifyRejection, startDateInfo, testApproval, TEST_ITEM_ID } from '../services/onboardingOwners';
 
 /**
  * Public: the page behind a "Review and approve" email button. The signed link names one item and the
@@ -24,10 +24,10 @@ button.go{background:#14213a;border-color:#14213a;color:#fff}label{font-size:13p
 </style></head><body><main>${body}</main></body></html>`;
 }
 
-function load(token: string): { item: OnboardingItem; email: string; req: any; test?: boolean } | null {
+function load(token: string): { item: OnboardingItem; email: string; req: any; test?: boolean; next?: string } | null {
   const v = verifyApproval(token);
   if (!v) return null;
-  if (v.itemId === 0) { const t = testApproval(v.email); return { item: t.item, email: v.email, req: t.hire, test: true }; }
+  if (v.itemId <= 0) { const t = testApproval(v.email, v.itemId === TEST_ITEM_ID.license ? 'license' : 'computer'); return { item: t.item, email: v.email, req: t.hire, test: true, next: t.next }; }
   const item = getDb().prepare(`SELECT * FROM onboarding_items WHERE id = ?`).get(v.itemId) as OnboardingItem | undefined;
   if (!item || item.kind !== 'approval') return null;
   const req = getDb().prepare(`SELECT name, start_date, job_position, status FROM onboarding_requests WHERE id = ?`).get(item.request_id) as any;
@@ -65,11 +65,11 @@ router.post('/approve/:token', express.urlencoded({ extended: false, limit: '8kb
   res.set('Cache-Control', 'no-store');
   const x = load(req.params.token);
   if (!x) return res.status(404).type('html').send(invalid());
-  const { item, email, req: r, test } = x;
+  const { item, email, req: r, test, next } = x;
   const action = String(req.body?.action || '');
   if (test && (action === 'approve' || action === 'reject')) {
     const what = action === 'approve'
-      ? `<h1 class="done">Approved (test)</h1>${summary(item, r)}<p class="sub">For a real hire, IT (support@liontechlabs.com) would now get "Order and set up new computer for ${esc(r.name)}". This was a test, so nothing was recorded or sent.</p>`
+      ? `<h1 class="done">Approved (test)</h1>${summary(item, r)}<p class="sub">For a real hire, IT (support@liontechlabs.com) would now get "${esc(next || '')}". This was a test, so nothing was recorded or sent.</p>`
       : `<h1 class="no">Not approved (test)</h1>${summary(item, r)}<p class="sub">For a real hire, your reason would be saved and IT told. This was a test, so nothing was recorded or sent.</p>`;
     return res.type('html').send(page(action === 'approve' ? 'Approved (test)' : 'Not approved (test)', testBanner + what));
   }

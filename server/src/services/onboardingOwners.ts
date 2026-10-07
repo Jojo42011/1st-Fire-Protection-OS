@@ -205,30 +205,47 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
 
 /* ─────────────────────────── test approval email ─────────────────────────── */
 
-/** A made-up hire and laptop approval for the test email. Its link signs item 0, which the approval
- *  page treats as a test: it looks and behaves like the real one but records nothing. */
-export function testApproval(email: string, now = new Date()): { item: OnboardingItem; hire: { name: string; start_date: string; job_position: string } } {
+/** The test approvals: a made-up hire and one approval each. Their links sign item 0 (computer) or
+ *  -1 (license), which the approval page treats as a test: it looks and behaves like the real one but
+ *  records nothing. */
+export type TestApprovalKind = 'computer' | 'license';
+export const TEST_ITEM_ID: Record<TestApprovalKind, number> = { computer: 0, license: -1 };
+const TEST_APPROVALS: Record<TestApprovalKind, { owner: Owner; owner_label: string; label: string; detail: string; intro: string; next: string }> = {
+  computer: {
+    owner: 'manager', owner_label: 'Approving manager (one level up)', label: 'Approve new computer',
+    detail: 'Standard laptop. Approver: you (this is a test)',
+    intro: 'TEST: this is the laptop approval email the approving manager (the hire\'s manager\'s manager) gets. Try the button: approving or declining a test records nothing.',
+    next: 'Order and set up new computer for Test Hire',
+  },
+  license: {
+    owner: 'it_manager', owner_label: 'IT manager (approval)', label: 'Approve Bluebeam license',
+    detail: 'Licensed software: needs the IT manager\'s sign-off before the seat is bought or assigned (this is a test)',
+    intro: 'TEST: this is the email you get when a new hire needs a paid license (Bluebeam, AutoCAD, HydraCAD). Try the button: approving or declining a test records nothing.',
+    next: 'Install Bluebeam',
+  },
+};
+export function testApproval(email: string, kind: TestApprovalKind = 'computer', now = new Date()): { item: OnboardingItem; hire: { name: string; start_date: string; job_position: string }; next: string; intro: string } {
   const start = new Date(now.getTime() + 14 * 86400000).toISOString().slice(0, 10);
+  const t = TEST_APPROVALS[kind];
   return {
     hire: { name: 'Test Hire', start_date: start, job_position: 'Fire Sprinkler Inspector' },
+    next: t.next, intro: t.intro,
     item: {
-      id: 0, request_id: 0, owner: 'manager', owner_label: 'Approving manager (one level up)', kind: 'approval',
-      label: 'Approve new computer', detail: 'Standard laptop. Approver: you (this is a test)', status: 'pending',
+      id: TEST_ITEM_ID[kind], request_id: 0, owner: t.owner, owner_label: t.owner_label, kind: 'approval',
+      label: t.label, detail: t.detail, status: 'pending',
       email_to: email, due_at: start, decided_by: null, decided_at: null, created_at: now.toISOString(),
     },
   };
 }
 
-/** Send the laptop-approval email a manager gets, for a made-up hire, so it can be checked end to end. */
-export async function sendTestApprovalEmail(to: string, base: string): Promise<{ ok: boolean; error?: string }> {
+/** Send an approval email exactly as the approver gets it, for a made-up hire, so it can be checked end to end. */
+export async function sendTestApprovalEmail(to: string, base: string, kind: TestApprovalKind = 'computer'): Promise<{ ok: boolean; error?: string }> {
   if (!mailCredsPresent()) return { ok: false, error: 'Mail is not connected.' };
   const sender = senderFor('onboarding');
   if (!sender) return { ok: false, error: 'No onboarding sender is set.' };
-  const { item, hire } = testApproval(to);
+  const { item, hire, intro } = testApproval(to, kind);
   const start = startDateInfo(hire.start_date);
-  const html = ownerTasksHtml(hire.name, [item], `${base}/onboarding`, start,
-    'TEST: this is the laptop approval email the approving manager (the hire\'s manager\'s manager) gets. Try the button: approving or declining a test records nothing.',
-    { email: to, base });
+  const html = ownerTasksHtml(hire.name, [item], `${base}/onboarding`, start, intro, { email: to, base });
   const out = await sendMail(to, '[Test] ' + ownerSubject(hire.name, start), html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true } : { ok: false, error: (out as any).error || 'send failed' };
 }

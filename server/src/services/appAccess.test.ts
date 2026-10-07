@@ -132,3 +132,19 @@ test('a ServiceTrade setup task closes itself once ServiceTrade lists the hire',
   assert.equal(row.status, 'done');
   assert.match(row.decided_by, /in ServiceTrade/);
 });
+
+test('the test license approval link shows Bluebeam and says IT support would get the install', async () => {
+  const app = express();
+  app.use(approvalLinkRoutes);
+  const server = http.createServer(app);
+  await new Promise<void>((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  try {
+    const url = approvalUrl(base, -1, 'devon.booker@1stfpservices.com');
+    const page = await (await fetch(url)).text();
+    assert.match(page, /Test approval/);
+    assert.match(page, /Bluebeam license/);
+    const done = await (await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'action=approve' })).text();
+    assert.match(done, /would now get &quot;Install Bluebeam&quot;|would now get "Install Bluebeam"/);
+  } finally { server.close(); }
+});
