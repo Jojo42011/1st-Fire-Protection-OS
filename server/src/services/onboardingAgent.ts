@@ -24,7 +24,7 @@ export type Owner = 'bamboo' | 'it' | 'it_manager' | 'manager' | 'mario' | 'rebe
 
 /** Display label + the tag shown on the form, per owner. Order is the grouped-view order. */
 export const OWNERS: { key: Owner; label: string; tag: string }[] = [
-  { key: 'bamboo', label: '(HR builds it)', tag: 'BambooHR' },
+  { key: 'bamboo', label: 'BambooHR (HR builds the record)', tag: 'BambooHR' },
   { key: 'it', label: 'IT (provisioning)', tag: 'IT' },
   { key: 'it_manager', label: 'IT manager (approval)', tag: 'IT Manager' },
   { key: 'manager', label: 'Approving manager (one level up)', tag: 'Manager' },

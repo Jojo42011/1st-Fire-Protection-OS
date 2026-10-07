@@ -282,7 +282,7 @@ const RETIRED_PAGES = new Set([
   'operator', 'home', 'my-tasks', 'approvals', 'exceptions', 'soon',
   'money', 'receivables', 'invoices', 'close',
   'service', 'schedule', 'inspections', 'deficiencies', 'ops-jobs', 'jobs', 'job-board', 'agreements', 'costing', 'plans',
-  'calls', 'reviews', 'review-requests', 'reviews-hub', 'oncall',
+  'calls', 'oncall',
   'accounts', 'account', 'sites', 'quotes', 'pipeline', 'closer', 'estimates', 'estimate-builder',
   'executive', 'office-performance', 'scoreboard', 'reports-money', 'reports-ops', 'reports-people', 'reports-builder',
   'offices', 'integrations', 'sync', 'roster', 'harness', 'department', 'agent',

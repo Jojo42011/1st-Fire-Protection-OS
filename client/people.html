@@ -24,7 +24,7 @@
   /* secondary sub-tab strips inside a view (employee detail, assets, credentials) */
   .ptabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin:6px 0 18px}
   .ptab{appearance:none;border:0;background:none;padding:10px 14px;font-weight:600;font-size:13.5px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-  .ptab.on{color:var(--ink);border-bottom-color:var(--indigo)}
+  .ptab.on{color:var(--ink);border-bottom-color:var(--brand)}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:8px}
   @media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{padding:16px 18px}
@@ -37,7 +37,7 @@
   .pill.blocked{color:#8C1D18;background:rgba(140,29,24,.12)}
   .team{display:inline-block;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;border-radius:6px;padding:2px 7px;color:#fff}
   .st{font-weight:700;font-size:11px;border-radius:6px;padding:2px 8px;background:var(--fill);color:var(--muted)}
-  .st.pending{background:rgba(75,87,201,.12);color:var(--indigo)}
+  .st.pending{background:var(--cobalt-bg);color:var(--cobalt)}
   .st.blocked{background:rgba(140,29,24,.1);color:#8C1D18}
   .st.awaiting_approval{background:rgba(185,134,11,.14);color:#8a6d0b}
   .st.completed,.st.approved,.st.provisioned{background:rgba(31,122,77,.12);color:var(--green)}
@@ -53,7 +53,7 @@
   .muted{color:var(--muted);font-size:12.5px}
   .authwrap{max-width:520px;margin:8vh auto;text-align:center}
   .authwrap .ms{display:inline-flex;align-items:center;gap:10px;background:#2f2f2f;color:#fff;border:0;border-radius:8px;padding:11px 18px;font-weight:700;font-size:14px;cursor:pointer;margin-top:16px}
-  .link{color:var(--indigo);font-weight:600;cursor:pointer}
+  .link{color:var(--link);font-weight:600;cursor:pointer}
   .backlink{font-weight:600;font-size:12.5px;color:var(--indigo);cursor:pointer}
   .btn-xs{font-weight:700;font-size:11px;color:var(--ink-2);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:4px 9px;cursor:pointer}
   .btn-xs:hover{border-color:var(--border-strong)}
@@ -84,20 +84,18 @@
 </style>
 </head>
 <body>
-<div class="screen view" id="root">
+<div class="page view" id="root">
+  <div id="crumbHost"></div>
   <div class="os-screen-head">
     <div>
-      <h1>People</h1>
-      <div class="os-question">Who is joining, who is here, and what do we reverse when someone leaves?</div>
+      <h1 id="pgTitle">People</h1>
+      <div class="os-question" id="pgSub">Who is joining, who is here, and who is leaving.</div>
     </div>
     <div class="os-actions" id="headActions" style="display:none"></div>
   </div>
-  <div id="who" class="muted" style="margin-bottom:6px"></div>
   <div id="tabsWrap" style="display:none">
     <div id="metricstrip"></div>
-    <div class="os-ptabs" id="pstrip"></div>
     <div id="view"></div>
-    <div class="os-foot">People holds employee and HR records, so it is gated by Microsoft identity, not the office password. Nothing provisions, grants or reverses access on its own: every item waits for its owner to act.</div>
   </div>
   <div id="gate"></div>
 </div>
@@ -123,9 +121,9 @@ var STRIP=[
   {key:'offboarding',label:'Offboarding',    badge:'offboarding'},
   {key:'templates',  label:'Role templates', badge:'positions',        drawer:true}
 ];
-var STRIP_VIEWS={overview:1,employees:1,offboarding:1}; // tabs people.html renders in-page
+var STRIP_VIEWS={overview:1,employees:1,templates:1,assets:1,credentials:1}; // views reachable by #hash (the sidebar picks them)
 var OVERVIEW=null, cur='overview';
-function renderStrip(active){
+function renderStrip(active){ if(!document.getElementById('pstrip')) return;
   var o=OVERVIEW||{};
   document.getElementById('pstrip').innerHTML=STRIP.map(function(t){
     var n=t.badge&&o[t.badge]!=null?o[t.badge]:null;
@@ -135,11 +133,12 @@ function renderStrip(active){
 }
 function renderMetricStrip(){
   var o=OVERVIEW||{};
+  document.getElementById('metricstrip').style.display=(cur==='overview')?'':'none';
   document.getElementById('metricstrip').innerHTML=OS.metricStrip([
     {label:'Active employees', value:o.active||0,     format:'count',drillable:false,sub:'on the roster'},
     {label:'In onboarding',    value:o.onboarding||0, format:'count',drillable:false,sub:'joining now'},
     {label:'Offboarding',      value:o.offboarding||0,format:'count',drillable:false,sub:'on notice or leaving'},
-    {label:'Open people tasks',value:o.openTasks||0,  format:'count',drillable:false,sub:'across HR, IT, Safety'}
+    {label:'Role templates',   value:o.templatesUnreviewed||0,format:'count',drillable:false,sub:'still to review'}
   ]);
 }
 function loadOverview(initial){
@@ -153,9 +152,7 @@ function loadOverview(initial){
 function boot(){
   j('/api/people/me').then(function(r){
     ME=r.body;
-    var who=document.getElementById('who');
     if(!ME.authenticated || !ME.authorized){ renderGate(); return; }
-    who.innerHTML='Signed in as <b>'+esc(ME.name||ME.email)+'</b> · roles: '+(ME.roles.map(esc).join(', ')||'none')+' · <span class="link" onclick="signOut()">sign out</span>';
     document.getElementById('gate').innerHTML='';
     document.getElementById('tabsWrap').style.display='';
     document.getElementById('headActions').style.display='';
@@ -183,21 +180,28 @@ function renderGate(){
 function signIn(){ try{ (window.top||window).location.href='/api/people/auth/login'; }catch(_){ window.location.href='/api/people/auth/login'; } }
 function signOut(){ j('/api/people/auth/logout',{method:'POST'}).then(function(){location.reload();}); }
 
-function go(k){ cur=k; renderStrip(STRIP_VIEWS[k]?k:''); var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v);
+var VIEW_META={
+  overview:{t:'People',s:'Who is joining, who is here, and who is leaving.'},
+  employees:{t:'Employees',s:'Everyone on the roster. Employment facts come from BambooHR, identity from Microsoft 365.'},
+  templates:{t:'Role templates',s:'Job positions and the access each one starts with.'},
+  assets:{t:'Assets',s:'Company property and who has it.'},
+  credentials:{t:'Credentials',s:'Licenses and certifications on file.'}
+};
+function setHead(title,sub,crumb){
+  document.getElementById('pgTitle').textContent=title;
+  document.getElementById('pgSub').textContent=sub||'';
+  document.getElementById('crumbHost').innerHTML=crumb?'<button class="crumb" id="crumbBtn">← '+esc(crumb.label)+'</button>':'';
+  if(crumb) document.getElementById('crumbBtn').addEventListener('click',crumb.go);
+  document.getElementById('headActions').innerHTML='';
+}
+function go(k){ if(!VIEWS[k]) k='overview'; cur=k; var m=VIEW_META[k]||VIEW_META.overview; setHead(m.t,m.s,null);
+  var ms=document.getElementById('metricstrip'); if(ms) ms.style.display=(k==='overview')?'':'none';
+  var v=document.getElementById('view'); v.innerHTML='<p class="muted">Loading…</p>'; VIEWS[k](v);
   // Tell the shell which in-page sub-tab is active so a browser reload restores it.
   if(STRIP_VIEWS[k]){ try{history.replaceState(null,'','#'+k);}catch(_){} try{parent.postMessage({type:'fp-subtab',tab:k},'*');}catch(_){} }
 }
 // Strip navigation: active in-page tab is inert; My tasks / Approvals leave via OS.go; Onboarding
 // opens its own view; Role templates opens a drawer; the rest render in-page.
-document.getElementById('pstrip').addEventListener('click',function(e){
-  var b=e.target.closest('[data-tab]'); if(!b) return;
-  var t=STRIP.filter(function(x){return x.key===b.getAttribute('data-tab');})[0]; if(!t) return;
-  if(t.go){ OS.go(t.go); return; }
-  if(t.drawer){ openTemplatesDrawer(); return; }
-  if(t.nav){ location.href=t.nav; return; }
-  if(t.key===cur) return;
-  go(t.key);
-});
 function openTemplatesDrawer(){
   var scrim=document.createElement('div'); scrim.className='os-scrim';
   scrim.innerHTML='<div class="os-drawer" role="dialog" aria-label="Role templates"><div class="dh"><div><h2>Role templates</h2><div class="sub">Job positions and their access defaults</div></div><button class="x" aria-label="Close">&times;</button></div><div class="db" id="tmplBody" style="overflow:auto;flex:1;padding:0"><p class="muted" style="padding:18px 20px">Loading…</p></div></div>';
@@ -230,21 +234,21 @@ VIEWS.overview=function(v){
     if(att.offboardingWithAccess>0) cards.push(attn('bad',att.offboardingWithAccess+' leaving/left still have access','Security and license exposure until revoked','offboarding'));
     if(att.unreturnedAssets>0) cards.push(attn('warn',att.unreturnedAssets+' assets not returned','Company property with departing employees','assets'));
     if(att.missingCredentials>0) cards.push(attn('warn',att.missingCredentials+' credentials missing or expired','Required certifications not on file','credentials'));
-    var attnHtml = cards.length? '<div class="kpis" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">'+cards.join('')+'</div>' : '<div class="card card-pad"><p class="muted">Nothing needs attention in the lifecycle right now.</p></div>';
+    var attnHtml = cards.length? '<div class="os-attn">'+cards.join('')+'</div>' : '<div class="banner good">Nothing needs attention right now.</div>';
     // 2) Starting next 7 days with Day-1 readiness
     var soonHtml = soon.length? '<div class="card card-clip" style="margin-top:14px"><div class="card-head"><h2>Starting next 7 days</h2></div><table><thead><tr><th>Name</th><th>Role</th><th>Office</th><th>Starts</th><th>Day-1</th></tr></thead><tbody>'+
       soon.map(function(s){var tone=s.readiness==='ready'?'completed':s.readiness==='blocked'?'awaiting_approval':'pending';
         return '<tr style="cursor:pointer" onclick="empDetail('+s.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(s.name)+'</td><td>'+esc(s.job_position||'')+'</td><td>'+esc(s.office||'')+'</td><td>'+esc(s.start||'')+(s.daysUntil!=null?' <span class="muted">('+s.daysUntil+'d)</span>':'')+'</td><td><span class="st '+tone+'">'+esc(human(s.readiness))+'</span></td></tr>';}).join('')+
       '</tbody></table></div>' : '';
     // 3) Config note (demoted). The headline lifecycle counts now live in the metric strip above.
-    var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'</p>';
+    var cfg=o.templatesUnreviewed>0?'<div class="note-line">'+o.templatesUnreviewed+' role templates still need review. <button class="linkbtn" onclick="goGlobal(\'templates\')">Review them</button></div>':'';
     var exports=(has('hr')||has('people_admin'))
       ? '<div class="card card-pad" style="margin-top:14px"><div class="card-head" style="padding:0 0 6px"><h2>Exports</h2></div>'+
         '<p class="muted" style="margin:0 0 10px">Phone list (First name, Last name, last 4 of the mobile number) for 1st FP Services and MGMT, from BambooHR.</p>'+
         '<button class="os-btn primary" id="dlPhone">Download phone list (last 4)</button>'+
         '<span id="dlPhoneMsg" class="muted" style="margin-left:10px"></span></div>'
       : '';
-    v.innerHTML='<div class="sec" style="margin-bottom:10px">Needs attention</div>'+attnHtml+soonHtml+renderHeadcount(HC)+exports+cfg;
+    v.innerHTML='<div class="sec-h" style="margin-top:22px"><h2>Needs attention</h2></div>'+attnHtml+soonHtml+renderHeadcount(HC)+exports+cfg;
     var dp=document.getElementById('dlPhone'); if(dp) dp.addEventListener('click',downloadPhoneList);
   });
 };
@@ -277,7 +281,9 @@ function renderHeadcount(HC){
     '<details style="padding:8px 14px"><summary class="muted" style="cursor:pointer;font-size:12px">Full title breakdown</summary>'+
     '<table style="margin-top:8px"><tbody>'+other+'</tbody></table></details></div>';
 }
-function attn(tone,title,why,tab){return '<div class="card kpi" style="cursor:pointer;border-left:4px solid '+(tone==='bad'?'#d64545':tone==='warn'?'#c9821a':'#7c869b')+'" onclick="go(\''+tab+'\')"><div class="val" style="font-size:15px;line-height:1.3">'+esc(title)+'</div><div class="lab" style="text-transform:none;font-weight:500;margin-top:4px">'+esc(why)+'</div></div>';}
+function attn(tone,title,why,tab){
+  var act=(tab==='onboarding'||tab==='offboarding')?'goGlobal(\''+tab+'\')':'go(\''+tab+'\')';
+  return '<div class="os-acard '+tone+'" style="cursor:pointer" onclick="'+act+'"><div class="t">'+esc(title)+'</div><div class="why">'+esc(why)+'</div></div>';}
 function goGlobal(tab){try{parent.postMessage({type:'app-navigate',tab:tab},'*');}catch(_){}}
 function kpi(lab,val){return '<div class="card kpi"><div class="lab">'+esc(lab)+'</div><div class="val">'+(val==null?'0':esc(val))+'</div></div>';}
 
@@ -310,18 +316,22 @@ VIEWS.employees=function(v){
     var resolveBtn=canEditAccess()?'<button class="btn btn-sm" id="resolveUn" onclick="resolveUnmatched()">Resolve unmatched</button>':'';
     var exportBtn='<button class="btn btn-sm" onclick="exportRoster()">Export roster</button>';
     var gapsBtn='<button class="btn btn-sm" onclick="showDataGaps()">Data gaps</button>';
-    var head='<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div><h2 style="margin:0">Employees</h2><p class="muted" style="margin:2px 0 0">BambooHR supplies employment facts; Microsoft 365 supplies identity (UPN/email).</p></div><div class="row" style="gap:8px;flex-wrap:wrap">'+exportBtn+gapsBtn+importBtn+idBtn+resolveBtn+syncAllBtn+'</div></div>';
+    var m365=canEditAccess()?'<details class="mmenu"><summary class="os-btn">Microsoft 365 ▾</summary><div class="mlist"><div class="mh">MICROSOFT 365</div>'+
+      '<button id="idSync" onclick="syncIdentities()">Match identities</button><button id="resolveUn" onclick="resolveUnmatched()">Resolve unmatched</button><button id="syncAll" onclick="syncAllAccess()">Sync everyone\'s access</button></div></details>':'';
+    document.getElementById('headActions').innerHTML='<button class="os-btn" onclick="exportRoster()">Export</button><button class="os-btn" onclick="showDataGaps()">Data gaps</button>'+m365+
+      (connected?'<button class="os-btn primary" id="bhImport" onclick="importBamboo()">Import from BambooHR</button>':'');
+    var head=connected?'':'<div class="banner">BambooHR is not connected, so the roster cannot be imported.</div>';
     // Filter bar: office, status, and a free-text search. Offices come from the roster itself.
     var offices=[]; EMPLOYEES.forEach(function(e){ if(e.office && offices.indexOf(e.office)<0) offices.push(e.office); }); offices.sort();
     var statuses=[]; EMPLOYEES.forEach(function(e){ if(e.employment_status && statuses.indexOf(e.employment_status)<0) statuses.push(e.employment_status); });
-    var sel=function(id,cur,opts){ return '<select id="'+id+'" class="emp-filter" style="padding:7px 9px;border:1px solid var(--line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===cur?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; };
+    var sel=function(id,cur,opts){ return '<select id="'+id+'" class="emp-filter">'+opts.map(function(o){return '<option value="'+esc(o[0])+'"'+(o[0]===cur?' selected':'')+'>'+esc(o[1])+'</option>';}).join('')+'</select>'; };
     if(offices.indexOf(empFO)<0 && empFO!=='all') empFO='all';
     if(statuses.indexOf(empFS)<0 && empFS!=='all') empFS='active';
-    var filterBar='<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+
-      '<input id="empSearch" type="text" placeholder="Search name, position, manager…" value="'+esc(empQ)+'" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit" />'+
+    var filterBar='<div class="fbar">'+
+      '<input id="empSearch" type="search" placeholder="Search name, position or manager" value="'+esc(empQ)+'" />'+
       sel('empOffice',empFO,[['all','All offices']].concat(offices.map(function(o){return [o,o];})))+
       sel('empStatus',empFS,[['all','All statuses']].concat(statuses.map(function(s){return [s,human(s)];})))+
-      '<span class="muted" id="empCount" style="font-size:12.5px"></span></div>';
+      '<span class="cnt" id="empCount"></span></div>';
     v.innerHTML=head+'<div id="bhMsg"></div>'+(EMPLOYEES.length?filterBar:'')+'<div id="empTableHost"></div>';
     if(EMPLOYEES.length) renderEmployeeTable(); else document.getElementById('empTableHost').innerHTML='<div class="card card-pad"><p class="muted">No employees yet. Click <b>Import from BambooHR</b> to pull the live roster, or start an onboarding. Nothing is faked.</p></div>';
     var os=document.getElementById('empSearch'); if(os) os.addEventListener('input',function(){ empQ=this.value.toLowerCase().trim(); renderEmployeeTable(); });
@@ -513,16 +523,18 @@ function renderEmp(){
   var critical = (e.employment_status==='terminated'||e.employment_status==='offboarding'||e.employment_status==='notice') && activeAccess>0;
   var name=empDisplayName(e);
   var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['software','Software'],['credentials','Credentials'],['history','History']];
-  var header='<p><span class="backlink" onclick="go(\'employees\')">← Employees</span></p>'+
-    '<div class="card"><div class="emp-hero">'+avatarHTML(name,'lg')+'<div style="flex:1;min-width:0"><h2>'+esc(name)+'</h2><div class="sub">'+esc(e.public_job_title||e.job_position||'')+(e.office?' · '+esc(e.office):'')+(e.manager?' · Manager: '+esc(e.manager):'')+'</div></div><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></div>'+
-    (critical?'<div style="margin:0 20px 18px;background:var(--os-bad-bg,#fbeaea);border-radius:10px;padding:11px 13px"><b style="color:#b3261e">Critical: '+activeAccess+' access still active</b><span class="muted">. This person is leaving or left but still has provisioned access. Do not close offboarding until access is revoked or a waiver is recorded.</span></div>':'')+
-    '</div>'+
+  var back=VIEW_META[cur]||VIEW_META.employees, backKey=cur;
+  setHead(name,[e.public_job_title||e.job_position||'',e.office||'',e.manager?'Manager: '+e.manager:''].filter(Boolean).join(' · '),{label:back.t,go:function(){go(backKey);}});
+  document.getElementById('metricstrip').style.display='none';
+  document.getElementById('headActions').innerHTML='<span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span>'+
+    (e.employment_status==='active'?'<button class="os-btn" onclick="goGlobal(\'offboarding\')">Start offboarding</button>':'');
+  var header=(critical?'<div class="banner bad"><span><b>'+activeAccess+' access still active.</b> This person is leaving or has left. Revoke it (or record a waiver) before closing their offboarding.</span></div>':'')+
     '<div class="ptabs" style="margin-top:12px">'+tabs.map(function(t){return '<button class="ptab'+(t[0]===_empTab?' on':'')+'" onclick="empTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var body='';
   if(_empTab==='overview'){
     body=(rd?'<div class="card card-pad"><div class="row" style="gap:8px;flex-wrap:wrap">'+rd.categories.map(function(c){return '<span class="pill '+c.state+'">'+esc(c.label)+' '+(c.state==='ready'?'✓':c.state==='blocked'?'✕':'⚠')+'</span>';}).join('')+'</div></div>':'')+
       section('Recent activity', (d.history||[]).slice(0,6), function(h){return '<tr><td style="white-space:nowrap;color:var(--faint)">'+esc(h.at)+'</td><td>'+esc(human(h.action))+'</td><td class="muted">'+esc(h.detail||'')+'</td></tr>';},['When','Event','Detail'],'No history.')+
-      (e.employment_status==='active'?'<div style="margin-top:14px"><button class="btn btn-sm" onclick="go(\'offboarding\')">Start offboarding →</button></div>':'');
+''
   } else if(_empTab==='access'){
     var accEdit=canEditAccess();
     if(accEdit && _accessGroups===null){ loadAccessGroups(function(){ if(_empTab==='access') renderEmp(); }); }
@@ -718,8 +730,9 @@ function startOff(){
 VIEWS.templates=function(v){
   j('/api/people/positions').then(function(r){
     var rows=(r.body&&r.body.positions)||[];
-    v.innerHTML='<div class="card card-clip"><div class="card-head"><h2>Job positions → role templates</h2><span style="flex:1"></span><span class="muted">'+rows.length+' positions</span></div>'+
-      '<div class="card-pad" style="padding-top:0"><p class="muted">Defaults are configured iteratively. New positions start <b>unreviewed</b> so nobody ships access defaults the business has not approved.</p></div>'+
+    var un=rows.filter(function(p){return p.review_status!=='reviewed';}).length;
+    v.innerHTML=(un?'<div class="banner warn"><span><b>'+un+' of '+rows.length+'</b> positions are unreviewed. A new position starts unreviewed so nobody gets access defaults the business has not approved.</span></div>':'')+
+      '<div class="card card-clip">'+
       '<table><thead><tr><th>Position</th><th>Template</th><th>Updated</th></tr></thead><tbody>'+rows.map(function(p){
         return '<tr><td style="font-weight:600;color:var(--ink)">'+esc(p.name)+'</td><td>'+(p.review_status==='reviewed'?'<span class="st completed">Reviewed</span>':'<span class="st awaiting_approval">Unreviewed</span>')+'</td><td class="muted">'+esc((p.updated_at||'').slice(0,10)||'not set')+'</td></tr>';
       }).join('')+'</tbody></table></div>';

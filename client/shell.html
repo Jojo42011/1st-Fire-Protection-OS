@@ -180,7 +180,9 @@
 "use strict";
 /* ---- what the OS does now: People (HR, onboarding, offboarding) and IT ---- */
 var SCREENS = {
-  people:      { src:'/people',      title:'People',            sub:'Employees, onboarding and offboarding' },
+  people:      { src:'/people',      title:'Overview',          sub:'Who is joining, who is here, and who is leaving' },
+  employees:   { src:'/people#employees', title:'Employees',      sub:'Everyone on the roster' },
+  templates:   { src:'/people#templates', title:'Role templates', sub:'Job positions and their starting access' },
   onboarding:  { src:'/onboarding',  title:'Onboarding',        sub:'New hires: intake, approvals and Day-1 readiness' },
   offboarding: { src:'/offboarding', title:'Offboarding',       sub:'The departure checklist and account cleanup' },
   itSystems:   { src:'/it-systems',  title:'IT & Systems',      sub:'Access, licenses and system health' },
@@ -189,17 +191,22 @@ var SCREENS = {
   spend:       { src:'/licenses',    title:'License cleanup',   sub:'Seats you pay for that nobody uses' },
   settings:    { src:'/access',      title:'Access & Roles',    sub:'Who can see what in the OS' },
   integrations:{ src:'/company-integrations', title:'Integrations', sub:'Connected systems and sync health' },
-  readiness:   { src:'/readiness',   title:'Readiness',         sub:'Identity, admin, backups and freshness' }
+  readiness:   { src:'/readiness',   title:'Readiness',         sub:'Identity, admin, backups and freshness' },
+  reviewsHub:  { src:'/reviews-hub', title:'Overview',          sub:'Google reviews across every location' },
+  reviews:     { src:'/reviews',     title:'Google reviews',    sub:'Read and reply to reviews' },
+  reviewRequests:{ src:'/review-requests', title:'Review requests', sub:'Ask customers for a review after the job' }
 };
 var MODULES = [
-  { k:'people', tile:'P', label:'People', desc:'Employees, onboarding and offboarding', items:['people','onboarding','offboarding'] },
-  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','adAudit','spAccess','spend','settings','integrations','readiness'] }
+  { k:'people', tile:'P', label:'People', desc:'Employees, onboarding and offboarding', items:['people','employees','onboarding','offboarding','templates'] },
+  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','adAudit','spAccess','spend','settings','integrations','readiness'] },
+  { k:'reviews', tile:'R', label:'Reviews', desc:'Google reviews and review requests', items:['reviewsHub','reviews','reviewRequests'] }
 ];
 // The People-role module that governs each screen (mirrors server PAGE_MODULE); hidden when the role lacks it.
-var SCREEN_MODULE = { people:'people', onboarding:'people', offboarding:'people',
-  itSystems:'access', adAudit:'access', spAccess:'access', spend:'access', settings:'access', integrations:'access', readiness:'access' };
+var SCREEN_MODULE = { people:'people', employees:'people', templates:'people', onboarding:'people', offboarding:'people',
+  itSystems:'access', adAudit:'access', spAccess:'access', spend:'access', settings:'access', integrations:'access', readiness:'access',
+  reviewsHub:'service', reviews:'service', reviewRequests:'service' };
 // Old links (?tab=home, ?tab=approve, ...) from before the OS was narrowed land on People.
-var ALIASES = { home:'people', tasks:'people', approve:'onboarding', exceptions:'people', reportsPeople:'people', companyOffices:'people', sync:'integrations' };
+var ALIASES = { 'reviews-hub':'reviewsHub', 'review-requests':'reviewRequests', home:'people', tasks:'people', approve:'onboarding', exceptions:'people', reportsPeople:'people', companyOffices:'people', sync:'integrations' };
 
 var KEYS = Object.keys(SCREENS), HOME = 'people', current = null;
 var GATE = false, ME_MODULES = {}, ME = null;
@@ -268,7 +275,7 @@ function activate(key){
   if(!SCREENS[key]) return;
   if(!allowedScreen(key)){ key=firstAllowed(); if(!key) return; }
   var f=frameEl(key);
-  if(!f.src){ var ds=f.getAttribute('data-src'); if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]); f.src=ds; }
+  if(!f.src){ var ds=f.getAttribute('data-src'); if(subByScreen[key] && ds.indexOf('#')<0) ds+='#'+encodeURIComponent(subByScreen[key]); f.src=ds; }
   KEYS.forEach(function(k){ frameEl(k).classList.toggle('on', k===key); });
   current = key; renderNav(); syncUrl();
   try{ document.title = SCREENS[key].title+' · 1st Fire Protection'; }catch(_){}
@@ -346,7 +353,7 @@ function paintCounts(){ Object.keys(COUNTS).forEach(function(k){ var el=document
 function refreshCounts(){
   fetch('/api/people/overview').then(function(r){ return r.json(); }).then(function(o){
     if(!o || o.error) return;
-    COUNTS.people = o.active || ''; COUNTS.onboarding = o.onboarding || ''; COUNTS.offboarding = o.offboarding || '';
+    COUNTS.employees = o.active || ''; COUNTS.onboarding = o.onboarding || ''; COUNTS.offboarding = o.offboarding || ''; COUNTS.templates = o.templatesUnreviewed || '';
     paintCounts();
   }).catch(function(){});
 }

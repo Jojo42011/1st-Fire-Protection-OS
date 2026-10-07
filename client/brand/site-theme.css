@@ -140,3 +140,89 @@ input[type=checkbox],input[type=radio]{accent-color:var(--brand)}
 /* ---- bars use the brand ---- */
 .os-band .bf{background:var(--brand)}
 .os-band .bf.neutral{background:var(--ink)}
+
+/* ============================================================
+   Shared page anatomy for the People screens (people, onboarding,
+   offboarding) so they read as one app:
+   back crumb, page head, metric strip, sections, lane checklists.
+   ============================================================ */
+.page{max-width:1180px;margin:0 auto;padding:28px clamp(18px,3vw,36px) 64px}
+@media(max-width:640px){.page{padding:18px 14px 52px}}
+.crumb{display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;padding:0;border:0;background:none;font-family:var(--sans);
+  font-weight:600;font-size:13px;color:var(--muted);cursor:pointer}
+.crumb:hover{color:var(--brand)}
+.os-screen-head{margin-bottom:18px}
+.os-screen-head .os-actions{align-items:center}
+.os-btn.sm{font-size:12px;padding:6px 12px}
+.os-btn.danger{color:var(--brand-deep);border-color:rgba(214,45,42,.35)}
+.os-btn.danger:hover{background:var(--brand-tint);border-color:var(--brand)}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:26px 0 10px}
+.sec-h h2{font-weight:800;font-size:17px;letter-spacing:-.02em;color:var(--ink);margin:0}
+.sec-h .n{font-weight:600;font-size:13px;color:var(--faint);margin-left:6px}
+.sec-h .aside{font-size:12.5px;color:var(--muted)}
+.note-line{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.6}
+.note-line b{color:var(--ink-2)}
+.linkbtn{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--link);cursor:pointer}
+.linkbtn:hover{color:var(--brand)}
+.banner{display:flex;gap:10px;align-items:flex-start;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.5;margin:0 0 14px;
+  background:var(--panel);box-shadow:0 0 0 1px var(--border)}
+.banner.warn{background:var(--amber-bg);box-shadow:none;color:var(--amber-ink)}
+.banner.good{background:var(--green-bg);box-shadow:none;color:var(--green)}
+.banner.bad{background:var(--brand-tint);box-shadow:none;color:var(--brand-deep)}
+
+/* detail header card (a person, a request) */
+.dhead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.dhead h1{font-weight:800;font-size:28px;letter-spacing:-.035em;line-height:1.12;margin:0;color:var(--ink)}
+.dhead .dsub{font-size:14px;color:var(--muted);margin-top:6px}
+.dhead .dsub b{color:var(--ink-2);font-weight:600}
+.dhead .dacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.dmeta{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.dmeta .mchip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);background:var(--panel);
+  box-shadow:0 0 0 1px var(--border);border-radius:980px;padding:5px 12px}
+.dmeta .mchip b{font-weight:700;color:var(--ink)}
+
+/* progress bar */
+.pbar{height:8px;background:var(--fill);border-radius:980px;overflow:hidden;min-width:90px}
+.pbar>span{display:block;height:100%;background:var(--brand);border-radius:980px}
+.pbar.done>span{background:var(--green)}
+
+/* lane checklist: one card per team, one row per step */
+.lane{background:var(--panel);border-radius:var(--r-card);box-shadow:0 0 0 1px var(--border);margin-top:14px;overflow:hidden}
+.lane-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid var(--divider)}
+.lane-h .ln{font-weight:700;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.lane-h .lc{font-weight:600;font-size:12px;color:var(--faint)}
+.lane-h .lr{display:flex;align-items:center;gap:8px}
+.lane-i{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:13px 16px;border-top:1px solid var(--divider)}
+.lane-i:first-of-type{border-top:0}
+.lane-i .lt{flex:1;min-width:0}
+.lane-i .lab{font-weight:600;font-size:14px;color:var(--ink)}
+.lane-i .dl{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.45}
+.lane-i .meta{font-size:11.5px;color:var(--faint);margin-top:4px}
+.lane-i .ax{display:flex;gap:7px;flex:none;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+.lane-i.closed .lab{color:var(--muted);font-weight:500}
+@media(max-width:640px){.lane-i{flex-direction:column}.lane-i .ax{justify-content:flex-start}}
+
+/* setup rows (catalog, manual request): collapsible cards */
+details.setup{background:var(--panel);border-radius:var(--r-card);box-shadow:0 0 0 1px var(--border);overflow:hidden;margin-top:10px}
+details.setup>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px}
+details.setup>summary::-webkit-details-marker{display:none}
+details.setup>summary b{font-weight:700;font-size:14px;color:var(--ink)}
+details.setup>summary span{font-size:12.5px;color:var(--muted)}
+details.setup>summary::after{content:"›";font-size:18px;color:var(--faint);transition:transform .2s var(--ease)}
+details.setup[open]>summary::after{transform:rotate(90deg)}
+
+/* filter bar: search + pill selects */
+.fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.fbar input[type=search],.fbar input[type=text]{flex:1;min-width:200px;border-radius:980px;padding:9px 16px;font-size:13.5px}
+.fbar select{border-radius:980px;padding:8px 14px;font-size:13px;font-weight:600}
+.fbar .cnt{font-size:12.5px;color:var(--faint);margin-left:4px}
+
+/* small dropdown menu for secondary actions */
+.mmenu{position:relative;display:inline-block}
+.mmenu>summary{list-style:none}
+.mmenu>summary::-webkit-details-marker{display:none}
+.mmenu .mlist{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:240px;background:var(--panel);border-radius:16px;padding:6px;box-shadow:var(--sh-float)}
+.mmenu .mlist button{display:block;width:100%;text-align:left;border:0;background:none;border-radius:10px;padding:9px 11px;font-family:var(--sans);font-size:13px;color:var(--ink);cursor:pointer}
+.mmenu .mlist button:hover{background:var(--bg)}
+.mmenu .mlist .mh{padding:6px 11px 4px;font-weight:800;font-size:10px;letter-spacing:.08em;color:var(--faint)}
+details.setup>summary span span{font-weight:500;font-size:12.5px;color:var(--muted)}

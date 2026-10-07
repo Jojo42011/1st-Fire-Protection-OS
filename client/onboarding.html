@@ -135,11 +135,11 @@
 </style>
 </head>
 <body>
-  <div class="os-wrap">
-    <div class="os-screen-head">
+  <div class="page view">
+    <div id="obHead" class="os-screen-head">
       <div>
         <h1>Onboarding</h1>
-        <div class="os-question">Who is joining, and is every team ready for day one?</div>
+        <div class="os-question">Who is starting, and is every team ready for their first day?</div>
       </div>
       <div class="os-actions">
         <button class="os-btn" id="previewForm">Preview the form</button>
@@ -147,24 +147,21 @@
       </div>
     </div>
 
-    <div id="metricstrip"></div>
-    <div class="os-ptabs" id="pstrip"></div>
+    <div id="listView">
+      <div id="metricstrip"></div>
 
-    <div class="os-sec">Intake links <span class="n" id="linkn"></span></div>
-    <div id="links"></div>
-    <div class="os-filter-note" id="linkNote"></div>
+      <div class="sec-h"><h2>New hires<span class="n" id="boardn"></span></h2><span class="aside">Click someone to see their checklist</span></div>
+      <div id="board"></div>
 
-    <div class="os-sec os-block">Onboarding board <span class="n" id="boardn"></span></div>
+      <div class="sec-h"><h2>Intake links<span class="n" id="linkn"></span></h2><span class="aside" id="linkNote"></span></div>
+      <div id="links"></div>
+
+      <div class="sec-h"><h2>Setup</h2></div>
+      <div id="formCard"></div>
+      <div id="catalogCard"></div>
+    </div>
+
     <div id="detail"></div>
-    <div id="board"></div>
-
-    <div class="os-sec os-block">Full onboarding request</div>
-    <div id="formCard"></div>
-
-    <div class="os-sec os-block">Onboarding catalog</div>
-    <div id="catalogCard"></div>
-
-    <div class="os-foot">Sending an intake link invites a hiring manager to describe the role. It never asks for pay, Social Security number or bank details: HR collects those from the employee directly. Each link is a single-use token that expires in 7 days; resending it voids the old one. When the manager submits, the board below fills and each item routes to the team that owns it. Nothing provisions or approves on its own.</div>
   </div>
 
   <div class="ov" id="ov" aria-hidden="true">
@@ -200,6 +197,7 @@
 <script>
 "use strict";
 function esc(t){return OS.esc(t);}
+function human(x){x=String(x||"").replace(/_/g," ");return x.charAt(0).toUpperCase()+x.slice(1);}
 
 /* ─────────────── shared People-family tab strip (single definition) ─────────────── */
 // Active tab here is 'onboarding'. My tasks / Approvals are company-wide queues and LEAVE via
@@ -212,21 +210,13 @@ var STRIP=[
   {key:'templates',  label:'Role templates', badge:'positions',        drawer:true}
 ];
 var COUNTS={};
-function renderStrip(){
+function renderStrip(){ if(!document.getElementById('pstrip')) return;
   document.getElementById('pstrip').innerHTML=STRIP.map(function(t){
     var n=t.badge&&COUNTS[t.badge]!=null?COUNTS[t.badge]:(t.key==='onboarding'?REQS.length:null);
     var on=t.key==='onboarding';
     return '<button class="os-ptab'+(on?' on':'')+'" data-tab="'+t.key+'"'+(on?' aria-current="page"':'')+'>'+esc(t.label)+(n!=null?'<span class="cc">'+esc(n)+'</span>':'')+'</button>';
   }).join('');
 }
-document.getElementById('pstrip').addEventListener('click',function(e){
-  var b=e.target.closest('[data-tab]'); if(!b) return;
-  var t=STRIP.filter(function(x){return x.key===b.getAttribute('data-tab');})[0]; if(!t) return;
-  if(t.key==='onboarding') return;      // active tab is inert
-  if(t.go){ OS.go(t.go); return; }
-  if(t.drawer){ openTemplatesDrawer(); return; }
-  if(t.nav){ location.href=t.nav; return; }
-});
 // Best-effort family counts. /api/people/overview is people-gated; if it is not available in this
 // context the badges simply omit their numbers rather than inventing them.
 function loadCounts(){
@@ -310,9 +300,9 @@ function linkCardHTML(l){
 function renderLinks(){
   var active=LINKS.filter(function(l){return !isArchived(l);});
   var archived=LINKS.filter(isArchived);
-  document.getElementById('linkn').textContent='· '+active.length;
+  document.getElementById('linkn').textContent=active.length;
   var note=document.getElementById('linkNote');
-  if(note) note.textContent = LINKS.length ? 'Each link is a single-use token that expires in 7 days. The board below is live from submissions.' : '';
+  if(note) note.textContent = LINKS.length ? 'Single use, expires in 7 days' : '';
   if(!LINKS.length){ document.getElementById('links').innerHTML=OS.empty('No intake links yet. Create one to invite a hiring manager.'); return; }
   var activeHTML = active.length ? active.map(linkCardHTML).join('') : OS.empty('No live intake links. Every invite has been submitted, discarded, or expired.');
   var archiveHTML='';
@@ -456,8 +446,8 @@ function loadBoard(){
     REQS=d.requests||[];
     renderStrip();
     renderMetric();
-    document.getElementById('boardn').textContent='· '+REQS.length;
-    if(!REQS.length){ document.getElementById('board').innerHTML=OS.empty('No onboarding requests yet. Send an intake link, or fill the full request below.','✓'); return; }
+    document.getElementById('boardn').textContent=REQS.length;
+    if(!REQS.length){ document.getElementById('board').innerHTML=OS.empty('No one is onboarding right now. Send an intake link to start.','✓'); return; }
     var cols=[
       {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
       {as:'starts',label:'Starts',render:function(v,r){return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
@@ -503,8 +493,9 @@ function openReq(id){
     var req=d.request, ru=d.rollup;
     var groups=(d.groups||[]).map(function(g){
       var items=g.items.map(itemRow).join('');
-      var emailBtn=g.items.length?'<button class="il-btn" data-emailowner="'+esc(g.owner)+'" style="margin-left:8px">Email</button>':'';
-      return '<div class="ob-grp"><div class="gh"><span class="gn">'+esc(g.owner_label)+' '+OS.officeTag(ownerTag(g.owner))+'</span><span style="display:flex;align-items:center;gap:8px">'+(g.pending>0?OS.pill(g.pending+' pending','warn'):OS.pill('Clear','good'))+emailBtn+'</span></div>'+items+'</div>';
+      var emailBtn=g.items.length?'<button class="os-btn sm" data-emailowner="'+esc(g.owner)+'">Email</button>':'';
+      var doneN=g.items.length-g.pending;
+      return '<div class="lane"><div class="lane-h"><span class="ln">'+esc(g.owner_label)+' <span class="lc">'+doneN+' of '+g.items.length+'</span></span><span class="lr">'+(g.pending>0?OS.pill(g.pending+' to do','warn'):OS.pill('All done','good'))+emailBtn+'</span></div>'+items+'</div>';
     }).join('');
     // Offer AD account provisioning while the request is still open. We run hybrid identity (on-prem
     // AD synced to Entra), so the OS generates a New-ADUser + Add-ADGroupMember script IT runs on a
@@ -512,10 +503,16 @@ function openReq(id){
     var canProv=(ru.pending>0);
     var createBtn=canProv?'<button class="os-btn primary" id="createReq" title="Queue the account for the DC agent to create automatically">Create account on DC</button>':'';
     var provBtn=canProv?'<button class="os-btn" id="provisionReq" title="Generate the New-ADUser + group-add PowerShell to run by hand">Script instead</button>':'';
-    document.getElementById('detail').innerHTML='<div class="ob-detail"><div class="dh"><div><h2>'+esc(req.name)+'</h2>'+
-      '<div class="sum">'+esc(req.job_position||'')+(req.manager_name?(' · reports to '+esc(req.manager_name)):'')+' · <b>'+ru.done+'/'+ru.total+'</b> done · <b>'+ru.pendingApprovals+'</b> approvals pending</div>'+
-      '<div class="sum">Starts <b>'+(req.start_date?esc(new Date(String(req.start_date).slice(0,10)+'T12:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric',year:'numeric'})):'(no start date)')+'</b> <button class="il-btn" id="changeStart" data-current="'+esc(req.start_date||'')+'" style="margin-left:6px">Change</button></div></div>'+
-      '<div style="display:flex;gap:9px">'+createBtn+provBtn+'<button class="os-btn" id="discardReq" title="Remove this request from the board">Discard</button><button class="os-btn" id="closeReq">Close</button></div></div>'+groups+'</div>';
+    var startTxt=req.start_date?esc(new Date(String(req.start_date).slice(0,10)+'T12:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric',year:'numeric'})):'No start date';
+    document.getElementById('listView').style.display='none';
+    document.getElementById('obHead').style.display='none';
+    document.getElementById('detail').innerHTML='<button class="crumb" id="closeReq">← Onboarding</button>'+
+      '<div class="dhead"><div><h1>'+esc(req.name)+'</h1><div class="dsub">'+esc(req.job_position||'New hire')+(req.manager_name?(' · reports to <b>'+esc(req.manager_name)+'</b>'):'')+'</div></div>'+
+      '<div class="dacts">'+createBtn+provBtn+'<button class="os-btn danger" id="discardReq" title="Remove this request from the board">Discard</button></div></div>'+
+      '<div class="dmeta"><span class="mchip">Starts <b>'+startTxt+'</b> <button class="linkbtn" id="changeStart" data-current="'+esc(req.start_date||'')+'">Change</button></span>'+
+      '<span class="mchip"><b>'+ru.done+' of '+ru.total+'</b> done</span>'+
+      (ru.pendingApprovals?'<span class="mchip"><b>'+ru.pendingApprovals+'</b> approval'+(ru.pendingApprovals===1?'':'s')+' waiting</span>':'')+'</div>'+
+      '<div class="pbar'+(ru.done>=ru.total?' done':'')+'" style="margin:12px 0 4px"><span style="width:'+(ru.total?Math.round(ru.done/ru.total*100):0)+'%"></span></div>'+groups;
     document.getElementById('closeReq').addEventListener('click',closeReq);
     document.getElementById('discardReq').addEventListener('click',function(){
       if(!confirm('Discard '+(req.name||'this onboarding')+'? It drops off the board (this does not delete the person from BambooHR or AD).')) return;
@@ -543,10 +540,10 @@ function openReq(id){
         showQueued(res);
       }).catch(function(){ cb.disabled=false; cb.textContent='Create account on DC'; OS.toast('Could not reach the provisioning service.','bad'); });
     });
-    document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
+    window.scrollTo(0,0);
   });
 }
-function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; }
+function closeReq(){ OPEN_ID=null; document.getElementById('detail').innerHTML=''; document.getElementById('listView').style.display=''; document.getElementById('obHead').style.display=''; }
 // Move the start date: every open task is re-dated and each team is emailed its updated list.
 function changeStartDate(id,current){
   var v=prompt('New start date (YYYY-MM-DD). Open tasks are re-dated and each team is emailed.',current||'');
@@ -618,16 +615,17 @@ function showScript(res){
 }
 function itemRow(it){
   var st, act='';
-  if(it.status==='pending'){ st=OS.pill('Pending','neutral');
-    if(it.kind==='task') act='<button class="il-btn primary" data-item="'+it.id+'" data-verb="complete">Complete</button>';
-    else act='<button class="il-btn primary" data-item="'+it.id+'" data-verb="approve">Approve</button><button class="il-btn" data-item="'+it.id+'" data-verb="reject">Reject</button>';
+  if(it.status==='pending'){ st='';
+    if(it.kind==='task') act='<button class="os-btn sm primary" data-item="'+it.id+'" data-verb="complete">Mark done</button>';
+    else act='<button class="os-btn sm primary" data-item="'+it.id+'" data-verb="approve">Approve</button><button class="os-btn sm" data-item="'+it.id+'" data-verb="reject">Don\'t approve</button>';
   } else if(it.status==='done'){ st=OS.pill('Done','good'); }
   else if(it.status==='approved'){ st=OS.pill('Approved','good'); }
   else { st=OS.pill('Rejected','bad'); }
-  return '<div class="ob-item"><div class="il-x"><div class="lab">'+esc(it.label)+'</div>'+
+  var meta=[it.kind==='approval'?'Approval':'Task', it.parent_id?'added when its approval was granted':'', (it.decided_by&&it.status!=='pending')?(human(it.status)+' by '+it.decided_by):''].filter(Boolean).join(' · ');
+  return '<div class="lane-i'+(it.status==='pending'?'':' closed')+'"><div class="lt"><div class="lab">'+esc(it.label)+'</div>'+
     (it.detail?'<div class="dl">'+esc(it.detail)+'</div>':'')+
-    (it.note?'<div class="dl" style="color:var(--critical,#8C1D18)">Reason: '+esc(it.note)+'</div>':'')+
-    '<div class="dl" style="font-size:11px">'+esc(it.kind)+(it.parent_id?' · created when its approval was granted':'')+(it.decided_by&&it.status!=='pending'?(' · '+esc(it.status)+' by '+esc(it.decided_by)):'')+'</div></div>'+
+    (it.note?'<div class="dl" style="color:var(--brand-deep)">Reason: '+esc(it.note)+'</div>':'')+
+    '<div class="meta">'+esc(meta)+'</div></div>'+
     '<div class="ax">'+dueChip(it)+st+act+'</div></div>';
 }
 document.getElementById('detail').addEventListener('click',function(e){
@@ -702,7 +700,7 @@ function renderForm(){
       ((o.sage&&o.sage.length)?'<div class="fsub2">Sage</div><div class="fradios">'+sageRadios+'</div>':'')+
       ((o.servicetrade&&o.servicetrade.length)?'<div class="fsub2">ServiceTrade</div><div class="fradios">'+stRadios+'</div>':'')):'';
   document.getElementById('formCard').innerHTML=
-    '<details class="formwrap"><summary>Fill the full request manually <span class="hint">Operational setup only. No pay or SSN: that lives in BambooHR.</span></summary>'+
+    '<details class="setup formwrap"><summary><span><b>Fill a request by hand</b><br><span>When a hiring manager cannot use the intake link</span></span></summary>'+
     '<form id="onb-form" class="fbody">'+
       formSection('New hire','Who is starting, and when','<div class="fgrid">'+
         ffield('Full name','name','First and last name',true)+ffield('Personal email','personal_email','name@email.com')+ffieldDate('Start date','start_date')+
@@ -804,7 +802,7 @@ function renderCatalog(cat){
     return '<div class="cat-sec"><div class="cat-h">'+esc(s[1])+'<span class="cat-sub">'+esc(s[2])+'</span></div>'+rows+catAddRow(kind)+'</div>';
   }).join('');
   document.getElementById('catalogCard').innerHTML=
-    '<details class="formwrap"><summary>Edit the catalog <span class="hint">What the onboarding form offers. Changes apply to new requests immediately.</span></summary>'+
+    '<details class="setup formwrap"><summary><span><b>Onboarding options</b><br><span>Computers, software, SharePoint groups and printers the form offers</span></span></summary>'+
     '<div class="fbody cat-body">'+html+'</div></details>';
 }
 function loadCatalog(){
