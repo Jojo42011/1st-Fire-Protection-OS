@@ -139,3 +139,20 @@ test('discard voids a live link so it can no longer be opened or submitted', () 
   const blocked = voidIntakeLink(l2.id);
   assert.equal(blocked.ok, false);
 });
+
+test('a test link previews the teams but creates no request, closes the token, and stays off the list', () => {
+  const before = (db.prepare(`SELECT COUNT(*) AS n FROM onboarding_requests`).get() as { n: number }).n;
+  const itemsBefore = (db.prepare(`SELECT COUNT(*) AS n FROM onboarding_items`).get() as { n: number }).n;
+  const { link, token } = createIntakeLink({ recipient_name: 'Test Manager', test: true });
+  assert.equal(listIntakeLinks().some((l) => l.id === link.id), false, 'test links are hidden from the board');
+  const out = submitIntake(token, { legal: 'Try Out', title: 'Inspector', start: '2030-01-07', accounts: ['Company email'] });
+  assert.equal(out.ok, true);
+  if (out.ok) {
+    assert.equal(out.test, true);
+    assert.ok(out.teams.length > 0, 'reports which teams a real submit would reach');
+  }
+  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM onboarding_requests`).get() as { n: number }).n, before, 'no request kept');
+  assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM onboarding_items`).get() as { n: number }).n, itemsBefore, 'no tasks kept');
+  const again = resolveToken(token);
+  assert.equal(again.ok, false, 'single-use like a real link');
+});

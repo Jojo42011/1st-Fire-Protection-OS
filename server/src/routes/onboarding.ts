@@ -249,6 +249,17 @@ async function emailInvite(id: number, base: string): Promise<{ ok: boolean; err
   return out.ok ? { ok: true, to: ctx.recipient_email } : { ok: false, error: out.error };
 }
 
+/** Make a test intake link and email it, so someone can try the manager form end to end. Submitting a
+ *  test link creates no onboarding request and notifies no one (see submitIntake). */
+export async function sendTestIntakeLink(to: string, name: string, base: string): Promise<{ ok: boolean; error?: string }> {
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 is not connected yet.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding invites.' };
+  const { token } = createIntakeLink({ recipient_name: name, recipient_email: to, created_by: 'system', test: true });
+  const html = intakeInviteHtml({ managerName: name, hireName: null, role: null, office: null, start: null, url: `${base}/intake/${token}` });
+  return sendMail(to, 'Test: set up a new hire at 1st Fire Protection', html, { from: sender.address, fromName: sender.name });
+}
+
 /** Create a new single-use link; returns the shareable URL. Emails it to the manager when send=true. */
 router.post('/api/onboarding/intake-links', async (req, res) => {
   const b = req.body || {};

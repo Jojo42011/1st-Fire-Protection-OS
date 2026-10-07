@@ -151,7 +151,7 @@ router.get('/api/home/activity', (req, res) => {
   // New hires submitted through a tokenised intake link.
   rows<{ recipient_name: string | null; job_title: string | null; office: string | null; submitted_at: string }>(
     `SELECT recipient_name, job_title, office, submitted_at FROM intake_links
-       WHERE status = 'submitted' AND submitted_at IS NOT NULL ORDER BY submitted_at DESC LIMIT 3`
+       WHERE status = 'submitted' AND submitted_at IS NOT NULL AND COALESCE(is_test, 0) = 0 ORDER BY submitted_at DESC LIMIT 3`
   ).forEach((r) => {
     events.push({
       tone: 'good',

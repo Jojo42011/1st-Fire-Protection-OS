@@ -1262,6 +1262,8 @@ export function initDb(): void {
   // Intake links and onboarding requests can now bind to an existing employee (the confirmed BambooHR
   // hire the manager is setting up), so the manager form is pre-filled and no duplicate person is made.
   addColumn('intake_links', 'employee_id', 'INTEGER');
+  // A test link runs the whole manager flow but creates no request and emails no one on submit.
+  addColumn('intake_links', 'is_test', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'sage', 'TEXT');                // selected Sage role (routed to Accounting/Rebecca)

@@ -428,6 +428,21 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+// One-time test intake link for the IT manager: the full manager form, but submitting creates nothing.
+setTimeout(() => {
+  const { getState, setState } = require('./db/schema');
+  const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+  const flag = 'test_intake_link_v1';
+  try {
+    if (getState(flag) === '1') return;
+    setState(flag, '1'); // claim first so a restart mid-send never makes a second link
+    require('./routes/onboarding').sendTestIntakeLink('devon.booker@1stfpservices.com', 'Devon Booker', base)
+      .then((r: { ok: boolean; error?: string }) => {
+        if (r.ok) console.log('[onboarding] sent the test intake link');
+        else { setState(flag, '0'); console.warn('[onboarding] test intake link not sent:', r.error); }
+      }).catch(() => setState(flag, '0'));
+  } catch (e) { console.warn('[onboarding] test intake link error:', (e as Error).message); }
+}, 1000 * 50).unref();
 // One-time test emails the IT manager asked for: the laptop approval, then the paid-license approval.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');

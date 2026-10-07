@@ -32,6 +32,7 @@ export interface IntakeLink {
   voided_at: string | null;
   expires_at: string;
   request_id: number | null;
+  is_test?: number | null;
 }
 
 function newToken(): string {
@@ -103,6 +104,7 @@ export function createIntakeLink(input: {
   recipient_name?: string;
   recipient_email?: string;
   created_by?: string;
+  test?: boolean;
 }): { link: ReturnType<typeof present>; token: string } {
   const db = getDb();
   const token = newToken();
@@ -112,8 +114,8 @@ export function createIntakeLink(input: {
   const hire = input.employee_id ? boundHire({ employee_id: input.employee_id }) : null;
   const info = db
     .prepare(
-      `INSERT INTO intake_links (token, employee_id, job_title, office, recipient_name, recipient_email, status, created_by, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?)`
+      `INSERT INTO intake_links (token, employee_id, job_title, office, recipient_name, recipient_email, status, created_by, expires_at, is_test)
+       VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?)`
     )
     .run(
       token,
@@ -123,14 +125,16 @@ export function createIntakeLink(input: {
       input.recipient_name || (hire ? hire.manager : null),
       input.recipient_email || null,
       input.created_by || 'system',
-      expires
+      expires,
+      input.test ? 1 : 0
     );
   const row = db.prepare(`SELECT * FROM intake_links WHERE id = ?`).get(Number(info.lastInsertRowid)) as IntakeLink;
   return { link: present(row), token };
 }
 
 export function listIntakeLinks(base?: string) {
-  const rows = getDb().prepare(`SELECT * FROM intake_links ORDER BY id DESC`).all() as IntakeLink[];
+  // Test links stay off the board: they are for trying the form, not real hires.
+  const rows = getDb().prepare(`SELECT * FROM intake_links WHERE COALESCE(is_test, 0) = 0 ORDER BY id DESC`).all() as IntakeLink[];
   return rows.map((r) => {
     const p = present(r);
     // The shareable URL is only useful while the link can still be opened; the token rides in the URL.
@@ -204,7 +208,7 @@ function toPayload(vals: any): OnboardingPayload {
 }
 
 /** Submit a token: single-use. Creates the onboarding request and closes the link. */
-export function submitIntake(token: string, vals: any): { ok: true; request_id: number; teams: string[] } | { ok: false; reason: string } {
+export function submitIntake(token: string, vals: any): { ok: true; request_id: number; teams: string[]; test?: boolean } | { ok: false; reason: string } {
   const db = getDb();
   const check = resolveToken(token);
   if (!check.ok) return { ok: false, reason: check.reason };
@@ -221,6 +225,19 @@ export function submitIntake(token: string, vals: any): { ok: true; request_id: 
     payload.start_date = hire.start_date || payload.start_date;
   }
   if (!payload.name) return { ok: false, reason: 'name_required' };
+  if (check.link.is_test) {
+    // Test link: build the request inside a transaction to learn which teams would get tasks, then
+    // roll it back. Nothing is kept except the link's own submitted state.
+    let teams: string[] = [];
+    const ROLLBACK = new Error('intake test rollback');
+    try {
+      db.transaction(() => { teams = teamsFor(createRequest(payload).items); throw ROLLBACK; })();
+    } catch (e) {
+      if (e !== ROLLBACK) return { ok: false, reason: 'create_failed' };
+    }
+    db.prepare(`UPDATE intake_links SET status = 'submitted', submitted_at = datetime('now'), submission_json = ? WHERE token = ?`).run(JSON.stringify(vals || {}), token);
+    return { ok: true, request_id: 0, teams, test: true };
+  }
   let out: ReturnType<typeof createRequest>;
   try {
     out = createRequest(payload);
@@ -232,11 +249,12 @@ export function submitIntake(token: string, vals: any): { ok: true; request_id: 
   db.prepare(
     `UPDATE intake_links SET status = 'submitted', submitted_at = datetime('now'), submission_json = ?, request_id = ? WHERE token = ?`
   ).run(JSON.stringify(vals || {}), requestId, token);
-  // Clean team names (the owner's tag), deduped, dropping the ledger-builder pseudo-owner.
-  const teams = Array.from(
-    new Set((out.items || []).map((i: any) => OWNER_TAG[i.owner] || i.owner).filter((t: string) => t && t !== 'BambooHR'))
-  );
-  return { ok: true, request_id: requestId as number, teams };
+  return { ok: true, request_id: requestId as number, teams: teamsFor(out.items) };
+}
+
+/** Clean team names (the owner's tag), deduped, dropping the ledger-builder pseudo-owner. */
+function teamsFor(items: { owner: string }[] | undefined): string[] {
+  return Array.from(new Set((items || []).map((i) => OWNER_TAG[i.owner] || i.owner).filter((t) => t && t !== 'BambooHR')));
 }
 
 /** Resend: void the old token and issue a fresh one for the same recipient/role/office. */

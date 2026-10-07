@@ -93,6 +93,7 @@
   .srow .l{display:block;font-weight:700;font-size:12.5px}
   .srow .n{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px}
   .srow .v{font-weight:700;font-size:12.5px;text-align:right;flex:0 1 auto;max-width:55%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+  .testbar{margin:16px 26px 0;padding:10px 14px;border-radius:12px;background:#fff8e6;border:1px solid #f3dca0;color:#7a5600;font-weight:600;font-size:12.5px;line-height:1.5}
   .hidden{display:none!important}
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
@@ -108,6 +109,7 @@
     <span class="h-step" id="stepLabel">Step 1 of 5</span>
   </div>
 
+  <div id="testBar" class="testbar hidden">Test link. Fill it in like a real one: submitting creates nothing and emails no one.</div>
   <div id="form">
     <div id="hireHead"></div>
     <div class="dots" id="dots"></div>
@@ -231,7 +233,7 @@
   // text fields not declared with def in STEPS need an explicit blank so vals always has the key
   vals.existing_computer = vals.existing_computer || '';
   var el = function (id) { return document.getElementById(id); };
-  var HIRE = null, DOCK_PRICE = 200, SHOW_ERR = false;
+  var HIRE = null, DOCK_PRICE = 200, SHOW_ERR = false, IS_TEST = false;
   var STANDALONE = document.body.classList.contains('standalone');
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   // Bind the form to a confirmed hire: prefill their known facts, drop the identity/role steps, and
@@ -294,6 +296,7 @@
         if (res.d.office) vals.office = res.d.office;
         // Bound to a confirmed BambooHR hire: their identity/role is known, so drop those steps and
         // show the person read-only. The manager only fills the operational setup.
+        if (res.d.test) { IS_TEST = true; el('testBar').classList.remove('hidden'); }
         if (res.d.hire) applyHire(res.d.hire);
         else if (res.d.recipient_name) {
           var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name;
@@ -561,6 +564,10 @@
           return;
         }
         var teams = (res.d.teams || []);
+        if (res.d.test) {
+          var would = teams.length ? (teams.length === 1 ? teams[0] : teams.slice(0, -1).join(', ') + ' and ' + teams[teams.length - 1]) : 'no teams';
+          return showResult('Test submitted', 'Nothing was created and no one was emailed. A real link with these answers would have sent onboarding tasks to ' + esc(would) + '.', true);
+        }
         var teamTxt = teams.length ? (teams.length === 1 ? teams[0] : teams.slice(0, -1).join(', ') + ' and ' + teams[teams.length - 1]) : 'the right teams';
         showResult('Submitted', esc(HIRE ? HIRE.name : vals.preferred || vals.legal || 'The new hire') + ' is set up for ' + esc(vals.office || 'their office') + '. Onboarding tasks went to ' + esc(teamTxt) + '. No pay, Social Security number or bank details were collected. You can close this window.', true);
       }).catch(function () { btn.disabled = false; btn.textContent = 'Submit'; submitErr('Could not reach the server, so nothing was sent. Check your connection and press Submit again.'); });

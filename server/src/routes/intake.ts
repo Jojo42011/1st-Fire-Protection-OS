@@ -54,7 +54,7 @@ router.get('/api/intake/:token', (req, res) => {
   markOpened(req.params.token);
   const l = check.link;
   const hire = boundHire(l); // the confirmed BambooHR hire this link is for (null for a freehand link)
-  res.json({ ok: true, hire, job_title: l.job_title || (hire ? hire.job_position : null), office: l.office || (hire ? hire.office : null), recipient_name: l.recipient_name, expires_at: l.expires_at, ...intakeOptions() });
+  res.json({ ok: true, test: !!l.is_test, hire, job_title: l.job_title || (hire ? hire.job_position : null), office: l.office || (hire ? hire.office : null), recipient_name: l.recipient_name, expires_at: l.expires_at, ...intakeOptions() });
 });
 
 /** Submit the form for a token. Single-use: creates the onboarding request and closes the link. */
@@ -65,6 +65,7 @@ router.post('/api/intake/:token', async (req, res) => {
     const status = out.reason === 'name_required' ? 400 : out.reason === 'create_failed' ? 500 : 410;
     return res.status(status).json({ ok: false, reason: out.reason });
   }
+  if (out.test) return res.json({ ok: true, test: true, request_id: null, teams: out.teams }); // nothing created, no one notified
   // Heads-up to the onboarding mailbox so the owning teams know a request is waiting. Keyless-safe:
   // a no-op when mail is not connected, and never blocks or fails the submission for the manager.
   const base = `${req.protocol}://${req.get('host')}`;
