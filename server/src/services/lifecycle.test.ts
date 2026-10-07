@@ -208,17 +208,26 @@ test('overdue offboarding steps go to each department once a day', async () => {
   outbox = [];
   const out = await sendOffboardingOverdueReminders(BASE, TUE_10AM);
   const to = outbox.map((m) => m.to).sort();
-  assert.deepEqual(to, ['accounting@1stfpservices.com', 'boss@1stfpservices.com', 'hr@1stfpservices.com', 'laura.shannon@1stfpservices.com', 'safety@1stfpservices.com', 'support@liontechlabs.com']);
+  assert.deepEqual(to, ['accounting@1stfpservices.com', 'boss@1stfpservices.com', 'devon.booker@1stfpservices.com', 'hr@1stfpservices.com', 'laura.shannon@1stfpservices.com', 'safety@1stfpservices.com', 'support@liontechlabs.com']);
   const it = outbox.find((m) => m.to === 'support@liontechlabs.com')!;
   assert.match(it.subject, /offboarding steps? overdue$/);
   assert.match(it.html, /Lee Gone<\/b>: Disable the AD account/);
   assert.match(it.html, /8 days overdue/);
+  // Online work to IT support; devices and building access to the IT manager.
+  assert.doesNotMatch(it.html, /Receive all assigned devices|key fob|ID badge/);
+  const devon = outbox.find((m) => m.to === 'devon.booker@1stfpservices.com')!;
+  assert.match(devon.html, /Receive all assigned devices/);
+  assert.match(devon.html, /Deactivate key fob/);
+  assert.match(devon.html, /Collect the company ID badge/);
+  assert.doesNotMatch(devon.html, /Disable the AD account|Microsoft 365 license/);
+  assert.match(devon.html, /Open offboarding/);
   // Laura handles ServiceTrade only: her reminder is that one step, not the IT list.
   const laura = outbox.find((m) => m.to === 'laura.shannon@1stfpservices.com')!;
   assert.match(laura.html, /Remove the user from ServiceTrade/);
   assert.doesNotMatch(laura.html, /Disable the AD account|Receive all assigned devices/);
   assert.match(laura.subject, /^1 offboarding step overdue$/);
-  assert.ok(out.sent === 6);
+  assert.doesNotMatch(laura.html, /Open offboarding/, 'Laura does not sign in to the OS');
+  assert.ok(out.sent === 7);
   outbox = [];
   await sendOffboardingOverdueReminders(BASE, new Date(TUE_10AM.getTime() + 3600_000));
   assert.equal(outbox.length, 0, 'once a day per address');
@@ -237,4 +246,21 @@ test('new-computer and MGMT approvals email the IT manager; the rest of IT goes 
   assert.doesNotMatch(devon.html, /Set up company email/);
   assert.doesNotMatch(msp.html, /Approve new computer|Approve SharePoint group: MGMT/, 'IT support does not get these approvals');
   assert.match(msp.html, /Set up company email/);
+});
+
+test("IT support sees the hire's hiring manager; Laura's emails have no board button", async () => {
+  const { notifyOwners } = await import('./onboardingOwners');
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, employment_status) VALUES ('Hank', 'Hiring', 'hank.hiring@1stfpservices.com', 'active')`).run();
+  const hire = Number(db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, employment_status, manager) VALUES ('Ivy', 'Intake', 'onboarding', 'Hiring, Hank')`).run().lastInsertRowid);
+  db.prepare(`INSERT OR IGNORE INTO onboarding_catalog (kind, name, owner, approval) VALUES ('servicetrade', 'Technician', 'laura', 0)`).run();
+  const out = createRequest({ name: 'Ivy Intake', employee_id: hire, start_date: '2099-06-01', company_email: true, servicetrade: 'Technician' } as any);
+  outbox = [];
+  await notifyOwners(out.request, out.items, BASE);
+  const msp = outbox.find((m) => m.to === 'support@liontechlabs.com')!;
+  assert.match(msp.html, /<b>Hiring manager:<\/b> Hank Hiring &middot; <a href="mailto:hank\.hiring@1stfpservices\.com"/);
+  assert.match(msp.html, /Open the onboarding board/);
+  const laura = outbox.find((m) => m.to === 'laura.shannon@1stfpservices.com')!;
+  assert.match(laura.html, /ServiceTrade access: Technician/);
+  assert.doesNotMatch(laura.html, /Open the onboarding board/);
+  assert.doesNotMatch(laura.html, /Hiring manager/, 'only IT support gets the manager line');
 });

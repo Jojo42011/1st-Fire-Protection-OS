@@ -29,6 +29,11 @@ const ACCT_MBX = 'accounting@1stfpservices.com';
 // ServiceTrade step (its own department below), not the whole IT list.
 const IT_MBX = 'support@liontechlabs.com';
 const LAURA_MBX = 'laura.shannon@1stfpservices.com';
+// Physical access and devices (devices back, key fobs, badges, phone line) go to the IT manager.
+const IT_MGR_MBX = 'devon.booker@1stfpservices.com';
+const PHYSICAL_ACTIONS = new Set<string>([
+  'it_receive_devices', 'it_icloud_logoff', 'it_remove_pins', 'it_keyfob_deactivate', 'it_keyfob_collect', 'it_badge_collect', 'it_cell_line',
+]);
 /** The mailbox offboarding email is sent from. Configurable via OFFBOARDING_FROM so it can point at a
  *  mailbox already allowed by a tenant Application Access Policy without a code change. */
 export function offboardingFrom(): string {
@@ -41,13 +46,16 @@ export function offboardingFrom(): string {
  * department's still-open tasks, to its shared mailbox. A task's department is its owner, except the
  * Safety-notify tasks (which belong to Safety) and anything routed to accounting@ (which belongs to
  * Accounting). HR and Manager have no shared mailbox: they work their tasks directly. */
-export type Dept = 'it' | 'servicetrade' | 'safety' | 'accounting' | 'hr' | 'manager';
-export const DEPT_ORDER: Dept[] = ['it', 'servicetrade', 'safety', 'accounting', 'hr', 'manager'];
-export const DEPT_LABEL: Record<Dept, string> = { it: 'IT', servicetrade: 'ServiceTrade', safety: 'Safety', accounting: 'Accounting', hr: 'HR', manager: 'Manager' };
-export const DEPT_MAILBOX: Partial<Record<Dept, string>> = { it: IT_MBX, servicetrade: LAURA_MBX, safety: SAFETY_MBX, accounting: ACCT_MBX };
+export type Dept = 'it' | 'it_physical' | 'servicetrade' | 'safety' | 'accounting' | 'hr' | 'manager';
+export const DEPT_ORDER: Dept[] = ['it', 'it_physical', 'servicetrade', 'safety', 'accounting', 'hr', 'manager'];
+export const DEPT_LABEL: Record<Dept, string> = { it: 'IT (accounts and licenses)', it_physical: 'IT manager (devices and building access)', servicetrade: 'ServiceTrade', safety: 'Safety', accounting: 'Accounting', hr: 'HR', manager: 'Manager' };
+export const DEPT_MAILBOX: Partial<Record<Dept, string>> = { it: IT_MBX, it_physical: IT_MGR_MBX, servicetrade: LAURA_MBX, safety: SAFETY_MBX, accounting: ACCT_MBX };
+/** Addresses that do not sign in to the OS: their emails carry no "Open the board" button. */
+export const NO_BOARD_MBX = new Set<string>([LAURA_MBX]);
 
 /** The department a checklist item belongs to (for grouping and the digest email). */
-export function itemDept(it: { owner: string; email_to?: string | null }): Dept {
+export function itemDept(it: { owner: string; email_to?: string | null; action_code?: string | null }): Dept {
+  if (it.action_code && PHYSICAL_ACTIONS.has(it.action_code)) return 'it_physical';
   if (it.email_to === SAFETY_MBX) return 'safety';
   if (it.email_to === LAURA_MBX) return 'servicetrade';
   if (it.owner === 'accounting' || it.email_to === ACCT_MBX) return 'accounting';
@@ -777,7 +785,7 @@ export async function notifyAutoStarted(created: { id: number; name: string }[],
     <p>Day-one steps are due today: disable the AD account, revoke sessions, remove groups, and collect devices.</p>
     <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p></div>`;
   let sent = 0;
-  for (const to of [IT_MBX, HR_MBX]) {
+  for (const to of [IT_MBX, IT_MGR_MBX, HR_MBX]) {
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(to, `Offboarding started: ${created.map((c) => c.name).join(', ')}`, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
     if (out.ok) sent++;
@@ -826,11 +834,12 @@ export async function sendOffboardingOverdueReminders(base: string, now = new Da
       const days = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${String(it.due_at).slice(0, 10)}T12:00:00Z`)) / 86400000);
       return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1"><b>${esc(it.person)}</b>: ${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;color:#B42318;font-size:12px;font-weight:600">${days} day${days === 1 ? '' : 's'} overdue</td></tr>`;
     }).join('');
-    const more = items.length > shown.length ? `<p style="color:#667085;font-size:13px">And ${items.length - shown.length} more on the board.</p>` : '';
+    const board = !NO_BOARD_MBX.has(to.toLowerCase());
+    const more = items.length > shown.length ? `<p style="color:#667085;font-size:13px">And ${items.length - shown.length} more${board ? ' on the board' : ''}.</p>` : '';
     const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
       <p><b>${items.length} offboarding step${items.length === 1 ? ' is' : 's are'} past due.</b> Until they are done, a former employee may still have access or a paid seat.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${lines}</tbody></table>${more}
-      <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p></div>`;
+      ${board ? `<p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p>` : `<p style="color:#667085;font-size:13px">These close on their own once the change shows up in ServiceTrade.</p>`}</div>`;
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(to, `${items.length} offboarding step${items.length === 1 ? '' : 's'} overdue`, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
     if (out.ok) { setState(key, today); sent++; }

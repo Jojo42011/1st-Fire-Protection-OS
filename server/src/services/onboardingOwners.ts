@@ -135,7 +135,31 @@ function approveButton(it: OnboardingItem, email: string | null, base: string): 
   return `<div style="margin-top:8px"><a href="${esc(approvalUrl(base, it.id, email))}" style="background:#101828;color:#fff;text-decoration:none;padding:7px 12px;border-radius:7px;font-size:13px;display:inline-block">Review and approve</a></div>`;
 }
 
-function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string, approver?: { email: string; base: string }): string {
+/** Recipients who do not sign in to the OS (ServiceTrade's Laura): no "Open the board" button for them. */
+function showsBoard(email: string | null | undefined, map: Partial<Record<Owner, string>> = ownerEmailMap()): boolean {
+  const e = String(email || '').toLowerCase();
+  return !(e && map.laura && e === map.laura.toLowerCase());
+}
+
+/** The hiring manager line IT support sees on a hire's tasks, so they know who to coordinate with. */
+export interface HiringManager { name: string | null; email: string | null }
+const flipName = (n: string) => (n.includes(',') ? `${n.split(',').slice(1).join(',').trim()} ${n.split(',')[0].trim()}`.trim() : n.trim());
+export function hiringManagerFor(request: { id?: number; employee_id?: number | null; manager_name?: string | null }): HiringManager | null {
+  const m = resolveHireManager(request);
+  const email = m.email || (request.id ? managerEmailFor(request.id) : null);
+  if (!m.name && !email) return null;
+  return { name: m.name ? flipName(m.name) : null, email };
+}
+function hiringManagerHtml(hm: HiringManager | null): string {
+  const who = hm ? [hm.name ? esc(hm.name) : '', hm.email ? `<a href="mailto:${esc(hm.email)}" style="color:#101828">${esc(hm.email)}</a>` : ''].filter(Boolean).join(hm.name && hm.email ? ' &middot; ' : '') : '';
+  return `<p style="margin:-6px 0 14px;padding:10px 12px;background:#F2F5F9;border-radius:8px;font-size:14px"><b>Hiring manager:</b> ${who || '<span style="color:#8A5A00">not on file yet</span>'}</p>`;
+}
+/** IT support (the "it" lane address) gets the hiring manager on every email about a hire. */
+function wantsManager(email: string | null | undefined, map: Partial<Record<Owner, string>> = ownerEmailMap()): boolean {
+  return !!email && !!map.it && email.toLowerCase() === map.it.toLowerCase();
+}
+
+function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string, approver?: { email: string; base: string }, extra: { manager?: HiringManager | null | false; board?: boolean } = {}): string {
   const rows = items.map((it) => {
     const due = dueLabel(it.due_at);
     const dueHtml = due ? `<div style="color:${due.late ? '#B42318;font-weight:600' : '#667085'};font-size:12px;margin-top:2px">${esc(due.text)}</div>` : '';
@@ -143,10 +167,10 @@ function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: str
   }).join('');
   return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
     <p>${intro ? esc(intro) : `New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:`}</p>
-    ${startLineHtml(start)}
+    ${startLineHtml(start)}${extra.manager === undefined || extra.manager === false ? '' : hiringManagerHtml(extra.manager)}
     <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${rows}</tbody></table>
-    <p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>
-    <p style="color:#667085;font-size:12px">You are receiving this because your team is the routing target for these onboarding tasks. Nothing provisions automatically: each item waits for the owner to act.</p>
+    ${extra.board === false ? '' : `<p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>`}
+    <p style="color:#667085;font-size:12px">You are receiving this because your team is the routing target for these onboarding tasks.${extra.board === false ? '' : ' Nothing provisions automatically: each item waits for the owner to act.'}</p>
   </div>`;
 }
 
@@ -170,7 +194,8 @@ export async function notifyOwners(request: any, items: OnboardingItem[], base: 
   let sent = 0;
   const start = startDateInfo(request.start_date);
   for (const [email, its] of byEmail) {
-    const html = ownerTasksHtml(request.name, its, boardUrl, start, opts.intro, { email, base });
+    const html = ownerTasksHtml(request.name, its, boardUrl, start, opts.intro, { email, base },
+      { manager: wantsManager(email, map) ? hiringManagerFor(request) : false, board: showsBoard(email, map) });
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(email, (opts.subjectPrefix || '') + ownerSubject(request.name, start), html, { from: sender.address, fromName: sender.name });
     if (out.ok) sent++;
@@ -217,7 +242,7 @@ export interface OwnerEmailPreview { to: string | null; subject: string; html: s
  *  (for copy/paste), so it can be previewed and sent, or sent by hand from your own mailbox. */
 export function ownerEmailPreview(requestId: number, owner: Owner, base: string): OwnerEmailPreview | null {
   const db = getDb();
-  const request = db.prepare(`SELECT id, name, start_date FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string; start_date: string | null } | undefined;
+  const request = db.prepare(`SELECT id, name, start_date, employee_id, manager_name FROM onboarding_requests WHERE id = ?`).get(requestId) as { id: number; name: string; start_date: string | null; employee_id: number | null; manager_name: string | null } | undefined;
   if (!request) return null;
   const allItems = db.prepare(`SELECT * FROM onboarding_items WHERE request_id = ? AND owner = ? ORDER BY id`).all(requestId, owner) as OnboardingItem[];
   const ownerLabel = (allItems[0] && allItems[0].owner_label) || owner;
@@ -228,13 +253,16 @@ export function ownerEmailPreview(requestId: number, owner: Owner, base: string)
   const start = startDateInfo(request.start_date);
   const subject = ownerSubject(request.name, start, ownerLabel);
   const boardUrl = `${base}/onboarding`;
-  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl, start, undefined, to ? { email: to, base } : undefined) : '';
+  const hm = wantsManager(to) ? hiringManagerFor(request) : false;
+  const board = showsBoard(to);
+  const html = items.length ? ownerTasksHtml(request.name, items, boardUrl, start, undefined, to ? { email: to, base } : undefined, { manager: hm, board }) : '';
   const text = [
     `Onboarding for ${request.name}: ${ownerLabel}`,
     start ? `Start date: ${start.long}${start.relative ? ` (${start.relative})` : ''}` : 'Start date: not provided yet',
+    ...(hm !== false ? [`Hiring manager: ${hm ? [hm.name, hm.email].filter(Boolean).join(', ') : 'not on file yet'}`] : []),
     '',
     ...items.map((it) => `- ${it.label}${it.detail ? ` (${it.detail})` : ''}`),
-    '', `Open the board: ${boardUrl}`,
+    ...(board ? ['', `Open the board: ${boardUrl}`] : []),
   ].join('\n');
   return { to, subject, html, text, count: items.length, ownerLabel };
 }
@@ -253,7 +281,7 @@ export async function sendOwnerEmailNow(requestId: number, owner: Owner, base: s
 }
 
 /* ─────────────────────────── follow-ups, start-date changes, rejections, reminders ─────────────────────────── */
-import { managerEmailFor } from './onboardingAgent';
+import { managerEmailFor, resolveHireManager } from './onboardingAgent';
 import { approvalUrl } from './approvalLinks';
 import { inSendWindow } from './reviewRequests';
 import { getState as getS, setState as setS } from '../db/schema';
@@ -321,10 +349,10 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   const soon = new Date(Date.parse(`${today}T12:00:00Z`) + 2 * 86400000).toISOString().slice(0, 10);
   const rows = getDb().prepare(
-    `SELECT i.*, r.name AS hire, r.start_date AS start_date FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
+    `SELECT i.*, r.name AS hire, r.start_date AS start_date, r.employee_id AS hire_employee_id, r.manager_name AS hire_manager_name FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
       WHERE i.status = 'pending' AND i.due_at IS NOT NULL AND i.due_at <= ? AND (r.status = 'open' OR r.status IS NULL)
       ORDER BY i.due_at, r.name, i.id`
-  ).all(soon) as (OnboardingItem & { hire: string; start_date: string | null })[];
+  ).all(soon) as (OnboardingItem & { hire: string; start_date: string | null; hire_employee_id: number | null; hire_manager_name: string | null })[];
   const map = ownerEmailMap();
   const byEmail = new Map<string, typeof rows>();
   for (const r of rows) {
@@ -342,7 +370,9 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
     for (const i of items) { const k = `${i.request_id}`; if (!hires.has(k)) hires.set(k, []); hires.get(k)!.push(i); }
     const sections = [...hires.values()].map((its) => {
       const st = startDateInfo(its[0].start_date);
-      return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#667085;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` +
+      const hm = wantsManager(email, map) ? hiringManagerFor({ id: its[0].request_id, employee_id: its[0].hire_employee_id, manager_name: its[0].hire_manager_name }) : false;
+      const hmLine = hm === false ? '' : `<div style="font-size:13px;color:#667085;margin:0 0 4px">Hiring manager: ${hm ? esc([hm.name, hm.email].filter(Boolean).join(', ')) : 'not on file yet'}</div>`;
+      return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#667085;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` + hmLine +
         `<table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${its.map((it) => {
           const due = dueLabel(it.due_at, now);
           return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${approveButton(it, email, base)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#667085'}">${esc(due ? due.text : '')}</td></tr>`;
@@ -350,7 +380,7 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
     }).join('');
     const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
       <p>${late ? `<b>${late} onboarding task${late === 1 ? ' is' : 's are'} overdue.</b> ` : ''}Here is everything your team has due in the next two days for new hires:</p>${sections}
-      <p style="margin-top:18px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p></div>`;
+      ${showsBoard(email, map) ? `<p style="margin-top:18px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>` : ''}</div>`;
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(email, `${late ? `${late} overdue, ` : ''}${items.length} onboarding task${items.length === 1 ? '' : 's'} due`, html, { from: sender.address, fromName: sender.name });
     if (out.ok) { setS(key, today); sent++; }
