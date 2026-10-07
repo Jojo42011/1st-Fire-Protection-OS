@@ -238,11 +238,22 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   // Bind the form to a confirmed hire: prefill their known facts, drop the identity/role steps, and
   // show them as a read-only header. Only the operational steps remain.
-  function applyHire(h) {
+  function applyHire(h, example) {
     HIRE = h;
     vals.legal = h.name; vals.title = h.job_position || ''; vals.office = h.office || '';
     vals.start = h.start_date || ''; vals.manager = h.manager || '';
-    STEPS = STEPS.filter(function (s) { return s.label !== 'the role' && s.label !== 'the person'; });
+    // The person comes from BambooHR. Only ask for a role detail the HR record is still missing (no
+    // title or start date yet); when it has everything, the manager goes straight to equipment.
+    var missing = { title: !h.job_position, office: !h.office, start: !h.start_date, manager: !h.manager };
+    STEPS = STEPS.filter(function (s) { return s.label !== 'the person'; });
+    STEPS.forEach(function (s) {
+      if (s.label !== 'the role') return;
+      s.fields = s.fields.filter(function (f) { return missing[f.key]; });
+      s.label = 'the missing details';
+      s.title = 'BambooHR is missing a detail';
+      s.blurb = 'Everything else comes from their HR record. Fill in what is blank here.';
+    });
+    STEPS = STEPS.filter(function (s) { return s.fields.length; });
     step = 0;
     var hs = el('hsub'); if (hs) hs.textContent = 'Setting up a confirmed hire';
     var initials = (h.name || '').replace(/[^A-Za-z ]/g, '').split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase() || '1F';
@@ -255,7 +266,7 @@
       '<div style="min-width:0">' +
         '<div class="hire-name">' + esc(h.name) + '</div>' +
         '<div class="hire-meta">' + esc(meta) + '</div>' +
-        '<span class="hire-tag">From your HR record</span>' +
+        '<span class="hire-tag">' + (example ? 'Example: a real link shows the hire picked from BambooHR' : 'From BambooHR') + '</span>' +
       '</div></div>';
   }
   var post = function (type) {
@@ -297,7 +308,7 @@
         // Bound to a confirmed BambooHR hire: their identity/role is known, so drop those steps and
         // show the person read-only. The manager only fills the operational setup.
         if (res.d.test) { IS_TEST = true; el('testBar').classList.remove('hidden'); }
-        if (res.d.hire) applyHire(res.d.hire);
+        if (res.d.hire) { applyHire(res.d.hire); if (!vals.manager && res.d.recipient_name) vals.manager = res.d.recipient_name; }
         else if (res.d.recipient_name) {
           var hs = el('hsub'); if (hs) hs.textContent = '1st Fire Protection · for ' + res.d.recipient_name;
           if (!vals.manager) vals.manager = res.d.recipient_name; // the person the link went to is usually the manager
@@ -311,6 +322,9 @@
       if (d && d.offices && d.offices.length) setFieldOpts('office', d.offices, vals.office);
       if (d && d.positions && d.positions.length) setFieldOpts('title', d.positions, vals.title, true);
       applyCatalog(d && d.catalog);
+      // Real links are always bound to a BambooHR hire, so the preview shows that version too.
+      var start = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10);
+      applyHire({ id: 0, name: 'Example Hire', job_position: (d && d.positions && d.positions[0]) || 'Inspector', office: (d && d.offices && d.offices[0]) || 'San Antonio', start_date: start, manager: 'Their Manager' }, true);
       render();
     }).catch(function () { /* keep the built-in defaults if the catalog is unavailable */ });
   }
@@ -475,7 +489,7 @@
     var access = accounts.concat(sp);
     var hasComp = vals.computer_type && vals.computer_type !== 'none';
     var rows = [
-      ['New hire', HIRE ? HIRE.name : (vals.legal || 'Unnamed hire'), HIRE ? 'from your HR record' : (vals.preferred ? 'goes by ' + vals.preferred : 'legal name')],
+      ['New hire', HIRE ? HIRE.name : (vals.legal || 'Unnamed hire'), HIRE ? 'from BambooHR' : (vals.preferred ? 'goes by ' + vals.preferred : 'legal name')],
       ['Role', vals.title || 'Not picked', vals.office || 'no office picked'],
       ['First day', niceDate(vals.start) || 'Not set', 'IT needs five working days'],
       ['Manager', flipName(vals.manager) || 'Not set', 'runs their day to day'],

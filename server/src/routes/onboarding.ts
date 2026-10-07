@@ -15,6 +15,7 @@ import {
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
+  boundHire,
   listIntakeLinks,
   resendIntakeLink,
   nudgeIntakeLink,
@@ -235,7 +236,7 @@ router.put('/api/mail/senders/:key', (req, res) => {
 });
 
 /** Email the current invite for a link to its manager, via Microsoft 365. Keyless-safe. */
-async function emailInvite(id: number, base: string): Promise<{ ok: boolean; error?: string; to?: string }> {
+async function emailInvite(id: number, base: string, subjectPrefix = ''): Promise<{ ok: boolean; error?: string; to?: string }> {
   if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 is not connected yet.' };
   const sender = senderFor('onboarding');
   if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding invites. Set one in Integrations.' };
@@ -245,7 +246,7 @@ async function emailInvite(id: number, base: string): Promise<{ ok: boolean; err
   if (!ctx.url) return { ok: false, error: 'This link can no longer be sent (submitted, expired, or discarded).' };
   const hireName = ctx.hire ? ctx.hire.name : null;
   const html = intakeInviteHtml({ managerName: ctx.recipient_name, hireName, role: ctx.job_title, office: ctx.office, start: ctx.hire ? ctx.hire.start_date : null, url: ctx.url });
-  const out = await sendMail(ctx.recipient_email, `Set up ${hireName || 'a new hire'} at 1st Fire Protection`, html, { from: sender.address, fromName: sender.name });
+  const out = await sendMail(ctx.recipient_email, `${subjectPrefix}Set up ${hireName || 'a new hire'} at 1st Fire Protection`, html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true, to: ctx.recipient_email } : { ok: false, error: out.error };
 }
 
@@ -255,14 +256,24 @@ export async function sendTestIntakeLink(to: string, name: string, base: string)
   if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 is not connected yet.' };
   const sender = senderFor('onboarding');
   if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding invites.' };
-  const { token } = createIntakeLink({ recipient_name: name, recipient_email: to, created_by: 'system', test: true });
-  const html = intakeInviteHtml({ managerName: name, hireName: null, role: null, office: null, start: null, url: `${base}/intake/${token}` });
-  return sendMail(to, 'Test: set up a new hire at 1st Fire Protection', html, { from: sender.address, fromName: sender.name });
+  // Bind it to a real BambooHR hire (the newest start date), the same way HR picks one for a real link.
+  const hire = getDb().prepare(
+    `SELECT id FROM employees WHERE employment_status IN ('onboarding','active')
+      ORDER BY COALESCE(actual_start_date, anticipated_start_date, '') DESC, id DESC LIMIT 1`
+  ).get() as { id: number } | undefined;
+  if (!hire) return { ok: false, error: 'No hires on the roster to bind the test link to.' };
+  const { link } = createIntakeLink({ employee_id: hire.id, recipient_name: name, recipient_email: to, created_by: 'system', test: true });
+  return emailInvite(link.id, base, 'Test: ');
 }
 
 /** Create a new single-use link; returns the shareable URL. Emails it to the manager when send=true. */
 router.post('/api/onboarding/intake-links', async (req, res) => {
   const b = req.body || {};
+  // HR creates the person in BambooHR first, then picks them here. A link is always bound to that hire
+  // so the manager never retypes the name or role.
+  if (!b.employee_id || !boundHire({ employee_id: Number(b.employee_id) })) {
+    return res.status(400).json({ ok: false, error: 'Pick the new hire from BambooHR first.' });
+  }
   const { link, token } = createIntakeLink({
     employee_id: b.employee_id ? Number(b.employee_id) : undefined,
     job_title: b.job_title,

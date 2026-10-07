@@ -409,7 +409,7 @@ document.getElementById('mk-create').addEventListener('click',function(){
   var body={ employee_id:h.id, recipient_email:email, send:send };
   fetch('/api/onboarding/intake-links',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok){ OS.toast('Could not create the link.','bad'); return; }
+      if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not create the link.','bad'); return; }
       if(d.url){ try{ navigator.clipboard.writeText(d.url); }catch(_){} }
       closeMk(); loadLinks(); renderStrip();
       if(d.emailed && d.emailed.ok){ OS.toast('Intake link created and emailed to '+d.emailed.to+'. It expires in 7 days.'); }
