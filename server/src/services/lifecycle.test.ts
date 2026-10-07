@@ -208,12 +208,17 @@ test('overdue offboarding steps go to each department once a day', async () => {
   outbox = [];
   const out = await sendOffboardingOverdueReminders(BASE, TUE_10AM);
   const to = outbox.map((m) => m.to).sort();
-  assert.deepEqual(to, ['accounting@1stfpservices.com', 'boss@1stfpservices.com', 'hr@1stfpservices.com', 'laura.shannon@1stfpservices.com', 'safety@1stfpservices.com']);
-  const it = outbox.find((m) => m.to === 'laura.shannon@1stfpservices.com')!;
+  assert.deepEqual(to, ['accounting@1stfpservices.com', 'boss@1stfpservices.com', 'hr@1stfpservices.com', 'laura.shannon@1stfpservices.com', 'safety@1stfpservices.com', 'support@liontechlabs.com']);
+  const it = outbox.find((m) => m.to === 'support@liontechlabs.com')!;
   assert.match(it.subject, /offboarding steps? overdue$/);
   assert.match(it.html, /Lee Gone<\/b>: Disable the AD account/);
   assert.match(it.html, /8 days overdue/);
-  assert.ok(out.sent === 5);
+  // Laura handles ServiceTrade only: her reminder is that one step, not the IT list.
+  const laura = outbox.find((m) => m.to === 'laura.shannon@1stfpservices.com')!;
+  assert.match(laura.html, /Remove the user from ServiceTrade/);
+  assert.doesNotMatch(laura.html, /Disable the AD account|Receive all assigned devices/);
+  assert.match(laura.subject, /^1 offboarding step overdue$/);
+  assert.ok(out.sent === 6);
   outbox = [];
   await sendOffboardingOverdueReminders(BASE, new Date(TUE_10AM.getTime() + 3600_000));
   assert.equal(outbox.length, 0, 'once a day per address');

@@ -25,8 +25,10 @@ const OWNER_LABEL: Record<OffOwner, string> = { it: 'IT', manager: 'Manager', ac
 /* Shared mailboxes some tasks notify, and the address offboarding mail is sent from. */
 const SAFETY_MBX = 'safety@1stfpservices.com';
 const ACCT_MBX = 'accounting@1stfpservices.com';
-const IT_MBX = 'laura.shannon@1stfpservices.com';
-const LAURA_MBX = IT_MBX;
+// IT offboarding work goes to the IT support desk, same as onboarding's IT lane. Laura only gets the
+// ServiceTrade step (its own department below), not the whole IT list.
+const IT_MBX = 'support@liontechlabs.com';
+const LAURA_MBX = 'laura.shannon@1stfpservices.com';
 /** The mailbox offboarding email is sent from. Configurable via OFFBOARDING_FROM so it can point at a
  *  mailbox already allowed by a tenant Application Access Policy without a code change. */
 export function offboardingFrom(): string {
@@ -39,14 +41,15 @@ export function offboardingFrom(): string {
  * department's still-open tasks, to its shared mailbox. A task's department is its owner, except the
  * Safety-notify tasks (which belong to Safety) and anything routed to accounting@ (which belongs to
  * Accounting). HR and Manager have no shared mailbox: they work their tasks directly. */
-export type Dept = 'it' | 'safety' | 'accounting' | 'hr' | 'manager';
-export const DEPT_ORDER: Dept[] = ['it', 'safety', 'accounting', 'hr', 'manager'];
-export const DEPT_LABEL: Record<Dept, string> = { it: 'IT', safety: 'Safety', accounting: 'Accounting', hr: 'HR', manager: 'Manager' };
-export const DEPT_MAILBOX: Partial<Record<Dept, string>> = { it: IT_MBX, safety: SAFETY_MBX, accounting: ACCT_MBX };
+export type Dept = 'it' | 'servicetrade' | 'safety' | 'accounting' | 'hr' | 'manager';
+export const DEPT_ORDER: Dept[] = ['it', 'servicetrade', 'safety', 'accounting', 'hr', 'manager'];
+export const DEPT_LABEL: Record<Dept, string> = { it: 'IT', servicetrade: 'ServiceTrade', safety: 'Safety', accounting: 'Accounting', hr: 'HR', manager: 'Manager' };
+export const DEPT_MAILBOX: Partial<Record<Dept, string>> = { it: IT_MBX, servicetrade: LAURA_MBX, safety: SAFETY_MBX, accounting: ACCT_MBX };
 
 /** The department a checklist item belongs to (for grouping and the digest email). */
 export function itemDept(it: { owner: string; email_to?: string | null }): Dept {
   if (it.email_to === SAFETY_MBX) return 'safety';
+  if (it.email_to === LAURA_MBX) return 'servicetrade';
   if (it.owner === 'accounting' || it.email_to === ACCT_MBX) return 'accounting';
   return (it.owner as Dept) || 'it';
 }
@@ -167,7 +170,7 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'it_badge_collect', label: 'Collect the company ID badge', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_vehicle_licensing', label: 'Vehicle insurance: remove 1st FP licensing filed with the fire marshals', detail: `Emails ${SAFETY_MBX}. Pull the departing employee from the fire-marshal license and insurance filings.`, due_at: base, email_to: SAFETY_MBX },
     { owner: 'accounting', stage: 's1', kind: 'task', action_code: 'hr_sage_remove', label: 'Remove the user from Sage Intacct', detail: `Emails ${ACCT_MBX} to remove the Sage Intacct user (Accounting grants Sage, so Accounting removes it).`, due_at: base, email_to: ACCT_MBX },
-    { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: `Emails ${LAURA_MBX}.`, due_at: base, email_to: LAURA_MBX },
+    { owner: 'it', stage: 's1', kind: 'task', action_code: 'hr_servicetrade_remove', label: 'Remove the user from ServiceTrade', detail: `Emails ${LAURA_MBX}. No need to mark this done in the OS: it closes on its own once they are gone from ServiceTrade.`, due_at: base, email_to: LAURA_MBX },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_bamboo_inactivate', label: 'Inactivate the user in BambooHR', due_at: base },
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_empnav_terminate', label: 'Terminate the user in Employee Navigator', detail: 'Ends the departing employee\'s benefits enrollment.', due_at: base },
 

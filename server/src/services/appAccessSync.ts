@@ -4,6 +4,7 @@ import { pullServiceTradeUsers } from './servicetradeUsers';
 import { intacctConfigured, listSageUsers } from './sageIntacct';
 import { importSoftwareCsv, SoftwareImportResult } from './softwareLicenses';
 import { reconcileAppAccessItems } from './offboardingAgent';
+import { autoCompleteServiceTradeSetup } from './onboardingAgent';
 
 /**
  * Keep each person's app access (Software tab) current from the apps that have an API, then close any
@@ -42,5 +43,7 @@ export async function refreshAppAccess(): Promise<string> {
   }
   const r = reconcileAppAccessItems();
   parts.push(`offboarding: ${r.na} step(s) N/A, ${r.done} already done`);
+  const st = autoCompleteServiceTradeSetup();
+  if (st) parts.push(`onboarding: ${st} ServiceTrade setup task(s) done`);
   return parts.join('; ');
 }

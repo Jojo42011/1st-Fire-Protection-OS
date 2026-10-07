@@ -2,6 +2,7 @@ import { getDb } from '../db/index';
 import { catalogByKind, catalogAll, CatalogItem } from './onboardingCatalog';
 import { addUserToGroup, graphConfigured } from './msGraphGroups';
 import { managerEmailByName, managerOfByName } from './offboardingAgent';
+import { appAccessFor } from './appAccess';
 
 /**
  * New-hire Onboarding engine.
@@ -286,7 +287,7 @@ function routeItems(req: any): DraftItem[] {
   // ── ServiceTrade access (Laura provisions) ──
   if (req.servicetrade) {
     const t = catalogRoute('servicetrade', String(req.servicetrade));
-    if (t) items.push({ owner: t.owner, kind: t.kind, label: `Grant ServiceTrade access: ${req.servicetrade}` });
+    if (t) items.push({ owner: t.owner, kind: t.kind, label: `Grant ServiceTrade access: ${req.servicetrade}`, detail: t.kind === 'task' ? ST_SELF_CLOSE : undefined });
   }
 
   // ── existing computer: IT task to set up the transferred machine for the new hire ──
@@ -609,6 +610,30 @@ export function completeItem(id: number, by = 'operator'): OnboardingItem {
   return decide(id, 'done', 'task', by);
 }
 
+/**
+ * Close "Grant / Set up ServiceTrade access" tasks once ServiceTrade's own user list shows the hire,
+ * so the person who sets up ServiceTrade never has to come into the OS to tick the box. Approvals are
+ * left alone (those are a human decision). Runs after each ServiceTrade user refresh.
+ */
+const ST_SELF_CLOSE = 'No need to mark this done in the OS: it closes on its own once they show up in ServiceTrade.';
+
+export function autoCompleteServiceTradeSetup(): number {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT i.id, r.employee_id, r.name FROM onboarding_items i JOIN onboarding_requests r ON r.id = i.request_id
+      WHERE i.status = 'pending' AND i.kind = 'task' AND (i.label LIKE 'Grant ServiceTrade access%' OR i.label LIKE 'Set up ServiceTrade access%')
+        AND r.status NOT IN ('discarded', 'cancelled')`
+  ).all() as { id: number; employee_id: number | null; name: string }[];
+  let n = 0;
+  for (const r of rows) {
+    const a = appAccessFor(r, 'ServiceTrade');
+    if (a.state !== 'active') continue;
+    completeItem(r.id, `system: in ServiceTrade (${String(a.asOf || '').slice(0, 10)})`);
+    n++;
+  }
+  return n;
+}
+
 /** The work an approval unlocks: approving a purchase or access is not the same as delivering it. */
 export function followUpFor(approval: { label: string; detail: string | null; owner: string }, hireName: string): DraftItem | null {
   let m: RegExpExecArray | null;
@@ -618,7 +643,7 @@ export function followUpFor(approval: { label: string; detail: string | null; ow
   if ((m = /^Approve (.+) license$/.exec(approval.label))) return { owner: 'it', kind: 'task', label: `Install ${m[1]}`, detail: 'License approved: buy or assign the seat, then install.' };
   if ((m = /^Approve SharePoint group:\s*(.+)$/.exec(approval.label))) return { owner: 'it', kind: 'task', label: `Add to SharePoint group: ${m[1].trim()}`, detail: 'Access approved.' };
   if ((m = /^Approve Sage access:\s*(.+)$/.exec(approval.label))) return { owner: approval.owner as Owner, kind: 'task', label: `Set up Sage access: ${m[1].replace(/\s*\(\$[^)]*\)\s*$/, '').trim()}`, detail: 'Seat approved: create the Sage user.' };
-  if ((m = /^Grant ServiceTrade access:\s*(.+)$/.exec(approval.label))) return { owner: 'laura', kind: 'task', label: `Set up ServiceTrade access: ${m[1].trim()}` };
+  if ((m = /^Grant ServiceTrade access:\s*(.+)$/.exec(approval.label))) return { owner: 'laura', kind: 'task', label: `Set up ServiceTrade access: ${m[1].trim()}`, detail: ST_SELF_CLOSE };
   return null;
 }
 

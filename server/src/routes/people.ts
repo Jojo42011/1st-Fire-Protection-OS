@@ -18,6 +18,7 @@ import * as sw from '../services/softwareLicenses';
 import { pullServiceTradeUsers } from '../services/servicetradeUsers';
 import { pullSageUsers } from '../services/appAccessSync';
 import { reconcileAppAccessItems } from '../services/offboardingAgent';
+import { autoCompleteServiceTradeSetup } from '../services/onboardingAgent';
 import { graphConfigured, listAllGroups } from '../services/msGraphGroups';
 import { getDb } from '../db/index';
 import { rosterCsv, employeeDataGaps } from '../services/peopleRoster';
@@ -241,7 +242,7 @@ router.post('/api/people/software/import', requirePeople('people_admin', 'it'), 
 // ServiceTrade access: pull users live from the ServiceTrade REST API and record who has access.
 router.post('/api/people/software/servicetrade-pull', requirePeople('people_admin', 'it'), async (req, res) => {
   const out = await pullServiceTradeUsers(!!(req.body || {}).commit);
-  if (out.ok && out.result?.committed) reconcileAppAccessItems();
+  if (out.ok && out.result?.committed) { reconcileAppAccessItems(); autoCompleteServiceTradeSetup(); }
   res.status(out.ok ? 200 : 400).json(out);
 });
 // Sage Intacct access: the same, from the Sage API when it is connected.

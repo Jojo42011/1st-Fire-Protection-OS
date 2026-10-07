@@ -119,3 +119,16 @@ test('the test approval link looks real but records nothing', async () => {
     assert.equal((db.prepare(`SELECT COUNT(*) c FROM onboarding_items`).get() as any).c, before);
   } finally { server.close(); }
 });
+
+test('a ServiceTrade setup task closes itself once ServiceTrade lists the hire', async () => {
+  const { createRequest, autoCompleteServiceTradeSetup } = await import('./onboardingAgent');
+  db.prepare(`INSERT OR IGNORE INTO onboarding_catalog (kind, name, owner, approval) VALUES ('servicetrade', 'Technician', 'laura', 0)`).run();
+  const { items } = createRequest({ name: 'Allie Call', employee_id: allie, servicetrade: 'Technician' } as any);
+  const st = items.find((i) => /ServiceTrade access/.test(i.label));
+  assert.ok(st, 'the intake made a ServiceTrade task');
+  assert.equal(st!.kind, 'task');
+  assert.ok(autoCompleteServiceTradeSetup() >= 1);
+  const row = db.prepare(`SELECT status, decided_by FROM onboarding_items WHERE id = ?`).get(st!.id) as any;
+  assert.equal(row.status, 'done');
+  assert.match(row.decided_by, /in ServiceTrade/);
+});
