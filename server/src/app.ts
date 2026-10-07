@@ -275,6 +275,25 @@ const page = (name: string) => (req: express.Request, res: express.Response) => 
   res.sendFile(path.join(CLIENT_DIR, name));
 };
 
+// The OS is narrowed to People (HR, onboarding, offboarding) and IT. These screens are retired from
+// the app: their pages redirect home. Their data, APIs and background jobs are untouched, so a screen
+// can be brought back by removing it from this list and re-adding it to the shell.
+const RETIRED_PAGES = new Set([
+  'operator', 'home', 'my-tasks', 'approvals', 'exceptions', 'soon',
+  'money', 'receivables', 'invoices', 'close',
+  'service', 'schedule', 'inspections', 'deficiencies', 'ops-jobs', 'jobs', 'job-board', 'agreements', 'costing', 'plans',
+  'calls', 'reviews', 'review-requests', 'reviews-hub', 'oncall',
+  'accounts', 'account', 'sites', 'quotes', 'pipeline', 'closer', 'estimates', 'estimate-builder',
+  'executive', 'office-performance', 'scoreboard', 'reports-money', 'reports-ops', 'reports-people', 'reports-builder',
+  'offices', 'integrations', 'sync', 'roster', 'harness', 'department', 'agent',
+]);
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  const name = req.path.replace(/^\//, '').replace(/\.html$/, '');
+  if (RETIRED_PAGES.has(name)) return res.redirect(302, '/');
+  next();
+});
+
 app.get('/', page('shell.html'));
 app.get('/shell', page('shell.html'));
 app.get('/operator', page('operator.html'));

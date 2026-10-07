@@ -3,1070 +3,434 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>1st Fire Protection · Operating System</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23101828'/%3E%3Ctext x='32' y='33' dominant-baseline='central' text-anchor='middle' font-family='Geist,Helvetica,Arial,sans-serif' font-size='38' font-weight='600' letter-spacing='-2' fill='%23ffffff'%3E1%3C/text%3E%3C/svg%3E" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23101828'/%3E%3Ctext x='32' y='33' dominant-baseline='central' text-anchor='middle' font-family='Helvetica,Arial,sans-serif' font-size='38' font-weight='600' fill='%23ffffff'%3E1%3C/text%3E%3C/svg%3E" />
+<title>1st Fire Protection</title>
+<link rel="icon" type="image/png" href="/brand/logo-240.png" />
+<link rel="apple-touch-icon" href="/brand/logo-240.png" />
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<link rel="stylesheet" href="/brand/site-theme.css" />
 <style>
-  /* ---- Signal shell chrome. Most classes (.side/.nav-item/.group/.head/.seg/
-     .avatar/.scrim/.palette) come from signal.css; this block adds only what the
-     shell itself needs: the collapse + mobile-drawer behaviour, the iframe frames,
-     the search field, the theme toggle, and the palette input/results. ---- */
-  html,body{height:100%;overflow:hidden}
-  .app{height:100vh;overflow:hidden}
+  /* App frame, modeled on 1stfpservices.com and the 1st FP Platform demo: a 56px blurred top bar
+     (logo, module switcher, location, search, account), a 224px sidebar for the active module, and
+     one persistent iframe per screen. */
+  html,body{height:100%;overflow:hidden;background:var(--bg)}
+  .top{position:sticky;top:0;z-index:60;height:56px;border-bottom:1px solid rgba(0,0,0,.07);
+    background:rgba(251,251,253,.82);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8)}
+  :root[data-theme="dark"] .top{background:rgba(28,28,30,.82);border-bottom-color:rgba(255,255,255,.08)}
+  .top-in{height:100%;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px;padding:0 18px}
+  .brandlink{display:flex;align-items:center;gap:10px;min-width:0;color:var(--ink);text-decoration:none;background:none;border:0;padding:0;cursor:pointer}
+  .brandlink img{width:32px;height:32px;object-fit:contain;flex:none}
+  .brandlink span{font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rgt{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+  .pillbtn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:980px;border:1px solid var(--border-strong);
+    background:var(--panel);color:var(--ink);font-family:var(--sans);font-weight:500;font-size:13px;cursor:pointer;white-space:nowrap;transition:border-color .25s var(--ease)}
+  .pillbtn:hover{border-color:var(--ink)}
+  .pillbtn .k{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+  select.loc{height:34px;max-width:180px;padding:0 30px 0 12px;border-radius:980px;border:1px solid var(--border-strong);background-color:var(--panel);
+    font-weight:600;font-size:13px;color:var(--ink);cursor:pointer}
+  .avatarbtn{width:34px;height:34px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-weight:800;font-size:11px;letter-spacing:.02em;cursor:pointer;flex:none}
+  :root[data-theme="dark"] .avatarbtn{background:var(--fill);color:var(--ink)}
+  .menubtn{display:none}
 
-  /* brand emblem: ink squircle signet (not a circle) */
-  .side .brand{padding:16px 16px 14px}
-  img.mark{width:30px;height:30px;border-radius:7px;object-fit:cover;flex:none}
-  .side .brand .n{font-weight:600;font-size:13.5px;letter-spacing:-.015em;color:var(--ink)}
-  .side .brand .s{font-weight:400;font-size:10.5px;color:#8C97A5}
-
-  /* sidebar: collapsible on desktop */
-  .side{position:relative;z-index:20;transition:margin-left .34s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),flex-basis .28s cubic-bezier(.4,0,.2,1),opacity .3s}
-  .app.collapsed .side{margin-left:calc(-1 * var(--sidebar));opacity:0}
-  .side .brand .grip{margin-left:auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--border);
-    background:none;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
-  .side .brand .grip:hover{border-color:var(--border-strong);color:var(--ink-2);background:var(--fill)}
-
-  /* ---- collapsed icon rail (desktop): 56px, glyph-only, the one place a shape is the whole label ---- */
-  .app.rail .side{flex:0 0 56px;width:56px;overflow:visible}
-  .app.rail .side nav{overflow:visible;padding:6px 0 12px;align-items:center}
-  .app.rail .side .brand{padding:13px 0 9px;justify-content:center}
-  .app.rail .side .brand>span:not(.mark),.app.rail .side .brand .grip{display:none}
-  .app.rail .side .brand .mark{width:34px;height:34px;font-size:18px;cursor:pointer}
-  .app.rail .searchsec{padding:0 0 8px !important;display:flex;justify-content:center}
-  .app.rail .searchbtn{width:38px;height:34px;justify-content:center;padding:0}
-  .app.rail .searchbtn .lbl,.app.rail .searchbtn .key{display:none}
-  /* rows become centered 38x34 tiles; labels + numeric counts drop away */
-  .app.rail .nav-block,.app.rail .nav-sect,.app.rail .nav-fly{width:38px;margin-left:auto;margin-right:auto}
-  .app.rail .nav-item{width:38px;height:34px;padding:0;justify-content:center;position:relative}
-  .app.rail .nav-item .grow,.app.rail .nav-flyrow .flychev{display:none}
-  .app.rail .nav-item .ic{margin:0}
-  .app.rail .nav-item .ic svg{width:16px;height:16px}
-  .app.rail .nav-item.on::before{top:6px;bottom:6px}
-  /* group label -> a short hairline divider */
-  .app.rail .grouplabel{font-size:0;padding:0;height:1px;width:38px;background:#EEF0F3;margin:6px auto;overflow:hidden}
-  .app.rail .nav-div{width:38px;margin:8px auto 4px}
-  /* count -> a corner dot (hidden entirely when empty) */
-  .app.rail .nav-item .count{position:absolute;top:4px;right:5px;margin:0;width:5px;height:5px;padding:0;border-radius:50%;
-    font-size:0;line-height:0;background:var(--faint);box-shadow:0 0 0 1.5px var(--panel)}
-  .app.rail .nav-item .count.problem{background:var(--amber)}
-  .app.rail .nav-item .count:empty{display:none}
-  /* footer: drop the Intacct card + identity text, keep a centered avatar */
-  .app.rail .intacct-card{display:none}
-  .app.rail .me{justify-content:center;padding:11px 0}
-  .app.rail .me>span:not(.avatar),.app.rail .me #signout{display:none}
-  /* the flyout PANEL keeps full rows (icon + label): it is the label the rail row is hiding */
-  .app.rail .flyout .nav-item{width:auto;height:auto;padding:9px 11px;justify-content:flex-start}
-  .app.rail .flyout .nav-item .grow{display:block}
-  .app.rail .flyout .nav-item .ic svg{width:15px;height:15px}
-  .app.rail .flyout .nav-item .count{position:static;width:auto;height:auto;font-size:11.5px;line-height:1;
-    border-radius:0;box-shadow:none;background:none;color:var(--faint);margin-left:auto}
-  .app.rail .flyout .nav-item .count.problem{background:none;color:var(--amber)}
-
-  /* the search "field" button that opens the palette */
-  .searchbtn{width:100%;display:flex;align-items:center;gap:8px;background:var(--fill);border:none;
-    border-radius:var(--r-btn);padding:8px 11px;text-align:left;cursor:pointer;font-family:var(--sans)}
-  .searchbtn .mag{color:var(--muted);display:flex}
-  .searchbtn .lbl{flex:1;font-weight:500;font-size:12.5px;color:var(--muted)}
-
-  /* nav variants layered on signal.css .nav-item */
-  .nav-item{cursor:pointer}
-  .nav-item .grow{flex:1;text-align:left}
-  .nav-item .avstack{display:flex}
-  .nav-item .avstack i{width:20px;height:20px;border-radius:50%;border:2px solid var(--panel);display:block}
-  .nav-item .avstack i+i{margin-left:-7px}
-  /* grouped business nav - always visible (no accordion), red active rail */
-  .nav .nav-sect.lead{margin-bottom:2px}
-  .nav-group{display:flex;align-items:center;width:100%;gap:8px;background:none;border:0;cursor:pointer;
-    font-family:var(--sans);font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-    color:var(--muted);padding:14px 10px 6px;text-align:left;border-radius:8px;transition:color .16s var(--ease)}
-  .nav-group:hover{color:var(--ink-2)}
-  .nav-group .grow{flex:1}
-  .nav-group .chev{display:block;font-size:12px;line-height:1;color:var(--muted);transition:transform .18s var(--ease);transform:rotate(90deg)}
-  .nav-block.collapsed .nav-group .chev{transform:rotate(0deg)}
-  .nav-sect{display:flex;flex-direction:column;gap:1px;overflow:hidden}
-  .nav-block.collapsed .nav-sect{display:none}
-  /* nav sections must not flex-shrink: overflow:hidden zeroes their min-height, so in a full
-     (uncollapsed) nav the flex column would otherwise squeeze the first section to nothing
-     instead of letting the pane scroll. */
-  .side nav>*{flex:0 0 auto}
-  .nav-item{position:relative;border-radius:8px;padding:9px 11px;font-weight:400;font-size:13.5px;color:var(--ink-2);transition:background .18s var(--ease),color .18s var(--ease)}
-  .nav-item:hover{background:var(--panel-alt)}
-  .nav-item.on{background:var(--fill);color:var(--ink);font-weight:500}
-  .nav-item .ic{flex:none;color:var(--faint)}
-  .nav-item.on .ic{color:var(--ink)}
-  .nav-item:hover .ic{color:var(--muted)}
-  .nav-item.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--ink);animation:railIn .35s var(--ease)}
-  @keyframes railIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-  .nav-item .dotk{display:none}
-  .nav-item .count{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
-  .nav-item .count.problem{color:var(--amber)}
-
-  /* primary-tier group label (static, no accordion) */
-  .grouplabel{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:18px 11px 8px}
-
-  /* divider between the primary tier and the secondary flyout tier */
-  .nav-div{height:1px;background:var(--divider);margin:10px 11px 4px}
-
-  /* secondary tier: quiet flyout rows (destinations, not queues) */
-  .nav-fly{position:relative}
-  .nav-flyrow{color:var(--muted);font-weight:400}
-  .nav-flyrow .ic{color:var(--faint)}
-  .nav-flyrow.on .ic,.nav-flyrow.on{color:var(--ink)}
-  .nav-flyrow .flychev{margin-left:auto;font-size:13px;line-height:1;color:var(--border-hover);transition:transform .16s var(--ease)}
-  .nav-fly.open .nav-flyrow .flychev{transform:rotate(90deg)}
-  .flyout{position:fixed;left:250px;top:0;min-width:210px;background:var(--panel);border:1px solid var(--border);
-    border-radius:12px;box-shadow:var(--sh-float);padding:7px;z-index:1000;
-    opacity:0;visibility:hidden;transform:translateX(-6px);transition:opacity .16s var(--ease),transform .16s var(--ease),visibility .16s;
-    display:flex;flex-direction:column;gap:1px}
-  .nav-fly:hover .flyout,.nav-fly.open .flyout{opacity:1;visibility:visible;transform:none}
-  .flyout-h{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);padding:6px 11px 7px}
-  @media (max-width:900px), (pointer:coarse){ .flyout{position:static;box-shadow:none;border:0;border-radius:0;padding:0 0 0 12px;min-width:0;
-    opacity:1;visibility:hidden;height:0;overflow:hidden;transform:none;transition:none}
-    .nav-fly.open .flyout{visibility:visible;height:auto} .flyout-h{display:none} }
-
-  /* Sage Intacct status card (sidebar footer) */
-  .intacct-card{margin:10px 12px 6px;padding:12px 13px;border-radius:12px;background:var(--panel);
-    border:1px solid var(--divider);display:flex;gap:9px;align-items:flex-start}
-  .intacct-card .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex:none;margin-top:6px}
-  .intacct-card b{display:block;font-weight:500;font-size:12.5px;color:var(--ink)}
-  .intacct-card p{font-weight:400;font-size:11.5px;line-height:1.5;color:#8C97A5;margin-top:4px}
-  .intacct-card .ic-connect{margin-top:9px;font-family:var(--sans);font-weight:500;font-size:12px;color:#fff;
-    background:var(--ink);border:0;border-radius:7px;padding:7px 12px;cursor:pointer;transition:.15s}
-  .intacct-card .ic-connect:hover{background:#000}
-  /* dark: ink inverts to a light fill, so the button label must flip to dark */
-  :root[data-theme="dark"] .intacct-card .ic-connect{color:var(--bg)}
-  :root[data-theme="dark"] .intacct-card .ic-connect:hover{background:#fff}
-
-  /* Intacct modal */
-  .modal-scrim{position:fixed;inset:0;z-index:1000;background:rgba(15,18,25,.5);display:flex;align-items:center;justify-content:center;
-    padding:24px;opacity:0;transition:opacity .18s}
-  .modal-scrim:not([hidden]){opacity:1}
-  .modal-scrim[hidden]{display:none}
-  .modal{width:min(520px,100%);background:var(--panel);border-radius:var(--r-modal);box-shadow:var(--sh-modal);
-    border:1px solid var(--border-card);overflow:hidden;transform:translateY(8px) scale(.99);transition:transform .2s var(--ease)}
-  .modal-scrim:not([hidden]) .modal{transform:none}
-  .modal-head{display:flex;align-items:flex-start;gap:12px;padding:20px 22px 14px}
-  .modal-head h2{font-weight:800;font-size:17px;color:var(--ink)}
-  .modal-head p{font-weight:500;font-size:12.5px;line-height:1.55;color:var(--muted);margin-top:5px}
-  .modal-head .mx{margin-left:auto;border:1px solid var(--border);background:var(--panel);border-radius:8px;width:32px;height:32px;
-    cursor:pointer;color:var(--muted);font-size:15px;flex:none}
-  .modal-head .mx:hover{border-color:var(--border-strong);color:var(--ink-2)}
-  .intacct-list{list-style:none;margin:0;padding:4px 22px 8px}
-  .intacct-list li{display:flex;flex-direction:column;gap:2px;padding:11px 0;border-top:1px solid var(--divider)}
-  .intacct-list li:first-child{border-top:0}
-  .intacct-list b{font-weight:650;font-size:13px;color:var(--ink)}
-  .intacct-list span{font-weight:500;font-size:11.5px;color:var(--muted)}
-  .modal-foot{display:flex;justify-content:flex-end;gap:9px;padding:14px 22px 20px;border-top:1px solid var(--divider);background:var(--panel-alt)}
-  .mbtn{font-family:var(--sans);font-weight:650;font-size:13px;border-radius:var(--r-btn);padding:9px 15px;cursor:pointer;border:1px solid var(--border)}
-  .mbtn.ghost{background:var(--panel);color:var(--ink-2)}
-  .mbtn.ghost:hover{border-color:var(--border-strong)}
-  .mbtn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
-  .mbtn.primary:hover{filter:brightness(.95)}
-
-  /* main column + iframe frames (persistent, one per screen) */
-  .main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-  .frames{flex:1;position:relative;min-width:0;background:var(--bg)}
-  .frame{position:absolute;inset:0;width:100%;height:100%;border:0;opacity:0;pointer-events:none;transition:opacity .2s;background:var(--bg)}
-  .frame.on{opacity:1;pointer-events:auto}
-
-  /* header: breadcrumb + right cluster */
-  .head{min-height:56px;padding:10px 24px}
-  .crumb{display:flex;align-items:center;gap:8px;min-width:0;flex:none}
-  .crumb .cg{font-weight:550;font-size:13px;color:var(--muted)}
-  .crumb .cs{color:var(--faint);font-weight:400}
-  .crumb .cp{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hcluster{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+  /* module switcher */
   .popwrap{position:relative}
-  .scopebtn,.periodbtn{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-weight:600;font-size:12.5px;
-    color:var(--ink);border:1px solid var(--border);border-radius:var(--r-btn);padding:7px 10px;background:var(--panel);cursor:pointer;transition:border-color .15s,background .15s}
-  .scopebtn:hover,.periodbtn:hover{border-color:var(--border-strong);background:var(--panel-alt)}
-  .scopebtn .sdot{width:7px;height:7px;border-radius:50%;background:var(--brand);flex:none}
-  .scopebtn .slabel{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .scopebtn .scount{font-family:var(--mono);font-weight:500;font-size:10.5px;color:var(--muted);padding-left:2px}
-  .scopebtn .chev,.periodbtn .chev{color:var(--faint)}
-  .periodbtn{color:var(--ink-2)}
-  .hdiv{width:1px;height:22px;background:var(--border);margin:0 1px}
-  .srchip{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-weight:600;font-size:12px;color:var(--ink-2);
-    border:1px solid var(--border);border-radius:var(--r-btn);padding:7px 11px;background:var(--panel);cursor:pointer;transition:.15s}
-  .srchip:hover{border-color:var(--border-strong);background:var(--panel-alt)}
-  .srchip .srdot{width:7px;height:7px;border-radius:50%;background:var(--green-accent);flex:none}
-  .srchip.warn{color:var(--amber-ink);border-color:#F0DBB4;background:var(--amber-bg)}
-  .srchip.warn .srdot{background:var(--amber)}
-  /* popover menus */
-  .pop{position:absolute;top:calc(100% + 7px);right:0;z-index:70;min-width:230px;background:var(--panel);
-    border:1px solid var(--border-card);border-radius:var(--r-inset);box-shadow:var(--sh-float);padding:6px;
-    opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .16s var(--ease),transform .16s var(--ease)}
-  .pop:not([hidden]){opacity:1;transform:none;pointer-events:auto}
-  .pop .prow{display:flex;align-items:center;gap:9px;width:100%;border:0;background:none;text-align:left;cursor:pointer;
-    font-family:var(--sans);font-weight:550;font-size:13px;color:var(--ink-2);padding:9px 10px;border-radius:8px;transition:background .12s}
-  .pop .prow:hover{background:var(--fill)}
-  .pop .prow.on{color:var(--ink);font-weight:650}
-  .pop .prow .pmeta{margin-left:auto;font-family:var(--mono);font-weight:500;font-size:11px;color:var(--muted)}
-  .pop .prow .pcheck{margin-left:auto;color:var(--brand);font-weight:800}
-  .pop .psep{height:1px;background:var(--divider);margin:5px 4px}
-  .pop .phdr{font-weight:600;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:8px 10px 4px}
-  .theme-tog{width:32px;height:32px;border-radius:var(--r-btn);border:1px solid var(--border);background:none;
-    color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
-  .theme-tog:hover{border-color:var(--border-strong);color:var(--ink-2)}
-  .theme-tog svg{width:16px;height:16px}
+  .modbtn{display:flex;align-items:center;gap:9px;white-space:nowrap;border-radius:980px;border:1px solid var(--border-strong);background:var(--panel);
+    padding:5px 14px 5px 6px;cursor:pointer;color:var(--ink);font-family:var(--sans);transition:border-color .25s var(--ease)}
+  .modbtn:hover{border-color:var(--ink)}
+  .tile{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--brand);color:#fff;font-weight:800;font-size:11px}
+  .modbtn b{font-weight:600;font-size:14px}
+  .modbtn .tri{font-size:10px;color:var(--faint)}
+  .pop{position:absolute;top:calc(100% + 8px);z-index:70;background:var(--panel);border-radius:18px;padding:8px;box-shadow:var(--sh-float);
+    animation:popIn .22s var(--ease)}
+  .pop[hidden]{display:none}
+  .pop.center{left:50%;transform:translateX(-50%);width:340px;animation:popC .22s var(--ease)}
+  @keyframes popC{from{opacity:0;transform:translate(-50%,-6px) scale(.98)}to{opacity:1;transform:translate(-50%,0)}}
+  .pop.right{right:0;width:280px}
+  .pop-h{padding:8px 10px 6px;font-weight:800;font-size:10px;letter-spacing:.08em;color:var(--faint)}
+  .modrow{display:grid;grid-template-columns:32px minmax(0,1fr) 16px;align-items:center;gap:12px;width:100%;border:0;border-radius:12px;padding:10px;
+    background:var(--panel);text-align:left;cursor:pointer;color:var(--ink);font-family:var(--sans)}
+  .modrow:hover{background:var(--bg)}
+  .modrow.on{background:var(--brand-wash)}
+  :root[data-theme="dark"] .modrow.on{background:rgba(224,51,47,.12)}
+  .modrow .mt{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:var(--ink);color:#fff;font-weight:800;font-size:13px}
+  :root[data-theme="dark"] .modrow .mt{background:#3a3a3c}
+  .modrow.on .mt{background:var(--brand)}
+  .modrow b{display:block;font-size:14px}
+  .modrow small{font-size:12px;color:var(--faint)}
+  .modrow .ck{font-weight:800;color:var(--brand)}
+  .me-card{padding:10px 12px 12px;border-bottom:1px solid var(--divider);margin-bottom:6px}
+  .me-card b{display:block;font-size:14px}
+  .me-card span{display:block;font-size:12px;color:var(--faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis}
+  .mrow{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:none;border-radius:10px;padding:9px 10px;
+    font-family:var(--sans);font-size:13px;color:var(--ink);cursor:pointer;text-align:left}
+  .mrow:hover{background:var(--bg)}
+  .mrow.danger{color:var(--brand)}
 
-  /* palette: input + result rows (on top of signal.css .scrim/.palette) */
-  .palette .q input{flex:1;background:none;border:none;padding:0;font-family:var(--sans);font-weight:500;
-    font-size:15px;color:var(--ink)}
-  .palette .q input:focus{outline:none;box-shadow:none}
-  .palette .body{padding:8px 8px 10px;max-height:56vh;overflow-y:auto}
-  .palette .res{cursor:pointer}
-  .palette .res .mg{width:22px;height:22px;border-radius:7px;font-weight:800;font-size:9px;display:flex;
-    align-items:center;justify-content:center;flex:none}
-  .palette .res .rl{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-  .palette .res .rl .rt{font-weight:600;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .palette .res .rl .rsub{font-weight:500;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .palette .res .rr{font-weight:700;font-size:11.5px;flex:none}
-  .palette .res .kb{flex:none;font-family:var(--mono);font-weight:600;font-size:9px;letter-spacing:.04em;text-transform:uppercase;
-    padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
-  .palette .res .kb-page{color:var(--ink-2);background:var(--fill)}
-  .palette .res .kb-customer{color:var(--money);background:var(--money-bg);border-color:transparent}
-  .palette .res .kb-number{color:var(--green);background:var(--green-bg);border-color:transparent}
-  .palette .res .rk{font-family:var(--mono);font-weight:600;font-size:9.5px;color:var(--faint);flex:none}
-  .palette .res .ic{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex:none}
-  .palette .res .ic svg{width:12px;height:12px}
-  .palette .empty-q{padding:26px 18px;text-align:center;font-weight:500;font-size:12.5px;color:var(--muted)}
+  /* body: sidebar + frames */
+  .body{display:flex;height:calc(100vh - 56px)}
+  .side{flex:0 0 var(--sidebar);width:var(--sidebar);display:flex;flex-direction:column;gap:2px;overflow-y:auto;
+    background:var(--panel-alt);border-right:1px solid var(--border);padding:18px 12px}
+  .side-h{padding:0 10px 10px;font-weight:800;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .side nav{display:flex;flex-direction:column;gap:2px}
+  .nv{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;border-radius:10px;padding:9px 10px;
+    background:transparent;color:var(--ink-2);font-family:var(--sans);font-size:14px;font-weight:400;text-align:left;cursor:pointer;transition:background .2s}
+  .nv:hover{background:rgba(0,0,0,.05)}
+  :root[data-theme="dark"] .nv:hover{background:rgba(255,255,255,.06)}
+  .nv.on{background:rgba(0,0,0,.06);color:var(--ink);font-weight:600}
+  :root[data-theme="dark"] .nv.on{background:rgba(255,255,255,.08)}
+  .nv::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:transparent}
+  .nv.on::before{background:var(--brand)}
+  .nv .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nv .c{font-size:11px;font-weight:600;color:var(--faint)}
+  .conn{margin-top:auto;border-radius:14px;background:var(--panel);box-shadow:0 0 0 1px rgba(0,0,0,.06);padding:12px}
+  :root[data-theme="dark"] .conn{box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+  .conn-h{font-weight:800;font-size:10px;letter-spacing:.08em;color:var(--faint)}
+  .conn-l{display:grid;gap:6px;margin-top:8px;font-size:12px;color:var(--ink)}
+  .conn-r{display:flex;align-items:center;gap:7px;border:0;background:none;padding:0;font-family:var(--sans);font-size:12px;color:var(--ink);cursor:pointer;text-align:left}
+  .conn-r .d{width:7px;height:7px;border-radius:50%;flex:none;background:var(--border-strong)}
+  .conn-r .d.fresh{background:var(--live);box-shadow:0 0 0 3px rgba(48,209,88,.18)}
+  .conn-r .d.stale,.conn-r .d.no_sync{background:#ff9f0a;box-shadow:0 0 0 3px rgba(255,159,10,.18)}
+  .conn-r .a{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .main{flex:1;min-width:0;position:relative}
+  .frames,.frames iframe{width:100%;height:100%}
+  .frames iframe{border:0;display:none;background:var(--bg)}
+  .frames iframe.on{display:block}
 
-  /* mobile "reopen" button + backdrop */
-  .reopen{position:fixed;top:14px;left:14px;z-index:60;display:none;align-items:center;gap:9px;
-    padding:9px 14px 9px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-btn);
-    box-shadow:var(--sh-rest);cursor:pointer;color:var(--ink-2)}
-  .app.collapsed .reopen{display:flex}   /* show the Menu button whenever collapsed (desktop + mobile) */
-  /* on desktop, clear the header title from under the floating Menu button when collapsed */
-  @media (min-width:901px){ .app.collapsed .head{padding-left:118px} }
-  .reopen .rl{font-weight:700;font-size:12px;color:var(--ink)}
-  .backdrop{position:fixed;inset:0;z-index:15;background:rgba(21,26,45,.4);opacity:0;pointer-events:none;
-    transition:opacity .3s;display:none}
+  /* command palette (search pages) */
+  .scrim{position:fixed;inset:0;background:rgba(29,29,31,.32);display:flex;align-items:flex-start;justify-content:center;padding-top:110px;z-index:90}
+  .palette{width:min(560px,calc(100vw - 32px));background:var(--panel);border-radius:22px;box-shadow:var(--sh-modal);overflow:hidden}
+  .palette .q{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--divider)}
+  .palette .q input{flex:1;border:0;background:none;box-shadow:none;padding:4px 0;font-size:15px}
+  .palette .body2{padding:8px;max-height:50vh;overflow:auto}
+  .palette .res{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:none;border-radius:12px;padding:10px 12px;
+    font-family:var(--sans);font-size:14px;color:var(--ink);text-align:left;cursor:pointer}
+  .palette .res small{font-size:12px;color:var(--faint)}
+  .palette .res.on{background:var(--bg)}
+  .palette .none{padding:18px;text-align:center;color:var(--muted);font-size:13px}
 
-  @media (max-width:900px), (pointer:coarse){
-    /* sidebar becomes an overlay drawer; the content no longer shifts */
-    .side{position:fixed;top:0;left:0;bottom:0;height:100dvh;width:min(84vw,290px);margin-left:0;opacity:1;
-      transform:translateX(0);transition:transform .34s cubic-bezier(.4,0,.2,1);box-shadow:var(--sh-lift)}
-    .app.collapsed .side{margin-left:0;opacity:1;transform:translateX(-102%)}
-    /* iOS/Android won't scroll a fixed iframe's overflow, so flow the layout: the
-       outer document scrolls and each iframe is sized to its content by JS. */
+  #shell-toast-host{position:fixed;left:0;right:0;bottom:0;z-index:95;display:flex;justify-content:center;pointer-events:none;padding:0 16px 26px}
+
+  /* narrow screens: the sidebar becomes a scrolling tab row under the bar (like the demo), and the
+     page flows so iOS can scroll each iframe (sized to its content by JS). */
+  @media (max-width:800px), (pointer:coarse){
     html,body{height:auto;overflow:visible}
-    .app{display:block;height:auto;min-height:100dvh}
-    .main{min-height:100dvh}
-    .frames{position:relative}
-    .frame{position:relative;inset:auto;width:100%;height:auto;opacity:1;pointer-events:auto;transition:none;display:none}
-    .frame.on{display:block}
-    .backdrop{display:block}
-    .app:not(.collapsed) .backdrop{opacity:1;pointer-events:auto}
-    .app.collapsed .reopen{display:flex}
-    .reopen{top:max(12px,env(safe-area-inset-top))}
-    .head{padding-left:64px}       /* clear the floating Menu button */
-    .crumb .cg,.crumb .cs{display:none}   /* keep only the page name on narrow screens */
-    .srchip #src-text{display:none}       /* chip collapses to a dot */
+    .body{flex-direction:column;height:auto}
+    .side{flex:none;width:100%;flex-direction:row;align-items:center;padding:8px 12px;border-right:0;border-bottom:1px solid var(--border);overflow-x:auto;position:sticky;top:56px;z-index:50}
+    .side-h,.conn{display:none}
+    .side nav{flex-direction:row;gap:4px}
+    .nv{width:auto;flex:none;white-space:nowrap}
+    .nv::before{left:10px;right:10px;top:auto;bottom:2px;width:auto;height:2px}
+    .frames,.frames iframe{height:auto;min-height:calc(100vh - 110px)}
+  }
+  @media (max-width:640px){
+    .top-in{gap:8px;padding:0 12px}
+    .brandlink span,.pillbtn .lbl,.pillbtn .k,select.loc{display:none}
+    .modbtn b{font-size:13px}
   }
 </style>
 </head>
 <body>
-  <div class="app" id="app">
-    <aside class="side" id="side">
-      <div class="brand">
-        <span class="mark" role="img" aria-label="1st Fire Protection">1</span>
-        <span style="flex:1;min-width:0">
-          <span class="n">1st Fire Protection</span>
-          <span class="s">Operating system</span>
-        </span>
-        <button class="grip" id="collapse" title="Collapse (Ctrl/⌘ + \)" aria-label="Collapse sidebar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+  <header class="top">
+    <div class="top-in">
+      <button class="brandlink" id="home-link" aria-label="1st Fire Protection home">
+        <img src="/brand/logo-240.png" alt="" />
+        <span>1st Fire Protection</span>
+      </button>
+
+      <div class="popwrap">
+        <button class="modbtn" id="mod-btn" aria-haspopup="menu" aria-expanded="false">
+          <span class="tile" id="mod-tile">P</span><b id="mod-label">People</b><span class="tri" aria-hidden="true">▼</span>
         </button>
+        <div class="pop center" id="mod-pop" role="menu" aria-label="Switch module" hidden></div>
       </div>
 
-      <div class="searchsec" style="padding:0 12px 10px">
-        <button class="searchbtn" id="open-palette" aria-label="Search (⌘K)">
-          <span class="mag"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></span>
-          <span class="lbl">Search</span>
-          <span class="key">⌘K</span>
+      <div class="rgt">
+        <select class="loc" id="loc" aria-label="Location" hidden></select>
+        <button class="pillbtn" id="open-palette" aria-label="Search pages">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg>
+          <span class="lbl">Search</span><span class="k">⌘K</span>
         </button>
-      </div>
-
-      <nav id="nav" class="nav"></nav>
-
-      <div class="intacct-card" id="intacct-card">
-        <span class="dot"></span>
-        <div class="ic-body">
-          <b>Sage Intacct not connected</b>
-          <p>Revenue, margin, cash and true AR stay blank until the ledger is linked. Nothing is estimated.</p>
-          <button class="ic-connect" id="intacct-connect">Connect</button>
+        <div class="popwrap">
+          <button class="avatarbtn" id="me-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Your account">··</button>
+          <div class="pop right" id="me-pop" role="menu" aria-label="Your account" hidden>
+            <div class="me-card"><b id="me-name">Signed in</b><span id="me-email"></span><span id="me-role"></span></div>
+            <button class="mrow" id="theme-tog" role="menuitem"><span>Dark mode</span><span id="theme-state">Off</span></button>
+            <button class="mrow danger" role="menuitem" onclick="signOut()">Sign out</button>
+          </div>
         </div>
       </div>
-      <div class="me">
-        <span class="avatar" id="me-avatar" style="width:26px;height:26px;font-size:10px">··</span>
-        <span style="flex:1;min-width:0">
-          <span id="me-name" style="display:block;font-weight:600;font-size:12px;color:var(--ink)">Signed in</span>
-          <span id="me-role" style="display:block;font-weight:500;font-size:10.5px;color:var(--muted)">Loading…</span>
-        </span>
-        <button id="signout" title="Sign out" aria-label="Sign out" onclick="signOut()"
-          style="appearance:none;border:1px solid var(--border);background:var(--panel);border-radius:8px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);flex:none">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
-        </button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="side" id="side">
+      <div class="side-h" id="side-h">People</div>
+      <nav id="nav" aria-label="Pages"></nav>
+      <div class="conn" id="conn" hidden>
+        <div class="conn-h">CONNECTED</div>
+        <div class="conn-l" id="conn-l"></div>
       </div>
     </aside>
-
-    <div class="reopen" id="reopen">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      <span class="rl">Menu</span>
-    </div>
-    <div class="backdrop" id="backdrop"></div>
-
-    <div class="main">
-      <header class="head">
-        <nav class="crumb" aria-label="Breadcrumb">
-          <span class="cg" id="crumb-group">Home</span>
-          <span class="cs">/</span>
-          <span class="cp" id="crumb-page">Home</span>
-        </nav>
-        <span class="spacer"></span>
-        <div class="hcluster">
-          <div class="popwrap">
-            <button class="scopebtn" id="scope-btn" aria-haspopup="true" aria-expanded="false">
-              <span class="sdot"></span>
-              <span class="slabel" id="scope-label">All offices</span>
-              <span class="scount" id="scope-count"></span>
-              <svg class="chev" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
-            <div class="pop" id="scope-pop" role="menu" hidden></div>
-          </div>
-          <div class="popwrap">
-            <button class="periodbtn" id="period-btn" aria-haspopup="true" aria-expanded="false">
-              <span id="period-label">This month</span>
-              <svg class="chev" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
-            <div class="pop" id="period-pop" role="menu" hidden></div>
-          </div>
-          <span class="hdiv"></span>
-          <button class="srchip" id="src-chip" title="Source health">
-            <span class="srdot" id="src-dot"></span>
-            <span id="src-text">Sources healthy</span>
-          </button>
-          <button class="theme-tog" id="theme-tog" aria-label="Toggle light and dark theme">
-            <span class="ti-moon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
-            <span class="ti-sun" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 1.5v2.4M12 20.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M1.5 12h2.4M20.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></svg></span>
-          </button>
-          <span class="avatar" id="head-avatar">DB</span>
-        </div>
-      </header>
-
-      <div class="frames" id="frames"></div>
-    </div>
-  </div>
-
-  <!-- Sage Intacct connect modal: names exactly what stays blank without the ledger -->
-  <div class="modal-scrim" id="intacct-modal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="intacct-title">
-      <div class="modal-head">
-        <div>
-          <h2 id="intacct-title">Connect Sage Intacct</h2>
-          <p>Intacct is the general ledger. Until it is linked, these stay blank on purpose. Nothing is estimated.</p>
-        </div>
-        <button class="mx" id="intacct-close" aria-label="Close">✕</button>
-      </div>
-      <ul class="intacct-list">
-        <li><b>Revenue, margin &amp; operating income</b><span>Money, Executive, Office Performance</span></li>
-        <li><b>Cash and true AR aging</b><span>Receivables, Money</span></li>
-        <li><b>Office attribution for AR</b><span>Receivables (AR is company-wide until then)</span></li>
-        <li><b>Month-end close tracking</b><span>Close</span></li>
-      </ul>
-      <div class="modal-foot">
-        <button class="mbtn ghost" id="intacct-cancel">Not now</button>
-        <button class="mbtn primary" id="intacct-request">Send connection request to IT</button>
-      </div>
-    </div>
+    <main class="main"><div class="frames" id="frames"></div></main>
   </div>
 
 <script>
 "use strict";
-/* ---- Signal shell ----
-   One iframe per screen (persistent, same-origin so postMessage nav + audio work).
-   The sidebar, header title/subtitle and ⌘K palette all drive activate(). Screens
-   not yet built (Home, To approve, and the CRM screens) open a graceful /soon
-   placeholder until their phase lands. */
+/* ---- what the OS does now: People (HR, onboarding, offboarding) and IT ---- */
 var SCREENS = {
-  // HOME
-  home:        { src:'/home',        title:'Home',                sub:'What needs attention, and how the business is doing', home:true },
-  operator:    { src:'/operator',    title:'Ask the Operator',    sub:'One conversation over the whole company' },
-  // WORK
-  tasks:       { src:'/my-tasks',    title:'My Tasks',            sub:'Your queue across the company' },
-  approve:     { src:'/approvals',   title:'Approvals',           sub:'Nothing leaves the building without a yes' },
-  exceptions:  { src:'/exceptions',  title:'Exceptions',          sub:'Where reality does not match the process' },
-  // MONEY
-  moneyOverview:{ src:'/money',      title:'Money',               sub:'Receivables, pipeline, and repair opportunity (financials pending Intacct)' },
-  receivables: { src:'/receivables', title:'Receivables',         sub:'What we have earned but not collected' },
-  handoffs:    { src:'/exceptions?owner=accounting', title:'Accounting Handoffs', sub:'Catch bad inputs before accounting cleans them up' },
-  close:       { src:'/close',       title:'Close',               sub:'Month-end readiness, by office' },
-  // OPERATIONS
-  service:     { src:'/service',     title:'Service',             sub:'The state of the service book right now' },
-  schedule:    { src:'/schedule',    title:'Schedule',            sub:'Jobs matched to crews, cancellations backfilled' },
-  inspections: { src:'/inspections', title:'Inspections',         sub:'NFPA ITM inspections (10/25/72) and letterheaded AHJ reports' },
-  deficiencies:{ src:'/deficiencies',title:'Deficiencies',        sub:'Open ServiceTrade deficiencies: quotable repair revenue waiting' },
-  jobs:        { src:'/ops-jobs',    title:'Jobs',                sub:'Job readiness: which are ready to bill, which are blocked' },
-  jobBoard:    { src:'/job-board',   title:'Job Board',           sub:'Won quotes tracked from schedule to invoiced' },
-  agreements:  { src:'/agreements',  title:'Service Agreements',  sub:'Recurring obligations, renewed before they lapse' },
-  costing:     { src:'/costing',     title:'Job margins',         sub:'Live job value from ServiceTrade, true margins pending Sage' },
-  // FRONT DESK
-  phones:      { src:'/calls',       title:'Phones',              sub:'Main line, answered 24/7' },
-  reviews:     { src:'/reviews-hub', title:'Reviews',             sub:'Ask, earn, and reply' },
-  oncall:      { src:'/oncall',      title:'On-call',             sub:'Who the after-hours line reaches, per office' },
-  // PEOPLE
-  people:      { src:'/people',      title:'People',              sub:'Onboarding, active employees, and offboarding' },
-  offboarding: { src:'/offboarding', title:'Offboarding',         sub:'The departure SOP and terminated-account cleanup' },
-  // CUSTOMERS
-  accounts:    { src:'/accounts',    title:'Accounts',            sub:'Customers, live from ServiceTrade' },
-  sites:       { src:'/sites',       title:'Sites',               sub:'Every service location, searchable' },
-  quotes:      { src:'/quotes',      title:'Quotes',              sub:'Every quote, searchable by value' },
-  pipeline:    { src:'/pipeline',    title:'Pipeline',            sub:'Open quotes by stage, live from ServiceTrade' },
-  closer:      { src:'/closer',      title:'Follow-ups',          sub:'Every open quote chased on a cadence until it books or dies' },
-  estimator:   { src:'/estimates',   title:'Estimates',           sub:'Photos in, a priced quote out' },
-  quoteBuilder:{ src:'/estimate-builder', title:'Quote Builder',   sub:'Build a construction quote from the price book' },
-  account:     { src:'/account',     title:'Account',             sub:'Customer detail', detail:true },
-  // REPORTS
-  reportsExec: { src:'/executive',   title:'Executive',           sub:'The company at a glance' },
-  officePerf:  { src:'/office-performance', title:'Office Performance', sub:'Every office side by side on the numbers that move money' },
-  reportsMoney:{ src:'/reports-money', title:'Money',               sub:'Financial reporting' },
-  reportsOps:  { src:'/reports-ops',   title:'Operations',          sub:'Operational trend analysis' },
-  reportsPeople:{ src:'/reports-people', title:'People',            sub:'Headcount and lifecycle reporting' },
-  customReports:{ src:'/reports-builder', title:'Custom Reports',      sub:'Build and save your own' },
-  // COMPANY
-  companyOffices:{ src:'/offices',   title:'Offices',             sub:'Each office, at a glance' },
-  itSystems:   { src:'/it-systems',  title:'IT & Systems',        sub:'Access, licenses, and system health' },
-  adAudit:     { src:'/ad-audit',    title:'Active Directory',    sub:'On-prem AD mirror: OU structure and account cleanup' },
-  spAccess:    { src:'/sp-access',   title:'SharePoint access',   sub:'Who has SharePoint access, and one-click cleanup' },
-  spend:       { src:'/licenses',    title:'License cleanup',     sub:'Finds the seats you pay for but nobody uses' },
-  integrations:{ src:'/company-integrations', title:'Integrations', sub:'Systems of record and sync health' },
-  sync:        { src:'/sync',        title:'ServiceTrade sync',   sub:'Two-way, every 15 minutes' },
-  settings:    { src:'/access',      title:'Access & Roles',      sub:'Who can see what: OS roles and office scope per person' },
-  readiness:   { src:'/readiness',   title:'Readiness',           sub:'Production posture: identity, admin, webhooks, freshness, backups' },
-  team:        { src:'/roster',      title:'Agents',              sub:'The automation working underneath, one job each' },
-  hire:        { src:'/harness',     title:'Add an agent',        sub:'Describe the gap in your own words' }
+  people:      { src:'/people',      title:'People',            sub:'Employees, onboarding and offboarding' },
+  onboarding:  { src:'/onboarding',  title:'Onboarding',        sub:'New hires: intake, approvals and Day-1 readiness' },
+  offboarding: { src:'/offboarding', title:'Offboarding',       sub:'The departure checklist and account cleanup' },
+  itSystems:   { src:'/it-systems',  title:'IT & Systems',      sub:'Access, licenses and system health' },
+  adAudit:     { src:'/ad-audit',    title:'Active Directory',  sub:'On-prem AD: OU structure and account cleanup' },
+  spAccess:    { src:'/sp-access',   title:'SharePoint access', sub:'Who has SharePoint access, and cleanup' },
+  spend:       { src:'/licenses',    title:'License cleanup',   sub:'Seats you pay for that nobody uses' },
+  settings:    { src:'/access',      title:'Access & Roles',    sub:'Who can see what in the OS' },
+  integrations:{ src:'/company-integrations', title:'Integrations', sub:'Connected systems and sync health' },
+  readiness:   { src:'/readiness',   title:'Readiness',         sub:'Identity, admin, backups and freshness' }
 };
-
-/* The business-oriented navigation. Groups are collapsible (accordion); the group holding the
-   active screen opens on load. Screens not yet built route to a graceful /soon placeholder. */
-// Two-tier nav. Primary tier (18 rows, always visible) is the queues you monitor. Then a divider and
-// a secondary tier of quiet flyout rows: destinations you visit, not queues, each opening a panel.
-var NAV = [
-  { items:[ 'home','operator' ] },
-  { group:'Work',       items:[ 'tasks','approve','exceptions' ] },
-  { group:'Money',      items:[ 'moneyOverview','receivables','handoffs','close' ] },
-  { group:'Operations', items:[ 'service','schedule','inspections','deficiencies','jobs','jobBoard','agreements','costing' ] },
-  { group:'Front desk', items:[ 'phones','reviews','oncall' ] },
-  { group:'Reports',    flyout:true, icon:'bars',      items:[ 'reportsExec','officePerf','reportsMoney','reportsOps','reportsPeople','customReports' ] },
-  { group:'Customers',  flyout:true, icon:'briefcase', items:[ 'accounts','sites','quotes','quoteBuilder','pipeline','closer','estimator' ] },
-  { group:'People',     flyout:true, icon:'users',     items:[ 'people','offboarding' ] },
-  { group:'Company',    flyout:true, icon:'building',  items:[ 'companyOffices','itSystems','adAudit','spAccess','integrations','sync','settings','readiness','team','hire' ] }
+var MODULES = [
+  { k:'people', tile:'P', label:'People', desc:'Employees, onboarding and offboarding', items:['people','onboarding','offboarding'] },
+  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','adAudit','spAccess','spend','settings','integrations','readiness'] }
 ];
-/* Which People module governs each screen, so the nav can hide areas a role does not include.
-   Mirrors the server's PAGE_MODULE map (server/src/app.ts): the server refuses the page, this just
-   keeps it out of the sidebar and command palette. Screens mapped to null (personal queues) always
-   show. Gating applies only to People-authorized sessions; legacy shared-password users see all. */
-var SCREEN_MODULE = {
-  home:'overview', operator:'overview',
-  tasks:null, approve:'overview', exceptions:'overview',
-  moneyOverview:'receivables', receivables:'receivables', handoffs:'accounting', close:'accounting',
-  service:'service', schedule:'service', inspections:'service', deficiencies:'deficiencies', jobs:'service', jobBoard:'service', agreements:'service', costing:'service',
-  phones:'service', reviews:'service', oncall:'service',
-  people:'people', offboarding:'people',
-  accounts:'service', sites:'service', quotes:'deficiencies', quoteBuilder:'deficiencies', pipeline:'deficiencies', closer:'deficiencies', estimator:'deficiencies', account:'service',
-  reportsExec:'overview', officePerf:'overview', reportsMoney:'accounting', reportsOps:'service', reportsPeople:'people', customReports:'overview',
-  companyOffices:'overview', itSystems:'access', adAudit:'access', spAccess:'access', spend:'access', integrations:'access', sync:'access', settings:'access', readiness:'access', team:'access', hire:'access'
-};
-// Gate state, populated once /api/me resolves. GATE stays false (show everything) until we know the
-// session is a People identity with roles; ME_MODULES is that identity's module->level map.
-var GATE = false, ME_MODULES = {};
-function allowedScreen(k){
-  if(!GATE) return true;
-  var mod = SCREEN_MODULE[k];
-  if(mod === null || mod === undefined) return true; // personal / unmapped -> always visible
-  return (ME_MODULES[mod]||0) >= 1;
-}
-// The landing screen for a gated role: first navigable (non-detail) screen it is allowed to see.
-function firstAllowed(){
-  for(var i=0;i<NAV.length;i++){ var it=NAV[i].items;
-    for(var j=0;j<it.length;j++){ if(!SCREENS[it[j]].detail && allowedScreen(it[j])) return it[j]; } }
-  return null;
-}
-/* count badge element id per screen key (only where /api/nav-counts provides a number) */
-var COUNTS = { approve:'c-approve', receivables:'c-money', phones:'c-phones', reviews:'c-review-requests',
-  deficiencies:'c-deficiencies', accounts:'c-accounts', sites:'c-sites', jobs:'c-jobs', quotes:'c-quotes',
-  pipeline:'c-pipeline', itSystems:'c-spend' };
-var KEYS = Object.keys(SCREENS);
-var HOME = KEYS.filter(function(k){return SCREENS[k].home;})[0] || KEYS[0];
-var NAV_MESSAGE_TYPE = 'app-navigate';
+// The People-role module that governs each screen (mirrors server PAGE_MODULE); hidden when the role lacks it.
+var SCREEN_MODULE = { people:'people', onboarding:'people', offboarding:'people',
+  itSystems:'access', adAudit:'access', spAccess:'access', spend:'access', settings:'access', integrations:'access', readiness:'access' };
+// Old links (?tab=home, ?tab=approve, ...) from before the OS was narrowed land on People.
+var ALIASES = { home:'people', tasks:'people', approve:'onboarding', exceptions:'people', reportsPeople:'people', companyOffices:'people', sync:'integrations' };
 
-var app=document.getElementById('app'), nav=document.getElementById('nav'), frames=document.getElementById('frames'),
-    backdrop=document.getElementById('backdrop'), reopen=document.getElementById('reopen'),
-    crumbGroupEl=document.getElementById('crumb-group'), crumbPageEl=document.getElementById('crumb-page');
-/* group label per screen key (for the header breadcrumb) */
-var GROUP_LABEL={};
-NAV.forEach(function(g){ (g.items||[]).forEach(function(k){ GROUP_LABEL[k]=g.group||''; }); });
-// Touch tablets (iPad, incl. landscape wider than 900px) must use the flow layout too: iOS Safari
-// will not scroll a fixed-height iframe's overflow, so we size each iframe to its content and let the
-// document scroll. Trigger on a coarse pointer as well as the narrow-width breakpoint.
-var mq=window.matchMedia('(max-width:900px), (pointer:coarse)');
-function isMobile(){return mq.matches;}
-var current=HOME;
-// Remembered sub-tab per screen (e.g. people -> employees), so a reload restores the exact view.
-var subByScreen={};
-// Keep the URL in sync with the active screen + its sub-tab so a browser reload restores it (no
-// history spam). Home clears the query.
-function syncUrl(){
-  try{
-    var qs = current===HOME ? '' : ('?tab='+encodeURIComponent(current));
-    if(current!==HOME && subByScreen[current]) qs += '&sub='+encodeURIComponent(subByScreen[current]);
-    history.replaceState(null, '', location.pathname + qs);
-  }catch(_){}
-}
-// Which screen's frame sent a postMessage (same-origin).
-function frameKeyFor(win){ for(var i=0;i<KEYS.length;i++){ var f=frameEl(KEYS[i]); if(f&&f.contentWindow===win) return KEYS[i]; } return null; }
+var KEYS = Object.keys(SCREENS), HOME = 'people', current = null;
+var GATE = false, ME_MODULES = {}, ME = null;
+function allowedScreen(k){ if(!GATE) return true; var m=SCREEN_MODULE[k]; return !m || (ME_MODULES[m]||0) >= 1; }
+function moduleOf(k){ for(var i=0;i<MODULES.length;i++) if(MODULES[i].items.indexOf(k)>=0) return MODULES[i]; return MODULES[0]; }
+function visibleModules(){ return MODULES.filter(function(m){ return m.items.some(allowedScreen); }); }
+function firstAllowed(){ var ms=visibleModules(); for(var i=0;i<ms.length;i++){ var it=ms[i].items.filter(allowedScreen); if(it.length) return it[0]; } return null; }
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-/* build one iframe per screen; only the home frame gets its src eagerly */
-frames.innerHTML=KEYS.map(function(k){
-  var src=k===HOME?(' src="'+SCREENS[k].src+'"'):'';
-  return '<iframe class="frame'+(k===HOME?' on':'')+'" id="frame-'+k+'" data-src="'+SCREENS[k].src+'"'+src+' allow="microphone; autoplay; camera"></iframe>';
-}).join('');
-function frameEl(k){return document.getElementById('frame-'+k);}
+/* ---- one persistent iframe per screen (loaded on first visit) ---- */
+var frames = document.getElementById('frames'), nav = document.getElementById('nav');
+frames.innerHTML = KEYS.map(function(k){ return '<iframe id="frame-'+k+'" data-src="'+SCREENS[k].src+'" title="'+esc(SCREENS[k].title)+'"></iframe>'; }).join('');
+function frameEl(k){ return document.getElementById('frame-'+k); }
+function frameKeyFor(win){ for(var i=0;i<KEYS.length;i++){ var f=frameEl(KEYS[i]); if(f && f.contentWindow===win) return KEYS[i]; } return null; }
+var subByScreen = {};
 
-/* ---- render the business navigation (grouped, collapsible) ---- */
-var PROBLEM_COUNT={ approve:1, receivables:1, deficiencies:1 }; // counts that read as a problem → amber
-
-// A small inline-SVG icon per screen, so the pane is scannable by shape, not just text. Stroke-based
-// (currentColor) so each icon inherits the item's colour in light, dark, active and hover states.
-var ICON={
-  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
-  chat:'<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.8 8.8 0 0 1-4-.9L3 20l1-4a8.4 8.4 0 0 1-1-4A8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/>',
-  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-  check:'<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>',
-  alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
-  dollar:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-  invoice:'<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>',
-  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
-  wrench:'<path d="M14.7 6.3a4 4 0 0 0 5 5l-9 9a2.8 2.8 0 0 1-4-4z"/>',
-  clipboard:'<rect x="5" y="4" width="14" height="18" rx="2"/><rect x="8.5" y="2.5" width="7" height="4" rx="1"/>',
-  repeat:'<path d="M17 2l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>',
-  trend:'<path d="M3 17l6-6 4 4 7-7M17 8h4v4"/>',
-  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
-  star:'<path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18.5 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z"/>',
-  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
-  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-  building:'<rect x="4" y="2" width="16" height="20" rx="1.5"/><path d="M9 22v-4h6v4M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01"/>',
-  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
-  filter:'<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
-  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
-  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
-  bars:'<path d="M22 20h-20M6 20V10M12 20V4M18 20v-7"/>',
-  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
-  server:'<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
-  tag:'<path d="M20.6 13.4 12 22l-9-9V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01"/>',
-  plug:'<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/>',
-  sync:'<path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M3 21v-5h5"/>',
-  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-  bot:'<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1"/><circle cx="15" cy="14" r="1"/>',
-  plus:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
-  briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-  deficiency:'<path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M12.5 11.5a2.4 2.4 0 0 0 3 3l-4 4-2-2z"/>',
-  exchange:'<path d="M4 8.5h13l-3-3M20 15.5H7l3 3"/>'
-};
-var KEY_ICON={
-  home:'home', operator:'chat',
-  tasks:'list', approve:'check', exceptions:'alert',
-  moneyOverview:'dollar', receivables:'invoice', handoffs:'exchange', close:'lock',
-  service:'wrench', schedule:'calendar', inspections:'shield', deficiencies:'deficiency', jobs:'clipboard', jobBoard:'target', agreements:'repeat', costing:'trend',
-  phones:'phone', reviews:'star', oncall:'bell',
-  people:'users', offboarding:'users',
-  accounts:'briefcase', sites:'pin', quotes:'invoice', quoteBuilder:'clipboard', pipeline:'filter', closer:'target', estimator:'camera', account:'briefcase',
-  reportsExec:'bars', officePerf:'bars', reportsMoney:'dollar', reportsOps:'trend', reportsPeople:'users', customReports:'sliders',
-  companyOffices:'building', itSystems:'server', adAudit:'users', spAccess:'users', spend:'tag', integrations:'plug', sync:'sync', settings:'shield', readiness:'check', team:'bot', hire:'plus'
-};
-function iconSvgByName(name){
-  return '<span class="ic"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">'+(ICON[name]||ICON.list)+'</svg></span>';
-}
-function iconSvg(k){ return iconSvgByName(KEY_ICON[k]||'list'); }
-function navItemHTML(k){
-  var s=SCREENS[k]; if(!s) return '';
-  var badge = COUNTS[k] ? '<span class="count'+(PROBLEM_COUNT[k]?' problem':'')+'" id="'+COUNTS[k]+'"></span>' : '';
-  return '<button class="nav-item" data-key="'+k+'">'+iconSvg(k)+'<span class="grow">'+s.title+'</span>'+badge+'</button>';
-}
-// Which nav sections the user has collapsed, remembered across visits so a long sidebar can be
-// trimmed to just the areas someone works in.
-// Legacy collapse map kept as a harmless no-op so any stored value is ignored; the two-tier nav has
-// no accordion. saveNavCollapsed is retained because activate() still references it.
-var NAV_COLLAPSED = {};
-function saveNavCollapsed(){}
-function renderNav(){
-  var firstFly = true;
-  nav.innerHTML = NAV.map(function(g){
-    var keys = g.items.filter(allowedScreen);
-    if(!keys.length) return ''; // whole section hidden when the role includes none of its screens
-    if(!g.group) return '<div class="nav-sect lead">'+keys.map(navItemHTML).join('')+'</div>';
-    if(g.flyout){
-      var div = firstFly ? '<div class="nav-div" aria-hidden="true"></div>' : ''; firstFly = false;
-      return div+'<div class="nav-fly" data-group="'+g.group+'">'+
-        '<button class="nav-item nav-flyrow" data-fly="'+g.group+'" aria-haspopup="true" aria-expanded="false">'+
-          iconSvgByName(g.icon)+'<span class="grow">'+g.group+'</span><span class="flychev" aria-hidden="true">›</span></button>'+
-        '<div class="flyout" role="menu"><div class="flyout-h">'+g.group+'</div>'+keys.map(navItemHTML).join('')+'</div></div>';
-    }
-    // Primary tier: static group label, always expanded (no accordion at 18 rows).
-    return '<div class="nav-block" data-group="'+g.group+'"><div class="grouplabel">'+g.group+'</div>'+
-      '<div class="nav-sect">'+keys.map(navItemHTML).join('')+'</div></div>';
-  }).join('');
-}
-renderNav();
-// Position each fixed flyout panel beside its row (fixed, so the sidebar's overflow can't clip it).
-// Skipped on mobile where the panel renders inline underneath the row.
-function placeFlyout(wrap){
-  if(isMobile && isMobile()) return;
-  var row=wrap.querySelector('.nav-flyrow'), panel=wrap.querySelector('.flyout'); if(!row||!panel) return;
-  var r=row.getBoundingClientRect();
-  panel.style.left=(r.right-6)+'px';
-  var top=Math.min(r.top-4, window.innerHeight-panel.offsetHeight-12);
-  panel.style.top=Math.max(8, top)+'px';
-}
-// Delegated on the persistent nav container so it survives re-renders (the nav is rebuilt when the
-// permission gate resolves). A per-node mouseenter listener would be lost on that rebuild, leaving
-// the fixed-position panel stuck at its default top:0 instead of beside its row.
-nav.addEventListener('mouseover', function(e){
-  var wrap = e.target && e.target.closest ? e.target.closest('.nav-fly') : null;
-  if(wrap) placeFlyout(wrap);
-});
-// Flyout rows: toggle the panel open on click (covers touch; hover handles pointer devices via CSS).
-nav.addEventListener('click', function(e){
-  var fr=e.target.closest('[data-fly]'); if(!fr) return;
-  var wrap=fr.closest('.nav-fly'); if(!wrap) return;
-  var open=wrap.classList.toggle('open');
-  fr.setAttribute('aria-expanded', open?'true':'false');
-  if(open) placeFlyout(wrap);
-  // close any other open flyout
-  Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ if(w!==wrap){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); } });
-});
-
-/* ---- mobile: size each iframe to its content so the outer document scrolls ---- */
+var mq = window.matchMedia('(max-width:800px), (pointer:coarse)');
+function isMobile(){ return mq.matches; }
 function fitFrame(f){
-  if(!f)return;
-  if(!isMobile()){f.style.height='';return;}
-  try{var doc=f.contentWindow&&f.contentWindow.document;if(!doc||!doc.body)return;
-    var h=Math.max(doc.documentElement.scrollHeight||0,doc.body.scrollHeight||0);
-    if(h>0)f.style.height=h+'px';}catch(_){}
+  if(!f) return;
+  if(!isMobile()){ f.style.height=''; return; }
+  try{ var d=f.contentWindow && f.contentWindow.document; if(!d||!d.body) return;
+    var h=Math.max(d.documentElement.scrollHeight||0, d.body.scrollHeight||0); if(h>0) f.style.height=h+'px'; }catch(_){}
 }
 function watchFrame(f){
-  try{var win=f.contentWindow,doc=win.document,refit=function(){fitFrame(f);};
-    if(typeof win.ResizeObserver!=='undefined'){new win.ResizeObserver(refit).observe(doc.body);}
-    win.addEventListener('resize',refit);
-    var n=0,iv=setInterval(function(){refit();if(++n>24)clearInterval(iv);},250);
+  try{ var w=f.contentWindow, refit=function(){ fitFrame(f); };
+    if(typeof w.ResizeObserver!=='undefined') new w.ResizeObserver(refit).observe(w.document.body);
+    var n=0, iv=setInterval(function(){ refit(); if(++n>24) clearInterval(iv); },250);
   }catch(_){}
   fitFrame(f);
-  // re-broadcast the current theme, office and period into every freshly loaded frame
-  try{f.contentWindow.postMessage({type:'fp-theme',theme:curTheme()},'*');}catch(_){}
-  try{f.contentWindow.postMessage({type:'fp-office',office:curOffice()},'*');}catch(_){}
-  try{var per=(localStorage.getItem('fpos_period')||'month');f.contentWindow.postMessage({type:'fp-period',period:per},'*');}catch(_){}
+  try{ f.contentWindow.postMessage({type:'fp-theme',theme:curTheme()},'*'); }catch(_){}
+  try{ f.contentWindow.postMessage({type:'fp-office',office:curOffice()},'*'); }catch(_){}
 }
-KEYS.forEach(function(k){var f=frameEl(k);f.addEventListener('load',function(){watchFrame(f);});});
+KEYS.forEach(function(k){ var f=frameEl(k); f.addEventListener('load', function(){ watchFrame(f); }); });
 
-/* ---- navigation ---- */
-function activate(key,announce){
-  if(!SCREENS[key])return;
-  // Never open an area this role does not include, even via ?tab= or the command palette.
-  if(!allowedScreen(key)){ key = firstAllowed(); if(!key) return; }
-  // Open the frame; if we have a remembered sub-tab for this screen, load it at that sub-tab (the
-  // child reads its location.hash on init).
-  var f=frameEl(key); if(f&&!f.src){ var ds=f.getAttribute('data-src'); if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]); f.src=ds; }
-  KEYS.forEach(function(k){
-    frameEl(k).classList.toggle('on',k===key);
-    var ni=nav.querySelector('.nav-item[data-key="'+k+'"]');
-    if(ni)ni.classList.toggle('on',k===key);
-  });
-  current=key;
-  syncUrl();
-  var grp=GROUP_LABEL[key]||'';
-  // Mark the active flyout row (secondary-tier destinations live inside a flyout, not an inline row).
-  Array.prototype.forEach.call(nav.querySelectorAll('.nav-flyrow'), function(fr){
-    var w=fr.closest('.nav-fly'); fr.classList.toggle('on', !!(w && w.getAttribute('data-group')===grp)); });
-  if(crumbGroupEl){ crumbGroupEl.textContent=grp; crumbGroupEl.style.display=grp?'':'none'; }
-  var sep=document.querySelector('.crumb .cs'); if(sep) sep.style.display=grp?'':'none';
-  if(crumbPageEl) crumbPageEl.textContent=SCREENS[key].title;
-  try{document.title='1st FP OS · '+SCREENS[key].title;}catch(_){}
-  if(isMobile()){setCollapsed(true);fitFrame(f);window.scrollTo(0,0);}
+/* ---- sidebar + module switcher ---- */
+function renderNav(){
+  var m = moduleOf(current||HOME);
+  document.getElementById('side-h').textContent = m.label;
+  nav.innerHTML = m.items.filter(allowedScreen).map(function(k){
+    return '<button class="nv'+(k===current?' on':'')+'" data-key="'+k+'"'+(k===current?' aria-current="page"':'')+'><span class="t">'+esc(SCREENS[k].title)+'</span><span class="c" id="c-'+k+'"></span></button>';
+  }).join('');
+  document.getElementById('mod-tile').textContent = m.tile;
+  document.getElementById('mod-label').textContent = m.label;
+  document.getElementById('mod-pop').innerHTML = '<div class="pop-h">SWITCH MODULE</div>' + visibleModules().map(function(x){
+    var on = x.k===m.k;
+    return '<button class="modrow'+(on?' on':'')+'" role="menuitem" data-mod="'+x.k+'"><span class="mt">'+x.tile+'</span><span><b>'+esc(x.label)+'</b><small>'+esc(x.desc)+'</small></span><span class="ck">'+(on?'✓':'')+'</span></button>';
+  }).join('');
+  document.getElementById('loc').hidden = !(m.k==='people' && OFFICES.length>1);
+  paintCounts();
 }
-nav.addEventListener('click',function(e){
-  var it=e.target.closest('.nav-item'); if(!it) return;
-  var key=it.getAttribute('data-key'); if(!key) return; // flyout header rows carry no key
-  activate(key,true);
-  // selecting a destination closes any open flyout
-  Array.prototype.forEach.call(nav.querySelectorAll('.nav-fly.open'), function(w){ w.classList.remove('open'); var b=w.querySelector('[data-fly]'); if(b)b.setAttribute('aria-expanded','false'); });
+nav.addEventListener('click', function(e){ var b=e.target.closest('[data-key]'); if(b) activate(b.getAttribute('data-key')); });
+document.getElementById('mod-pop').addEventListener('click', function(e){
+  var b=e.target.closest('[data-mod]'); if(!b) return; closePops();
+  var m=MODULES.filter(function(x){ return x.k===b.getAttribute('data-mod'); })[0];
+  var k=m && m.items.filter(allowedScreen)[0]; if(k) activate(k);
 });
+document.getElementById('home-link').addEventListener('click', function(){ var k=firstAllowed(); if(k) activate(k); });
 
-/* Breadcrumb click: reload the current screen's frame to its home (its data-src). A screen can drill
-   its own iframe to a sub-page (e.g. Reviews → Review requests) via location.href, which leaves no way
-   back; clicking either breadcrumb part returns to that screen's landing page. */
-function resetFrameToHome(key){
-  var f=frameEl(key); if(!f) return;
-  var ds=f.getAttribute('data-src'); if(!ds) return;
-  if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]);
-  f.src=ds; // reload (a fresh navigation, even if the src string is unchanged)
+function syncUrl(){
+  try{ var qs = current===HOME && !subByScreen[current] ? '' : ('?tab='+encodeURIComponent(current)+(subByScreen[current]?'&sub='+encodeURIComponent(subByScreen[current]):''));
+    history.replaceState(null,'',location.pathname+qs); }catch(_){}
 }
-(function wireCrumb(){
-  [crumbGroupEl,crumbPageEl].forEach(function(el){
-    if(!el) return;
-    el.style.cursor='pointer';
-    el.setAttribute('role','link'); el.setAttribute('tabindex','0');
-    el.addEventListener('click',function(){ if(current) resetFrameToHome(current); });
-    el.addEventListener('keydown',function(ev){ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); if(current) resetFrameToHome(current); } });
-  });
-})();
-
-/* ---- collapse / rail (desktop) / mobile drawer ----
-   Mobile: the sidebar is a drawer that slides fully off (.collapsed) with a Menu pill to reopen.
-   Desktop: collapsing shrinks the sidebar to a 56px glyph-only rail (.rail) instead of hiding it;
-   the signet toggles it back open. */
-function setCollapsed(v){app.classList.toggle('collapsed',v);}
-function setRail(v){app.classList.toggle('rail',v);try{localStorage.setItem('shell_rail',v?'1':'0');}catch(_){}}
-function isRail(){return app.classList.contains('rail');}
-document.getElementById('collapse').onclick=function(){ if(isMobile())setCollapsed(true); else setRail(true); };
-reopen.onclick=function(){setCollapsed(false);};
-backdrop.addEventListener('click',function(){setCollapsed(true);});
-// The signet expands the rail (or collapses to it) on desktop.
-var brandMark=document.querySelector('.side .brand .mark');
-if(brandMark){ brandMark.title='Toggle sidebar (Ctrl/⌘ + \\)'; brandMark.addEventListener('click',function(){ if(!isMobile())setRail(!isRail()); }); }
-document.addEventListener('keydown',function(e){if((e.metaKey||e.ctrlKey)&&e.key==='\\'){e.preventDefault(); if(isMobile())setCollapsed(!app.classList.contains('collapsed')); else setRail(!isRail());}});
-if(isMobile()){app.classList.add('collapsed');}
-else{try{if(localStorage.getItem('shell_rail')==='1')app.classList.add('rail');}catch(_){}}
-function syncHeights(){if(isMobile()){fitFrame(frameEl(current));}else{KEYS.forEach(function(k){frameEl(k).style.height='';});}}
-(mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(function(){
-  if(isMobile()){ app.classList.remove('rail'); setCollapsed(true); }
-  else{ setCollapsed(false); try{setRail(localStorage.getItem('shell_rail')==='1');}catch(_){setRail(false);} }
-  syncHeights();
-});
-window.addEventListener('resize',syncHeights);
-window.addEventListener('orientationchange',function(){setTimeout(syncHeights,250);});
-
-/* ---- cross-frame nav + roster refresh ---- */
-window.addEventListener('message',function(e){var d=e.data||{};
-  if(d.type===NAV_MESSAGE_TYPE&&d.tab){
-    var nk=String(d.tab).toLowerCase();
-    // optional param reloads that screen's frame with a query (e.g. account?id=5)
-    if(d.param&&SCREENS[nk]){var nf=frameEl(nk);if(nf){nf.src=SCREENS[nk].src+(SCREENS[nk].src.indexOf('?')>=0?'&':'?')+d.param;}}
-    activate(nk,true);
-  }
-  // A screen tells the shell which of its sub-tabs is active, so a reload restores it.
-  if(d.type==='fp-subtab'&&d.tab){ var sk=frameKeyFor(e.source); if(sk){ subByScreen[sk]=String(d.tab); if(sk===current) syncUrl(); } }
-  if(d.type==='counts-changed'){refreshCounts();}
-  if(d.type==='roster-changed'){location.replace(location.pathname+'?tab='+encodeURIComponent(current));}
-  // A screen (e.g. Exceptions drill-down) asks to scope the whole app to one office.
-  if(d.type==='set-office'&&d.office){ setScope(d.office,{quiet:true}); }
-  if(d.type==='fp-toast'&&d.message){ shellToast(d.message, d.tone); }
-});
-
-/* ---- shell toast (bottom-centre, ink bg, green check) ---- */
-var shellToastTimer=null;
-function shellToast(msg, tone){
-  var host=document.getElementById('shell-toast-host');
-  if(!host){host=document.createElement('div');host.id='shell-toast-host';document.body.appendChild(host);}
-  host.innerHTML='<div class="os-toast'+(tone==='bad'?' bad':'')+'" role="status"><span class="tk">'+(tone==='bad'?'!':'✓')+'</span><span class="tm"></span></div>';
-  host.querySelector('.tm').textContent=msg;
-  requestAnimationFrame(function(){var t=host.firstChild;if(t)t.classList.add('on');});
-  clearTimeout(shellToastTimer);
-  shellToastTimer=setTimeout(function(){var t=host.firstChild;if(t){t.classList.remove('on');setTimeout(function(){if(host)host.innerHTML='';},260);}},3400);
+function activate(key){
+  key = ALIASES[key] || key;
+  if(!SCREENS[key]) return;
+  if(!allowedScreen(key)){ key=firstAllowed(); if(!key) return; }
+  var f=frameEl(key);
+  if(!f.src){ var ds=f.getAttribute('data-src'); if(subByScreen[key]) ds+='#'+encodeURIComponent(subByScreen[key]); f.src=ds; }
+  KEYS.forEach(function(k){ frameEl(k).classList.toggle('on', k===key); });
+  current = key; renderNav(); syncUrl();
+  try{ document.title = SCREENS[key].title+' · 1st Fire Protection'; }catch(_){}
+  if(isMobile()){ fitFrame(f); window.scrollTo(0,0); }
 }
 
-/* ---- global office scope: scopes every screen to one location ---- */
-var OFFICES=[], CAN_ALL=true, ME=null;
-function curOffice(){try{return localStorage.getItem('fpos_office')||'all';}catch(_){return 'all';}}
-function broadcastOffice(o){document.querySelectorAll('.frames iframe').forEach(function(f){try{f.contentWindow.postMessage({type:'fp-office',office:o},'*');}catch(_){}});}
-function setOfficeCookie(v){try{document.cookie='fpos_office='+encodeURIComponent(v)+';path=/;max-age=31536000;samesite=lax';}catch(_){}}
-function officeLabelOf(key){ if(key==='all'||key==='__scoped__') return 'All offices';
-  var m=OFFICES.filter(function(o){return o.key===key||o.value===key;})[0]; return m?m.label:key; }
-function paintScopeBtn(){
-  var lbl=document.getElementById('scope-label'), cnt=document.getElementById('scope-count');
-  var cur=curOffice();
-  if(lbl) lbl.textContent=officeLabelOf(cur);
-  if(cnt){ var n=OFFICES.length; cnt.textContent=n?('· '+n+' authorized'):''; }
+/* ---- popovers ---- */
+function closePops(){ document.querySelectorAll('.pop').forEach(function(p){ p.hidden=true; }); document.querySelectorAll('[aria-expanded="true"]').forEach(function(b){ b.setAttribute('aria-expanded','false'); }); }
+function wirePop(btnId, popId){
+  var b=document.getElementById(btnId), p=document.getElementById(popId);
+  b.addEventListener('click', function(e){ e.stopPropagation(); var open=!p.hidden; closePops(); if(!open){ p.hidden=false; b.setAttribute('aria-expanded','true'); } });
 }
-function renderScopePop(){
-  var pop=document.getElementById('scope-pop'); if(!pop) return;
-  var cur=curOffice(); var html='';
-  if(CAN_ALL){ html+='<button class="prow'+((cur==='all'||cur==='__scoped__')?' on':'')+'" data-office="all">All offices'+((cur==='all'||cur==='__scoped__')?'<span class="pcheck">✓</span>':'')+'</button>'; }
-  OFFICES.forEach(function(o){
-    var on=cur===o.key||cur===o.value;
-    var meta=(o.headcount!=null)?('<span class="pmeta">'+o.headcount+'</span>'):'';
-    html+='<button class="prow'+(on?' on':'')+'" data-office="'+o.value+'">'+esc(o.label)+(on?'<span class="pcheck">✓</span>':meta)+'</button>';
-  });
-  pop.innerHTML=html;
+wirePop('mod-btn','mod-pop'); wirePop('me-btn','me-pop');
+document.addEventListener('click', function(e){ if(!e.target.closest('.popwrap')) closePops(); });
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closePops(); });
+
+/* ---- location (office) filter: the People pages follow it ---- */
+var OFFICES = [], CAN_ALL = true;
+function curOffice(){ try{ return localStorage.getItem('fpos_office')||'all'; }catch(_){ return 'all'; } }
+function setOffice(o){
+  try{ localStorage.setItem('fpos_office',o); }catch(_){}
+  try{ document.cookie='fpos_office='+encodeURIComponent(o)+';path=/;max-age=31536000;samesite=lax'; }catch(_){}
+  document.querySelectorAll('.frames iframe').forEach(function(f){ try{ f.contentWindow.postMessage({type:'fp-office',office:o},'*'); }catch(_){} });
 }
-function setScope(o, opts){ opts=opts||{};
-  o=o||'all';
-  // guard: a scoped user can't select a office they aren't authorized for
-  var ok = (o==='all'&&CAN_ALL) || OFFICES.some(function(x){return x.key===o||x.value===o;});
-  if(!ok){ if(CAN_ALL) o='all'; else if(OFFICES.length) o=OFFICES[0].value; else return; }
-  try{localStorage.setItem('fpos_office',o);}catch(_){}
-  setOfficeCookie(o); broadcastOffice(o); refreshCounts();
-  paintScopeBtn(); renderScopePop();
-  if(!opts.quiet){ shellToast('Scope is now '+officeLabelOf(o)+'. Every page follows it.'); }
+function renderLoc(){
+  var sel=document.getElementById('loc'), cur=curOffice();
+  sel.innerHTML = (CAN_ALL?'<option value="all">All locations</option>':'') + OFFICES.map(function(o){ return '<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>'; }).join('');
+  var ok = (cur==='all'&&CAN_ALL) || OFFICES.some(function(o){ return o.value===cur; });
+  var v = ok ? cur : (CAN_ALL?'all':(OFFICES[0]?OFFICES[0].value:'all'));
+  sel.value = v; if(v!==cur) setOffice(v);
 }
+document.getElementById('loc').addEventListener('change', function(e){ setOffice(e.target.value); });
+
+/* ---- who is signed in: name, menu, and which areas their role includes ---- */
 function setMe(me){
-  ME=me;
-  var nEl=document.getElementById('me-name'), rEl=document.getElementById('me-role'),
-      aEl=document.getElementById('me-avatar'), hAv=document.getElementById('head-avatar');
-  var name=(me.identity&&(me.identity.name||me.identity.email))||'Signed in';
-  var roleTxt=(me.roles&&me.roles.length)?me.roles.map(function(r){return r.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});}).join(' · '):(me.legacy?'Office access':'No role');
-  var scopeTxt=me.canSeeAllOffices!==false?'All offices':((me.offices||[]).length+' office'+(((me.offices||[]).length)===1?'':'s'));
-  if(nEl)nEl.textContent=name;
-  if(rEl)rEl.textContent=roleTxt+' · '+scopeTxt;
-  var init=name.replace(/[^A-Za-z ]/g,'').split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'··';
-  if(aEl)aEl.textContent=init;
-  if(hAv)hAv.textContent=init;
-  applyGate(me);
+  ME = me || {};
+  var name=(ME.identity&&(ME.identity.name||ME.identity.email))||'Signed in';
+  var roles=(ME.roles&&ME.roles.length)?ME.roles.map(function(r){ return r.replace(/_/g,' ').replace(/\b\w/g,function(c){ return c.toUpperCase(); }); }).join(' · '):(ME.legacy?'Office access':'');
+  document.getElementById('me-name').textContent=name;
+  document.getElementById('me-email').textContent=(ME.identity&&ME.identity.email&&ME.identity.email!==name)?ME.identity.email:'';
+  document.getElementById('me-role').textContent=roles;
+  var who=(ME.identity&&(ME.identity.name||ME.identity.email))||'';
+  document.getElementById('me-btn').textContent=who?((who.replace(/@.*/,'').replace(/[^A-Za-z .]/g,'').split(/[\s.]+/).filter(Boolean).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase())||'··'):'··';
+  GATE = !!(ME.peopleAuthorized && ME.modules); ME_MODULES = ME.modules || {};
+  if(current && !allowedScreen(current)){ var f=firstAllowed(); if(f) activate(f); } else renderNav();
 }
-// Once we know who is signed in, hide the areas their People role does not include. Only real
-// People sessions (an identity with roles) are gated; legacy shared-password sessions see all.
-function applyGate(me){
-  GATE = !!(me && me.peopleAuthorized && me.modules);
-  ME_MODULES = (me && me.modules) || {};
-  renderNav();
-  // Rebuild the command-palette page corpus so hidden screens are unsearchable too.
-  if(typeof PAGES !== 'undefined'){
-    PAGES = KEYS.filter(function(k){return !SCREENS[k].detail && allowedScreen(k);})
-      .map(function(k){return {key:k,title:SCREENS[k].title,group:GROUP_LABEL[k]||'Home'};});
-  }
-  // If the screen we landed on is not allowed for this role, move to the first one that is.
-  if(!allowedScreen(current)){ var f=firstAllowed(); if(f) activate(f,true); }
-}
-(function initScope(){
-  Promise.all([
-    fetch('/api/me').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch('/api/offices').then(function(r){return r.json();}).catch(function(){return {offices:[]};})
-  ]).then(function(res){
-    var me=res[0]||{}, all=(res[1]&&res[1].offices)||[];
-    CAN_ALL=me.canSeeAllOffices!==false;
-    var allowedKeys=(me.offices||[]).map(function(o){return o.key;});
-    OFFICES=CAN_ALL?all:all.filter(function(o){return allowedKeys.indexOf(o.key)>=0;});
-    setMe(me);
-    // resolve the saved/default scope through the authorized set
-    var saved=curOffice();
-    var have=(saved==='all'&&CAN_ALL)||OFFICES.some(function(x){return x.value===saved;});
-    var start=have?saved:(CAN_ALL?'all':(OFFICES[0]?OFFICES[0].value:'all'));
-    setScope(start,{quiet:true});
-  });
-  // scope button toggles its popover
-  var btn=document.getElementById('scope-btn'), pop=document.getElementById('scope-pop');
-  if(btn) btn.addEventListener('click',function(e){e.stopPropagation();togglePop(pop,btn);});
-  if(pop) pop.addEventListener('click',function(e){var b=e.target.closest('[data-office]');if(b){closeAllPops();setScope(b.getAttribute('data-office'));}});
-})();
+Promise.all([
+  fetch('/api/me').then(function(r){ return r.json(); }).catch(function(){ return {}; }),
+  fetch('/api/offices').then(function(r){ return r.json(); }).catch(function(){ return {offices:[]}; })
+]).then(function(res){
+  var me=res[0]||{}, all=(res[1]&&res[1].offices)||[];
+  CAN_ALL = me.canSeeAllOffices!==false;
+  var keys=(me.offices||[]).map(function(o){ return o.key; });
+  OFFICES = CAN_ALL ? all : all.filter(function(o){ return keys.indexOf(o.key)>=0; });
+  renderLoc(); setMe(me);
+});
 
-/* ---- global reporting period ---- */
-var PERIODS=[['today','Today'],['week','This week'],['month','This month'],['last_month','Last month'],['quarter','This quarter'],['year','Year to date']];
-function curPeriod(){try{return localStorage.getItem('fpos_period')||'month';}catch(_){return 'month';}}
-function periodLabelOf(p){var f=PERIODS.filter(function(x){return x[0]===p;})[0];return f?f[1]:p;}
-function broadcastPeriod(p){document.querySelectorAll('.frames iframe').forEach(function(f){try{f.contentWindow.postMessage({type:'fp-period',period:p},'*');}catch(_){}});}
-function paintPeriodBtn(){var l=document.getElementById('period-label');if(l)l.textContent=periodLabelOf(curPeriod());}
-function renderPeriodPop(){
-  var pop=document.getElementById('period-pop'); if(!pop) return; var cur=curPeriod();
-  pop.innerHTML=PERIODS.map(function(p){var on=p[0]===cur;return '<button class="prow'+(on?' on':'')+'" data-period="'+p[0]+'">'+p[1]+(on?'<span class="pcheck">✓</span>':'')+'</button>';}).join('');
-}
-function setPeriod(p){try{localStorage.setItem('fpos_period',p);}catch(_){}broadcastPeriod(p);paintPeriodBtn();renderPeriodPop();}
-(function initPeriod(){
-  var saved=curPeriod();
-  if(!PERIODS.some(function(x){return x[0]===saved;})) saved='month';
-  try{localStorage.setItem('fpos_period',saved);}catch(_){}
-  paintPeriodBtn(); renderPeriodPop(); broadcastPeriod(saved);
-  var btn=document.getElementById('period-btn'), pop=document.getElementById('period-pop');
-  if(btn) btn.addEventListener('click',function(e){e.stopPropagation();togglePop(pop,btn);});
-  if(pop) pop.addEventListener('click',function(e){var b=e.target.closest('[data-period]');if(b){closeAllPops();setPeriod(b.getAttribute('data-period'));}});
-})();
+/* ---- connected systems ---- */
+function ago(iso){ if(!iso) return ''; var m=Math.max(0,Math.round((Date.now()-new Date(iso).getTime())/60000));
+  return m<60 ? m+'m' : m<1440 ? Math.round(m/60)+'h' : Math.round(m/1440)+'d'; }
+var CONN_KEEP = { bamboo:1, entra:1, m365:1, microsoft:1, graph:1, servicetrade:1, intacct:1, ad:1, automate:1 };
+fetch('/api/sources').then(function(r){ return r.json(); }).then(function(d){
+  var s=((d&&d.sources)||[]).filter(function(x){ return x.connected || CONN_KEEP[x.key]; });
+  if(!s.length) return;
+  document.getElementById('conn-l').innerHTML = s.map(function(x){
+    return '<button class="conn-r" data-go="integrations" title="'+esc(x.status.replace('_',' '))+'"><span class="d '+esc(x.status)+'"></span>'+esc(x.label)+'<span class="a">'+(x.connected?esc(ago(x.lastSyncedAt)||'on'):'off')+'</span></button>';
+  }).join('');
+  document.getElementById('conn').hidden=false;
+}).catch(function(){});
+document.getElementById('conn').addEventListener('click', function(e){ if(e.target.closest('[data-go]')) activate('integrations'); });
 
-/* ---- popover open/close plumbing ---- */
-function closeAllPops(){document.querySelectorAll('.pop').forEach(function(p){p.hidden=true;var w=p.previousElementSibling;if(w&&w.setAttribute)w.setAttribute('aria-expanded','false');});}
-function togglePop(pop,btn){var open=!pop.hidden;closeAllPops();if(!open){pop.hidden=false;if(btn)btn.setAttribute('aria-expanded','true');}}
-document.addEventListener('click',function(e){if(!e.target.closest('.popwrap'))closeAllPops();});
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closeAllPops();});
-
-/* ---- source-health chip: green when all healthy, amber when one needs attention ---- */
-(function initSourceHealth(){
-  var chip=document.getElementById('src-chip'), txt=document.getElementById('src-text');
-  fetch('/api/sources').then(function(r){return r.json();}).then(function(d){
-    var srcs=(d&&d.sources)||[];
-    // "needs attention" = a source that should be flowing but is not (stale, or connected-but-never-synced).
-    // 'not_connected' is a deliberate/unconfigured state surfaced by the Intacct card + Integrations, not a red alert.
-    var bad=srcs.filter(function(s){return s.status==='stale'||s.status==='no_sync';});
-    if(bad.length){ chip.classList.add('warn'); txt.textContent=bad.length+' source'+(bad.length===1?'':'s')+' need'+(bad.length===1?'s':'')+' attention'; }
-    else { chip.classList.remove('warn'); txt.textContent=srcs.length?'All sources healthy':'Sources'; }
-  }).catch(function(){ if(txt) txt.textContent='Sources'; });
-  if(chip) chip.addEventListener('click',function(){activate('integrations',true);});
-})();
-
-/* ---- Sage Intacct connect modal ---- */
-(function initIntacct(){
-  var modal=document.getElementById('intacct-modal');
-  function open(){ if(modal){ modal.hidden=false; } }
-  function close(){ if(modal){ modal.hidden=true; } }
-  var c=document.getElementById('intacct-connect'); if(c) c.addEventListener('click',open);
-  var x=document.getElementById('intacct-close'); if(x) x.addEventListener('click',close);
-  var cancel=document.getElementById('intacct-cancel'); if(cancel) cancel.addEventListener('click',close);
-  var req=document.getElementById('intacct-request');
-  if(req) req.addEventListener('click',function(){ close(); shellToast('Connection request sent to IT. Nothing is estimated in the meantime.'); });
-  if(modal) modal.addEventListener('mousedown',function(e){ if(e.target===modal) close(); });
-  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&modal&&!modal.hidden) close(); });
-  // screens open it from their honest empty states / Integrations card
-  window.addEventListener('message',function(e){ if((e.data||{}).type==='open-intacct') open(); });
-})();
-
-/* ---- sidebar counts / badges ---- */
+/* ---- sidebar counts ---- */
+var COUNTS = {};
+function paintCounts(){ Object.keys(COUNTS).forEach(function(k){ var el=document.getElementById('c-'+k); if(el) el.textContent=COUNTS[k]||''; }); }
 function refreshCounts(){
-  fetch('/api/nav-counts').then(function(r){return r.json();}).then(function(c){
-    function set(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
-    set('c-phones',c.phones||0); set('c-money',c.money||0); set('c-reviews',c.reviews||0);
-    set('c-review-requests',c.reviewRequests||'');
-    set('c-spend',c.spend||0); set('c-accounts',c.accounts||''); set('c-pipeline',c.pipeline||'');
-    set('c-sites',c.sites||''); set('c-jobs',c.jobs||''); set('c-quotes',c.quotes||'');
-    function count(id,v){var el=document.getElementById(id);if(el){if(v>0){el.textContent=(''+v);el.style.display='';}else{el.textContent='';el.style.display='none';}}}
-    count('c-approve',c.approvals||0); count('c-deficiencies',c.deficiencies||0);
+  fetch('/api/people/overview').then(function(r){ return r.json(); }).then(function(o){
+    if(!o || o.error) return;
+    COUNTS.people = o.active || ''; COUNTS.onboarding = o.onboarding || ''; COUNTS.offboarding = o.offboarding || '';
+    paintCounts();
   }).catch(function(){});
 }
 refreshCounts();
 
-/* ---- deep link + public API ---- */
-var _params=new URLSearchParams(location.search);
-var q=_params.get('tab'), qsub=_params.get('sub');
-if(q&&SCREENS[q]&&q!==HOME){ if(qsub) subByScreen[q]=qsub; activate(q); } else { activate(HOME); }
-window.AppShell={open:function(k){activate(k,true);},collapse:setCollapsed,screens:SCREENS};
-window.signOut=function(){try{fetch('/api/logout',{method:'POST'}).then(function(){location.href='/login';}).catch(function(){location.href='/login';});}catch(e){location.href='/login';}};
-
-/* ---- theme toggle (broadcast to every frame so the whole app flips) ---- */
-var tog=document.getElementById('theme-tog');
-function curTheme(){return document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';}
-function paintTog(t){
-  tog.querySelector('.ti-moon').style.display=t==='dark'?'none':'';
-  tog.querySelector('.ti-sun').style.display=t==='dark'?'':'none';
-}
-function setTheme(t){
-  try{localStorage.setItem('fpTheme',t);}catch(_){}
-  if(t==='dark')document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');
-  paintTog(t);
-  document.querySelectorAll('.frames iframe').forEach(function(f){try{f.contentWindow.postMessage({type:'fp-theme',theme:t},'*');}catch(_){}});
-}
-paintTog(curTheme());
-tog.addEventListener('click',function(){setTheme(curTheme()==='dark'?'light':'dark');});
-
-/* ---- ⌘K command palette ---- */
-var paletteOpen=false, palResults=[], palIndex=0, palEl=null;
-function openPalette(){
-  if(paletteOpen)return; paletteOpen=true;
-  palEl=document.createElement('div'); palEl.className='scrim';
-  palEl.innerHTML=
-    '<div class="palette" role="dialog" aria-label="Command palette">'+
-      '<div class="q">'+
-        '<span style="color:var(--muted);display:flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg></span>'+
-        '<input id="pal-input" autocomplete="off" spellcheck="false" placeholder="Search pages, customers, or metrics…" />'+
-        '<span class="key">ESC</span>'+
-      '</div>'+
-      '<div class="body" id="pal-body"></div>'+
-    '</div>';
-  document.body.appendChild(palEl);
-  palEl.addEventListener('mousedown',function(e){if(e.target===palEl)closePalette();});
-  var input=palEl.querySelector('#pal-input');
-  input.addEventListener('input',function(){runSearch(input.value);});
-  input.focus();
-  runSearch('');
-}
-function closePalette(){if(!paletteOpen)return;paletteOpen=false;if(palEl){palEl.remove();palEl=null;}palResults=[];palIndex=0;}
-function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function money(n){return '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});}
-
-/* palette corpus: every page (with its nav group), and every metric that has a drill-down */
-var PAGES=KEYS.filter(function(k){return !SCREENS[k].detail;}).map(function(k){return {key:k,title:SCREENS[k].title,group:GROUP_LABEL[k]||'Home'};});
-var METRICS=[
-  {key:'open_pipeline',label:'Open pipeline'},{key:'open_deficiencies',label:'Open deficiencies'},
-  {key:'unquoted_deficiencies',label:'Unquoted deficiencies'},{key:'quoted_deficiencies',label:'Quoted deficiencies'},
-  {key:'quoted_repair_value',label:'Quoted repair value'},{key:'jobs_completed',label:'Jobs completed'},
-  {key:'jobs_total',label:'Jobs'},{key:'service_agreements',label:'Service agreements'},
-  {key:'ar_outstanding',label:'Accounts receivable'},{key:'quotes_won',label:'Quotes won'},{key:'quotes_lost',label:'Quotes lost'}
-];
-function matchLocal(q){
-  q=(q||'').trim().toLowerCase();
-  var pages=PAGES.filter(function(p){return !q||p.title.toLowerCase().indexOf(q)>=0||p.group.toLowerCase().indexOf(q)>=0;}).slice(0,6);
-  var metrics=q?METRICS.filter(function(m){return m.label.toLowerCase().indexOf(q)>=0;}).slice(0,4):[];
-  return {pages:pages,metrics:metrics};
-}
-var searchTimer=null;
-function runSearch(q){
-  var local=matchLocal(q);
-  renderPalette({pages:local.pages,metrics:local.metrics,customers:[]}); // paint pages/metrics instantly
-  clearTimeout(searchTimer);
-  searchTimer=setTimeout(function(){
-    fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
-      renderPalette({pages:local.pages,metrics:local.metrics,customers:(d&&d.customers)||[]});
-    }).catch(function(){/* keep the local results already shown */});
-  },110);
-}
-var KIND_BADGE={page:'page',customer:'customer',number:'number'};
-function resRow(idx,kind,mono,tint,title,sub,right){
-  return '<button class="res" data-i="'+idx+'">'+
-    (mono?'<span class="mg" style="background:'+tint[0]+';color:'+tint[1]+'">'+esc(mono)+'</span>':'<span class="ic" style="background:'+tint[0]+';color:'+tint[1]+'">'+tint[2]+'</span>')+
-    '<span class="rl"><span class="rt">'+esc(title)+'</span>'+(sub?'<span class="rsub">'+esc(sub)+'</span>':'')+'</span>'+
-    (right?'<span class="rr">'+right+'</span>':'')+
-    '<span class="kb kb-'+kind+'">'+KIND_BADGE[kind]+'</span></button>';
-}
-function renderPalette(d){
-  if(!paletteOpen||!palEl)return;
-  var body=palEl.querySelector('#pal-body'); palResults=[]; var html='';
-  var pages=(d.pages||[]).slice(0,8), metrics=d.metrics||[], cust=d.customers||[];
-  var room=function(){return 8-palResults.length;};
-  if(pages.length&&room()>0){
-    html+='<div class="grp">Pages</div>';
-    pages.slice(0,room()).forEach(function(p){
-      var idx=palResults.length; palResults.push({screen:p.key});
-      html+=resRow(idx,'page',null,['var(--fill)','var(--ink-2)','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6M9 13h6"/></svg>'],p.title,p.group,'');
-    });
+/* ---- messages from the pages ---- */
+window.addEventListener('message', function(e){
+  var d=e.data||{};
+  if(d.type==='app-navigate' && d.tab){
+    var k=ALIASES[d.tab]||d.tab;
+    if(d.param && SCREENS[k]){ var nf=frameEl(k); nf.src=SCREENS[k].src+(SCREENS[k].src.indexOf('?')>=0?'&':'?')+d.param; }
+    activate(k);
   }
-  if(cust.length&&room()>0){
-    html+='<div class="grp">Customers</div>';
-    cust.slice(0,room()).forEach(function(c){
-      var idx=palResults.length; palResults.push({screen:c.screen});
-      var meta=c.days>0?(money(c.amount)+' · '+c.days+'d'):money(c.amount);
-      html+=resRow(idx,'customer',c.monogram,['var(--money-bg)','var(--money)'],c.name,'Open receivable','<b style="color:var(--money)">'+esc(meta)+'</b>');
-    });
-  }
-  if(metrics.length&&room()>0){
-    html+='<div class="grp">Metrics</div>';
-    metrics.slice(0,room()).forEach(function(m){
-      var idx=palResults.length; palResults.push({metric:m.key,label:m.label});
-      html+=resRow(idx,'number',null,['var(--green-bg)','var(--green)','<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6"/></svg>'],m.label,'Opens the records behind it','');
-    });
-  }
-  if(!palResults.length)html='<div class="empty-q">Nothing matches that. Try an office, a customer, or a page name.</div>';
-  body.innerHTML=html;
-  palIndex=0; paintPalIndex();
-  body.querySelectorAll('.res').forEach(function(btn){
-    btn.addEventListener('mouseenter',function(){palIndex=+btn.getAttribute('data-i');paintPalIndex();});
-    btn.addEventListener('click',function(){choosePal(+btn.getAttribute('data-i'));});
-  });
-}
-function paintPalIndex(){if(!palEl)return;palEl.querySelectorAll('.res').forEach(function(b){b.classList.toggle('on',+b.getAttribute('data-i')===palIndex);});}
-function choosePal(i){
-  var r=palResults[i]; if(!r)return; closePalette();
-  if(r.screen){ activate(r.screen,true); return; }
-  if(r.metric){ var f=frameEl(current); try{ f.contentWindow.postMessage({type:'open-drill',key:r.metric,label:r.label},'*'); }catch(_){} }
-}
-document.getElementById('open-palette').addEventListener('click',openPalette);
-document.addEventListener('keydown',function(e){
-  if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();paletteOpen?closePalette():openPalette();return;}
-  if(!paletteOpen)return;
-  if(e.key==='Escape'){e.preventDefault();closePalette();}
-  else if(e.key==='ArrowDown'){e.preventDefault();palIndex=Math.min(palResults.length-1,palIndex+1);paintPalIndex();}
-  else if(e.key==='ArrowUp'){e.preventDefault();palIndex=Math.max(0,palIndex-1);paintPalIndex();}
-  else if(e.key==='Enter'){e.preventDefault();choosePal(palIndex);}
+  if(d.type==='fp-subtab' && d.tab){ var sk=frameKeyFor(e.source); if(sk){ subByScreen[sk]=String(d.tab); if(sk===current) syncUrl(); } }
+  if(d.type==='counts-changed') refreshCounts();
+  if(d.type==='roster-changed') location.replace(location.pathname+'?tab='+encodeURIComponent(current));
+  if(d.type==='set-office' && d.office){ setOffice(d.office); renderLoc(); }
+  if(d.type==='fp-toast' && d.message) shellToast(d.message, d.tone);
 });
+
+/* ---- toast ---- */
+var toastTimer=null;
+function shellToast(msg, tone){
+  var host=document.getElementById('shell-toast-host');
+  if(!host){ host=document.createElement('div'); host.id='shell-toast-host'; document.body.appendChild(host); }
+  host.innerHTML='<div class="os-toast'+(tone==='bad'?' bad':'')+'" role="status"><span class="tk">'+(tone==='bad'?'!':'✓')+'</span><span class="tm"></span></div>';
+  host.querySelector('.tm').textContent=msg;
+  requestAnimationFrame(function(){ var t=host.firstChild; if(t) t.classList.add('on'); });
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){ var t=host.firstChild; if(t){ t.classList.remove('on'); setTimeout(function(){ host.innerHTML=''; },260); } },2800);
+}
+
+/* ---- theme ---- */
+function curTheme(){ return document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light'; }
+function paintTheme(){ document.getElementById('theme-state').textContent = curTheme()==='dark'?'On':'Off'; }
+document.getElementById('theme-tog').addEventListener('click', function(){
+  var t = curTheme()==='dark'?'light':'dark';
+  try{ localStorage.setItem('fpTheme',t); }catch(_){}
+  if(t==='dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('.frames iframe').forEach(function(f){ try{ f.contentWindow.postMessage({type:'fp-theme',theme:t},'*'); }catch(_){} });
+  paintTheme();
+});
+paintTheme();
+
+window.signOut=function(){ fetch('/api/logout',{method:'POST'}).then(function(){ location.href='/login'; }).catch(function(){ location.href='/login'; }); };
+
+/* ---- search pages (⌘K) ---- */
+var pal=null, palRes=[], palIdx=0;
+function openPalette(){
+  if(pal) return;
+  pal=document.createElement('div'); pal.className='scrim';
+  pal.innerHTML='<div class="palette" role="dialog" aria-label="Search pages"><div class="q"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg><input id="pal-in" autocomplete="off" placeholder="Go to a page…" /></div><div class="body2" id="pal-body"></div></div>';
+  document.body.appendChild(pal);
+  pal.addEventListener('mousedown', function(e){ if(e.target===pal) closePalette(); });
+  var inp=pal.querySelector('#pal-in'); inp.addEventListener('input', function(){ runPal(inp.value); }); inp.focus(); runPal('');
+}
+function closePalette(){ if(pal){ pal.remove(); pal=null; } }
+function runPal(q){
+  q=(q||'').trim().toLowerCase();
+  palRes = KEYS.filter(allowedScreen).filter(function(k){ var s=SCREENS[k]; return !q || s.title.toLowerCase().indexOf(q)>=0 || s.sub.toLowerCase().indexOf(q)>=0 || moduleOf(k).label.toLowerCase().indexOf(q)>=0; });
+  palIdx=0;
+  pal.querySelector('#pal-body').innerHTML = palRes.length ? palRes.map(function(k,i){
+    return '<button class="res'+(i===0?' on':'')+'" data-i="'+i+'"><span>'+esc(SCREENS[k].title)+'<br><small>'+esc(SCREENS[k].sub)+'</small></span><small>'+esc(moduleOf(k).label)+'</small></button>';
+  }).join('') : '<div class="none">No page matches that.</div>';
+  pal.querySelectorAll('.res').forEach(function(b){ b.addEventListener('click', function(){ var k=palRes[+b.getAttribute('data-i')]; closePalette(); activate(k); }); });
+}
+function paintPal(){ if(pal) pal.querySelectorAll('.res').forEach(function(b){ b.classList.toggle('on', +b.getAttribute('data-i')===palIdx); }); }
+document.getElementById('open-palette').addEventListener('click', openPalette);
+document.addEventListener('keydown', function(e){
+  if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); pal?closePalette():openPalette(); return; }
+  if(!pal) return;
+  if(e.key==='Escape'){ e.preventDefault(); closePalette(); }
+  else if(e.key==='ArrowDown'){ e.preventDefault(); palIdx=Math.min(palRes.length-1,palIdx+1); paintPal(); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); palIdx=Math.max(0,palIdx-1); paintPal(); }
+  else if(e.key==='Enter' && palRes[palIdx]){ e.preventDefault(); var k=palRes[palIdx]; closePalette(); activate(k); }
+});
+
+/* ---- layout changes + deep link ---- */
+(mq.addEventListener?mq.addEventListener.bind(mq,'change'):mq.addListener.bind(mq))(function(){ KEYS.forEach(function(k){ fitFrame(frameEl(k)); }); });
+window.addEventListener('resize', function(){ if(isMobile()) fitFrame(frameEl(current)); });
+var P=new URLSearchParams(location.search), qt=P.get('tab'), qs=P.get('sub');
+qt = qt ? (ALIASES[qt]||qt) : null;
+if(qt && SCREENS[qt]){ if(qs) subByScreen[qt]=qs; activate(qt); } else activate(HOME);
+window.AppShell={ open:activate, screens:SCREENS };
 </script>
 </body>
 </html>

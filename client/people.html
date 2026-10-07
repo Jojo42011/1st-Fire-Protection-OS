@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/os.css" />
+<link rel="stylesheet" href="/brand/site-theme.css" />
 <style>
   .screen{max-width:1160px;margin:0 auto;padding:24px 24px 64px}
   @media(max-width:640px){.screen{padding:16px 14px 52px}}
@@ -96,7 +97,7 @@
     <div id="metricstrip"></div>
     <div class="os-ptabs" id="pstrip"></div>
     <div id="view"></div>
-    <div class="os-foot">People holds employee and HR records, so it is gated by Microsoft identity, not the office password. My tasks and Approvals are company-wide queues and open the shared views. Nothing provisions, grants or reverses access on its own: every item waits for its owner to act.</div>
+    <div class="os-foot">People holds employee and HR records, so it is gated by Microsoft identity, not the office password. Nothing provisions, grants or reverses access on its own: every item waits for its owner to act.</div>
   </div>
   <div id="gate"></div>
 </div>
@@ -119,8 +120,6 @@ var STRIP=[
   {key:'overview',   label:'Overview'},
   {key:'onboarding', label:'Onboarding',     badge:'onboarding',       nav:'/onboarding'},
   {key:'employees',  label:'Employees',      badge:'active'},
-  {key:'tasks',      label:'My tasks',       badge:'openTasks',        go:'tasks'},
-  {key:'approvals',  label:'Approvals',      badge:'awaitingApproval', go:'approve'},
   {key:'offboarding',label:'Offboarding',    badge:'offboarding'},
   {key:'templates',  label:'Role templates', badge:'positions',        drawer:true}
 ];
@@ -227,7 +226,7 @@ VIEWS.overview=function(v){
     // 1) Needs attention: current employee risk first (config is demoted below).
     var cards=[];
     if(att.startingSoon>0) cards.push(attn('warn',att.startingSoon+' starting within 7 days','Confirm Day-1 readiness before they arrive','onboarding'));
-    if(att.blockedOnboarding>0) cards.push(attn('bad',att.blockedOnboarding+' onboarding blocked','A dependency or approval is holding Day-1 readiness','tasks'));
+    if(att.blockedOnboarding>0) cards.push(attn('bad',att.blockedOnboarding+' onboarding blocked','A dependency or approval is holding Day-1 readiness','onboarding'));
     if(att.offboardingWithAccess>0) cards.push(attn('bad',att.offboardingWithAccess+' leaving/left still have access','Security and license exposure until revoked','offboarding'));
     if(att.unreturnedAssets>0) cards.push(attn('warn',att.unreturnedAssets+' assets not returned','Company property with departing employees','assets'));
     if(att.missingCredentials>0) cards.push(attn('warn',att.missingCredentials+' credentials missing or expired','Required certifications not on file','credentials'));
@@ -238,7 +237,7 @@ VIEWS.overview=function(v){
         return '<tr style="cursor:pointer" onclick="empDetail('+s.id+')"><td style="font-weight:600;color:var(--ink)">'+esc(s.name)+'</td><td>'+esc(s.job_position||'')+'</td><td>'+esc(s.office||'')+'</td><td>'+esc(s.start||'')+(s.daysUntil!=null?' <span class="muted">('+s.daysUntil+'d)</span>':'')+'</td><td><span class="st '+tone+'">'+esc(human(s.readiness))+'</span></td></tr>';}).join('')+
       '</tbody></table></div>' : '';
     // 3) Config note (demoted). The headline lifecycle counts now live in the metric strip above.
-    var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'Work your queue in the company-wide <span class="link" onclick="goGlobal(\'tasks\')">My tasks</span>.</p>';
+    var cfg='<p class="muted" style="margin-top:16px">'+(o.templatesUnreviewed>0?o.templatesUnreviewed+' role templates still need review in <span class="link" onclick="openTemplatesDrawer()">Role templates</span> (configuration). ':'')+'</p>';
     var exports=(has('hr')||has('people_admin'))
       ? '<div class="card card-pad" style="margin-top:14px"><div class="card-head" style="padding:0 0 6px"><h2>Exports</h2></div>'+
         '<p class="muted" style="margin:0 0 10px">Phone list (First name, Last name, last 4 of the mobile number) for 1st FP Services and MGMT, from BambooHR.</p>'+
