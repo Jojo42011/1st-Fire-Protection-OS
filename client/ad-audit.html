@@ -10,18 +10,16 @@
 <link rel="stylesheet" href="/os.css" />
 <link rel="stylesheet" href="/brand/site-theme.css" />
 <style>
-  .wrap{padding:22px 26px;max-width:1120px}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
-  .kpi .lab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
-  .kpi .val{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px}
+  .kpi{background:var(--panel);border:0;box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);padding:16px 18px}
+  .kpi .lab{font-size:12px;color:var(--muted)}
+  .kpi .val{font-weight:800;font-size:28px;letter-spacing:-.035em;font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px}
   .kpi .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
   .sec{margin-top:26px}
-  .sec-h{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);display:flex;align-items:center;gap:10px;margin-bottom:12px}
-  .sec-h::after{content:"";flex:1;height:1px;background:var(--border)}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .sec-h{font-weight:800;font-size:17px;letter-spacing:-.02em;color:var(--ink);display:flex;align-items:center;gap:10px;margin:0 0 10px}
+  .card{background:var(--panel);border:0;box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);overflow:hidden}
   table{width:100%;border-collapse:collapse;font-size:12.5px}
-  th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding:10px 14px;border-bottom:1px solid var(--border);font-weight:500}
+  th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:10px 14px;border-bottom:1px solid var(--border);font-weight:700}
   td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--ink-2);vertical-align:top}
   tr:last-child td{border-bottom:none}
   .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -29,7 +27,7 @@
   .sub2{font-size:11px;color:var(--muted)}
   .exp{color:var(--good,#12805C);font-family:var(--mono);font-size:11.5px}
   .cur{color:var(--muted);font-family:var(--mono);font-size:11.5px}
-  .empty{background:var(--panel);border:1px dashed var(--border);border-radius:12px;padding:26px;color:var(--muted);font-size:13px;line-height:1.6}
+  .empty{background:var(--panel);box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);padding:24px 26px;color:var(--muted);font-size:13.5px;line-height:1.6}
   .empty h3{margin:0 0 8px;font-size:14px;color:var(--ink)}
   .empty code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 6px}
   .empty ol{margin:10px 0 0;padding-left:20px} .empty li{margin:6px 0}
@@ -37,36 +35,37 @@
   .tree .row{display:flex;align-items:center;gap:10px;padding:2px 0}
   .tree .nm{color:var(--ink)} .tree .ct{color:var(--muted);font-variant-numeric:tabular-nums}
   .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-  .filters button{font-family:var(--mono);font-size:11px;letter-spacing:.04em;border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:20px;padding:5px 12px;cursor:pointer}
-  .filters button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .filters button{font-family:var(--sans);font-weight:500;font-size:12px;border:1px solid var(--border-strong);background:var(--panel);color:var(--ink);border-radius:980px;padding:6px 13px;cursor:pointer}
+  .filters button.on{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 8px 20px -6px rgba(214,45,42,.55),0 0 0 4px rgba(214,45,42,.12)}
   :root[data-theme="dark"] .filters button.on{color:var(--bg)}
   .note{font-size:11.5px;color:var(--muted);margin-top:8px}
-  .adset{background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:18px;padding:2px 16px}
-  .adset>summary{cursor:pointer;font-weight:600;font-size:13px;padding:12px 0;list-style:none;color:var(--ink)}
+  .adset{background:var(--panel);border:0;box-shadow:0 0 0 1px var(--border);border-radius:var(--r-card);margin-bottom:10px;padding:2px 18px}
+  .adset>summary{cursor:pointer;font-weight:700;font-size:14px;padding:15px 0;list-style:none;color:var(--ink)}
   .adset>summary::-webkit-details-marker{display:none}
-  .adset>summary::before{content:"▸ ";color:var(--muted)} .adset[open]>summary::before{content:"▾ "}
+  .adset>summary{display:flex;justify-content:space-between;align-items:center}
+  .adset>summary::after{content:"›";font-size:18px;color:var(--faint);transition:transform .2s var(--ease)} .adset[open]>summary::after{transform:rotate(90deg)}
   .adsetBody{padding:6px 0 16px}
   .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px}
   .fld{display:flex;flex-direction:column;gap:4px} .fld.full{grid-column:1/3}
-  .fld label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
-  .fld input{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;outline:none}
+  .fld label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+  .fld input{font-size:13px;color:var(--ink);background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:9px 12px;outline:none}
   .fld input:focus{border-color:var(--ink)}
   .offrow{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;margin-bottom:6px}
   .offrow .on{font-size:12px;color:var(--ink-2)}
   .offrow input,.offrow select{font-family:var(--mono);font-size:11.5px;color:var(--ink);background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;outline:none;width:100%}
   .offrow select:focus{border-color:var(--ink)}
-  .subh{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
+  .subh{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:16px 0 8px}
 </style>
 <script src="/os.js" defer></script>
 </head>
 <body>
-<div class="wrap">
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:4px">
+<div class="page view">
+  <div class="os-screen-head">
     <div>
-      <h1 style="font-size:20px;font-weight:600;margin:0">Active Directory</h1>
-      <p style="font-size:13px;color:var(--muted);margin:6px 0 0;max-width:640px">A read-only mirror of on-prem AD, posted by the agent on the domain controller. The OS compares it against the employee record to surface accounts that need cleanup. Nothing here changes AD.</p>
+      <h1>Active Directory</h1>
+      <div class="os-question">Your on-prem directory, compared against the roster to find accounts that need cleanup. Read only.</div>
     </div>
-    <button class="os-btn" id="refresh">Refresh</button>
+    <div class="os-actions"><button class="os-btn" id="refresh">Refresh</button></div>
   </div>
   <details id="adset" class="adset">
     <summary>New-hire provisioning settings</summary>

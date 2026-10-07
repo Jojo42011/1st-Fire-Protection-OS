@@ -9,9 +9,8 @@
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/brand/site-theme.css" />
 <style>
-  .screen{max-width:none}
   .embed .hub-intro{display:none!important}
-  .embed .screen{padding-top:4px}
+  .embed .page{padding-top:4px}
   .sp-note{display:flex;gap:9px;align-items:flex-start;background:var(--amber-bg);border-radius:10px;padding:10px 14px;margin:10px 0 4px;font-weight:500;font-size:12px;line-height:1.5;color:var(--amber-ink)}
   .tag{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:2px 6px;border-radius:5px;white-space:nowrap}
   .tag.crit{background:var(--money-bg,#FBEBE9);color:var(--money)}
@@ -30,12 +29,11 @@
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 </head>
 <body>
-<div class="screen">
-  <div class="hub-intro">
-    <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Access governance · Entra × BambooHR</p>
-    <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">SharePoint access</h1>
-    <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:74ch">Every <b>SG-SP</b> security group and who is in it, matched to the BambooHR roster. Remove disabled accounts, former staff, and non-employees, one click or all at once. Changes apply live in Entra.</p>
-  </div>
+<div class="page view">
+  <div class="os-screen-head hub-intro"><div>
+    <h1>SharePoint access</h1>
+    <div class="os-question">Who is in each SharePoint group, checked against the roster. Remove former staff in one click; changes apply in Entra.</div>
+  </div></div>
 
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
 

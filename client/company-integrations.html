@@ -8,8 +8,8 @@
 <style>
   /* System-of-record cards: the kit has no connector card, so this small block only lays one out. */
   .ic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
-  .ic{border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);padding:17px 18px;box-shadow:var(--sh-rest);display:flex;flex-direction:column;gap:12px}
-  .ic.off{border-style:dashed;border-color:var(--border-strong,#c9ccd6);background:var(--fill)}
+  .ic{border:1px solid var(--border-card,var(--border));border-radius:var(--r-card);background:var(--panel);padding:17px 18px;box-shadow:var(--sh-rest);display:flex;flex-direction:column;gap:12px}
+  .ic.off{background:var(--panel-alt)}
   /* per-purpose mail sender editor */
   .ms-list{display:flex;flex-direction:column;gap:8px}
   .ms-row{display:flex;align-items:center;gap:8px}

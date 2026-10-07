@@ -165,10 +165,10 @@ function renderList(){
   var rows=SEATS.filter(PRED[FILTER]||PRED.all);
   // Lead with terminated-then-live access, most expensive first.
   rows.sort(function(a,b){ var ao=a.reason_kind==='terminated'?0:1, bo=b.reason_kind==='terminated'?0:1; return ao-bo || (b.cost_monthly-a.cost_monthly); });
-  document.getElementById('listn').textContent='· '+rows.length;
+  document.getElementById('listn').textContent=rows.length;
 
   var total=SEATS.length, note=document.getElementById('filterNote');
-  if(FILTER==='all') note.textContent='Showing all '+total+' seat'+(total===1?'':'s')+' that no active employee holds.';
+  if(FILTER==='all') note.textContent=total+' seat'+(total===1?'':'s')+' held by someone who is not an active employee.';
   else if(rows.length===total) note.textContent='“'+chipLabel(FILTER)+'” · all '+total+' seats match, so nothing is hidden.';
   else note.textContent='Filtered to “'+chipLabel(FILTER)+'” · '+rows.length+' of '+total+' seats.';
 
@@ -187,8 +187,13 @@ function renderList(){
       if(r.reclaim_status) return '<span class="muted">n/a</span>';
       return '<button class="os-btn" style="padding:6px 11px;font-size:12px" data-flag="'+r.seat_id+'">Flag for reclaim</button>';}}
   ];
-  document.getElementById('list').innerHTML=OS.table(cols, rows, {empty:'No seats need cleanup in this view.'});
+  var shown=SHOW_ALL?rows:rows.slice(0,8);
+  document.getElementById('list').innerHTML=OS.table(cols, shown, {empty:'No seats need cleanup in this view.'})+
+    (rows.length>8?'<div class="note-line"><button class="linkbtn" id="showAllSeats">'+(SHOW_ALL?'Show fewer':'Show all '+rows.length)+'</button> or work them in <button class="linkbtn" data-go-licenses>License cleanup</button></div>':'');
+  var sa=document.getElementById('showAllSeats'); if(sa) sa.addEventListener('click',function(){ SHOW_ALL=!SHOW_ALL; renderList(); });
+  var gl=document.querySelector('[data-go-licenses]'); if(gl) gl.addEventListener('click',function(){ OS.go('spend'); });
 }
+var SHOW_ALL=false;
 
 function renderFoot(){
   var s=SUMMARY||{};

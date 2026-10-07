@@ -226,3 +226,12 @@ details.setup[open]>summary::after{transform:rotate(90deg)}
 .mmenu .mlist button:hover{background:var(--bg)}
 .mmenu .mlist .mh{padding:6px 11px 4px;font-weight:800;font-size:10px;letter-spacing:.08em;color:var(--faint)}
 details.setup>summary span span{font-weight:500;font-size:12.5px;color:var(--muted)}
+
+/* ---- one page width + one section-title style across every screen ---- */
+.os-wrap{max-width:1180px;margin:0 auto;padding:28px clamp(18px,3vw,36px) 64px}
+@media(max-width:640px){.os-wrap{padding:18px 14px 52px}}
+.os-sec{font-weight:800;font-size:17px;letter-spacing:-.02em;text-transform:none;color:var(--ink);margin:30px 0 10px;display:flex;align-items:baseline;gap:6px}
+.os-sec .n{font-weight:600;font-size:13px;color:var(--faint)}
+/* long explanatory footnotes read as clutter in the app; the pages explain themselves */
+.os-foot{display:none}
+.os-filter-note{font-size:12.5px}

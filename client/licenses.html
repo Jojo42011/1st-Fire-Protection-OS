@@ -29,18 +29,16 @@
   <script src="/motion.js" defer></script>
 </head>
 <body>
-<div class="screen">
+<div class="page view">
 
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+  <div class="os-screen-head">
     <div>
-      <p style="font-weight:700;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)">Cost Recovery &middot; HR &times; Software Licenses</p>
-      <h1 style="font-weight:800;font-size:22px;letter-spacing:-.02em;color:var(--ink);margin-top:6px">Wasted spend</h1>
-      <p style="font-weight:500;font-size:13px;line-height:1.6;color:var(--ink-3);margin-top:8px;max-width:72ch">Connects the HR roster to your software seats and finds every license still being paid for someone who no longer works here. Flag a seat to draft the offboard task; a human approves it. Nothing gets cancelled automatically.</p>
+      <h1>License cleanup</h1>
+      <div class="os-question">Software seats still being paid for people who no longer work here.</div>
     </div>
-    <span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span>
+    <div class="os-actions"><span id="status-badge" class="badge demo"><span class="d"></span>Standalone</span></div>
   </div>
 
-  <!-- headline: the one number that matters -->
   <div class="card" style="display:flex;align-items:center;gap:26px;padding:20px 22px;flex-wrap:wrap">
     <div id="headline-savings">$0<small>Reclaimable per year</small></div>
     <div style="width:1px;height:52px;background:var(--divider)"></div>
@@ -51,31 +49,12 @@
     </div>
   </div>
 
-  <!-- summary KPIs -->
   <div class="kpis" id="kpis"></div>
 
-  <!-- per-vendor cards -->
+  <div class="sec-h"><h2>By vendor</h2></div>
   <div class="kpis" id="vendors"></div>
 
-  <!-- import seats: universal CSV / admin-export path (works for all six vendors, no keys) -->
-  <div class="card" style="padding:16px 18px">
-    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:11px">
-      <span class="sect-h" style="padding:0">Import seats</span>
-      <span style="font-weight:500;font-size:12px;color:var(--muted)">Paste a CSV export from any vendor console, with flexible columns like <span class="key">email</span>, <span class="key">name</span>, <span class="key">product</span>, <span class="key">cost_monthly</span>. Re-importing replaces that vendor's manual seats.</span>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
-      <select id="imp-vendor" class="btn" style="min-width:150px"></select>
-      <textarea id="imp-csv" placeholder="email,name,product,cost_monthly&#10;jdoe@1stfpservices.com,Jane Doe,Bluebeam Revu,30" style="flex:1;min-width:260px;min-height:78px;font-family:monospace;font-size:12px;padding:10px 12px;border:1px solid var(--divider);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical"></textarea>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <input type="file" id="imp-file" accept=".csv,text/csv" style="display:none" />
-        <button class="btn" onclick="document.getElementById('imp-file').click()">Choose file…</button>
-        <button class="btn-primary" id="imp-go" onclick="doImport(this)">Import</button>
-      </div>
-    </div>
-    <div id="imp-msg" style="font-weight:500;font-size:12px;color:var(--muted);margin-top:9px">&nbsp;</div>
-  </div>
-
-  <!-- the featured design table: Seats to reclaim (fed by d.reclaimable) -->
+  <div style="height:14px"></div>
   <div class="card card-clip">
     <div class="card-head">
       <h2>Seats to reclaim</h2>
@@ -91,7 +70,6 @@
     </table>
   </div>
 
-  <!-- off-roster: seats with no matching employee (shared mailboxes or missing work email) -->
   <div class="card card-clip" id="review-card" style="display:none">
     <div class="card-head">
       <h2>Not on your roster</h2>
@@ -105,25 +83,35 @@
     </table>
   </div>
 
-  <!-- full inventory (left) + reclaim queue & connect hint (rail) -->
-  <div class="split">
-    <div class="card card-clip">
-      <div class="card-head"><h2>Full seat inventory</h2><span style="font-weight:500;font-size:12px;color:var(--muted)">all seats under management</span></div>
+  <div class="sec-h"><h2>Reclaim queue</h2></div>
+  <div id="queue" class="stack"></div>
+
+  <div class="sec-h"><h2>Seat data</h2></div>
+  <details class="setup"><summary><span><b>Import seats</b><br><span>Paste or upload a CSV export from any vendor console</span></span></summary>
+    <div style="padding:0 18px 18px"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:11px">
+      <span class="sect-h" style="padding:0">Import seats</span>
+      <span style="font-weight:500;font-size:12px;color:var(--muted)">Paste a CSV export from any vendor console, with flexible columns like <span class="key">email</span>, <span class="key">name</span>, <span class="key">product</span>, <span class="key">cost_monthly</span>. Re-importing replaces that vendor's manual seats.</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+      <select id="imp-vendor" class="btn" style="min-width:150px"></select>
+      <textarea id="imp-csv" placeholder="email,name,product,cost_monthly&#10;jdoe@1stfpservices.com,Jane Doe,Bluebeam Revu,30" style="flex:1;min-width:260px;min-height:78px;font-family:monospace;font-size:12px;padding:10px 12px;border:1px solid var(--divider);border-radius:10px;background:var(--bg);color:var(--ink);resize:vertical"></textarea>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input type="file" id="imp-file" accept=".csv,text/csv" style="display:none" />
+        <button class="btn" onclick="document.getElementById('imp-file').click()">Choose file…</button>
+        <button class="btn-primary" id="imp-go" onclick="doImport(this)">Import</button>
+      </div>
+    </div>
+    <div id="imp-msg" style="font-weight:500;font-size:12px;color:var(--muted);margin-top:9px">&nbsp;</div>
+  </div>
+  </details>
+  <details class="setup"><summary><span><b>Full seat inventory</b><br><span>Every seat under management</span></span></summary>
+    <div class="card-clip" style="border-top:1px solid var(--divider)">
       <table>
         <thead><tr><th>Software</th><th>Assigned to</th><th>Source</th><th class="right">Per month</th></tr></thead>
         <tbody id="seat-rows"></tbody>
       </table>
     </div>
-    <div class="stack">
-      <div>
-        <div class="sect-h">Reclaim queue</div>
-        <div id="queue" class="stack"></div>
-      </div>
-      <div class="card conn" style="padding:14px 16px;border-left:3px solid var(--indigo)">
-        <b>Go live:</b> <span class="key">BAMBOO_*</span> pulls your real active + terminated roster; <span class="key">MS_GRAPH_*</span> pulls Microsoft 365 seats via Graph. Adobe (UMAPI) and Autodesk have APIs too. <b>Bluebeam, HydraCAD and HFSS have no public API</b>, so import those by CSV above. Every vendor works by CSV today.
-      </div>
-    </div>
-  </div>
+  </details>
 
 </div>
 
