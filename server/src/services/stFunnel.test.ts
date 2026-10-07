@@ -68,3 +68,28 @@ test('the report covers last year, this year and the last 12 months, by office, 
   assert.match(html, /\$2,500/);
   assert.doesNotMatch(html, /—|–/);
 });
+
+test('quotes, deficiencies and invoices with no job office take the office that serves that location or customer', () => {
+  const d: FunnelData = {
+    jobs: [
+      { id: 10, type: 'inspection', completedOn: t('2026-03-01'), customer: { id: 7 }, location: { id: 70 }, assignedOffice: { name: '1st FP Waco' } },
+      { id: 11, type: 'inspection', completedOn: t('2026-03-02'), customer: { id: 7 }, location: { id: 71 }, assignedOffice: { name: '1st FP Houston' } },
+      { id: 12, type: 'inspection', completedOn: t('2026-03-03'), customer: { id: 7 }, location: { id: 72 }, assignedOffice: { name: '1st FP Houston' } },
+    ],
+    deficiencies: [
+      { id: 1, reportedOn: t('2026-03-01'), location: { id: 70 } },                  // by location: Waco
+      { id: 2, reportedOn: t('2026-03-01'), location: { id: 999, address: { city: 'Lubbock' } } }, // by city
+      { id: 3, reportedOn: t('2026-03-01') },                                          // nothing to go on
+    ],
+    quotes: [{ id: 1, status: 'submitted', totalPrice: '100', latestSubmission: t('2026-03-05'), customer: { id: 7 } }], // customer: Houston (2 of 3 jobs)
+    invoices: [{ id: 1, totalPrice: 50, transactionDate: t('2026-03-06'), job: { id: 555, type: 'service_call' }, location: { id: 70 } }],
+  };
+  assert.equal(computeFunnel(d, ytd, 'waco').deficiencies.count, 1);
+  assert.equal(computeFunnel(d, ytd, 'lubbock').deficiencies.count, 1);
+  assert.equal(computeFunnel(d, ytd, 'houston').quotesSent.count, 1);
+  assert.equal(computeFunnel(d, ytd, 'waco').repairsInvoiced.usd, 50);
+  const r = buildReport(d, new Date('2026-10-07T15:00:00Z'));
+  const none = r.byOffice.rows.find((x) => x.label === 'Office not identified')!;
+  assert.equal(none.n.deficiencies.count, 1, 'whatever cannot be placed is shown, so offices add up to the total');
+  assert.match(reportHtml(r), /Completed jobs by type: inspection \(3\)/);
+});

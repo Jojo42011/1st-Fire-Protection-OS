@@ -428,21 +428,21 @@ setTimeout(() => {
 // saves the result (GET /api/reports/st-funnel) and emails it.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');
-  if (getState('st_funnel_email_v1') === '1') return;
+  if (getState('st_funnel_email_v2') === '1') return; // v2: offices filled in from location / customer
   const f = require('./services/stFunnel');
   f.runFunnelReport().then(async (r: any) => {
     setState('st_funnel_report', JSON.stringify(r));
     const { sendMail } = require('./services/msGraphMail');
     const sender = require('./services/mailSenders').senderFor('reports');
-    const out = await sendMail('devon.booker@1stfpservices.com', 'ServiceTrade repair funnel', f.reportHtml(r), sender ? { from: sender.address, fromName: sender.name } : undefined);
-    if (out.ok) { setState('st_funnel_email_v1', '1'); console.log('[st-funnel] report emailed'); }
+    const out = await sendMail('devon.booker@1stfpservices.com', 'ServiceTrade repair funnel (offices corrected)', f.reportHtml(r), sender ? { from: sender.address, fromName: sender.name } : undefined);
+    if (out.ok) { setState('st_funnel_email_v2', '1'); console.log('[st-funnel] report emailed'); }
     else console.warn('[st-funnel] email not sent:', out.error);
   }).catch(async (e: Error) => {
     console.warn('[st-funnel] report failed:', e.message);
     // Say so once, rather than leaving the request silently unanswered.
     const { sendMail } = require('./services/msGraphMail');
     const out = await sendMail('devon.booker@1stfpservices.com', 'ServiceTrade repair funnel: could not run', `<p>The ServiceTrade repair funnel report could not be built: ${String(e.message).replace(/</g, '&lt;')}</p>`).catch(() => ({ ok: false }));
-    if (out.ok) setState('st_funnel_email_v1', '1');
+    if (out.ok) setState('st_funnel_email_v2', '1');
   });
 }, 1000 * 90).unref();
 setInterval(() => { void runDueSyncs(); }, SYNC_TICK_MS).unref();

@@ -1,6 +1,7 @@
 import { getDb } from '../db/index';
 import { stGet, stConfigured } from './servicetrade';
 import { canonicalOffice, officeLabel } from '../os/office';
+import { cityToOffice } from './deficiencySync';
 
 /**
  * The repair funnel, live from ServiceTrade: deficiencies found -> quotes sent -> quotes approved ->
@@ -17,10 +18,12 @@ import { canonicalOffice, officeLabel } from '../os/office';
  *  - Office: the job's assigned office (the deficiency's job, the quote's linked job, the invoice's job).
  */
 
-export interface StDef { id: number; status?: string; reportedOn?: number | null; created?: number | null; job?: { id?: number } | null }
-export interface StQuoteRow { id: number; status?: string; totalPrice?: string | number; latestSubmission?: number | null; created?: number | null; deficiencyJobs?: any[]; assignedOffice?: { name?: string } | null; customer?: { id?: number } | null }
-export interface StInvoiceRow { id: number; totalPrice?: string | number; transactionDate?: number | null; job?: { id?: number; type?: string } | null; status?: string }
-export interface StJobRow { id: number; type?: string; completedOn?: number | null; customer?: { id?: number } | null; assignedOffice?: { name?: string } | null }
+type Ref = { id?: number } | null;
+type LocRef = { id?: number; address?: { city?: string } | null; company?: Ref } | null;
+export interface StDef { id: number; status?: string; reportedOn?: number | null; created?: number | null; job?: { id?: number } | null; location?: LocRef; customer?: Ref }
+export interface StQuoteRow { id: number; status?: string; totalPrice?: string | number; latestSubmission?: number | null; created?: number | null; deficiencyJobs?: any[]; assignedOffice?: { name?: string } | null; customer?: Ref; location?: LocRef }
+export interface StInvoiceRow { id: number; totalPrice?: string | number; transactionDate?: number | null; job?: { id?: number; type?: string } | null; status?: string; customer?: Ref; location?: LocRef }
+export interface StJobRow { id: number; type?: string; completedOn?: number | null; customer?: Ref; location?: LocRef; assignedOffice?: { name?: string } | null }
 
 export interface FunnelData { deficiencies: StDef[]; quotes: StQuoteRow[]; invoices: StInvoiceRow[]; jobs: StJobRow[] }
 export interface Period { label: string; from: string; to: string } // YYYY-MM-DD, inclusive
@@ -43,27 +46,63 @@ const dayOf = (unix: number | null | undefined): string | null => (unix && unix 
 const inP = (d: string | null, p: Period) => !!d && d >= p.from && d <= p.to;
 
 /** Compute the funnel for one period, optionally for one office key. Pure. */
-export function computeFunnel(data: FunnelData, p: Period, office: string | null = null): FunnelNumbers {
+/**
+ * Who serves what. ServiceTrade leaves the office blank on most quotes and on deficiencies, so an
+ * item's office is found in order: its own job's assigned office, then the office that most often
+ * serves that service location, then that customer, then the location's city. null when none match.
+ */
+export interface OfficeResolver { job: (id: number | null) => string | null; of: (x: { job?: any; location?: LocRef; customer?: Ref; jobs?: number[]; assigned?: string | null }) => string | null }
+export function officeResolver(data: FunnelData): OfficeResolver {
   const jobOffice = new Map<number, string>();
-  const jobType = new Map<number, string>();
-  for (const j of data.jobs) {
-    if (j.assignedOffice?.name) jobOffice.set(j.id, canonicalOffice(j.assignedOffice.name));
-    if (j.type) jobType.set(j.id, j.type);
-  }
-  const officeOfJob = (jid: number | null) => (jid != null ? jobOffice.get(jid) || null : null);
-  const quoteJobs = (q: StQuoteRow) => (q.deficiencyJobs || []).map(jobIdOf).filter((x): x is number => x != null);
-  const quoteOffice = (q: StQuoteRow) => {
-    for (const jid of quoteJobs(q)) { const o = officeOfJob(jid); if (o) return o; }
-    return q.assignedOffice?.name ? canonicalOffice(q.assignedOffice.name) : null;
+  const tally = (m: Map<number, Map<string, number>>, id: number | undefined | null, o: string) => {
+    if (!id) return;
+    if (!m.has(id)) m.set(id, new Map());
+    const t = m.get(id)!; t.set(o, (t.get(o) || 0) + 1);
   };
-  const keep = (o: string | null) => office == null || o === office;
+  const byLoc = new Map<number, Map<string, number>>();
+  const byCust = new Map<number, Map<string, number>>();
+  for (const j of data.jobs) {
+    const o = j.assignedOffice?.name ? canonicalOffice(j.assignedOffice.name) : '';
+    if (!o) continue;
+    jobOffice.set(j.id, o);
+    tally(byLoc, j.location?.id, o);
+    tally(byCust, j.customer?.id ?? j.location?.company?.id, o);
+  }
+  const top = (m: Map<number, Map<string, number>>, id: number | undefined | null) => {
+    const t = id ? m.get(Number(id)) : undefined;
+    if (!t) return null;
+    let best: string | null = null, n = 0;
+    for (const [o, c] of t) if (c > n) { best = o; n = c; }
+    return best;
+  };
+  const job = (id: number | null) => (id != null ? jobOffice.get(id) || null : null);
+  return {
+    job,
+    of: (x) => {
+      for (const jid of [jobIdOf(x.job), ...(x.jobs || [])]) { const o = job(jid ?? null); if (o) return o; }
+      if (x.assigned) { const o = canonicalOffice(x.assigned); if (o) return o; }
+      return top(byLoc, x.location?.id) || top(byCust, x.customer?.id ?? x.location?.company?.id)
+        || cityToOffice(x.location?.address?.city) || null;
+    },
+  };
+}
+
+export function computeFunnel(data: FunnelData, p: Period, office: string | null = null, res: OfficeResolver = officeResolver(data)): FunnelNumbers {
+  const jobType = new Map<number, string>();
+  for (const j of data.jobs) if (j.type) jobType.set(j.id, j.type);
+  const quoteJobs = (q: StQuoteRow) => (q.deficiencyJobs || []).map(jobIdOf).filter((x): x is number => x != null);
+  const quoteOffice = (q: StQuoteRow) => res.of({ jobs: quoteJobs(q), assigned: q.assignedOffice?.name || null, location: q.location, customer: q.customer });
+  const defOffice = (d: StDef) => res.of({ job: d.job, location: d.location, customer: d.customer });
+  const invOffice = (i: StInvoiceRow) => res.of({ job: i.job, location: i.location, customer: i.customer });
+  const UNKNOWN = '__none__';
+  const keep = (o: string | null) => office == null || (office === UNKNOWN ? !o : o === office);
 
   // quotes by linked job, for deficiency $ and days-to-quote
   const quotesByJob = new Map<number, StQuoteRow[]>();
   for (const q of data.quotes) for (const jid of quoteJobs(q)) { if (!quotesByJob.has(jid)) quotesByJob.set(jid, []); quotesByJob.get(jid)!.push(q); }
 
   // 1. deficiencies found
-  const defs = data.deficiencies.filter((d) => inP(dayOf(d.reportedOn ?? d.created ?? null), p) && keep(officeOfJob(jobIdOf(d.job))));
+  const defs = data.deficiencies.filter((d) => inP(dayOf(d.reportedOn ?? d.created ?? null), p) && keep(defOffice(d)));
   const linkedQuotes = new Map<number, number>();
   let quoted = 0;
   const gaps: number[] = [];
@@ -86,7 +125,7 @@ export function computeFunnel(data: FunnelData, p: Period, office: string | null
     if (!inP(dayOf(inv.transactionDate ?? null), p)) return false;
     const jid = jobIdOf(inv.job);
     const type = inv.job?.type || (jid != null ? jobType.get(jid) : undefined) || '';
-    return REPAIR_TYPE.test(type) && keep(officeOfJob(jid));
+    return REPAIR_TYPE.test(type) && keep(invOffice(inv));
   });
 
   gaps.sort((a, b) => a - b);
@@ -153,6 +192,7 @@ export interface FunnelReport {
   byOffice: { period: Period; rows: { office: string; label: string; n: FunnelNumbers }[] };
   customers: { accounts: number; locations: number; activeAccounts: number };
   repairJobTypes: Record<string, number>;
+  jobTypes?: Record<string, number>;
   fetched: { deficiencies: number; quotes: number; invoices: number; jobs: number };
 }
 
@@ -166,19 +206,28 @@ export function buildReport(data: FunnelData, now = new Date()): FunnelReport {
     { label: 'Last 12 months', from: ttmFrom, to: today },
   ];
   const ttm = periods[2];
+  const res = officeResolver(data);
   const offices = new Set<string>();
   for (const j of data.jobs) if (j.assignedOffice?.name) { const k = canonicalOffice(j.assignedOffice.name); if (k) offices.add(k); }
-  const rows = [...offices].map((o) => ({ office: o, label: officeLabel(o) || o, n: computeFunnel(data, ttm, o) }))
+  const rows = [...offices].map((o) => ({ office: o, label: officeLabel(o) || o, n: computeFunnel(data, ttm, o, res) }))
     .filter((r) => r.n.deficiencies.count || r.n.quotesSent.count || r.n.repairsInvoiced.count)
     .sort((a, b) => b.n.repairsInvoiced.usd - a.n.repairsInvoiced.usd);
+  const none = computeFunnel(data, ttm, '__none__', res);
+  if (none.deficiencies.count || none.quotesSent.count || none.repairsInvoiced.count) rows.push({ office: '', label: 'Office not identified', n: none });
   const repairJobTypes: Record<string, number> = {};
-  for (const j of data.jobs) if (j.type && REPAIR_TYPE.test(j.type)) repairJobTypes[j.type] = (repairJobTypes[j.type] || 0) + 1;
+  const jobTypes: Record<string, number> = {};
+  for (const j of data.jobs) {
+    const t = j.type || '(none)';
+    jobTypes[t] = (jobTypes[t] || 0) + 1;
+    if (j.type && REPAIR_TYPE.test(j.type)) repairJobTypes[j.type] = (repairJobTypes[j.type] || 0) + 1;
+  }
   return {
     generatedAt: now.toISOString(),
     periods: periods.map((p) => ({ period: p, total: computeFunnel(data, p) })),
     byOffice: { period: ttm, rows },
     customers: customerCounts(data, now),
     repairJobTypes,
+    jobTypes,
     fetched: { deficiencies: data.deficiencies.length, quotes: data.quotes.length, invoices: data.invoices.length, jobs: data.jobs.length },
   };
 }
@@ -218,6 +267,8 @@ export function reportHtml(r: FunnelReport): string {
       <li>Quotes sent uses each quote's latest send date. Approved means a quote sent in that period that is now accepted.</li>
       <li>Repairs invoiced are invoices dated in the period on repair-type jobs: ${esc(types)}.</li>
       <li>Days to quote runs from the deficiency date to the first sent quote linked to the same job.</li>
+      <li>Offices: an item's own job office, else the office that most often serves that location, else that customer, else the location's city.</li>
+      ${r.jobTypes ? `<li>Completed jobs by type: ${esc(Object.entries(r.jobTypes).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} (${v.toLocaleString()})`).join(', '))}.</li>` : ''}
       <li>Read ${r.fetched.deficiencies.toLocaleString()} deficiencies, ${r.fetched.quotes.toLocaleString()} quotes, ${r.fetched.invoices.toLocaleString()} invoices and ${r.fetched.jobs.toLocaleString()} completed jobs.</li>
     </ul></div>`;
 }
