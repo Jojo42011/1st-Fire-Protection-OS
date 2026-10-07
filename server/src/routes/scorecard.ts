@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { getDb } from '../db/index';
 import { CLOSED_STATUSES, AVG_REPAIR_USD } from '../services/deficiencySync';
+import { runFunnelReport, reportHtml } from '../services/stFunnel';
+import { getState, setState } from '../db/schema';
 
 /**
  * Per-office scoreboard. One comparative row per office, built entirely from the local mirror so
@@ -95,6 +97,24 @@ router.get('/api/scorecard', (_req, res) => {
   };
 
   res.json({ rows, totals });
+});
+
+/* The ServiceTrade repair funnel, computed live (slow: it reads every deficiency, quote and invoice).
+ * GET returns the last result; POST starts a fresh run in the background. */
+let funnelRunning = false;
+router.get('/api/reports/st-funnel', (req, res) => {
+  const raw = getState('st_funnel_report');
+  const r = raw ? JSON.parse(raw) : null;
+  if (req.query.format === 'html') return res.type('html').send(r ? reportHtml(r) : '<p>No report yet. POST /api/reports/st-funnel to run one.</p>');
+  res.json({ ok: true, running: funnelRunning, report: r });
+});
+router.post('/api/reports/st-funnel', (_req, res) => {
+  if (funnelRunning) return res.json({ ok: true, started: false, running: true });
+  funnelRunning = true;
+  runFunnelReport().then((r) => setState('st_funnel_report', JSON.stringify(r)))
+    .catch((e) => console.warn('[st-funnel]', (e as Error).message))
+    .finally(() => { funnelRunning = false; });
+  res.json({ ok: true, started: true });
 });
 
 export default router;
