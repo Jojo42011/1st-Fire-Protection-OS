@@ -65,6 +65,7 @@ router.get('/tasks/done/:token', (req, res) => {
   res.set('Cache-Control', 'no-store'); res.set('Referrer-Policy', 'no-referrer');
   const x = taskForToken(req.params.token);
   if (!x) return res.status(404).type('html').send(invalid());
+  if (x.test) return res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1><p class="sub">Test email: this is a sample task, so nothing on your list changes.</p>${box(x.task)}<form method="post"><button>Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
   if (x.task.status === 'done') return res.type('html').send(page('Already done', `<h1 class="ok">Already done</h1>${box(x.task)}<a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
   res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1>${box(x.task)}<form method="post"><button>Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
 });
@@ -72,6 +73,7 @@ router.post('/tasks/done/:token', express.urlencoded({ extended: false, limit: '
   res.set('Cache-Control', 'no-store');
   const x = taskForToken(req.params.token);
   if (!x) return res.status(404).type('html').send(invalid());
+  if (x.test) return res.type('html').send(page('Done', `<h1 class="ok">The button works</h1>${box(x.task)}<p class="sub">This was a sample task from the test email, so nothing changed. Real tasks come off your list and out of the next email.</p><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
   updateTask(x.email, x.task.id, { done: true });
   res.type('html').send(page('Done', `<h1 class="ok">Done</h1>${box(x.task)}<p class="sub">It is off your list and out of tomorrow's email.</p><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
 });

@@ -108,11 +108,29 @@ export function verifyDone(token: string, now = Date.now()): { taskId: number; e
     return { taskId: d.t, email: d.e };
   } catch { return null; }
 }
-export function taskForToken(token: string): { task: PersonalTask; email: string } | null {
+export function taskForToken(token: string): { task: PersonalTask; email: string; test?: boolean } | null {
   const v = verifyDone(token);
   if (!v) return null;
+  if (v.taskId <= 0) { // a sample task from the test email: the link works, nothing is stored
+    const task = sampleTasks(v.email, centralNow().date).find((t) => t.id === v.taskId);
+    return task ? { task, email: v.email, test: true } : null;
+  }
   const task = getTask(v.email, v.taskId);
   return task ? { task, email: v.email } : null;
+}
+
+/** Made-up tasks for the test email (ids 0 and below never match a real task). */
+export function sampleTasks(owner: string, today: string): PersonalTask[] {
+  const mk = (id: number, title: string, due: number | null, notes: string | null = null): PersonalTask => ({
+    id, owner_email: owner, title, notes, due_date: due == null ? null : addDays(today, due), status: 'open', created_at: today, done_at: null,
+  });
+  return [
+    mk(-1, 'Sample: renew the domain', -2, 'Example of an overdue task with a note'),
+    mk(-2, 'Sample: order laptops for the new hires', 0),
+    mk(-3, 'Sample: review the Inspect Point invoice', 3),
+    mk(-4, 'Sample: quarterly AD cleanup', 21),
+    mk(-5, 'Sample: look into Teams phone pricing', null),
+  ];
 }
 
 /* ─────────── the daily email ─────────── */
@@ -125,7 +143,10 @@ export interface Digest { subject: string; html: string; count: number }
 
 /** Group open tasks into overdue / today / next 7 days / later / no date and render the email. */
 export function buildDigest(owner: string, base: string, now = new Date()): Digest | null {
-  const open = listTasks(owner).filter((t) => t.status === 'open');
+  return renderDigest(owner, listTasks(owner).filter((t) => t.status === 'open'), base, now);
+}
+
+function renderDigest(owner: string, open: PersonalTask[], base: string, now = new Date()): Digest | null {
   if (!open.length) return null;
   const today = centralNow(now).date, week = addDays(today, 7);
   const groups: { label: string; tone: string; items: PersonalTask[] }[] = [
@@ -175,6 +196,16 @@ export async function sendDigestNow(owner: string, base: string, now = new Date(
   if (!d) return { ok: false, error: 'You have no open tasks, so there is nothing to send.' };
   const out = await sendMail(owner, d.subject, d.html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true, count: d.count } : { ok: false, error: (out as any).error || 'send failed' };
+}
+
+/** A test of the daily email with sample tasks; its Mark done buttons open a test page. */
+export async function sendTestDigest(owner: string, base: string, now = new Date()): Promise<{ ok: boolean; error?: string }> {
+  if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 mail is not connected.' };
+  const sender = senderFor('onboarding');
+  if (!sender) return { ok: false, error: 'No sending mailbox is set.' };
+  const d = renderDigest(owner, sampleTasks(owner, centralNow(now).date), base, now)!;
+  const out = await sendMail(owner, '[Test] ' + d.subject, d.html, { from: sender.address, fromName: sender.name });
+  return out.ok ? { ok: true } : { ok: false, error: (out as any).error || 'send failed' };
 }
 
 /** Run by the scheduler: once a day after 7am Central, email each user who has open tasks. */

@@ -431,6 +431,21 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+// One-time test of the My tasks daily email (sample tasks), for the IT manager.
+setTimeout(() => {
+  const { getState, setState } = require('./db/schema');
+  const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+  const flag = 'test_task_digest_v1';
+  try {
+    if (getState(flag) === '1') return;
+    setState(flag, '1'); // claim first so a restart mid-send never sends twice
+    require('./services/personalTasks').sendTestDigest('devon.booker@1stfpservices.com', base)
+      .then((r: { ok: boolean; error?: string }) => {
+        if (r.ok) console.log('[tasks] sent the test daily email');
+        else { setState(flag, '0'); console.warn('[tasks] test daily email not sent:', r.error); }
+      }).catch(() => setState(flag, '0'));
+  } catch (e) { console.warn('[tasks] test daily email error:', (e as Error).message); }
+}, 1000 * 60).unref();
 // One-time example of the email IT support gets for a new hire (hiring manager line included), sent
 // to the IT manager only. Built from a rolled-back request, so nothing is saved.
 setTimeout(() => {

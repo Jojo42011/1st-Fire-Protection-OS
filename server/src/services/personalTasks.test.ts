@@ -64,3 +64,11 @@ test('a signed Mark done link opens only its own task, and a tampered one does n
   assert.equal(taskForToken(signDone(t.id, ME, Date.now() - 50 * 86400000)), null, 'expired');
   assert.equal(taskForToken(signDone(t.id, 'someone@1stfpservices.com')), null, 'not a task user');
 });
+
+test('sample tasks from the test email resolve as test links and never touch the list', () => {
+  const before = listTasks(ME).length;
+  const x = taskForToken(signDone(-2, ME))!;
+  assert.equal(x.test, true);
+  assert.match(x.task.title, /^Sample: /);
+  assert.equal(listTasks(ME).length, before);
+});
