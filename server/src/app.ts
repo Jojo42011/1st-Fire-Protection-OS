@@ -431,6 +431,25 @@ setInterval(() => void sendAiosReport(), AIOS_REPORT_MS).unref();
 // also refreshes the exceptions queue.
 const SYNC_TICK_MS = 1000 * 60; // check every minute; each integration runs on its own cadence
 setTimeout(() => { void runDueSyncs(); }, 1000 * 60).unref(); // first pass ~60s after boot
+// One-time AD audit report for the IT manager: OU placement and email-signature fields vs BambooHR.
+setTimeout(() => {
+  const { getState, setState } = require('./db/schema');
+  const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+  const flag = 'ad_directory_audit_email_v1';
+  try {
+    if (getState(flag) === '1') return;
+    const { mailCredsPresent, sendMail } = require('./services/msGraphMail');
+    const { senderFor } = require('./services/mailSenders');
+    if (!mailCredsPresent()) return;
+    setState(flag, '1');
+    const a = require('./services/adDirectoryAudit');
+    const d = a.directoryAudit();
+    const sender = senderFor('onboarding');
+    sendMail('devon.booker@1stfpservices.com', `AD audit: ${d.counts.wrong_office + d.counts.default_container + d.counts.not_mapped_ou} in the wrong OU, signature fields for ${d.counts.active} people`, a.directoryAuditHtml(d, base), sender ? { from: sender.address, fromName: sender.name } : undefined)
+      .then((r: { ok: boolean; error?: string }) => { if (r.ok) console.log('[ad] sent the directory audit'); else { setState(flag, '0'); console.warn('[ad] directory audit not sent:', r.error); } })
+      .catch(() => setState(flag, '0'));
+  } catch (e) { console.warn('[ad] directory audit error:', (e as Error).message); }
+}, 1000 * 65).unref();
 // One-time test of the My tasks daily email (sample tasks), for the IT manager.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');

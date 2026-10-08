@@ -41,7 +41,7 @@ if ($Ping) {
 
 Import-Module ActiveDirectory -ErrorAction Stop
 
-$props = @('Title','mobile','department','physicalDeliveryOfficeName','mail','whenCreated',
+$props = @('Title','mobile','telephoneNumber','Description','department','physicalDeliveryOfficeName','mail','whenCreated',
            'lastLogonTimestamp','memberOf','userPrincipalName','distinguishedName','Enabled',
            'GivenName','Surname','DisplayName','SamAccountName','ObjectGUID')
 
@@ -83,6 +83,8 @@ $users = foreach ($u in $adUsers) {
     surname     = $u.Surname
     title       = $u.Title
     mobile      = $u.mobile
+    telephone   = $u.telephoneNumber
+    description = $u.Description
     department  = $u.department
     office      = $u.physicalDeliveryOfficeName
     email       = $u.mail

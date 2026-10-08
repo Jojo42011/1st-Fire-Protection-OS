@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { directoryAudit } from '../services/adDirectoryAudit';
 import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/adAudit';
 import { getDb } from '../db/index';
@@ -479,6 +480,18 @@ router.post('/api/ad-agent/jobs/:id(\\d+)/result', (req, res) => {
 /** The audit dashboard read: mirror stats, OU tree, and drift findings. Behind the normal user gate. */
 router.get('/api/ad-audit', (_req, res) => {
   res.json({ ok: true, ...auditReport() });
+});
+
+/** OU placement and email-signature fields (Title, Telephone = office main line, Mobile) against
+ *  BambooHR, plus a preview-first PowerShell for Telephone/Mobile. Read-only; nothing is written. */
+router.get('/api/ad-audit/directory', (_req, res) => {
+  try { const { script, ...rest } = directoryAudit(); res.json({ ok: true, ...rest, scriptLines: script.split('\r\n').filter((l) => /^Set-ADUser/.test(l)).length }); }
+  catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
+});
+router.get('/api/ad-audit/directory/script', (_req, res) => {
+  res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="signature-fields.ps1"');
+  res.send(directoryAudit().script);
 });
 
 /** Whether the agent token is set, so the UI can tell the admin if the DC agent can connect yet. */

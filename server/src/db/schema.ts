@@ -1491,6 +1491,9 @@ export function initDb(): void {
       synced_at  TEXT DEFAULT (datetime('now'))
     );
   `);
+  // Signature fields from AD: the Telephone (office main line) and Description, posted by newer agents.
+  addColumn('ad_users', 'telephone', 'TEXT');
+  addColumn('ad_users', 'description', 'TEXT');
 
   // Offboarding: the account/mailbox lifecycle after a termination. One request per departing person
   // routes into dated items across the SOP stages (lock down, stop paying, cut the forward, retire).

@@ -21,6 +21,8 @@ export interface AdUserIn {
   surname?: string;
   title?: string;
   mobile?: string;
+  telephone?: string;
+  description?: string;
   department?: string;
   office?: string;
   email?: string;
@@ -45,9 +47,9 @@ export function ingestInventory(users: AdUserIn[], collectedAt?: string, ous?: A
   const db = getDb();
   const insUser = db.prepare(
     `INSERT OR REPLACE INTO ad_users
-      (object_guid, sam, upn, display_name, given_name, surname, title, mobile, department, office,
+      (object_guid, sam, upn, display_name, given_name, surname, title, mobile, telephone, description, department, office,
        email, enabled, ou, dn, when_created, last_logon, synced_at)
-     VALUES (@object_guid,@sam,@upn,@display_name,@given_name,@surname,@title,@mobile,@department,@office,
+     VALUES (@object_guid,@sam,@upn,@display_name,@given_name,@surname,@title,@mobile,@telephone,@description,@department,@office,
        @email,@enabled,@ou,@dn,@when_created,@last_logon,datetime('now'))`
   );
   const insGroup = db.prepare(`INSERT INTO ad_user_groups (object_guid, sam, group_name, group_dn) VALUES (?,?,?,?)`);
@@ -73,6 +75,8 @@ export function ingestInventory(users: AdUserIn[], collectedAt?: string, ous?: A
         surname: s(u.surname),
         title: s(u.title),
         mobile: s(u.mobile),
+        telephone: s(u.telephone),
+        description: s(u.description),
         department: s(u.department),
         office: s(u.office),
         email: s(u.email),

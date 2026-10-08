@@ -116,6 +116,17 @@
       <div id="dlResult" class="note" style="margin-top:10px">Stamps every active BambooHR employee with their Office + Company on-prem, so the per-site dynamic distribution lists resolve to the right people. Run it on a domain controller, then Start-ADSyncSyncCycle -PolicyType Delta. The creation script (one list per office) is also generated below.</div>
     </div>
   </details>
+  <details id="dir" class="adset">
+    <summary>OU placement and email signature fields</summary>
+    <div id="dirBody" class="adsetBody">
+      <div class="offrow" style="grid-template-columns:auto auto 1fr;max-width:560px">
+        <button class="os-btn primary" id="dirLoad">Run audit</button>
+        <a class="os-btn" id="dirDl" href="/api/ad-audit/directory/script" download="signature-fields.ps1">Download signature fields .ps1</a>
+        <span></span>
+      </div>
+      <div id="dirResult" class="note" style="margin-top:10px">Checks every active person against BambooHR: the OU they sit in, Title, Telephone (should be their office main line) and Mobile (their cell, or a Teams number). The script previews until you add -Apply, only fills an empty Mobile, and leaves OU moves commented out.</div>
+    </div>
+  </details>
   <div id="body"></div>
 </div>
 
@@ -149,7 +160,7 @@ function renderFindings(){
     var fix=FIXABLE[f.code]&&f.sam;
     var cell=fix
       ? '<input type="checkbox" class="fchk" data-key="'+esc(keyOf(f))+'" data-sam="'+esc(f.sam)+'" data-code="'+esc(f.code)+'"'+(PICKED[keyOf(f)]?' checked':'')+'>'
-      : '<span class="sub2" title="No automatic on-prem fix">—</span>';
+      : '<span class="sub2" title="No automatic on-prem fix">none</span>';
     return '<tr><td style="width:34px;text-align:center">'+cell+'</td>'+
       '<td>'+OS.pill(f.severity,SEV[f.severity]||'neutral')+'</td>'+
       '<td><div class="who">'+esc(f.name||f.sam||f.upn||'-')+'</div><div class="sub2 mono">'+esc(f.upn||f.sam||'')+'</div></td>'+
@@ -300,7 +311,7 @@ function loadSettings(){
     document.getElementById('adsetBody').innerHTML=hint+
       '<div class="fgrid">'+
       '<div class="fld full"><label>Default OU (used when nothing else matches)</label><input id="s_ou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=New Hires,OU=Users,OU=1FP,DC=...,DC=..." value="'+esc(s.targetOu||'')+'">'+dlist+'</div>'+
-      '<div class="fld full"><label>Disabled Users OU (offboarding moves disabled accounts here — must be a SYNCED OU)</label><input id="s_disou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=Disabled Users,OU=1FP,DC=...,DC=...  (blank = do not move)" value="'+esc(s.disabledOu||'')+'"></div>'+
+      '<div class="fld full"><label>Disabled Users OU (offboarding moves disabled accounts here; it must be a SYNCED OU)</label><input id="s_disou" type="text" spellcheck="false" '+(haveOus?'list="oulist" ':'')+'placeholder="OU=Disabled Users,OU=1FP,DC=...,DC=...  (blank = do not move)" value="'+esc(s.disabledOu||'')+'"></div>'+
       '<div class="fld"><label>UPN domain</label><input id="s_dom" type="text" spellcheck="false" value="'+esc(s.upnDomain||'')+'"></div>'+
       '<div class="fld"><label>Default license SKU</label><input id="s_sku" type="text" spellcheck="false" placeholder="e.g. SPE_E3" value="'+esc(s.licenseSku||'')+'"></div>'+
       '</div>'+
@@ -414,9 +425,9 @@ function genPilot(){
   fetch('/api/ad-audit/pilot-script?group='+encodeURIComponent(group)+'&suffix='+encodeURIComponent(suffix)).then(function(r){return r.json();}).then(function(d){
     btn.disabled=false; btn.textContent='Generate';
     if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not generate.'; return; }
-    var dropList=(d.dropped||[]).map(function(x){return '<div style="font-size:11.5px;color:var(--muted)">'+esc(x.name||x.upn||'?')+' — '+esc(x.reason||'')+'</div>';}).join('');
+    var dropList=(d.dropped||[]).map(function(x){return '<div style="font-size:11.5px;color:var(--muted)">'+esc(x.name||x.upn||'?')+': '+esc(x.reason||'')+'</div>';}).join('');
     var keepList=(d.kept||[]).map(function(x){return '<div style="font-size:11.5px;color:var(--ink-2)">'+esc(x.name||x.upn||'?')+'</div>';}).join('');
-    out.innerHTML='<div style="margin-bottom:8px"><b>'+esc(d.newName)+'</b> — keeps <b>'+(d.kept||[]).length+'</b>, drops <b>'+(d.dropped||[]).length+'</b> '+
+    out.innerHTML='<div style="margin-bottom:8px"><b>'+esc(d.newName)+'</b> keeps <b>'+(d.kept||[]).length+'</b>, drops <b>'+(d.dropped||[]).length+'</b> '+
       '<button class="os-btn primary" id="pilotDl" style="margin-left:8px">Download .ps1</button></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px">'+
       '<div><div class="subh" style="margin:0 0 4px">Keep ('+(d.kept||[]).length+')</div>'+(keepList||'<div class="note">none</div>')+'</div>'+
@@ -431,6 +442,24 @@ function genPilot(){
 
 /* ---------- location distribution lists (Office/Company backfill + creation) ---------- */
 var DLPLAN=null;
+var DIR_LABEL={wrong_office:'Wrong office OU',default_container:'Default Users container',not_mapped_ou:'Not the mapped OU',unknown:'OU is not an office',ok:'OK'};
+function loadDir(){
+  var out=document.getElementById('dirResult'); out.textContent='Running...';
+  fetch('/api/ad-audit/directory').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ out.textContent=d.error||'Could not run the audit.'; return; }
+    var c=d.counts, tbl=function(head,rows){ return rows.length?'<div class="card" style="overflow-x:auto"><table><thead><tr>'+head.map(function(h){return '<th>'+esc(h)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(r){return '<tr>'+r.map(function(x){return '<td>'+x+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>':'<div class="note">None.</div>'; };
+    var bad=d.people.filter(function(p){return p.placement==='wrong_office'||p.placement==='default_container'||p.placement==='not_mapped_ou';});
+    var sig=d.people.filter(function(p){return !p.title.ok||!p.telephone.ok||p.mobile.status!=='ok';});
+    var mob=function(m){ return m.status==='ok'?'ok':m.status==='empty_fill'?'(blank) → <b>'+esc(m.bamboo)+'</b>':m.status==='empty_none'?'<span style="color:var(--amber-ink)">no cell on file</span>':m.status==='differs'?esc(m.current)+' <span class="note">(Teams number? left alone)</span>':esc(m.current)+' <span class="note">(left alone)</span>'; };
+    out.innerHTML=
+      '<div class="note" style="margin-bottom:8px">'+(d.lastSync?'AD data collected '+esc(String(d.lastSync.collectedAt||d.lastSync.at||'').slice(0,16).replace('T',' '))+' UTC. ':'No AD data yet. ')+c.active+' active people with an enabled account. '+(d.telephoneCollected?'':'Telephone and Description show as not read yet until the DC agent script is updated.')+'</div>'+
+      '<div class="subh">Wrong OU ('+bad.length+')</div>'+tbl(['Person','BambooHR office','Current OU','Suggested OU','Why'],bad.map(function(p){return [esc(p.name),esc(p.officeLabel),esc(p.ouLabel),p.expectedOu?esc(p.expectedOu.split(',').filter(function(x){return /^OU=/i.test(x);}).map(function(x){return x.slice(3);}).reverse().join(' / ')):'<span style="color:var(--amber-ink)">no OU for this office</span>',esc(p.placementNote||'')];}))+
+      '<div class="subh">What each OU holds</div>'+tbl(['OU','OU is for','People','BambooHR offices inside'],d.ouComposition.map(function(o){return [esc(o.label),o.ouOffice?esc(o.ouOffice):'<span class="note">not an office</span>',String(o.total),esc(o.byOffice.map(function(b){return b.label+' '+b.count;}).join(', '))];}))+
+      '<div class="subh">Signature fields to fix ('+sig.length+')</div>'+tbl(['Person','Office','Title (AD → BambooHR)','Telephone (→ office line)','Mobile'],sig.map(function(p){return [esc(p.name),esc(p.officeLabel),p.title.ok?'ok':esc(p.title.current||'(blank)')+' → <b>'+esc(p.title.expected||'')+'</b>',p.telephone.ok?'ok':(p.telephone.collected?esc(p.telephone.current||'(blank)'):'<span class="note">not read yet</span>')+' → <b>'+esc(p.telephone.expected)+'</b>',mob(p.mobile)];}))+
+      '<div class="subh">Enabled accounts with no BambooHR match ('+d.unmatchedEnabled.length+')</div>'+tbl(['Account','sAM','OU'],d.unmatchedEnabled.map(function(u){return [esc(u.name),esc(u.sam||''),esc(u.ouLabel)];}));
+  }).catch(function(){ out.textContent='Could not run the audit.'; });
+}
+document.getElementById('dirLoad').addEventListener('click',loadDir);
 function dlDownload(text,fname){
   var blob=new Blob([text||''],{type:'text/plain'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fname;
