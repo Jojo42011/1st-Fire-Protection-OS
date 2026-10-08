@@ -1264,6 +1264,20 @@ export function initDb(): void {
   addColumn('intake_links', 'employee_id', 'INTEGER');
   // A test link runs the whole manager flow but creates no request and emails no one on submit.
   addColumn('intake_links', 'is_test', 'INTEGER DEFAULT 0');
+  // Personal to-do list (My tasks): one person's own items with due dates and a daily email.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS personal_tasks (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_email TEXT NOT NULL,
+      title       TEXT NOT NULL,
+      notes       TEXT,
+      due_date    TEXT,                              -- YYYY-MM-DD, Central time
+      status      TEXT NOT NULL DEFAULT 'open',      -- open | done
+      created_at  TEXT DEFAULT (datetime('now')),
+      done_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_personal_tasks_owner ON personal_tasks(owner_email, status, due_date);
+  `);
   addColumn('onboarding_requests', 'employee_id', 'INTEGER');
   addColumn('onboarding_requests', 'dock', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'sage', 'TEXT');                // selected Sage role (routed to Accounting/Rebecca)

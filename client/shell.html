@@ -192,13 +192,14 @@ var SCREENS = {
   settings:    { src:'/access',      title:'Access & Roles',    sub:'Who can see what in the OS' },
   integrations:{ src:'/company-integrations', title:'Integrations', sub:'Connected systems and sync health' },
   readiness:   { src:'/readiness',   title:'Readiness',         sub:'Identity, admin, backups and freshness' },
+  myTasks:     { src:'/todo',        title:'My tasks',          sub:'Your own to-do list with a daily email' },
   reviewsHub:  { src:'/reviews-hub', title:'Overview',          sub:'Google reviews across every location' },
   reviews:     { src:'/reviews',     title:'Google reviews',    sub:'Read and reply to reviews' },
   reviewRequests:{ src:'/review-requests', title:'Review requests', sub:'Ask customers for a review after the job' }
 };
 var MODULES = [
   { k:'people', tile:'P', label:'People', desc:'Employees, onboarding and offboarding', items:['people','employees','onboarding','offboarding','templates'] },
-  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','adAudit','spAccess','spend','settings','integrations','readiness'] },
+  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','myTasks','adAudit','spAccess','spend','settings','integrations','readiness'] },
   { k:'reviews', tile:'R', label:'Reviews', desc:'Google reviews and review requests', items:['reviewsHub','reviews','reviewRequests'] }
 ];
 // The People-role module that governs each screen (mirrors server PAGE_MODULE); hidden when the role lacks it.
@@ -209,8 +210,9 @@ var SCREEN_MODULE = { people:'people', employees:'people', templates:'people', o
 var ALIASES = { 'reviews-hub':'reviewsHub', 'review-requests':'reviewRequests', home:'people', tasks:'people', approve:'onboarding', exceptions:'people', reportsPeople:'people', companyOffices:'people', sync:'integrations' };
 
 var KEYS = Object.keys(SCREENS), HOME = 'people', current = null;
-var GATE = false, ME_MODULES = {}, ME = null;
-function allowedScreen(k){ if(!GATE) return true; var m=SCREEN_MODULE[k]; return !m || (ME_MODULES[m]||0) >= 1; }
+var GATE = false, ME_MODULES = {}, ME = null, WANTED = null;
+// My tasks is personal: shown only to the people the server turns it on for (ME.personalTasks).
+function allowedScreen(k){ if(k==='myTasks') return !!(ME && ME.personalTasks); if(!GATE) return true; var m=SCREEN_MODULE[k]; return !m || (ME_MODULES[m]||0) >= 1; }
 function moduleOf(k){ for(var i=0;i<MODULES.length;i++) if(MODULES[i].items.indexOf(k)>=0) return MODULES[i]; return MODULES[0]; }
 function visibleModules(){ return MODULES.filter(function(m){ return m.items.some(allowedScreen); }); }
 function firstAllowed(){ var ms=visibleModules(); for(var i=0;i<ms.length;i++){ var it=ms[i].items.filter(allowedScreen); if(it.length) return it[0]; } return null; }
@@ -320,7 +322,10 @@ function setMe(me){
   var who=(ME.identity&&(ME.identity.name||ME.identity.email))||'';
   document.getElementById('me-btn').textContent=who?((who.replace(/@.*/,'').replace(/[^A-Za-z .]/g,'').split(/[\s.]+/).filter(Boolean).map(function(w){ return w[0]; }).join('').slice(0,2).toUpperCase())||'··'):'··';
   GATE = !!(ME.peopleAuthorized && ME.modules); ME_MODULES = ME.modules || {};
-  if(current && !allowedScreen(current)){ var f=firstAllowed(); if(f) activate(f); } else renderNav();
+  // A deep link to My tasks (from the daily email) waits for /api/me before it can open.
+  if(WANTED && WANTED!==current && allowedScreen(WANTED)){ activate(WANTED); }
+  else if(current && !allowedScreen(current)){ var f=firstAllowed(); if(f) activate(f); } else renderNav();
+  WANTED = null;
 }
 Promise.all([
   fetch('/api/me').then(function(r){ return r.json(); }).catch(function(){ return {}; }),
@@ -436,7 +441,7 @@ document.addEventListener('keydown', function(e){
 window.addEventListener('resize', function(){ if(isMobile()) fitFrame(frameEl(current)); });
 var P=new URLSearchParams(location.search), qt=P.get('tab'), qs=P.get('sub');
 qt = qt ? (ALIASES[qt]||qt) : null;
-if(qt && SCREENS[qt]){ if(qs) subByScreen[qt]=qs; activate(qt); } else activate(HOME);
+if(qt && SCREENS[qt]){ if(qs) subByScreen[qt]=qs; WANTED=qt; activate(qt); } else activate(HOME);
 window.AppShell={ open:activate, screens:SCREENS };
 </script>
 </body>

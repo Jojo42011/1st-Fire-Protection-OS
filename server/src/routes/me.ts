@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { currentContext, allowedOffices } from '../os/scope';
 import { currentIdentity } from '../people/identity';
 import { userModules } from '../people/permissions';
+import { canUseTasks } from '../services/personalTasks';
 
 /**
  * GET /api/me - the OS-wide "who am I and what can I see" endpoint that the shell boots from.
@@ -38,6 +39,8 @@ router.get('/api/me', (req, res) => {
     // Effective module x level permissions for this user (from the Access matrix); empty for a
     // non-People session. The client uses it to reflect access; the server still enforces per route.
     modules: userModules(ctx.user),
+    // My tasks (personal to-do list with a daily email) is on only for the people listed for it.
+    personalTasks: canUseTasks(ctx.email),
   });
 });
 

@@ -198,9 +198,10 @@ function isPublicIntake(p: string): boolean {
   return p.startsWith('/intake/') || p.startsWith('/api/intake/');
 }
 // Token links that work without an OS login: /r/<token> review-request links, the NFC page and its
-// beacon, and /approve/<token> (a signed link for one approval, sent to the person who must decide).
+// beacon, /approve/<token> (a signed link for one approval, sent to the person who must decide), and
+// /tasks/done/<token> (the signed "Mark done" link in the My tasks daily email).
 function isReviewLink(p: string): boolean {
-  return p.startsWith('/r/') || p === '/review' || p === '/review/' || p === '/api/review-page/events' || p.startsWith('/approve/');
+  return p.startsWith('/r/') || p === '/review' || p === '/review/' || p === '/api/review-page/events' || p.startsWith('/approve/') || p.startsWith('/tasks/done/');
 }
 // The on-prem AD agent authenticates with its own bearer token (checked in routes/agent.ts), not an
 // app session: the domain controller has no OS login. Let its endpoints past the session gate so the

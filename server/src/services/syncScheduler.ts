@@ -18,6 +18,7 @@ import { detectExceptions } from '../os/exceptions';
 import { syncReviews, googleConnected } from './googleBusiness';
 import { sendOnboardingReminders } from './onboardingOwners';
 import { sendOffboardingOverdueReminders } from './offboardingAgent';
+import { sendDailyTaskDigests } from './personalTasks';
 import { refreshAppAccess } from './appAccessSync';
 
 export interface SyncDef {
@@ -112,6 +113,17 @@ export const SYNC_DEFS: SyncDef[] = [
       const off = await sendOffboardingOverdueReminders(base);
       if (on.waiting && off.waiting) return 'outside business hours';
       return `onboarding: ${on.sent} email(s) for ${on.items} due item(s); offboarding: ${off.sent} email(s) for ${off.items} overdue step(s)`;
+    },
+  },
+  {
+    key: 'personal_tasks',
+    label: 'My tasks daily email',
+    detail: 'Every morning after 7am Central: one email with your open tasks (overdue, due today, coming up)',
+    defaultInterval: 30,
+    run: async () => {
+      const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+      const r = await sendDailyTaskDigests(base);
+      return r.waiting ? 'before 7am Central' : `${r.sent} email(s) sent`;
     },
   },
   {

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My tasks · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" />
+<link rel="stylesheet" href="/signal.css" />
+<link rel="stylesheet" href="/os.css" />
+<link rel="stylesheet" href="/brand/site-theme.css" />
+<style>
+  .add{background:var(--panel);border-radius:var(--r-card);box-shadow:0 0 0 1px var(--border);padding:14px;display:grid;gap:10px}
+  .add-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .in{font-family:var(--sans);font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--border-strong);border-radius:12px;padding:10px 12px;outline:none;min-width:0}
+  .in:focus{border-color:var(--brand);box-shadow:0 0 0 4px rgba(214,45,42,.12)}
+  .in.title{flex:1 1 280px;font-weight:600}
+  .in.date{flex:0 0 auto}
+  textarea.in{width:100%;box-sizing:border-box;min-height:64px;resize:vertical;font-weight:500}
+  .quick{display:flex;gap:6px;flex-wrap:wrap}
+  .qd{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--ink-2);background:var(--fill);border:0;border-radius:980px;padding:6px 11px;cursor:pointer}
+  .qd:hover{background:var(--brand-tint);color:var(--brand-deep)}
+  .qd.on{background:var(--brand);color:#fff}
+  .lane-h .ln .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .task{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-top:1px solid var(--divider)}
+  .task:first-of-type{border-top:0}
+  .tick{flex:none;width:22px;height:22px;margin-top:1px;border-radius:50%;border:1.5px solid var(--border-strong);background:var(--panel);cursor:pointer;display:grid;place-items:center;padding:0;color:transparent;font-size:13px;font-weight:800}
+  .tick:hover{border-color:var(--green);color:var(--green)}
+  .task.done .tick{background:var(--green);border-color:var(--green);color:#fff}
+  .tbody{flex:1;min-width:0}
+  .tt{font-weight:600;font-size:14px;color:var(--ink);overflow-wrap:anywhere}
+  .task.done .tt{color:var(--faint);text-decoration:line-through}
+  .tn{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+  .td{font-size:12px;color:var(--faint);margin-top:4px;font-weight:600}
+  .td.late{color:var(--brand-deep)} .td.today{color:var(--brand)}
+  .tacts{flex:none;display:flex;gap:4px;opacity:.75}
+  .task:hover .tacts{opacity:1}
+  .ic{border:0;background:none;color:var(--muted);font:inherit;font-size:12.5px;font-weight:600;padding:4px 6px;border-radius:8px;cursor:pointer}
+  .ic:hover{background:var(--fill);color:var(--ink)}
+  .ic.del:hover{color:var(--brand-deep);background:var(--brand-tint)}
+  .edit{display:grid;gap:8px;margin-top:2px}
+  .empty{background:var(--panel);border-radius:var(--r-card);box-shadow:0 0 0 1px var(--border);padding:28px 18px;text-align:center;color:var(--muted);font-size:13.5px;margin-top:14px}
+  .empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:4px}
+  details.donebox{margin-top:14px}
+  details.donebox summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--muted);list-style:none;padding:6px 0}
+  details.donebox summary::-webkit-details-marker{display:none}
+  @media(max-width:640px){ .tacts{opacity:1} .in.title{flex-basis:100%} }
+</style>
+<script src="/os.js" defer></script>
+</head>
+<body>
+<div class="page view">
+  <div class="os-screen-head">
+    <div>
+      <h1>My tasks</h1>
+      <div class="os-question">Your own to-do list. Every morning you get one email with what is overdue, due today, and coming up.</div>
+    </div>
+  </div>
+
+  <form class="add" id="addForm" autocomplete="off">
+    <div class="add-row">
+      <input class="in title" id="aTitle" placeholder="What do you need to do?" maxlength="300" aria-label="Task" />
+      <input class="in date" id="aDate" type="date" aria-label="Due date" />
+      <button class="os-btn primary" type="submit">Add task</button>
+    </div>
+    <div class="add-row" style="justify-content:space-between">
+      <div class="quick" id="quick"></div>
+      <button class="linkbtn" type="button" id="noteToggle">Add a note</button>
+    </div>
+    <textarea class="in" id="aNotes" placeholder="Details, links, who to call" maxlength="2000" hidden></textarea>
+  </form>
+
+  <div id="view"><p class="note-line">Loading your tasks…</p></div>
+  <p class="note-line" id="mailLine"></p>
+</div>
+<script>
+"use strict";
+var TASKS = [], TODAY = '', EMAIL = '', EDITING = null;
+function esc(t){ return String(t==null?'':t).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function toast(m, bad){ if(window.OS&&OS.toast) OS.toast(m, bad?{tone:'bad'}:{}); }
+function addDays(d, n){ return new Date(Date.parse(d+'T12:00:00Z') + n*864e5).toISOString().slice(0,10); }
+function nice(d){ return new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{timeZone:'UTC',weekday:'short',month:'short',day:'numeric'}); }
+function dayDiff(d){ return Math.round((Date.parse(d+'T12:00:00Z') - Date.parse(TODAY+'T12:00:00Z'))/864e5); }
+function api(method, url, body){
+  return fetch(url,{method:method,headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined})
+    .then(function(r){ return r.json().then(function(d){ if(!r.ok||!d.ok) throw new Error((d&&d.error)||'Something went wrong.'); return d; }); });
+}
+
+function quickDates(){
+  if(!TODAY) return [];
+  var wd = new Date(TODAY+'T12:00:00Z').getUTCDay();
+  var toFri = (5 - wd + 7) % 7, toMon = ((1 - wd + 7) % 7) || 7;
+  return [['Today',TODAY],['Tomorrow',addDays(TODAY,1)],[toFri===0?'This Friday':'Friday',addDays(TODAY,toFri)],['Next Monday',addDays(TODAY,toMon)],['In 2 weeks',addDays(TODAY,14)]];
+}
+function paintQuick(){
+  var cur = document.getElementById('aDate').value;
+  document.getElementById('quick').innerHTML = quickDates().map(function(q){
+    return '<button type="button" class="qd'+(q[1]===cur?' on':'')+'" data-d="'+q[1]+'">'+esc(q[0])+'</button>'; }).join('');
+}
+
+function dueHtml(t){
+  if(!t.due_date) return '';
+  var n = dayDiff(t.due_date);
+  if(t.status==='done') return '<div class="td">Due '+esc(nice(t.due_date))+'</div>';
+  if(n<0) return '<div class="td late">'+esc(nice(t.due_date))+' · '+(-n)+' day'+(n===-1?'':'s')+' late</div>';
+  if(n===0) return '<div class="td today">Due today</div>';
+  if(n===1) return '<div class="td">Tomorrow</div>';
+  return '<div class="td">'+esc(nice(t.due_date))+'</div>';
+}
+function taskHtml(t){
+  var done = t.status==='done';
+  if(EDITING===t.id){
+    return '<div class="task" data-id="'+t.id+'"><div class="tbody"><div class="edit">'+
+      '<div class="add-row"><input class="in title" data-f="title" value="'+esc(t.title)+'" maxlength="300" aria-label="Task" />'+
+      '<input class="in date" data-f="due_date" type="date" value="'+esc(t.due_date||'')+'" aria-label="Due date" /></div>'+
+      '<textarea class="in" data-f="notes" placeholder="Details, links, who to call" maxlength="2000">'+esc(t.notes||'')+'</textarea>'+
+      '<div class="add-row"><button class="os-btn primary sm" data-act="save">Save</button><button class="os-btn sm" data-act="cancel">Cancel</button></div>'+
+      '</div></div></div>';
+  }
+  return '<div class="task'+(done?' done':'')+'" data-id="'+t.id+'">'+
+    '<button class="tick" data-act="toggle" aria-label="'+(done?'Mark not done':'Mark done')+'" title="'+(done?'Mark not done':'Mark done')+'">✓</button>'+
+    '<div class="tbody"><div class="tt">'+esc(t.title)+'</div>'+(t.notes?'<div class="tn">'+esc(t.notes)+'</div>':'')+dueHtml(t)+'</div>'+
+    '<div class="tacts">'+(done?'':'<button class="ic" data-act="edit">Edit</button>')+'<button class="ic del" data-act="del">Delete</button></div></div>';
+}
+function lane(label, color, items){
+  if(!items.length) return '';
+  return '<div class="lane"><div class="lane-h"><span class="ln"><span class="dot" style="background:'+color+'"></span>'+esc(label)+'</span><span class="lc">'+items.length+'</span></div>'+
+    items.map(taskHtml).join('')+'</div>';
+}
+function render(){
+  var open = TASKS.filter(function(t){return t.status==='open';}), done = TASKS.filter(function(t){return t.status==='done';});
+  var week = addDays(TODAY,7);
+  var html = '';
+  if(!open.length){
+    html += '<div class="empty"><b>'+(done.length?'All caught up':'Nothing on your list yet')+'</b>Add something above with a due date and it will show up in your morning email.</div>';
+  } else {
+    html += lane('Overdue','var(--brand-deep)', open.filter(function(t){return t.due_date && t.due_date<TODAY;}));
+    html += lane('Due today','var(--brand)', open.filter(function(t){return t.due_date===TODAY;}));
+    html += lane('Next 7 days','var(--ink)', open.filter(function(t){return t.due_date && t.due_date>TODAY && t.due_date<=week;}));
+    html += lane('Later','var(--faint)', open.filter(function(t){return t.due_date && t.due_date>week;}));
+    html += lane('No due date','var(--faint)', open.filter(function(t){return !t.due_date;}));
+  }
+  if(done.length){
+    var shown = done.slice(0,25);
+    html += '<details class="donebox"'+(EDITING&&done.some(function(t){return t.id===EDITING;})?' open':'')+'><summary>Done ('+done.length+')'+(done.length>25?', latest 25':'')+'</summary>'+
+      '<div class="lane" style="margin-top:6px">'+shown.map(taskHtml).join('')+'</div></details>';
+  }
+  document.getElementById('view').innerHTML = html;
+  document.getElementById('mailLine').innerHTML = 'The daily email goes to <b>'+esc(EMAIL)+'</b> at 7am Central, every day you have open tasks. '+
+    (open.length?'<button class="linkbtn" id="sendNow">Send today\'s email now</button>':'');
+  paintQuick();
+}
+function load(){
+  return api('GET','/api/my-tasks').then(function(d){ TASKS=d.tasks||[]; TODAY=d.today; EMAIL=d.email; render(); })
+    .catch(function(e){ document.getElementById('addForm').hidden=true; document.getElementById('view').innerHTML='<div class="empty"><b>Not available</b>'+esc(e.message)+'</div>'; });
+}
+
+document.getElementById('addForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  var title = document.getElementById('aTitle').value.trim();
+  if(!title){ document.getElementById('aTitle').focus(); toast('Type what you need to do first.', true); return; }
+  var body = { title:title, due_date:document.getElementById('aDate').value, notes:document.getElementById('aNotes').value };
+  api('POST','/api/my-tasks',body).then(function(d){
+    document.getElementById('aTitle').value=''; document.getElementById('aNotes').value=''; document.getElementById('aDate').value='';
+    document.getElementById('aNotes').hidden=true; document.getElementById('noteToggle').textContent='Add a note';
+    toast('Added'+(d.task.due_date?(', due '+nice(d.task.due_date)):'')+'.');
+    return load();
+  }).catch(function(err){ toast(err.message, true); });
+});
+document.getElementById('noteToggle').addEventListener('click', function(){
+  var n=document.getElementById('aNotes'); n.hidden=!n.hidden; this.textContent=n.hidden?'Add a note':'Hide note'; if(!n.hidden) n.focus();
+});
+document.getElementById('quick').addEventListener('click', function(e){
+  var b=e.target.closest('[data-d]'); if(!b) return;
+  var inp=document.getElementById('aDate'); inp.value = inp.value===b.getAttribute('data-d') ? '' : b.getAttribute('data-d'); paintQuick();
+});
+document.getElementById('aDate').addEventListener('input', paintQuick);
+document.getElementById('view').addEventListener('click', function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return;
+  var row=b.closest('[data-id]'), id=Number(row.getAttribute('data-id')), t=TASKS.filter(function(x){return x.id===id;})[0];
+  var act=b.getAttribute('data-act');
+  if(act==='toggle'){ api('PATCH','/api/my-tasks/'+id,{done:t.status!=='done'}).then(function(){ toast(t.status==='done'?'Moved back to your list.':'Done. It is off tomorrow\'s email.'); return load(); }).catch(function(err){ toast(err.message,true); }); }
+  if(act==='edit'){ EDITING=id; render(); var f=row.parentNode.querySelector('[data-id="'+id+'"] [data-f="title"]'); if(f) f.focus(); }
+  if(act==='cancel'){ EDITING=null; render(); }
+  if(act==='save'){
+    var get=function(k){ var el=row.querySelector('[data-f="'+k+'"]'); return el?el.value:''; };
+    api('PATCH','/api/my-tasks/'+id,{title:get('title'),due_date:get('due_date'),notes:get('notes')}).then(function(){ EDITING=null; toast('Saved.'); return load(); }).catch(function(err){ toast(err.message,true); });
+  }
+  if(act==='del'){
+    if(!confirm('Delete "'+t.title+'"? This cannot be undone.')) return;
+    api('DELETE','/api/my-tasks/'+id).then(function(){ toast('Deleted.'); return load(); }).catch(function(err){ toast(err.message,true); });
+  }
+});
+document.getElementById('mailLine').addEventListener('click', function(e){
+  if(!e.target.closest('#sendNow')) return;
+  api('POST','/api/my-tasks/send-now').then(function(d){ toast('Sent to '+EMAIL+' with '+d.count+' open task'+(d.count===1?'':'s')+'.'); })
+    .catch(function(err){ toast(err.message,true); });
+});
+load();
+</script>
+</body>
+</html>
