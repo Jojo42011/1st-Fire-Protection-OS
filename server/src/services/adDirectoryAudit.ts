@@ -1,6 +1,8 @@
 import { getDb } from '../db/index';
 import { canonicalOffice, officeLabel, knownOffices } from '../os/office';
-import { officeBranding, formatPhone } from './officeBranding';
+import { officeBranding, formatPhone, officeCity } from './officeBranding';
+
+const COMPANY = '1st Fire Protection'; // the Company field the distribution lists filter on
 import { getAdSettings, resolveOu } from './adProvision';
 import { lastSync, EmpRow } from './adAudit';
 
@@ -56,6 +58,7 @@ export interface PersonRow {
   placement: 'ok' | 'wrong_office' | 'not_mapped_ou' | 'default_container' | 'unknown';
   expectedOu: string | null; placementNote: string | null;
   title: { current: string | null; expected: string | null; ok: boolean };
+  officeField: { current: string | null; expected: string | null; ok: boolean };
   telephone: { current: string | null; expected: string; ok: boolean; collected: boolean };
   mobile: { current: string | null; bamboo: string | null; status: 'ok' | 'empty_fill' | 'empty_none' | 'differs' | 'set_no_bamboo' };
   description: { current: string | null; suggested: string };
@@ -165,6 +168,7 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     }
     const wantTitle = e.public_job_title || e.job_position || null;
     const wantTel = officeBranding(e.office || '').phone;
+    const wantOffice = e.office ? officeCity(e.office) : null;
     const bamboo = e.personal_phone ? formatPhone(e.personal_phone) : null;
     const mobileStatus: PersonRow['mobile']['status'] = a.mobile
       ? (bamboo ? (samePhone(a.mobile, bamboo) ? 'ok' : 'differs') : 'set_no_bamboo')
@@ -175,6 +179,7 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
       name, sam: a.sam, upn: a.upn, office: off, officeLabel: off ? officeLabel(off) : 'No office in BambooHR',
       ou: a.ou, ouLabel: ouLabel(a.ou), ouOffice: oo, placement, expectedOu, placementNote: note,
       title: { current: a.title || null, expected: wantTitle, ok: !wantTitle || lc(a.title) === lc(wantTitle) },
+      officeField: { current: a.office || null, expected: wantOffice, ok: !wantOffice || lc(a.office) === lc(wantOffice) },
       telephone: { current: a.telephone || null, expected: wantTel, ok: samePhone(a.telephone, wantTel), collected: telephoneCollected },
       mobile: { current: a.mobile || null, bamboo, status: mobileStatus },
       description: { current: a.description || null, suggested: domainUser ? 'AD + Email' : 'Email Only' },
@@ -188,6 +193,8 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
       const wantDesc = domainUser ? 'AD + Email' : 'Email Only';
       if (lc(a.description) !== lc(wantDesc)) sets.push(`Description = ${psq(wantDesc)}`);
       if (!a.title && wantTitle) sets.push(`Title = ${psq(wantTitle)}`); // fill a blank Title only, never overwrite
+      // Office is the city (not the LLC); Company goes with it, since the office distribution lists filter on both.
+      if (wantOffice && lc(a.office) !== lc(wantOffice)) sets.push(`Office = ${psq(wantOffice)}`, `Company = ${psq(COMPANY)}`);
       if (sets.length) scriptLines.push(`Fix-User ${psq(a.sam)} @{ ${sets.join('; ')} } ${psq(label)}`);
       if ((placement === 'wrong_office' || placement === 'default_container' || placement === 'not_mapped_ou')) {
         const n = expectedOu ? (peopleInOu.get(lc(expectedOu)) || 0) : 0;
@@ -233,6 +240,7 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     not_mapped_ou: people.filter((p) => p.placement === 'not_mapped_ou').length,
     unknown_ou: people.filter((p) => p.placement === 'unknown').length,
     title_off: people.filter((p) => !p.title.ok).length,
+    office_off: people.filter((p) => !p.officeField.ok).length,
     telephone_off: people.filter((p) => !p.telephone.ok).length,
     mobile_fill: people.filter((p) => p.mobile.status === 'empty_fill').length,
     mobile_none: people.filter((p) => p.mobile.status === 'empty_none').length,
@@ -254,6 +262,7 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     '#                 number, so it is never overwritten)',
     `#   Description = "AD + Email" if they signed in to a domain computer in the last ${DOMAIN_LOGON_DAYS} days, else "Email Only"`,
     '#   Title       = BambooHR title, only where Title is blank (titles you set are left alone)',
+    '#   Office      = the city (San Antonio, Austin, ...), not the LLC name; Company = 1st Fire Protection',
     `#   OU          = moved to their office OU, only when that OU already holds ${SAFE_MIN}+ active people`,
     '#                 (proof it is in Entra Connect sync scope, so no Microsoft 365 account is dropped)',
     '# Accounts not matched to an employee (shared, service, former staff) are not touched.',
@@ -337,9 +346,9 @@ export function directoryAuditHtml(d: DirectoryAudit, base: string): string {
   ${table(['Person', 'BambooHR office', 'Current OU'], d.people.filter((p) => p.placement === 'unknown').map((p) => [esc(p.name), esc(p.officeLabel), esc(p.ouLabel)]))}
 
   ${h('Signature fields')}
-  ${table(['Person', 'Office', 'Title (AD / BambooHR)', 'Telephone (now / should be)', 'Mobile (AD / BambooHR)'],
-    d.people.filter((p) => !p.title.ok || !p.telephone.ok || p.mobile.status !== 'ok').map((p) => [
-      esc(p.name), esc(p.officeLabel),
+  ${table(['Person', 'Office field (AD / city)', 'Title (AD / BambooHR)', 'Telephone (now / should be)', 'Mobile (AD / BambooHR)'],
+    d.people.filter((p) => !p.title.ok || !p.officeField.ok || !p.telephone.ok || p.mobile.status !== 'ok').map((p) => [
+      esc(p.name), p.officeField.ok ? esc(p.officeField.current || '') : `${esc(p.officeField.current || '(blank)')} / <b>${esc(p.officeField.expected || '')}</b>`,
       p.title.ok ? '<span style="color:#1a8a4a">ok</span>' : `${esc(p.title.current || '(blank)')} / <b>${esc(p.title.expected || '')}</b>`,
       p.telephone.ok ? '<span style="color:#1a8a4a">ok</span>' : `${esc(p.telephone.collected ? (p.telephone.current || '(blank)') : '(not read yet)')} / <b>${esc(p.telephone.expected)}</b>`,
       p.mobile.status === 'ok' ? '<span style="color:#1a8a4a">ok</span>'

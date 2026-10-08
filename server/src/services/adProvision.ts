@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { catalogByKind } from './onboardingCatalog';
-import { officeBranding, formatPhone } from './officeBranding';
+import { officeBranding, formatPhone, officeCity } from './officeBranding';
 
 /**
  * On-prem AD new-hire provisioning (hybrid identity).
@@ -269,7 +269,7 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
     title: title || null,
     mobile: mobile ? formatPhone(mobile) : null,
     department: department || null,
-    office: office || null,
+    office: office ? officeCity(office) : null, // AD Office is the city (the LLC stays in BambooHR)
     company: '1st Fire Protection',
     telephone: office ? officeBranding(office).phone : null,
     description: accountType(request),

@@ -46,6 +46,20 @@ function bambooLlc(key: string): string | null {
   return null;
 }
 
+/** What the AD Office field holds: the city for each field office, and the entity's own short name
+ *  for the ones that share a city with another office (so each distribution list stays separate). */
+const OFFICE_CITY: Record<string, string> = {
+  services: 'San Antonio', austin: 'Austin', houston: 'Houston', mcallen: 'McAllen', waco: 'Waco',
+  laredo: 'Laredo', lubbock: 'Lubbock', 'college-station': 'College Station', 'corpus-christi': 'Corpus Christi',
+  extinguishers: 'Extinguishers', management: 'Management', asds: 'Austin Sprinkler Design',
+  'one-stop-code-consulting': 'One Stop Code Consulting',
+};
+export function officeCity(officeRaw: string | null | undefined): string {
+  const raw = String(officeRaw || '').trim();
+  const key = raw ? canonicalOffice(raw) : '';
+  return OFFICE_CITY[key] || raw;
+}
+
 /** 2103773473 / (210) 377-3473 / +1 210 377 3473 -> 210-377-3473. Anything else is returned trimmed. */
 export function formatPhone(v: string | null | undefined): string {
   const d = String(v || '').replace(/\D/g, '');

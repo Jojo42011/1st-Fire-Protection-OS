@@ -57,7 +57,7 @@ test('signature fields: office main line, and Mobile only filled when empty', ()
   assert.equal(by('Tia Teams').mobile.status, 'differs');
   assert.equal(by('Ann Austin').description.suggested, 'AD + Email');
   assert.equal(by('Hal Moved').description.suggested, 'Email Only');
-  assert.match(d.script, /^Fix-User 'hal' @\{ OfficePhone = '346-372-8684'; MobilePhone = '713-555-0102'; Description = 'Email Only' \}/m);
+  assert.match(d.script, /^Fix-User 'hal' @\{ OfficePhone = '346-372-8684'; MobilePhone = '713-555-0102'; Description = 'Email Only'; Office = 'Houston'; Company = '1st Fire Protection' \}/m);
   assert.match(d.script, /^Fix-User 'una' @\{[^}]*Title = 'Inspector'/m, 'fills a blank Title');
   assert.doesNotMatch(d.script, /^Fix-User 'hal'[^\n]*Title/m, 'never overwrites a Title already set');
   assert.doesNotMatch(d.script, /^Fix-User 'tia'[^\n]*MobilePhone/m, 'never overwrites a Mobile already set');
@@ -95,4 +95,28 @@ test('a real account is matched by email before an admin account can take the pe
   assert.deepEqual(names, ['Devon Booker', 'Shawn Flores'], 'active record wins; display name matches when AD has no given/surname');
   assert.equal(d.people.find((p) => p.name === 'Devon Booker')!.sam, 'devon.booker', 'the real account, not the admin one');
   assert.match(d.script, /Write-Host '  Devon Booker \(Admin\) \(admin\.devon\): no match in BambooHR/);
+});
+
+test('Office becomes the city, and the distribution lists keep their address and match city or LLC', () => {
+  const { officeCity } = require('./officeBranding');
+  assert.equal(officeCity('1st FP Austin, LLC'), 'Austin');
+  assert.equal(officeCity('1st FP Services, LLC'), 'San Antonio');
+  assert.equal(officeCity('1st FP Extinguishers, LLC'), 'Extinguishers', 'shares Buda with Austin, so keeps its own name');
+  assert.equal(officeCity('Austin'), 'Austin');
+  db.exec(`DELETE FROM employees`);
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, office, employment_status) VALUES ('Sam','Antonio','sam@1stfp.com','1st FP Services, LLC','active')`).run();
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, office, employment_status) VALUES ('Al','Austin','al@1stfp.com','1st FP Austin, LLC','active')`).run();
+  ingestInventory([
+    { objectGuid: 's1', sam: 'sam', upn: 'sam@1stfp.com', displayName: 'Sam Antonio', enabled: true, office: '1st FP Services, LLC', ou: 'OU=Services,DC=corp,DC=local' },
+    { objectGuid: 'a1', sam: 'al', upn: 'al@1stfp.com', displayName: 'Al Austin', enabled: true, office: 'Austin', ou: 'OU=Austin,DC=corp,DC=local' },
+  ]);
+  const d = directoryAudit();
+  assert.match(d.script, /^Fix-User 'sam' @\{[^}]*Office = 'San Antonio'; Company = '1st Fire Protection'/m);
+  assert.doesNotMatch(d.script, /^Fix-User 'al'[^\n]*Office =/m, 'already the city');
+  const plan = require('./distributionLists').buildOfficeDlPlan();
+  const sa = plan.offices.find((o: any) => o.office === 'San Antonio');
+  assert.ok(sa, 'grouped by city');
+  assert.match(plan.ddgScript, /Name = 'San Antonio - All Staff'; Alias = 'services'; Smtp = 'services@1stfpservices\.com'/, 'keeps the existing address');
+  assert.match(plan.ddgScript, /\(Office -eq ''San Antonio'' -or Office -eq ''1st FP Services, LLC''\)/, 'matches the city and the old LLC text');
+  assert.match(plan.backfillScript, /-Office 'San Antonio' -Company '1st Fire Protection'/);
 });

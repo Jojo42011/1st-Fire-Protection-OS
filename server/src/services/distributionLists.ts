@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { officeCity } from './officeBranding';
 
 /**
  * Office and company-wide distribution lists (Exchange Online dynamic distribution groups).
@@ -16,7 +17,7 @@ import { getDb } from '../db/index';
 
 const COMPANY = '1st Fire Protection';
 
-export interface OfficeStat { office: string; headcount: number; matched: number; needsBackfill: number; noAccount: string[] }
+export interface OfficeStat { office: string; headcount: number; matched: number; needsBackfill: number; noAccount: string[]; bambooNames: string[] }
 export interface DlPlan {
   ok: boolean;
   company: string;
@@ -85,15 +86,18 @@ export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
     return { first: e.first, last: e.last, email: e.email || '', bamboo_office: e.bamboo_office, sam, ad_office: hit ? hit.office : '' };
   });
 
-  // Group by BambooHR office.
-  const byOffice = new Map<string, { headcount: number; matched: number; needsBackfill: number; noAccount: string[] }>();
+  // Group by office city (AD Office holds the city, e.g. "Austin", not the LLC "1st FP Austin, LLC").
+  // Each city remembers the BambooHR office names behind it, so its list keeps its existing address
+  // and also catches accounts still carrying the old LLC text.
+  const byOffice = new Map<string, { headcount: number; matched: number; needsBackfill: number; noAccount: string[]; names: Map<string, number> }>();
   const backfill: string[] = [];
   for (const r of rows) {
-    const office = r.bamboo_office;
-    if (!office) continue; // skip employees with no office set
-    if (!byOffice.has(office)) byOffice.set(office, { headcount: 0, matched: 0, needsBackfill: 0, noAccount: [] });
+    if (!r.bamboo_office) continue; // skip employees with no office set
+    const office = officeCity(r.bamboo_office);
+    if (!byOffice.has(office)) byOffice.set(office, { headcount: 0, matched: 0, needsBackfill: 0, noAccount: [], names: new Map() });
     const g = byOffice.get(office)!;
     g.headcount++;
+    g.names.set(r.bamboo_office, (g.names.get(r.bamboo_office) || 0) + 1);
     if (!r.sam) { g.noAccount.push(`${r.first || ''} ${r.last || ''}`.trim() || r.email); continue; }
     g.matched++;
     if (r.ad_office !== office) g.needsBackfill++;
@@ -102,12 +106,13 @@ export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
   }
 
   const offices: OfficeStat[] = [...byOffice.entries()]
-    .map(([office, g]) => ({ office, headcount: g.headcount, matched: g.matched, needsBackfill: g.needsBackfill, noAccount: g.noAccount }))
+    .map(([office, g]) => ({ office, headcount: g.headcount, matched: g.matched, needsBackfill: g.needsBackfill, noAccount: g.noAccount,
+      bambooNames: [...g.names.entries()].sort((x, y) => y[1] - x[1]).map(([n]) => n) }))
     .sort((a, b) => b.headcount - a.headcount);
 
   // ---- Backfill script (on-prem AD) ----
   const bf: string[] = [];
-  bf.push('# Stamp Company + Office on every active employee account, matched to BambooHR, so the');
+  bf.push('# Stamp Company + Office (the city, e.g. Austin) on every active employee account, matched to BambooHR, so the');
   bf.push('# distribution-list filters catch existing staff. Run on a domain controller, then force a');
   bf.push('# sync: Start-ADSyncSyncCycle -PolicyType Delta on the AD Connect server. Idempotent.');
   bf.push('Import-Module ActiveDirectory');
@@ -122,22 +127,28 @@ export function buildOfficeDlPlan(upnDomain = '1stfpservices.com'): DlPlan {
   const dl: string[] = [];
   dl.push('# Create/refresh the office + All Employees distribution lists in Exchange Online. Safe to');
   dl.push('# re-run. Dynamic groups evaluate their filter at send time, so they maintain themselves.');
-  dl.push('# NOTE: run the Office/Company backfill on the DC and sync FIRST, or these lists will only');
-  dl.push('# include people whose accounts already carry those attributes.');
+  dl.push('# Each office list matches Office = the city (Austin, San Antonio, ...) and also the old BambooHR');
+  dl.push('# LLC text, so it works whether or not fix-ad.ps1 has run yet. Existing lists keep their address');
+  dl.push('# and are updated in place (display name becomes "<City> - All Staff").');
+  dl.push('# Run from a PC with the Exchange Online module:  Install-Module ExchangeOnlineManagement');
   dl.push('Connect-ExchangeOnline');
   dl.push('');
   dl.push('$offices = @(');
   const usedAlias = new Set<string>(['allemployees']);
+  const opathq = (v: string) => `'${v.replace(/'/g, "''")}'`; // OPATH string literal
   for (const o of offices) {
-    let { name, alias } = labelForOffice(o.office);
+    // Keep the address the list already has: it was derived from the main BambooHR office name.
+    let { alias } = labelForOffice(o.bambooNames[0] || o.office);
     while (usedAlias.has(alias)) alias = alias + 'x';
     usedAlias.add(alias);
-    dl.push(`  @{ Name = ${psq(name + ' - All Staff')}; Alias = ${psq(alias)}; Smtp = ${psq(alias + '@' + upnDomain)}; Office = ${psq(o.office)} }`);
+    const values = [o.office, ...o.bambooNames.filter((n) => n !== o.office)];
+    const filter = `Company -eq ${opathq(COMPANY)} -and (${values.map((v) => `Office -eq ${opathq(v)}`).join(' -or ')}) -and RecipientTypeDetails -eq 'UserMailbox'`;
+    dl.push(`  @{ Name = ${psq(o.office + ' - All Staff')}; Alias = ${psq(alias)}; Smtp = ${psq(alias + '@' + upnDomain)}; Filter = ${psq(filter)} }`);
   }
   dl.push(')');
   dl.push('');
   dl.push('foreach ($o in $offices) {');
-  dl.push(`  $filter = "Company -eq '${COMPANY}' -and Office -eq '$($o.Office.Replace("'","''"))' -and RecipientTypeDetails -eq 'UserMailbox'"`);
+  dl.push('  $filter = $o.Filter');
   dl.push('  $g = Get-DynamicDistributionGroup -Identity $o.Smtp -ErrorAction SilentlyContinue');
   dl.push('  try {');
   dl.push('    if ($g) {');
