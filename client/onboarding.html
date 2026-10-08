@@ -151,6 +151,7 @@
       <div id="metricstrip"></div>
 
       <div class="sec-h"><h2>New hires<span class="n" id="boardn"></span></h2><span class="aside">Click someone to see their checklist</span></div>
+      <div id="scopeLine"></div>
       <div id="board"></div>
 
       <div class="sec-h"><h2>Intake links<span class="n" id="linkn"></span></h2><span class="aside" id="linkNote"></span></div>
@@ -444,10 +445,16 @@ function loadBoard(){
   return fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){
     if(d.options && !OPTIONS){ OPTIONS=d.options; renderForm(); }
     REQS=d.requests||[];
+    var v=d.viewer||{}, sl=document.getElementById('scopeLine');
+    // Each team sees only its own tasks; say so, and tell an unidentified session how to see theirs.
+    if(v.all) sl.innerHTML='';
+    else if(!v.signedIn) sl.innerHTML='<div class="banner warn">Sign in with your Microsoft account to see your team\'s onboarding tasks. The shared office password does not show tasks.</div>';
+    else if(!(v.teams||[]).length) sl.innerHTML='<div class="banner warn">Your account has no team in Access &amp; Roles, so no tasks are shown. Ask a People admin to add one.</div>';
+    else sl.innerHTML='<div class="note-line" style="margin:0 0 10px">Showing tasks for <b>'+esc(v.teams.join(', '))+'</b> only.</div>';
     renderStrip();
     renderMetric();
     document.getElementById('boardn').textContent=REQS.length;
-    if(!REQS.length){ document.getElementById('board').innerHTML=OS.empty('No one is onboarding right now. Send an intake link to start.','✓'); return; }
+    if(!REQS.length){ document.getElementById('board').innerHTML=(!v.all&&!v.signedIn)?'':OS.empty(v.all?'No one is onboarding right now. Send an intake link to start.':'Nothing for your team right now.','✓'); return; }
     var cols=[
       {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
       {as:'starts',label:'Starts',render:function(v,r){return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},

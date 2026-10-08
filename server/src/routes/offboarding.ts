@@ -7,7 +7,8 @@ import {
   cancelOffboarding,
   getPolicy,
   setPolicy,
-  ownersForRoles,
+  itemDept,
+  ItemFilter,
   hasDirectory,
   sendOffboardingEmail,
   sendDepartmentDigest,
@@ -22,6 +23,7 @@ import { completeItemByScript } from '../services/offboardingAgent';
 import { decider, sendDenied } from '../people/decider';
 import { isCloudExecutable, cloudActionLabel, runCloudAction, graphOffboardConfigured, offboardingPermissionCheck } from '../services/msGraphOffboard';
 import { osAudit, actorLabel } from '../os/audit';
+import { taskScope, seesOffboardingItem, scopeSummary, TaskScope } from '../people/taskScope';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
@@ -30,28 +32,38 @@ const actor = (req: any): string => (req.user?.email as string) || (req.body && 
 // only sees their own tasks (HR, Accounting, Manager) may not trigger it.
 function canRunCloud(req: any): boolean {
   const roles: string[] = currentContext(req).user?.roles || [];
-  if (!roles.length) return true; // legacy shared-password session (no mapped identity): allowed, audited
   return roles.some((r) => ['it', 'people_admin', 'executive'].includes(r));
 }
+// The DC / Exchange / cloud scripts and the backlog sweep are IT and admin tools.
+function itOrAdmin(req: any): boolean {
+  const s = taskScope(currentContext(req).user);
+  return s.all || s.offboarding.has('it');
+}
 
-// Department scoping: each department sees only its own offboarding tasks. Admins/execs (allowed=null)
-// see all and may narrow to one department via ?owner=; a department member is locked to their own.
-function scopeOwners(req: any): { owners: string[] | null; allowed: string[] | null; canSeeAll: boolean } {
-  const ctx = currentContext(req);
-  const allowed = ownersForRoles(ctx.user?.roles);
-  const requested = String(req.query.owner || '').trim();
-  let owners = allowed;
-  if (requested) {
-    if (allowed === null) owners = [requested];
-    else if (allowed.includes(requested)) owners = [requested];
-  }
-  return { owners, allowed, canSeeAll: allowed === null };
+// Department scoping: each department sees only its own offboarding steps (see people/taskScope.ts).
+// Admins and executives see all and may narrow to one department with ?dept= (or the older ?owner=).
+function scopeFor(req: any): { see: ItemFilter; scope: TaskScope; viewer: ReturnType<typeof scopeSummary> & { canSeeAll: boolean } } {
+  const user = currentContext(req).user;
+  const scope = taskScope(user);
+  const want = String(req.query.dept || req.query.owner || '').trim();
+  const see: ItemFilter = scope.all
+    ? (want ? (item: any) => itemDept(item) === want : null)
+    : (item: any, request: any) => seesOffboardingItem(scope, item, request);
+  return { see, scope, viewer: { ...scopeSummary(scope, user), canSeeAll: scope.all } };
+}
+/** The item and its request, when the signed-in person may see the item; else null. */
+function visibleItem(req: any, itemId: number): any | null {
+  const db = getDb();
+  const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
+  if (!item) return null;
+  const request = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(item.request_id) as any;
+  return seesOffboardingItem(taskScope(currentContext(req).user), item, request) ? item : null;
 }
 
 /** The board: every offboarding request with its (department-scoped) progress rollup, plus policy. */
 router.get('/api/offboarding', (req, res) => {
-  const s = scopeOwners(req);
-  res.json({ ok: true, requests: listOffboarding(s.owners), policy: getPolicy(), viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
+  const s = scopeFor(req);
+  res.json({ ok: true, requests: listOffboarding(s.see), policy: getPolicy(), viewer: s.viewer });
 });
 
 /** Create an offboarding request (manual). Routes it into the dated SOP items. */
@@ -75,7 +87,7 @@ router.post('/api/offboarding/items/:id(\\d+)/run-on-dc', (req, res) => {
   const itemId = Number(req.params.id);
   const db = getDb();
   const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
-  if (!item) return res.status(404).json({ ok: false, error: 'item not found' });
+  if (!item || !visibleItem(req, itemId)) return res.status(404).json({ ok: false, error: 'item not found' });
   if (!isDcExecutable(item.action_code)) return res.status(400).json({ ok: false, error: 'this step is not run on the DC (mailbox/cloud steps run elsewhere)' });
   if (item.kind === 'approval' && item.status !== 'approved') {
     return res.status(400).json({ ok: false, error: 'approve this step before running it on the DC' });
@@ -101,7 +113,7 @@ router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) =>
   const itemId = Number(req.params.id);
   const db = getDb();
   const item = db.prepare(`SELECT * FROM offboarding_items WHERE id = ?`).get(itemId) as any;
-  if (!item) return res.status(404).json({ ok: false, error: 'item not found' });
+  if (!item || !visibleItem(req, itemId)) return res.status(404).json({ ok: false, error: 'item not found' });
   if (!isCloudExecutable(item.action_code)) {
     return res.status(400).json({ ok: false, error: 'this step is not a server-runnable cloud action (it runs on the DC or in Exchange Online)' });
   }
@@ -129,6 +141,8 @@ router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) =>
 /** Send one department its still-open tasks as a single digest email to its shared mailbox. */
 router.post('/api/offboarding/:id(\\d+)/email-department', async (req, res) => {
   const dept = String(req.body?.dept || '').trim();
+  const sc = taskScope(currentContext(req).user);
+  if (!sc.all && !sc.offboarding.has(dept)) return res.status(403).json({ ok: false, error: "That is another team's list." });
   const out = await sendDepartmentDigest(Number(req.params.id), dept, actor(req));
   const ctx = currentContext(req);
   osAudit({
@@ -144,6 +158,7 @@ router.post('/api/offboarding/:id(\\d+)/email-department', async (req, res) => {
 /** Send the shared-mailbox notification email for one offboarding task (from offboarding@). */
 router.post('/api/offboarding/items/:id(\\d+)/send-email', async (req, res) => {
   const itemId = Number(req.params.id);
+  if (!visibleItem(req, itemId)) return res.status(404).json({ ok: false, error: 'item not found' });
   const out = await sendOffboardingEmail(itemId, actor(req));
   const ctx = currentContext(req);
   osAudit({
@@ -158,18 +173,21 @@ router.post('/api/offboarding/items/:id(\\d+)/send-email', async (req, res) => {
 
 /** Latest DC job status for one offboarding item, for the UI to poll. */
 router.get('/api/offboarding/items/:id(\\d+)/job', (req, res) => {
+  if (!visibleItem(req, Number(req.params.id))) return res.status(404).json({ ok: false, error: 'item not found' });
   const j = latestJobForRef('offboarding_item', Number(req.params.id));
   res.json({ ok: true, job: j ? { id: j.id, kind: j.kind, status: j.status, error: j.error, finished_at: j.finished_at } : null });
 });
 
 /** The Exchange Online offboarding script (mailbox/license/GAL/forwarding) for one request. */
 router.get('/api/offboarding/:id(\\d+)/exchange-script', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const out = buildExchangeScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** The on-prem AD offboarding script (disable + remove groups), run on a domain controller. */
 router.get('/api/offboarding/:id(\\d+)/dc-script', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const out = buildDcOffboardingScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
@@ -177,6 +195,7 @@ router.get('/api/offboarding/:id(\\d+)/dc-script', (req, res) => {
 /** The cloud offboarding script (Exchange Online + Graph): convert to shared, remove license, revoke
  *  sessions, forward, auto-reply. Run on your own computer. */
 router.get('/api/offboarding/:id(\\d+)/cloud-script', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const out = buildCloudOffboardingScript(Number(req.params.id));
   res.status(out.ok ? 200 : 400).json(out);
 });
@@ -189,12 +208,14 @@ router.put('/api/offboarding/policy', (req, res) => {
 });
 
 /** The backlog sweep: already-terminated AD accounts with no offboarding request yet. */
-router.get('/api/offboarding/backlog', (_req, res) => {
+router.get('/api/offboarding/backlog', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   res.json({ ok: true, candidates: backlogCandidates() });
 });
 
 /** Create offboarding requests for the selected backlog accounts (by object_guid). */
 router.post('/api/offboarding/backlog/create', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const guids: string[] = Array.isArray(req.body?.guids) ? req.body.guids : [];
   if (!guids.length) return res.status(400).json({ ok: false, error: 'no accounts selected' });
   res.json({ ok: true, ...createFromBacklog(guids, actor(req)) });
@@ -202,11 +223,12 @@ router.post('/api/offboarding/backlog/create', (req, res) => {
 
 /** One request: the record + its (department-scoped) items + the rollup. */
 router.get('/api/offboarding/:id(\\d+)', (req, res) => {
-  const s = scopeOwners(req);
-  const out = getOffboarding(Number(req.params.id), s.owners);
+  const s = scopeFor(req);
+  const out = getOffboarding(Number(req.params.id), s.see);
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
+  if (!s.scope.all && !out.items.length) return res.status(404).json({ ok: false, error: 'No steps for your team on this person.' });
   const no_directory = !hasDirectory(out.request);
-  res.json({ ok: true, ...out, no_directory, viewer: { allowed: s.allowed, canSeeAll: s.canSeeAll } });
+  res.json({ ok: true, ...out, no_directory, viewer: s.viewer });
 });
 
 /** Cancel a request. */
@@ -218,8 +240,7 @@ router.post('/api/offboarding/:id(\\d+)/cancel', (req, res) => {
  *  person whose department owns the item may decide it, and it is recorded under their email. */
 for (const verb of ['complete', 'approve', 'reject', 'skip'] as const) {
   router.post(`/api/offboarding/items/:id/${verb}`, (req, res) => {
-    const row = getDb().prepare(`SELECT owner FROM offboarding_items WHERE id = ?`).get(Number(req.params.id)) as { owner: string } | undefined;
-    const d = decider(req, (u) => { const allowed = ownersForRoles(u.roles); return !allowed || !row || allowed.includes(row.owner); });
+    const d = decider(req, () => !!visibleItem(req, Number(req.params.id)));
     if (!d.ok) return sendDenied(res, d);
     try {
       res.json({ ok: true, item: decideItem(Number(req.params.id), verb, d.actor) });

@@ -419,12 +419,19 @@ function deptSummary(items: any[]): DeptSummary[] {
   return DEPT_ORDER.filter((k) => map.has(k)).map((k) => map.get(k)!);
 }
 
-export function getOffboarding(id: number, owners: string[] | null = null): { request: any; items: any[]; rollup: OffRollup; departments: DeptSummary[] } | null {
+/** Which items a viewer gets: a list of owners (legacy), or a predicate over (item, request), or null for all. */
+export type ItemFilter = string[] | ((item: any, request: any) => boolean) | null;
+function applyFilter(items: any[], request: any, f: ItemFilter): any[] {
+  if (!f) return items;
+  if (Array.isArray(f)) return items.filter((i) => f.includes(i.owner));
+  return items.filter((i) => f(i, request));
+}
+
+export function getOffboarding(id: number, owners: ItemFilter = null): { request: any; items: any[]; rollup: OffRollup; departments: DeptSummary[] } | null {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM offboarding_requests WHERE id = ?`).get(id);
   if (!request) return null;
-  let items = itemsFor(id);
-  if (owners) items = items.filter((i) => owners.includes(i.owner));
+  let items = applyFilter(itemsFor(id), request, owners);
   items = items.map((i) => ({ ...i, dept: itemDept(i), dept_label: DEPT_LABEL[itemDept(i)] }));
   return { request, items, rollup: rollup(items), departments: deptSummary(items) };
 }
@@ -468,14 +475,15 @@ export async function sendDepartmentDigest(requestId: number, dept: string, by =
   return { ok: true, to: mailbox, count: items.length };
 }
 
-export function listOffboarding(owners: string[] | null = null): any[] {
+export function listOffboarding(owners: ItemFilter = null): any[] {
   const db = getDb();
   const rows = db.prepare(`SELECT * FROM offboarding_requests ORDER BY id DESC`).all() as any[];
   return rows.map((r) => {
-    let items = itemsFor(r.id);
-    if (owners) items = items.filter((i) => owners.includes(i.owner));
-    return { ...r, no_directory: !hasDirectory(r), rollup: rollup(items) };
-  });
+    const items = applyFilter(itemsFor(r.id), r, owners);
+    return { ...r, no_directory: !hasDirectory(r), rollup: rollup(items), visible: items.length };
+  })
+    // A department only sees the people who have steps for them.
+    .filter((r) => !owners || r.visible > 0);
 }
 
 /** Whether a person already has an offboarding request (any status), to avoid duplicates. */

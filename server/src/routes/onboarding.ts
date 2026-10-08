@@ -12,6 +12,7 @@ import {
   provisionRequestGroups,
   discardRequest,
   setStartDate,
+  rollupFor,
 } from '../services/onboardingAgent';
 import {
   createIntakeLink,
@@ -35,9 +36,12 @@ import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings 
 import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
-import { visibleOwners, notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange, sendTestApprovalEmail } from '../services/onboardingOwners';
+import { notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange, sendTestApprovalEmail } from '../services/onboardingOwners';
 import { decider, sendDenied } from '../people/decider';
 import { currentUser } from '../people/authz';
+import { taskScope, seesOnboardingItem, scopeSummary, TaskScope } from '../people/taskScope';
+
+const scopeOf = (req: any): TaskScope => taskScope(currentUser(req));
 
 const router = Router();
 
@@ -66,8 +70,10 @@ router.get('/api/onboarding/form-options', (_req, res) => {
 const actor = (req: any): string => (req.user?.email as string) || (req.body && req.body.by) || 'operator';
 
 /** The board: every onboarding request with its progress rollup, plus the form option catalogs. */
-router.get('/api/onboarding', (_req, res) => {
-  res.json({ requests: listRequests(), options: getFormOptions() });
+router.get('/api/onboarding', (req, res) => {
+  const s = scopeOf(req);
+  const requests = s.all ? listRequests() : listRequests((it) => seesOnboardingItem(s, it));
+  res.json({ requests, options: getFormOptions(), viewer: scopeSummary(s, currentUser(req)) });
 });
 
 /** Create a new onboarding request and auto-route it into gated items. Emails each owner lane's tasks
@@ -87,8 +93,8 @@ router.post('/api/onboarding', (req, res) => {
  *  so it can be previewed, copied, and sent by hand, or sent now via the OS. Role-scoped. */
 router.get('/api/onboarding/:id(\\d+)/owner-email/:owner', (req, res) => {
   const owner = req.params.owner as any;
-  const vis = visibleOwners(currentUser(req));
-  if (vis && !vis.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
+  const s = scopeOf(req);
+  if (!s.all && !s.onboarding.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
   const base = `${req.protocol}://${req.get('host')}`;
   const out = ownerEmailPreview(Number(req.params.id), owner, base);
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
@@ -96,8 +102,8 @@ router.get('/api/onboarding/:id(\\d+)/owner-email/:owner', (req, res) => {
 });
 router.post('/api/onboarding/:id(\\d+)/owner-email/:owner/send', async (req, res) => {
   const owner = req.params.owner as any;
-  const vis = visibleOwners(currentUser(req));
-  if (vis && !vis.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
+  const s = scopeOf(req);
+  if (!s.all && !s.onboarding.has(owner)) return res.status(403).json({ ok: false, error: 'not visible to your role' });
   const base = `${req.protocol}://${req.get('host')}`;
   const out = await sendOwnerEmailNow(Number(req.params.id), owner, base);
   res.status(out.ok ? 200 : 400).json(out);
@@ -132,30 +138,21 @@ router.post('/api/onboarding/:id(\\d+)/discard', (req, res) => {
 router.get('/api/onboarding/:id(\\d+)', (req, res) => {
   const out = getRequest(Number(req.params.id));
   if (!out) return res.status(404).json({ ok: false, error: 'request not found' });
-  const vis = visibleOwners(currentUser(req));
-  if (vis) {
-    out.groups = out.groups.filter((g) => vis.has(g.owner as any));
-    // Recompute the rollup from only the lanes this viewer can see, so counts match what they see.
-    const items = out.groups.flatMap((g) => g.items);
-    const total = items.length;
-    const done = items.filter((i) => i.status === 'done' || i.status === 'approved').length;
-    const settled = items.filter((i) => i.status !== 'pending').length;
-    const pendingApprovals = items.filter((i) => i.kind === 'approval' && i.status === 'pending').length;
-    out.rollup = { total, settled, done, pending: total - settled, pendingApprovals, progress: total ? Math.round((done / total) * 100) : 0 };
+  const s = scopeOf(req);
+  if (!s.all) {
+    // Only this viewer's own tasks: their department's lanes, and manager approvals addressed to them.
+    out.groups = out.groups.map((g) => ({ ...g, items: g.items.filter((it) => seesOnboardingItem(s, it)) })).filter((g) => g.items.length);
+    if (!out.groups.length) return res.status(404).json({ ok: false, error: 'No tasks for your team on this hire.' });
+    out.rollup = rollupFor(out.groups.flatMap((g) => g.items));
   }
-  res.json({ ok: true, ...out });
+  res.json({ ok: true, ...out, viewer: scopeSummary(s, currentUser(req)) });
 });
 
 /** The signed-in person allowed to decide this item (its lane must be one they can see). */
 function itemDecider(req: any, itemId: number) {
   const row = getDb().prepare(`SELECT owner, email_to FROM onboarding_items WHERE id = ?`).get(itemId) as { owner: string; email_to: string | null } | undefined;
-  return decider(req, (u) => {
-    const vis = visibleOwners(u);
-    if (!vis || !row) return true; // admins and executive approvers
-    // A hire's-manager approval is that manager's call, not every manager's.
-    if (row.owner === 'manager') return !!row.email_to && row.email_to.toLowerCase() === u.email.toLowerCase();
-    return vis.has(row.owner as any);
-  });
+  // Only someone who can see the task may decide it (a manager approval is that manager's call alone).
+  return decider(req, (u) => !!row && seesOnboardingItem(taskScope(u), row));
 }
 const baseUrl = (req: any) => `${req.protocol}://${req.get('host')}`;
 

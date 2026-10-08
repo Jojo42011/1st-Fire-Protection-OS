@@ -502,7 +502,8 @@ router.get('/api/ad-audit/agent-script', (_req, res) => {
   const file = path.join(__dirname, '..', '..', '..', 'dc-agent', 'collect-ad-inventory.ps1');
   if (!fs.existsSync(file)) return res.status(404).type('text').send('Agent script not found in this build.');
   res.set('Content-Type', 'text/plain; charset=utf-8');
-  res.set('Content-Disposition', 'attachment; filename="collect-ad-inventory.ps1"');
+  // Named like the copy on the DC (C:\dc-agent\collectadinventory1stfp.ps1) so it drops straight over it.
+  res.set('Content-Disposition', 'attachment; filename="collectadinventory1stfp.ps1"');
   res.send(fs.readFileSync(file, 'utf8'));
 });
 

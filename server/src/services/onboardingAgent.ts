@@ -575,11 +575,15 @@ function rollupFor(items: OnboardingItem[]): RequestRollup {
 }
 
 /** Every request with a progress rollup, newest first (the board). Discarded requests are hidden. */
-export function listRequests(): (any & { rollup: RequestRollup })[] {
+export function listRequests(see?: (item: OnboardingItem) => boolean): (any & { rollup: RequestRollup })[] {
   const db = getDb();
   const requests = db.prepare(`SELECT * FROM onboarding_requests WHERE status IS NULL OR status != 'discarded' ORDER BY id DESC`).all() as any[];
-  return requests.map((r) => ({ ...r, rollup: rollupFor(itemsFor(r.id)) }));
+  return requests
+    .map((r) => { const items = see ? itemsFor(r.id).filter(see) : itemsFor(r.id); return { ...r, rollup: rollupFor(items), visible: items.length }; })
+    // A team only sees the hires that have tasks for them, counted from their own tasks.
+    .filter((r) => !see || r.visible > 0);
 }
+export { rollupFor };
 
 /** Discard an onboarding request: mark it discarded so it drops off the board. Reversible (the row and
  *  its items are kept); use for test entries or a hire who never actually started. */

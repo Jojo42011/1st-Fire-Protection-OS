@@ -48,8 +48,8 @@ var SEV={critical:'bad',high:'bad',medium:'warn'};
 var STAGE={s1:'Day 0 · lock down',s2:'Stop paying',s3:'Cut the forward',s4:'Retire'};
 var TAB='board', OPEN=null, POLICY={forwardDays:90,retainDays:180};
 var DEPT='', CAN_ALL=false; // department filter (admins can see all and narrow by dept)
-var DEPTS=[['','All teams'],['it','IT'],['hr','HR'],['accounting','Accounting'],['manager','Manager']];
-function ownerQS(){return DEPT?('?owner='+encodeURIComponent(DEPT)):'';}
+var DEPTS=[['','All teams'],['it','IT'],['it_physical','IT manager'],['hr','HR'],['accounting','Accounting'],['safety','Safety'],['servicetrade','ServiceTrade'],['manager','Manager']];
+function ownerQS(){return DEPT?('?dept='+encodeURIComponent(DEPT)):'';}
 
 var HEADS={
   board:{t:'Offboarding',s:'Who is leaving, and is all their access and company property back?'},
@@ -79,7 +79,8 @@ function loadBoard(){
   document.getElementById('view').innerHTML='<div class="empty">Loading…</div>';
   fetch('/api/offboarding'+ownerQS()).then(function(r){return r.json();}).then(function(d){
     POLICY=d.policy||POLICY;
-    CAN_ALL=!!(d.viewer&&d.viewer.canSeeAll);
+    CAN_ALL=!!(d.viewer&&d.viewer.canSeeAll); var V=d.viewer||{};
+    var bl=document.querySelector('#headActions [data-tab="backlog"]'); if(bl) bl.style.display=(CAN_ALL||(V.teams||[]).indexOf('IT')>=0)?'':'none'; // IT and admin tool
     var reqs=d.requests||[];
     var rows=reqs.map(function(r){var ru=r.rollup||{};
       var st=r.status==='complete'?OS.pill('Complete','good'):r.status==='cancelled'?OS.pill('Cancelled','neutral'):OS.pill('In progress','warn');
@@ -96,15 +97,17 @@ function loadBoard(){
     var done=reqs.filter(function(r){return r.status==='complete';}).length;
     var strip=OS.metricStrip([
       {label:'Leaving now',value:open.length,format:'count',drillable:false,sub:'open offboardings'},
-      {label:'Steps left',value:steps,format:'count',drillable:false,sub:'across every team'},
+      {label:'Steps left',value:steps,format:'count',drillable:false,sub:CAN_ALL?'across every team':'for your team'},
       {label:'Approvals waiting',value:appr,format:'count',drillable:false,sub:'account and mailbox deletes'},
       {label:'Completed',value:done,format:'count',drillable:false,sub:'fully offboarded'}
     ]);
     var table=reqs.length?'<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Person</th><th>Progress</th><th>Status</th><th>Mail forwards until</th><th>Account retires</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      :OS.empty('No one is being offboarded. Start one, or run the backlog sweep.','✓');
+      :(!CAN_ALL&&!V.signedIn)?'':OS.empty(CAN_ALL?'No one is being offboarded. Start one, or run the backlog sweep.':'Nothing for your team right now.','✓');
     var chips = CAN_ALL
       ? '<div class="os-chips">'+DEPTS.map(function(d2){return '<button class="os-chip'+(d2[0]===DEPT?' on':'')+'" data-dept="'+d2[0]+'">'+esc(d2[0]?d2[1]:'All teams')+'</button>';}).join('')+'</div>'
-      : '<div class="note-line" style="margin:0 0 10px">Showing your team\'s steps.</div>';
+      : !V.signedIn ? '<div class="banner warn">Sign in with your Microsoft account to see your team\'s offboarding steps. The shared office password does not show tasks.</div>'
+      : !(V.teams||[]).length ? '<div class="banner warn">Your account has no team in Access &amp; Roles, so no steps are shown. Ask a People admin to add one.</div>'
+      : '<div class="note-line" style="margin:0 0 10px">Showing steps for <b>'+esc(V.teams.join(', '))+'</b> only.</div>';
     document.getElementById('view').innerHTML=strip+'<div class="sec-h"><h2>People leaving<span class="n">'+open.length+'</span></h2><span class="aside">Click someone to see their checklist</span></div>'+chips+table+
       '<div class="note-line policy">Mail forwards for <b>'+POLICY.forwardDays+' days</b>, then the account retires after <b>'+POLICY.retainDays+' days</b>. <button class="linkbtn" id="editPolicy">Change</button></div><div id="cloudPerm"></div>';
     document.querySelectorAll('.rowlink').forEach(function(tr){tr.addEventListener('click',function(){openReq(Number(tr.getAttribute('data-id')));});});

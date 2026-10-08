@@ -1,9 +1,12 @@
 <#
   1st Fire Protection OS - on-prem AD inventory agent (P1, read-only)
 
-  Reads Active Directory read-only and posts a full snapshot to the OS, which mirrors it and
-  compares it against the employee record to surface accounts that need cleanup. This script does
-  NOT change AD in any way: it only runs Get-ADUser and an HTTPS POST.
+  Reads Active Directory and posts a full snapshot to the OS, which mirrors it and compares it
+  against the employee record to surface accounts that need cleanup. After posting, it runs any
+  jobs the OS queued (create a new hire, disable or retire a departed account).
+
+  On the DC this file is saved as C:\dc-agent\collectadinventory1stfp.ps1 and run by a scheduled task.
+  To update it, download it from the Active Directory page in the OS and save it over that file.
 
   Run it on a domain controller (or any domain-joined host with the ActiveDirectory module) as an
   account that can read the directory. See README.md for the scheduled-task setup.
