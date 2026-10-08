@@ -46,6 +46,13 @@ function bambooLlc(key: string): string | null {
   return null;
 }
 
+/** 2103773473 / (210) 377-3473 / +1 210 377 3473 -> 210-377-3473. Anything else is returned trimmed. */
+export function formatPhone(v: string | null | undefined): string {
+  const d = String(v || '').replace(/\D/g, '');
+  const ten = d.length === 11 && d.startsWith('1') ? d.slice(1) : d;
+  return ten.length === 10 ? `${ten.slice(0, 3)}-${ten.slice(3, 6)}-${ten.slice(6)}` : String(v || '').trim();
+}
+
 export function officeBranding(officeRaw: string): OfficeBranding {
   const key = officeRaw ? (canonicalOffice(officeRaw) || '') : '';
   const llc = bambooLlc(key) || DEFAULT_LLC[key] || '1st Fire Protection Services, LLC';

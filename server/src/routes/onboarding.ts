@@ -335,6 +335,8 @@ router.post('/api/onboarding/:id(\\d+)/provision-job', (req, res) => {
     department: plan.department,
     office: plan.office,
     company: plan.company,
+    telephone: plan.telephone, // office main line (signature Telephone)
+    description: plan.description, // account type: AD + Email or Email Only
   };
   const job = enqueue('ad_create_user', payload, { type: 'onboarding_request', id }, actor(req));
   res.json({ ok: true, job, upn: plan.upn, sam: plan.sam, password: plan.password, securityGroups: allGroups, warnings: plan.warnings });

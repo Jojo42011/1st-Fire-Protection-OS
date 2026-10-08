@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { directoryAudit } from '../services/adDirectoryAudit';
+import fs from 'fs';
+import path from 'path';
 import { timingSafeEqual } from 'crypto';
 import { ingestInventory, auditReport, lastSync, AdUserIn } from '../services/adAudit';
 import { getDb } from '../db/index';
@@ -485,13 +487,23 @@ router.get('/api/ad-audit', (_req, res) => {
 /** OU placement and email-signature fields (Title, Telephone = office main line, Mobile) against
  *  BambooHR, plus a preview-first PowerShell for Telephone/Mobile. Read-only; nothing is written. */
 router.get('/api/ad-audit/directory', (_req, res) => {
-  try { const { script, ...rest } = directoryAudit(); res.json({ ok: true, ...rest, scriptLines: script.split('\r\n').filter((l) => /^Set-ADUser/.test(l)).length }); }
+  try { const { script, ...rest } = directoryAudit(); res.json({ ok: true, ...rest, scriptLines: script.split('\r\n').filter((l) => /^(Fix-User|Move-User) /.test(l)).length }); }
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 router.get('/api/ad-audit/directory/script', (_req, res) => {
   res.set('Content-Type', 'text/plain; charset=utf-8');
-  res.set('Content-Disposition', 'attachment; filename="signature-fields.ps1"');
+  res.set('Content-Disposition', 'attachment; filename="fix-ad.ps1"');
   res.send(directoryAudit().script);
+});
+
+/** The current DC agent script (no secrets in it: the token comes from the DC's environment), so
+ *  the copy on the domain controller can be replaced from the OS instead of from the repo. */
+router.get('/api/ad-audit/agent-script', (_req, res) => {
+  const file = path.join(__dirname, '..', '..', '..', 'dc-agent', 'collect-ad-inventory.ps1');
+  if (!fs.existsSync(file)) return res.status(404).type('text').send('Agent script not found in this build.');
+  res.set('Content-Type', 'text/plain; charset=utf-8');
+  res.set('Content-Disposition', 'attachment; filename="collect-ad-inventory.ps1"');
+  res.send(fs.readFileSync(file, 'utf8'));
 });
 
 /** Whether the agent token is set, so the UI can tell the admin if the DC agent can connect yet. */

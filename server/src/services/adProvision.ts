@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto';
 import { getDb } from '../db/index';
 import { getState, setState } from '../db/schema';
 import { catalogByKind } from './onboardingCatalog';
+import { officeBranding, formatPhone } from './officeBranding';
 
 /**
  * On-prem AD new-hire provisioning (hybrid identity).
@@ -173,6 +174,10 @@ export interface ProvisionPlan {
   department: string | null;
   office: string | null;
   company: string | null;
+  // Email-signature fields: Telephone is the office main line; Description is the account type,
+  // "AD + Email" when the hire gets a computer (signs in to the domain), else "Email Only".
+  telephone: string | null;
+  description: string;
 }
 
 /**
@@ -180,10 +185,16 @@ export interface ProvisionPlan {
  * one-time password, and the mapped groups. Both the generated script and the DC create-user job
  * are rendered from this, so they never drift. Reads only; writes no state.
  */
+/** "AD + Email" when the hire gets a computer (new or reassigned) and so signs in to the domain, else "Email Only". */
+export function accountType(request: { computer_type?: string | null; existing_computer?: string | null }): 'AD + Email' | 'Email Only' {
+  const newComputer = !!request.computer_type && request.computer_type !== 'none';
+  return newComputer || !!String(request.existing_computer || '').trim() ? 'AD + Email' : 'Email Only';
+}
+
 export function buildProvisionPlan(requestId: number): ProvisionPlan {
   const db = getDb();
   const request = db.prepare(`SELECT * FROM onboarding_requests WHERE id = ?`).get(requestId) as any;
-  const empty: ProvisionPlan = { ok: false, first: '', last: '', displayName: '', sam: '', upn: '', ou: '', ouIsPlaceholder: true, password: '', securityGroups: [], sharepointGroups: [], licenseSku: null, warnings: [], title: null, mobile: null, department: null, office: null, company: null };
+  const empty: ProvisionPlan = { ok: false, first: '', last: '', displayName: '', sam: '', upn: '', ou: '', ouIsPlaceholder: true, password: '', securityGroups: [], sharepointGroups: [], licenseSku: null, warnings: [], title: null, mobile: null, department: null, office: null, company: null, telephone: null, description: 'Email Only' };
   if (!request) return { ...empty, error: 'request not found' };
 
   const settings = getAdSettings();
@@ -256,10 +267,12 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
     licenseSku: settings.licenseSku,
     warnings,
     title: title || null,
-    mobile: mobile || null,
+    mobile: mobile ? formatPhone(mobile) : null,
     department: department || null,
     office: office || null,
     company: '1st Fire Protection',
+    telephone: office ? officeBranding(office).phone : null,
+    description: accountType(request),
   };
 }
 
@@ -271,7 +284,7 @@ export function buildProvisionPlan(requestId: number): ProvisionPlan {
 export function buildProvisionScript(requestId: number): ProvisionScript {
   const plan = buildProvisionPlan(requestId);
   if (!plan.ok) return { ok: false, error: plan.error };
-  const { first, last, sam, upn, ou, ouIsPlaceholder, password: pw, securityGroups, sharepointGroups, displayName, licenseSku, warnings, title, mobile, department, office, company } = plan;
+  const { first, last, sam, upn, ou, ouIsPlaceholder, password: pw, securityGroups, sharepointGroups, displayName, licenseSku, warnings, title, mobile, department, office, company, telephone, description } = plan;
 
   // Confirm each security group name is one we recognise from the catalog, so a typo shows up.
   const knownGroups = new Set(catalogByKind('printer').map((p) => p.group_name).filter(Boolean) as string[]);
@@ -319,7 +332,8 @@ export function buildProvisionScript(requestId: number): ProvisionScript {
   // are written; -Office maps to physicalDeliveryOfficeName in AD.
   const attrs: string[] = [];
   if (title) attrs.push(`-Title ${psq(title)}`);
-  if (title) attrs.push(`-Description ${psq(title)}`); // Description mirrors the job title
+  attrs.push(`-Description ${psq(description)}`); // account type: AD + Email or Email Only
+  if (telephone) attrs.push(`-OfficePhone ${psq(telephone)}`); // office main line, for the email signature
   if (mobile) attrs.push(`-MobilePhone ${psq(mobile)}`);
   if (department) attrs.push(`-Department ${psq(department)}`);
   if (office) attrs.push(`-Office ${psq(office)}`);

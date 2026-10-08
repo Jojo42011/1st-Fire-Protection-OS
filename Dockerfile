@@ -1,4 +1,4 @@
-# 1st FP Operating System — single-image build
+# 1st FP Operating System: single-image build
 FROM node:20-slim AS build
 WORKDIR /app
 # native deps for better-sqlite3
@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/client ./client
+COPY dc-agent ./dc-agent
 VOLUME /data
 EXPOSE 3900
 CMD ["node", "server/dist/app.js"]

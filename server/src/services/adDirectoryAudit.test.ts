@@ -57,7 +57,25 @@ test('signature fields: office main line, and Mobile only filled when empty', ()
   assert.equal(by('Tia Teams').mobile.status, 'differs');
   assert.equal(by('Ann Austin').description.suggested, 'AD + Email');
   assert.equal(by('Hal Moved').description.suggested, 'Email Only');
-  assert.match(d.script, /Set-ADUser -Identity 'hal' -OfficePhone '346-372-8684' -MobilePhone '713-555-0102' -WhatIf:\$preview/);
-  assert.doesNotMatch(d.script, /Identity 'tia'[^\n]*MobilePhone/, 'never overwrites a Mobile already set');
-  assert.doesNotMatch(d.script, /^Get-ADUser .*Move-ADObject/m, 'moves stay commented out');
+  assert.match(d.script, /^Fix-User 'hal' @\{ OfficePhone = '346-372-8684'; MobilePhone = '713-555-0102'; Description = 'Email Only' \}/m);
+  assert.match(d.script, /^Fix-User 'una' @\{[^}]*Title = 'Inspector'/m, 'fills a blank Title');
+  assert.doesNotMatch(d.script, /^Fix-User 'hal'[^\n]*Title/m, 'never overwrites a Title already set');
+  assert.doesNotMatch(d.script, /^Fix-User 'tia'[^\n]*MobilePhone/m, 'never overwrites a Mobile already set');
+  assert.match(d.script, /^Fix-User 'ann' @\{[^}]*Description = 'AD \+ Email'/m);
+  assert.match(d.script, /^param\(\[switch\]\$Apply\)/m);
+});
+
+test('moves only into an OU that already holds active people; the rest are listed for a person', () => {
+  emp('Hank', 'Houston', 'hank@1stfp.com', '1st FP Houston, LLC', null);
+  emp('Hope', 'Houston', 'hope@1stfp.com', '1st FP Houston, LLC', null);
+  ingestInventory([
+    { objectGuid: 'g2', sam: 'hal', upn: 'hal@1stfp.com', displayName: 'Hal Moved', title: 'Tech', enabled: true, ou: 'OU=Users,OU=Austin,DC=corp,DC=local' },
+    { objectGuid: 'g3', sam: 'una', upn: 'una@1stfp.com', displayName: 'Una Users', enabled: true, ou: 'CN=Users,DC=corp,DC=local' },
+    { objectGuid: 'g7', sam: 'hank', upn: 'hank@1stfp.com', displayName: 'Hank Houston', enabled: true, ou: 'OU=Users,OU=Houston,DC=corp,DC=local' },
+    { objectGuid: 'g8', sam: 'hope', upn: 'hope@1stfp.com', displayName: 'Hope Houston', enabled: true, ou: 'OU=Users,OU=Houston,DC=corp,DC=local' },
+  ]);
+  const d = directoryAudit();
+  assert.match(d.script, /^Move-User 'hal' 'OU=Users,OU=Houston,DC=corp,DC=local'/m);
+  assert.doesNotMatch(d.script, /^Move-User 'una'/m, 'no Waco OU with people in it, so no automatic move');
+  assert.match(d.script, /^# {3}Una Users \(Waco\): in Users\. There is no OU for Waco yet\./m);
 });
