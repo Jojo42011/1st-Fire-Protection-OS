@@ -79,3 +79,20 @@ test('moves only into an OU that already holds active people; the rest are liste
   assert.doesNotMatch(d.script, /^Move-User 'una'/m, 'no Waco OU with people in it, so no automatic move');
   assert.match(d.script, /^# {3}Una Users \(Waco\): in Users\. There is no OU for Waco yet\./m);
 });
+
+test('a real account is matched by email before an admin account can take the person by name, and skipped accounts are printed', () => {
+  db.exec(`DELETE FROM employees`);
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, preferred_name, work_email, office, employment_status) VALUES ('Devonte','Booker','Devon','devon.booker@1stfp.com','1st FP Services, LLC','terminated')`).run();
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, preferred_name, work_email, office, employment_status) VALUES ('Devonte','Booker','Devon','devon.booker@1stfp.com','1st FP Services, LLC','active')`).run();
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, preferred_name, work_email, office, employment_status) VALUES ('Shawn','Flores',NULL,NULL,'1st FP Austin, LLC','active')`).run();
+  ingestInventory([
+    { objectGuid: 'adm', sam: 'admin.devon', upn: 'admin.devon@corp.local', displayName: 'Devon Booker (Admin)', givenName: 'Devon', surname: 'Booker', enabled: true, ou: 'OU=Admins,DC=corp,DC=local' },
+    { objectGuid: 'dev', sam: 'devon.booker', upn: 'devon.booker@1stfp.com', displayName: 'Devon Booker', givenName: 'Devon', surname: 'Booker', enabled: true, ou: 'OU=Services,DC=corp,DC=local' },
+    { objectGuid: 'sha', sam: 'sflores', upn: 'sflores@corp.local', displayName: 'Shawn Flores', enabled: true, ou: 'OU=Austin,DC=corp,DC=local' },
+  ]);
+  const d = directoryAudit();
+  const names = d.people.map((p) => p.name).sort();
+  assert.deepEqual(names, ['Devon Booker', 'Shawn Flores'], 'active record wins; display name matches when AD has no given/surname');
+  assert.equal(d.people.find((p) => p.name === 'Devon Booker')!.sam, 'devon.booker', 'the real account, not the admin one');
+  assert.match(d.script, /Write-Host '  Devon Booker \(Admin\) \(admin\.devon\): no match in BambooHR/);
+});

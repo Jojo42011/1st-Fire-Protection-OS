@@ -2,7 +2,7 @@ import { getDb } from '../db/index';
 import { canonicalOffice, officeLabel, knownOffices } from '../os/office';
 import { officeBranding, formatPhone } from './officeBranding';
 import { getAdSettings, resolveOu } from './adProvision';
-import { lastSync, buildEmployeeIndex, matchAdToEmployee, EmpRow } from './adAudit';
+import { lastSync, EmpRow } from './adAudit';
 
 /**
  * AD directory audit for the email signature and OU placement (read-only).
@@ -69,24 +69,45 @@ export interface DirectoryAudit {
   counts: Record<string, number>;
   ouComposition: { ou: string; label: string; ouOffice: string | null; total: number; byOffice: { office: string; label: string; count: number }[] }[];
   unmatchedEnabled: { name: string; sam: string | null; ou: string | null; ouLabel: string }[];
+  skipped: { name: string; sam: string | null; reason: string }[];
   disabledOutsideDisabledOu: { name: string; sam: string | null; ouLabel: string }[];
   script: string;
 }
 
-/** Match AD accounts to active employees (UPN, email, sAM, then first + last name). */
+/** Match AD accounts to employees. Exact identifiers first (UPN, email, account name, the email's
+ *  first.last part) for every account, then names (legal or preferred first name + last name, from
+ *  the AD given name/surname or display name) for what is left, so an admin or duplicate account
+ *  can never take a person by name before their real account claims them by email. When BambooHR
+ *  has several records for one person (a rehire), the active one wins. */
+const STATUS_RANK: Record<string, number> = { active: 0, onboarding: 0, notice: 1, offboarding: 2, prehire: 3, terminated: 4 };
 function pairs(): { a: any; e: EmpRow }[] & { unmatched?: any[] } {
   const db = getDb();
   const ad = db.prepare(`SELECT * FROM ad_users`).all() as any[];
-  const idx = buildEmployeeIndex();
-  const byName = new Map<string, EmpRow>();
-  for (const e of idx.all) if (e.legal_first_name && e.legal_last_name) byName.set(lc(e.legal_first_name) + '|' + lc(e.legal_last_name), e);
+  const emps = db.prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name, work_email, upn, ad_username, employment_status,
+            job_position, public_job_title, personal_phone, manager, office, department FROM employees`
+  ).all() as (EmpRow & { preferred_name: string | null })[];
+  const rank = (e: EmpRow) => STATUS_RANK[lc(e.employment_status)] ?? 1;
+  const byId = new Map<string, EmpRow>(), byName = new Map<string, EmpRow>();
+  const put = (m: Map<string, EmpRow>, k: string, e: EmpRow) => { if (!k || k === '|') return; const cur = m.get(k); if (!cur || rank(e) < rank(cur)) m.set(k, e); };
+  const nameKey = (first: string | null | undefined, last: string | null | undefined) => (first && last ? lc(first).split(/\s+/)[0] + '|' + lc(last) : '');
+  for (const e of emps) {
+    put(byId, lc(e.upn), e); put(byId, lc(e.work_email), e); put(byId, 'sam:' + lc(e.ad_username), e);
+    const local = lc(e.work_email).split('@')[0]; if (local) put(byId, 'sam:' + local, e);
+    put(byName, nameKey(e.legal_first_name, e.legal_last_name), e);
+    put(byName, nameKey(e.preferred_name, e.legal_last_name), e);
+  }
   const out: { a: any; e: EmpRow }[] & { unmatched?: any[] } = [];
-  out.unmatched = [];
-  const used = new Set<number>();
+  const used = new Set<number>(), left: any[] = [];
   for (const a of ad) {
-    let e = matchAdToEmployee(a, idx);
-    if (!e && a.given_name && a.surname) e = byName.get(lc(a.given_name) + '|' + lc(a.surname));
-    if (e && !used.has(e.id)) { used.add(e.id); out.push({ a, e }); } else out.unmatched!.push(a);
+    const e = (a.upn && byId.get(lc(a.upn))) || (a.email && byId.get(lc(a.email))) || (a.sam && byId.get('sam:' + lc(a.sam))) || (a.upn && byId.get('sam:' + lc(a.upn).split('@')[0])) || undefined;
+    if (e && !used.has(e.id)) { used.add(e.id); out.push({ a, e }); } else left.push(a);
+  }
+  out.unmatched = [];
+  for (const a of left) {
+    const parts = String(a.display_name || '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/);
+    const e = byName.get(nameKey(a.given_name, a.surname)) || (parts.length >= 2 ? byName.get(nameKey(parts[0], parts[parts.length - 1])) : undefined);
+    if (e && !used.has(e.id)) { used.add(e.id); out.push({ a, e }); } else out.unmatched.push(a);
   }
   return out;
 }
@@ -198,6 +219,13 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
         .filter((a) => lc(a.ou) !== disabledOu).map((a) => ({ name: a.display_name || a.sam, sam: a.sam, ouLabel: ouLabel(a.ou) }))
     : [];
 
+  // Every enabled account the script leaves alone, and why, so nobody is silently skipped.
+  const skipped = [
+    ...all.filter(({ a, e }) => a.enabled && ['terminated', 'prehire'].includes(lc(e.employment_status)))
+      .map(({ a, e }) => ({ name: a.display_name || a.sam, sam: a.sam, reason: `BambooHR has them as ${lc(e.employment_status)}` })),
+    ...unmatchedEnabled.map((u) => ({ name: u.name, sam: u.sam, reason: 'no match in BambooHR by email, account name or name' })),
+  ].sort((x, y) => String(x.name).localeCompare(String(y.name)));
+
   const counts: Record<string, number> = {
     active: people.length,
     wrong_office: people.filter((p) => p.placement === 'wrong_office').length,
@@ -259,6 +287,12 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     ...(moveLines.length ? moveLines : ['# No safe moves to make.']),
     ...(manualMoves.length ? ['', '# Not moved automatically (check these by hand):', ...manualMoves] : []),
     '',
+    '# ---- Enabled accounts this script does not touch (printed so nobody is skipped silently) ----',
+    '# Shared, service and admin accounts belong here. A real person here needs their BambooHR record',
+    '# fixed (work email, or status) so the next script includes them.',
+    `Write-Host ''; Write-Host 'Not touched (${skipped.length}):' -ForegroundColor Yellow`,
+    ...skipped.map((k) => `Write-Host ${psq(`  ${k.name}${k.sam ? ` (${k.sam})` : ''}: ${k.reason}`)}`),
+    '',
     'if ($Apply) {',
     '  Write-Host "Done: $script:changed changed, $script:skipped skipped, $script:failed failed." -ForegroundColor Yellow',
     '  Write-Host "Now push it to Microsoft 365: on the Entra Connect server run  Start-ADSyncSyncCycle -PolicyType Delta"',
@@ -266,7 +300,7 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     '',
   ].join('\r\n');
 
-  return { lastSync: lastSync(), telephoneCollected, people, counts, ouComposition, unmatchedEnabled, disabledOutsideDisabledOu, script };
+  return { lastSync: lastSync(), telephoneCollected, people, counts, ouComposition, unmatchedEnabled, skipped, disabledOutsideDisabledOu, script };
 }
 
 /* ─────────── the emailed report ─────────── */
