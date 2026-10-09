@@ -252,7 +252,7 @@ const PAGE_MODULE: Record<string, string> = {
   'executive.html': 'overview', 'office-performance.html': 'overview', 'scoreboard.html': 'overview',
   'reports-money.html': 'accounting', 'reports-ops.html': 'service', 'reports-people.html': 'people',
   'reports-builder.html': 'overview',
-  'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access', 'devices.html': 'access',
+  'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access', 'devices.html': 'access', 'devices-report.html': 'access',
   'company-integrations.html': 'access', 'integrations.html': 'access', 'sync.html': 'access',
   'access.html': 'access', 'roster.html': 'access', 'harness.html': 'access',
   'department.html': 'access', 'agent.html': 'access', 'ad-audit.html': 'access',
@@ -356,6 +356,7 @@ app.get('/reports-people', page('reports-people.html'));
 app.get('/offices', page('offices.html'));
 app.get('/it-systems', page('it-systems.html'));
 app.get('/devices', page('devices.html'));
+app.get('/devices-report', page('devices-report.html'));
 app.get('/company-integrations', page('company-integrations.html'));
 app.get('/people', page('people.html'));
 app.get('/readiness', page('readiness.html'));

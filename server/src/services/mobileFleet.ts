@@ -763,7 +763,7 @@ export function teamsAudit(): { synced: boolean; rows: any[]; counts: Record<str
   const pushRow = (name: string, office: string | null, status: string | null, phones: any[], tablets: any[], t: any) => {
     const rec = recommend(phones, t, synced);
     rows.push({
-      person: name, office: office || '', employment_status: status, phones: phones.map((p) => p.number_fmt), tablets: tablets.map((p) => p.number_fmt),
+      person: name, office: office ? officeLabel(canonicalOffice(office)) || office : '', employment_status: status, phones: phones.map((p) => p.number_fmt), tablets: tablets.map((p) => p.number_fmt),
       phone_cost: Math.round(phones.reduce((s, p) => s + (Number(p.monthly_cost) || 0), 0) * 100) / 100,
       phone_balance: Math.round(phones.reduce((s, p) => s + (Number(p.device_balance) || 0), 0) * 100) / 100,
       upn: t?.upn || null, account_enabled: t ? !!t.account_enabled : null, teams_phone: t ? !!t.has_teams_phone : null,
@@ -783,6 +783,10 @@ export function teamsAudit(): { synced: boolean; rows: any[]; counts: Record<str
   return { synced, rows, counts };
 }
 
+/** Outside (PSTN) calls on Teams in the period that separate "uses the cell" from "uses Teams". */
+export const TEAMS_LIGHT_CALLS = 4;
+export const TEAMS_HEAVY_CALLS = 15;
+
 function recommend(phones: any[], t: any, synced: boolean): { category: string; recommendation: string; tone: string; rank: number } {
   const hasCell = phones.length > 0;
   if (!synced) return { category: 'pending', recommendation: 'Sync Teams voice to compare', tone: 'neutral', rank: 9 };
@@ -794,8 +798,11 @@ function recommend(phones: any[], t: any, synced: boolean): { category: string; 
   const unused = t.has_teams_phone && (t.call_count ?? 0) === 0 && (!pstnKnown || t.pstn_calls === 0);
   if (unused) return { category: hasCell ? 'overlap_unused' : 'unused', recommendation: hasCell ? 'Has an AT&T phone and Teams Phone but made no Teams calls. Remove Teams Phone' : 'Teams Phone with no calls in the period. Remove the license', tone: 'bad', rank: 1 };
   if (t.has_teams_phone && hasCell) {
-    const light = pstnKnown && t.pstn_calls < 10;
-    return { category: 'overlap', recommendation: light ? 'Has both and barely calls real numbers on Teams. Pick one: keep the AT&T phone or Teams Phone' : 'Has both and uses Teams for calls. Candidate to drop the AT&T line (keep an iPad if it is a field tablet)', tone: 'warn', rank: 2 };
+    // Outside calls (PSTN) decide which of the two they actually use; Teams-to-Teams calls need no Teams Phone.
+    const outside = pstnKnown ? t.pstn_calls : t.call_count ?? 0;
+    if (outside <= TEAMS_LIGHT_CALLS) return { category: 'overlap_light', recommendation: 'Has both but rarely calls outside numbers on Teams. Remove Teams Phone and keep the AT&T phone', tone: 'bad', rank: 1 };
+    if (outside >= TEAMS_HEAVY_CALLS) return { category: 'overlap_heavy', recommendation: 'Has both and calls outside numbers on Teams regularly. Candidate to drop the AT&T phone', tone: 'warn', rank: 2 };
+    return { category: 'overlap', recommendation: 'Has both and uses each some. Review with their manager and keep one', tone: 'warn', rank: 2 };
   }
   if (t.has_teams_phone) return { category: 'teams_only', recommendation: 'Teams Phone in use, no AT&T phone', tone: 'good', rank: 8 };
   return { category: 'att_only', recommendation: 'AT&T phone only, no Teams Phone', tone: 'neutral', rank: 7 };

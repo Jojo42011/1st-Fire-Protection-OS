@@ -187,6 +187,7 @@ var SCREENS = {
   offboarding: { src:'/offboarding', title:'Offboarding',       sub:'The departure checklist and account cleanup' },
   itSystems:   { src:'/it-systems',  title:'IT & Systems',      sub:'Access, licenses and system health' },
   devices:     { src:'/devices',     title:'Phones & iPads',    sub:'AT&T lines, devices, MDM and Teams voice' },
+  devicesReport:{ src:'/devices-report', title:'Phones: executive report', sub:'Spend, savings and decisions for leadership' },
   adAudit:     { src:'/ad-audit',    title:'Active Directory',  sub:'On-prem AD: OU structure and account cleanup' },
   spAccess:    { src:'/sp-access',   title:'SharePoint access', sub:'Who has SharePoint access, and cleanup' },
   spend:       { src:'/licenses',    title:'License cleanup',   sub:'Seats you pay for that nobody uses' },
@@ -200,12 +201,12 @@ var SCREENS = {
 };
 var MODULES = [
   { k:'people', tile:'P', label:'People', desc:'Employees, onboarding and offboarding', items:['people','employees','onboarding','offboarding','templates'] },
-  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','devices','myTasks','adAudit','spAccess','spend','settings','integrations','readiness'] },
+  { k:'it',     tile:'I', label:'IT',     desc:'Accounts, access, licenses and systems', items:['itSystems','devices','devicesReport','myTasks','adAudit','spAccess','spend','settings','integrations','readiness'] },
   { k:'reviews', tile:'R', label:'Reviews', desc:'Google reviews and review requests', items:['reviewsHub','reviews','reviewRequests'] }
 ];
 // The People-role module that governs each screen (mirrors server PAGE_MODULE); hidden when the role lacks it.
 var SCREEN_MODULE = { people:'people', employees:'people', templates:'people', onboarding:'people', offboarding:'people',
-  itSystems:'access', devices:'access', adAudit:'access', spAccess:'access', spend:'access', settings:'access', integrations:'access', readiness:'access',
+  itSystems:'access', devices:'access', devicesReport:'access', adAudit:'access', spAccess:'access', spend:'access', settings:'access', integrations:'access', readiness:'access',
   reviewsHub:'service', reviews:'service', reviewRequests:'service' };
 // Old links (?tab=home, ?tab=approve, ...) from before the OS was narrowed land on People.
 var ALIASES = { 'reviews-hub':'reviewsHub', 'review-requests':'reviewRequests', home:'people', tasks:'people', approve:'onboarding', exceptions:'people', reportsPeople:'people', companyOffices:'people', sync:'integrations' };

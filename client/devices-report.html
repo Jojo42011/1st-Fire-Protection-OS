@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Phones executive report · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+<link rel="stylesheet" href="/brand/site-theme.css" />
+<style>
+  .rp-lead{font-size:16px;line-height:1.5;max-width:860px;margin:4px 0 18px;color:var(--ink)}
+  .rp-note{font-size:12px;color:var(--muted);margin-top:6px}
+  .rp-bars{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;font-size:13px}
+  .rp-bar{height:18px;border-radius:4px;background:var(--os-neutral,#A7B0C0);opacity:.55}
+  .rp-bar.top{background:var(--indigo,#4C5BD4);opacity:1}
+  .rp-barrow{display:flex;align-items:center;gap:10px}
+  .rp-barlab{color:var(--muted);font-size:12px;white-space:nowrap}
+  .rp-in{padding:6px 8px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit;width:100px}
+  .rp-dec li{margin:6px 0;line-height:1.45}
+  tr.rp-total td{font-weight:700}
+  @media print{
+    .os-actions,.rp-noprint{display:none!important}
+    body{background:#fff}
+    .os-card,.os-tablewrap{break-inside:avoid}
+    .os-sec{break-after:avoid}
+  }
+</style>
+</head><body>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Phones &amp; iPads: executive report</h1>
+        <div class="os-question" id="asof">Loading…</div>
+      </div>
+      <div class="os-actions">
+        <button class="os-btn" id="back">Phones &amp; iPads</button>
+        <button class="os-btn primary" id="print">Print or save as PDF</button>
+      </div>
+    </div>
+    <div id="out"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var R=null;
+function usd(n,cents){ n=Number(n)||0; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:cents?2:0,maximumFractionDigits:cents?2:0}); }
+function j(r){ return r.json(); }
+function tbl(head, rows, opts){ opts=opts||{};
+  if(!rows.length) return '<div class="os-filter-note">'+OS.esc(opts.empty||'None.')+'</div>';
+  return '<div class="os-tablewrap"><div class="os-tablescroll"><table class="os-table"><thead><tr>'+head.map(function(h){ return '<th'+(h.num?' class="num"':'')+'>'+OS.esc(h.label)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    rows.map(function(r){ return '<tr'+(r._cls?' class="'+r._cls+'"':'')+'>'+head.map(function(h){ return '<td'+(h.num?' class="num"':'')+'>'+(h.render?h.render(r):OS.esc(r[h.key]==null?'':r[h.key]))+'</td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div></div>';
+}
+function load(){
+  fetch('/api/devices/report').then(j).then(function(d){
+    if(!d||!d.ok){ document.getElementById('out').innerHTML=OS.errorBox('Could not load the report.'); return; }
+    R=d; render();
+  }).catch(function(){ document.getElementById('out').innerHTML=OS.errorBox('Could not load the report.'); });
+}
+function render(){
+  var s=R.spend, t=R.total, a=R.actions, est=s.costEstimated;
+  var asof=[]; if(R.asOf.att) asof.push('AT&T report of '+OS.esc(R.asOf.att)); if(R.asOf.teams) asof.push('Teams voice synced '+OS.esc(OS.date(R.asOf.teams))+(R.asOf.teamsPeriod?' ('+R.asOf.teamsPeriod.replace('D','last ')+' days)':''));
+  document.getElementById('asof').innerHTML=asof.length?asof.join(' · '):'Import the AT&amp;T report on Phones &amp; iPads to build this report.';
+  if(!s.activeLines){ document.getElementById('out').innerHTML=OS.empty('No lines yet. Import the AT&T report on the Phones & iPads screen.'); return; }
+  var free=a.filter(function(x){return x.key==='cancel_free';})[0];
+  var lead='We pay '+(est?'about ':'')+usd(s.monthlyService)+' a month for '+s.activeLines+' AT&amp;T lines, plus '+usd(s.monthlyInstallments)+' a month in device installments. '+
+    'The actions below save up to '+(est?'about ':'')+usd(t.monthly)+' a month ('+usd(t.yearly)+' a year)'+(t.oneTime?', for '+usd(t.oneTime)+' in one-time device payoffs':'')+'. '+
+    (free&&free.count?'The first, cancelling '+free.count+' idle paid-off lines, costs nothing.':'');
+  var strip=OS.metricStrip([
+    {label:'Monthly service',display:usd(s.monthlyService),tag:est?'est':'real',sub:s.activeLines+' lines: '+s.phones+' phones, '+s.tablets+' iPads'},
+    {label:'Device installments',display:usd(s.monthlyInstallments),sub:usd(s.deviceBalance)+' still owed'},
+    {label:'Possible savings',display:'<span style="color:var(--os-good)">'+usd(t.monthly)+'/mo</span>',tag:'est',sub:usd(t.yearly)+' a year'},
+    {label:'One-time payoffs',display:usd(t.oneTime),sub:'to cancel lines that owe a balance'},
+    {label:'Upgrades available',display:OS.num(s.upgradeEligible),sub:'lines eligible now'}
+  ]);
+  var savings=tbl([
+    {label:'Action',key:'label',render:function(r){ return r._cls?'Total':OS.esc(r.label)+(r.estimated?' '+OS.pill('Teams price est.','warn'):''); }},
+    {label:'Lines or licenses',num:true,render:function(r){ return r._cls?'':r.count+' '+OS.esc(r.unit); }},
+    {label:'Saves / month',num:true,render:function(r){ return usd(r.monthly); }},
+    {label:'Saves / year',num:true,render:function(r){ return usd(r.yearly); }},
+    {label:'One-time cost',num:true,render:function(r){ return r.oneTime?usd(r.oneTime)+' payoff':'$0'; }}
+  ], a.concat([{_cls:'rp-total',monthly:t.monthly,yearly:t.yearly,oneTime:t.oneTime}]));
+  var max=Math.max.apply(null,R.offices.map(function(o){return o.lines;}).concat([1]));
+  var bars='<div class="rp-bars">'+R.offices.map(function(o,i){
+    return '<div>'+OS.esc(o.label)+'</div><div class="rp-barrow"><div class="rp-bar'+(i<3?' top':'')+'" style="width:'+Math.max(2,Math.round(o.lines/max*55))+'%"></div>'+
+      '<span class="rp-barlab">'+o.lines+' lines: '+o.phones+' phone'+(o.phones===1?'':'s')+', '+o.tablets+' iPad'+(o.tablets===1?'':'s')+', ~'+usd(o.monthly)+'/mo'+(o.idle?' · '+o.idle+' idle':'')+'</span></div>';
+  }).join('')+'</div>';
+  var idle=tbl([{label:'Number',key:'number'},{label:'Office',key:'office'},{label:'Device',key:'model'},{label:'Why it is idle',render:function(r){ return OS.esc(r.reason)+(r.holder?' <span class="muted">('+OS.esc(r.holder)+')</span>':''); }},
+    {label:'Device balance',num:true,render:function(r){ return r.balance?usd(r.balance):'<span class="muted">none</span>'; }}], R.idleLines, {empty:'No idle lines.'});
+  var tcols=[{label:'Person',key:'person'},{label:'Office',key:'office'},{label:'AT&T phone',render:function(r){ return r.phones.length?'Yes':'No'; }},
+    {label:'Outside calls on Teams',num:true,render:function(r){ return r.pstn_calls==null?'n/a':OS.num(r.pstn_calls); }},
+    {label:'All Teams calls',num:true,render:function(r){ return r.calls==null?'n/a':OS.num(r.calls); }}];
+  var tv=R.teamsVoice;
+  var teams=!tv.synced?OS.empty('Teams voice has not synced yet.'):
+    '<div class="os-sec" style="margin-top:6px">Remove Teams Phone <span class="n">· '+R.teams.remove.length+' licenses</span></div>'+tbl(tcols,R.teams.remove,{empty:'Nobody.'})+
+    '<div class="os-sec">Consider dropping the AT&amp;T phone <span class="n">· '+R.teams.heavy.length+' heavy Teams callers</span></div>'+tbl(tcols,R.teams.heavy,{empty:'Nobody.'})+
+    (R.teams.review.length?'<div class="os-sec">Review with their manager <span class="n">· '+R.teams.review.length+'</span></div>'+tbl(tcols,R.teams.review):'')+
+    (R.teams.disabled.length?'<div class="os-sec">Disabled accounts still holding a phone or Teams voice <span class="n">· '+R.teams.disabled.length+'</span></div>'+tbl(tcols,R.teams.disabled):'');
+  var risk=tbl([{label:'Issue',key:'label'},{label:'Devices',key:'count',num:true},{label:'What it means',key:'why'}], R.risk);
+  var removeN=R.teams.remove.length, heavyN=R.teams.heavy.length;
+  var owing=a.filter(function(x){return x.key==='cancel_owing';})[0];
+  var dec='<ol class="rp-dec">'+
+    (free&&free.count?'<li><b>Approve cancelling the '+free.count+' idle paid-off lines</b> (saves '+usd(free.monthly)+' a month, no cost).</li>':'')+
+    (owing&&owing.count?'<li><b>Keep or cancel the '+owing.count+' idle lines that owe a balance</b> (saves '+usd(owing.monthly)+' a month, '+usd(owing.oneTime)+' to pay off). Reassigning newer devices to new hires avoids buying new ones.</li>':'')+
+    (removeN?'<li><b>Remove Teams Phone from the '+removeN+' people who do not use it</b> (saves about '+usd(removeN*tv.cost)+' a month). Confirm any shared account is not a main line first.</li>':'')+
+    '<li><b>Set the phone standard: one company number per person</b>, either an AT&amp;T phone or Teams Phone, not both.</li>'+
+    (heavyN?'<li><b>Decide for the '+heavyN+' heavy Teams callers</b> whether to drop their AT&amp;T phone.</li>':'')+
+    '<li><b>Require Apple Business Manager and Addigy for every new device</b>, and use the '+s.upgradeEligible+' available upgrades to replace devices too old for current iOS.</li></ol>';
+  var notes='<ul class="rp-note" style="padding-left:18px">'+
+    '<li>AT&amp;T cost: '+(est?'estimated as the monthly bill divided by active lines ('+usd(s.perLine,true)+' a line). Enter real plan costs on Phones &amp; iPads to replace the estimate.':'from the plan costs entered on Phones &amp; iPads ('+s.priced+' lines priced).')+'</li>'+
+    '<li>Teams voice cost: '+usd(tv.cost,true)+' per user per month'+(tv.estimated?', the 2026 list price for Teams Phone with Calling Plan from third-party pricing guides (not your invoice)':', from your invoice')+'. '+
+      '<span class="rp-noprint">Set the real price: <input id="tvCost" class="rp-in" type="number" min="0" step="0.01" value="'+(tv.estimated?'':tv.cost)+'" placeholder="'+tv.cost+'" /> <button class="os-btn" id="tvSave">Save</button></span></li>'+
+    '<li>Outside calls on Teams count calls to and from real phone numbers; all Teams calls include Teams-to-Teams, which keep working without Teams Phone.</li>'+
+    '<li>Device balances come from AT&amp;T installment terms, or from the device workbook where AT&amp;T shows none.</li></ul>';
+  document.getElementById('out').innerHTML='<div class="rp-lead">'+lead+'</div>'+strip+
+    '<div class="os-sec">Savings</div>'+savings+
+    '<div class="os-sec">Lines by office</div><div class="os-card" style="padding:14px 16px">'+bars+'</div>'+
+    '<div class="os-sec">Idle lines to cancel or reassign <span class="n">· '+R.idleLines.length+'</span></div>'+idle+
+    '<div class="os-sec">AT&amp;T phone vs Teams voice</div>'+teams+
+    '<div class="os-sec">Device risk</div>'+risk+
+    '<div class="os-sec">Decisions needed</div><div class="os-card" style="padding:12px 18px">'+dec+'</div>'+
+    '<div class="os-sec">How these numbers were built</div>'+notes;
+  var sv=document.getElementById('tvSave'); if(sv) sv.addEventListener('click',function(){
+    fetch('/api/devices/teams-voice-cost',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({amount:document.getElementById('tvCost').value})})
+      .then(j).then(function(d){ if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not save.','bad'); return; } OS.toast('Saved.'); load(); }); });
+}
+document.getElementById('print').addEventListener('click',function(){ window.print(); });
+document.getElementById('back').addEventListener('click',function(){ OS.go('devices'); });
+OS.ready(load); OS.onChange(load);
+</script></body></html>

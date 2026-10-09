@@ -15,6 +15,7 @@ import {
 } from './mobileFleet';
 import { isVoicePlan, parseTeamsActivity } from './teamsVoice';
 import { abmClientAssertion, mapAddigyItem } from './appleDevices';
+import { executiveReport, setTeamsVoiceCost, DEFAULT_TEAMS_VOICE_COST } from './mobileReport';
 
 initDb();
 const db = getDb();
@@ -211,6 +212,39 @@ test('Teams audit sorts overlap and unused licenses', () => {
   assert.equal(cat('Front Desk'), 'unused');
   assert.equal(cat('Mario'), 'teams_only');
   assert.equal(a.rows[0].category, 'disabled'); // worst first
+});
+
+test('people with both are split by how often they call outside numbers on Teams', () => {
+  const set = (pstn: number, calls: number) => db.prepare(`UPDATE teams_voice_users SET pstn_calls = ?, call_count = ? WHERE upn = 'josh@1stfp.com'`).run(pstn, calls);
+  const cat = () => teamsAudit().rows.find((r) => r.person.startsWith('Joshua'))!.category;
+  set(2, 40); assert.equal(cat(), 'overlap_light');
+  set(9, 40); assert.equal(cat(), 'overlap');
+  set(30, 40); assert.equal(cat(), 'overlap_heavy');
+  set(0, 0); assert.equal(cat(), 'overlap_unused');
+});
+
+test('executive report totals come from the same lines and Teams audit', () => {
+  const r = executiveReport();
+  assert.equal(r.ok, true);
+  const by = (k: string) => r.actions.find((x: any) => x.key === k);
+  // Joe Bond's paid-off line still bills; Robert (terminated) and the unassigned 210-422-0300 still owe.
+  assert.equal(by('cancel_free').count, 1);
+  assert.equal(by('cancel_owing').count, 2);
+  assert.ok(by('cancel_owing').oneTime > 0);
+  // Joshua (has both, never calls on Teams) + the unused shared Front Desk account.
+  assert.equal(by('remove_teams').count, 2);
+  assert.equal(by('remove_teams').monthly, 2 * DEFAULT_TEAMS_VOICE_COST);
+  assert.equal(r.teamsVoice.estimated, true);
+  const sum = r.actions.reduce((s: number, x: any) => s + x.monthly, 0);
+  assert.equal(r.total.monthly, Math.round(sum * 100) / 100);
+  assert.equal(r.total.yearly, Math.round(sum * 12 * 100) / 100);
+  assert.equal(r.idleLines.length, 3);
+  assert.equal(r.idleLines[0].balance, 0, 'free-to-cancel lines first');
+  setTeamsVoiceCost(20);
+  const r2 = executiveReport();
+  assert.equal(r2.teamsVoice.estimated, false);
+  assert.equal(r2.actions.find((x: any) => x.key === 'remove_teams').monthly, 40);
+  assert.throws(() => setTeamsVoiceCost('abc'), /positive number/);
 });
 
 test('CSV export has a row per line', () => {

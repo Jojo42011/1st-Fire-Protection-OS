@@ -10,6 +10,7 @@ import * as fleet from '../services/mobileFleet';
 import { syncTeamsVoice, teamsVoiceStatus, teamsPermissionGaps } from '../services/teamsVoice';
 import { graphUsersConfigured } from '../services/msGraphUsers';
 import { syncAddigy, syncAbm, addigyConfigured, abmConfigured } from '../services/appleDevices';
+import { executiveReport, setTeamsVoiceCost } from '../services/mobileReport';
 
 const router = Router();
 const actor = (req: any): string => (req.user?.email as string) || 'system';
@@ -67,6 +68,11 @@ router.post('/api/devices/plan-costs', IT, (req, res) => {
 });
 router.post('/api/devices/bill-total', IT, (req, res) => {
   try { fleet.setBillTotal(req.body?.amount); res.json({ ok: true, billTotal: fleet.billTotal() }); } catch (err) { fail(res, err); }
+});
+
+router.get('/api/devices/report', requirePeople(), (_req, res) => res.json(executiveReport()));
+router.post('/api/devices/teams-voice-cost', IT, (req, res) => {
+  try { setTeamsVoiceCost(req.body?.amount); res.json({ ok: true }); } catch (err) { fail(res, err); }
 });
 
 router.get('/api/devices/teams-audit', requirePeople(), async (_req, res) => {

@@ -26,6 +26,7 @@
       </div>
       <div class="os-actions">
         <a class="os-btn" href="/api/devices/export.csv">Export to Excel</a>
+        <button class="os-btn" id="report">Executive report</button>
         <button class="os-btn primary" id="syncAll">Sync Teams, Addigy &amp; ABM</button>
       </div>
     </div>
@@ -250,9 +251,10 @@ document.getElementById('chips').addEventListener('click',function(e){ var b=e.t
 ['q','office','kind'].forEach(function(id){ document.getElementById(id).addEventListener(id==='q'?'input':'change',function(){ renderChips(); renderList(); }); });
 
 /* ---- Teams voice audit ---- */
+var CAT_LABEL={overlap_light:'has both, uses the cell',overlap_heavy:'has both, uses Teams',overlap:'has both',overlap_unused:'has both, no Teams calls',unused:'unused',disabled:'disabled account',no_m365:'no Microsoft 365 match',teams_only:'Teams only',att_only:'AT&T only',pending:'pending'};
 var TCHIPS=[
-  ['action','Act on',function(r){return ['disabled','overlap_unused','unused','overlap','no_m365'].indexOf(r.category)>=0;}],
-  ['overlap','Has both',function(r){return r.category==='overlap'||r.category==='overlap_unused';}],
+  ['action','Act on',function(r){return r.category.indexOf('overlap')===0||['disabled','unused','no_m365'].indexOf(r.category)>=0;}],
+  ['overlap','Has both',function(r){return r.category.indexOf('overlap')===0;}],
   ['unused','Teams voice unused',function(r){return r.category==='unused'||r.category==='overlap_unused';}],
   ['disabled','Disabled account',function(r){return r.category==='disabled';}],
   ['all','All',function(){return true;}]
@@ -281,7 +283,7 @@ function renderTeams(){
     {as:'teams_phone',label:'Teams voice',render:function(v,r){ if(r.teams_phone==null) return '<span class="muted">no account</span>'; return r.teams_phone?OS.pill(r.calling_plan?'Teams Phone + Calling Plan':'Teams Phone','neutral'):'<span class="muted">none</span>'; }},
     {as:'calls',label:'Teams calls',kind:'num',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':OS.num(v); }},
     {as:'pstn_calls',label:'PSTN calls',kind:'num',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':OS.num(v); }},
-    {as:'recommendation',label:'Recommendation',render:function(v,r){ return v?OS.pill(r.category.replace('_',' '),r.tone)+' '+OS.esc(v):''; }}
+    {as:'recommendation',label:'Recommendation',render:function(v,r){ return v?OS.pill(CAT_LABEL[r.category]||r.category,r.tone)+' '+OS.esc(v):''; }}
   ];
   document.getElementById('teamsOut').innerHTML=OS.table(cols, rows.filter(pred), {empty:'Nobody in this view.'});
 }
@@ -292,6 +294,7 @@ function runSync(src, btn){
     if(!d||!d.ok) OS.toast(src+': '+((d&&d.error)||'sync failed'),'bad'); return d; })
     .catch(function(){ if(btn){ btn.disabled=false; btn.textContent=t; } });
 }
+document.getElementById('report').addEventListener('click',function(){ OS.go('devicesReport'); });
 document.getElementById('syncTeams').addEventListener('click',function(){ runSync('teams',this).then(load); });
 document.getElementById('syncAll').addEventListener('click',function(){ var b=this; b.disabled=true;
   Promise.all(['teams','addigy','abm'].filter(function(s){ return s==='teams'?D.sources.teams.connected:D.sources[s].connected; }).map(function(s){ return runSync(s); }))
