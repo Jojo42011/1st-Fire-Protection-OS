@@ -186,6 +186,13 @@ test('reassigning a line moves its device and writes the history', () => {
   addLineEvent(spare.id, { kind: 'upgrade', detail: 'Used this line upgrade for Mario' }, 'tester');
   const kinds = lineDetail(spare.id).events.map((e: any) => e.kind);
   assert.ok(kinds.includes('assigned') && kinds.includes('upgrade'));
+  // Saving the form unchanged writes nothing to the history.
+  const before = lineDetail(spare.id).events.length;
+  const cur = lineDetail(spare.id);
+  updateLine(spare.id, { employee_id: 3, monthly_cost: '', intent: '', freeze_until: '', apple_account: cur.apple_account || '', notes: cur.notes || '' }, 'tester');
+  assert.equal(lineDetail(spare.id).events.length, before);
+  updateLine(spare.id, { monthly_cost: 35 }, 'tester');
+  assert.match(lineDetail(spare.id).events[0].detail, /^Updated monthly cost$/);
   assert.throws(() => updateLine(spare.id, { employee_id: 999 }, 'tester'), /employee not found/);
   assert.throws(() => updateLine(spare.id, { intent: 'delete' }, 'tester'), /intent/);
 });

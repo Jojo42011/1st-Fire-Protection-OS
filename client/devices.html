@@ -175,7 +175,7 @@ function renderList(){
     {as:'employee',label:'Assigned to',render:function(v,r){ return who(r); }},
     {as:'model',label:'Device',render:function(v,r){ return OS.esc(r.model||'')+'<div class="muted dv-sub">'+(r.serial?'SN '+OS.esc(r.serial):'no serial')+(r.imei?' · IMEI …'+OS.esc(String(r.imei).slice(-4)):'')+'</div>'; }},
     {as:'monthly_cost',label:'Cost / mo',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':(usd(v)+(r.cost_source&&r.cost_source.indexOf('estimate')===0?' '+OS.pill('est','warn'):'')); }},
-    {as:'device_balance',label:'Device',render:function(v,r){ if(r.paid_off) return OS.pill('paid off','good'); return v?usd(v)+'<div class="muted dv-sub">owed'+(r.contract_end?' · ends '+OS.esc(r.contract_end):'')+'</div>':'<span class="muted">n/a</span>'; }},
+    {as:'device_balance',label:'Balance',render:function(v,r){ if(r.paid_off) return OS.pill('paid off','good'); return v?usd(v)+'<div class="muted dv-sub">owed'+(r.contract_end?' · ends '+OS.esc(r.contract_end):'')+'</div>':'<span class="muted">n/a</span>'; }},
     {as:'upgrade_eligible',label:'Upgrade',render:function(v,r){ return upgradeCell(r); }},
     {as:'mdm',label:'MDM',render:function(v,r){ return mdmCell(r); }},
     {as:'flags',label:'Flags',render:function(v,r){ return '<div class="dv-flags">'+r.flags.map(function(f){return OS.pill(f.label,f.tone);}).join('')+'</div>'; }}

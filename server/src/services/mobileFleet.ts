@@ -668,16 +668,35 @@ export function updateLine(id: number, body: any, actor: string): any {
       changes.push('assignment');
     }
   }
-  if (body.shared_label !== undefined) { fields.shared_label = clean(body.shared_label) || null; if (fields.shared_label) { fields.employee_id = null; fields.holder_name = null; } changes.push('shared label'); }
-  if (body.monthly_cost !== undefined) { const c = body.monthly_cost === '' || body.monthly_cost === null ? null : Number(body.monthly_cost); if (c != null && !(c >= 0)) throw new Error('monthly cost must be a number'); fields.monthly_cost = c; changes.push('monthly cost'); }
+  // Only fields whose value actually changes are written and named in the history.
+  const set = (col: string, value: unknown, label: string) => {
+    const cur = l[col] ?? null, next = value ?? null;
+    if (String(cur ?? '') === String(next ?? '')) return;
+    fields[col] = next;
+    changes.push(label);
+  };
+  if (body.shared_label !== undefined) {
+    const label = clean(body.shared_label) || null;
+    set('shared_label', label, 'shared label');
+    if (label && l.employee_id != null && fields.employee_id === undefined) { fields.employee_id = null; fields.holder_name = null; }
+  }
+  if (body.monthly_cost !== undefined) {
+    const c = body.monthly_cost === '' || body.monthly_cost === null ? null : Number(body.monthly_cost);
+    if (c != null && !(c >= 0)) throw new Error('monthly cost must be a number');
+    set('monthly_cost', c, 'monthly cost');
+  }
   if (body.intent !== undefined) {
     const intent = body.intent || null;
     if (intent && !['cancel', 'freeze'].includes(intent)) throw new Error('intent must be cancel, freeze, or empty');
-    if (intent !== l.intent) { fields.intent = intent; fields.intent_at = intent ? today() : null; logEvent(id, intent || 'note', intent ? `Marked to ${intent} with AT&T` : 'Cleared the pending cancel / freeze', actor); }
+    if (intent !== (l.intent || null)) { fields.intent = intent; fields.intent_at = intent ? today() : null; logEvent(id, intent || 'note', intent ? `Marked to ${intent} with AT&T` : 'Cleared the pending cancel / freeze', actor); }
   }
-  if (body.freeze_until !== undefined) { fields.freeze_until = normDate(body.freeze_until) || null; changes.push('freeze end'); }
-  if (body.apple_account !== undefined) { const a = clean(body.apple_account).toLowerCase(); if (a && !/@/.test(a)) throw new Error('Apple account must be an email address'); fields.apple_account = a || null; changes.push('Apple account'); }
-  if (body.notes !== undefined) { fields.notes = String(body.notes || '').slice(0, 4000) || null; changes.push('notes'); }
+  if (body.freeze_until !== undefined) set('freeze_until', normDate(body.freeze_until) || null, 'freeze end');
+  if (body.apple_account !== undefined) {
+    const a = clean(body.apple_account).toLowerCase();
+    if (a && !/@/.test(a)) throw new Error('Apple account must be an email address');
+    set('apple_account', a || null, 'Apple account');
+  }
+  if (body.notes !== undefined) set('notes', String(body.notes || '').slice(0, 4000) || null, 'notes');
   if (Object.keys(fields).length) writeLine(l.number, fields);
   if (changes.filter((c) => c !== 'assignment').length) logEvent(id, 'note', `Updated ${changes.filter((c) => c !== 'assignment').join(', ')}`, actor);
   return lineDetail(id);
