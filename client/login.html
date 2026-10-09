@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/brand/site-theme.css" />
+<link rel="stylesheet" href="/brand/site-motion.css" />
+<script src="/brand/site-motion.js" defer></script>
 <style>
   html,body{height:100%}
   body{margin:0;min-height:100%;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;
@@ -51,8 +53,8 @@
 </head>
 <body>
   <span class="orb a"></span><span class="orb b"></span><span class="orb c"></span>
-  <div class="lockup"><img src="/brand/logo-240.png" alt="" />1st Fire Protection</div>
-  <form class="card" id="form">
+  <div class="lockup" data-reveal="0"><img src="/brand/logo-240.png" alt="" />1st Fire Protection</div>
+  <form class="card" id="form" data-reveal="120">
     <h1>Sign in</h1>
     <div class="p">People, onboarding, offboarding and IT in one place.</div>
     <div id="ssoWrap" style="display:none">

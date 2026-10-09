@@ -4,7 +4,13 @@
    up automatically. Numbers marked [data-count] roll up from zero when revealed. Rows of a
    .rows-in table get their stagger index. Everything shows at once for reduced motion, for
    browsers without IntersectionObserver, and before printing. A number never stays mid-roll:
-   a timer puts the final value back even if the page stopped drawing. */
+   a timer puts the final value back even if the page stopped drawing.
+
+   Automatic mode (every page, unless <body data-motion="manual">): the screen's top-level
+   sections (children of .page, .os-wrap or .screen) are revealed in a stagger, and so are the
+   sections a page draws into a view host (#view, #listView, [data-reveal-children]). A host that
+   is redrawn right after a click or on first load animates in again, like a page change; a
+   background refresh just updates in place. */
 (function () {
   var root = document.documentElement;
   var reduce = false;
@@ -56,7 +62,14 @@
     var els = document.querySelectorAll('[data-reveal]:not(.rv-in)');
     for (var i = 0; i < els.length; i++) { var b = els[i].getBoundingClientRect(); if (b.top < h && b.bottom > 0) reveal(els[i]); }
   }
-  var safety = null;
+  var safety = null, tick = null;
+  function startTick() {
+    if (tick || !document.querySelector('[data-reveal]:not(.rv-in)')) return;
+    tick = setInterval(function () {
+      revealOnScreen();
+      if (!document.querySelector('[data-reveal]:not(.rv-in)')) { clearInterval(tick); tick = null; }
+    }, 1200);
+  }
   function scan(scope) {
     var els = (scope || document).querySelectorAll('[data-reveal]:not(.rv-in)');
     for (var i = 0; i < els.length; i++) {
@@ -69,16 +82,6 @@
     }
     if (io) { clearTimeout(safety); safety = setTimeout(revealOnScreen, 1500); startTick(); }
   }
-  // While anything is still hidden, re-check what is on screen about once a second; stops when all
-  // are shown and restarts when new blocks arrive.
-  var tick = null;
-  function startTick() {
-    if (tick || !document.querySelector('[data-reveal]:not(.rv-in)')) return;
-    tick = setInterval(function () {
-      revealOnScreen();
-      if (!document.querySelector('[data-reveal]:not(.rv-in)')) { clearInterval(tick); tick = null; }
-    }, 1200);
-  }
   function showAll() {
     var els = document.querySelectorAll('[data-reveal]');
     for (var i = 0; i < els.length; i++) reveal(els[i]);
@@ -87,11 +90,56 @@
     for (var j = 0; j < c.length; j++) c[j].__counted = true; // printed numbers are final, never mid-roll
   }
 
+  /* ---------- automatic mode ---------- */
+  var CONTAINERS = '.page, .os-wrap, .screen';
+  var HOSTS = '#view, #listView, [data-reveal-children]';
+  var SKIP_TAG = { SCRIPT: 1, STYLE: 1, LINK: 1, TEMPLATE: 1, BR: 1, HR: 1, INPUT: 1, DATALIST: 1 };
+  var SKIP_CLS = /\b(scrim|overlay|toast|drawer|modal|backdrop|os-drawer|os-toast|os-foot)\b/;
+  var bootAt = Date.now(), lastAct = 0;
+  ['click', 'keydown', 'popstate', 'hashchange', 'message'].forEach(function (ev) {
+    window.addEventListener(ev, function () { lastAct = Date.now(); }, true);
+  });
+  function markable(el, top) {
+    if (SKIP_TAG[el.tagName] || el.__auto || el.hasAttribute('data-reveal') || el.hasAttribute('data-noreveal') || el.hidden) return false;
+    var cls = typeof el.className === 'string' ? el.className : '';
+    if (SKIP_CLS.test(cls)) return false;
+    var pos = getComputedStyle(el).position;
+    if (pos === 'fixed' || pos === 'sticky') return false;
+    if (el.querySelector('[data-reveal]')) return false;         // the page animates its own parts
+    if (top && (el.matches(HOSTS) || el.querySelector(HOSTS))) return false; // its sections animate instead
+    return true;
+  }
+  function markChildren(host, top) {
+    var i = 0;
+    for (var k = 0; k < host.children.length; k++) {
+      var el = host.children[k];
+      if (!markable(el, top)) continue;
+      el.__auto = true;
+      el.setAttribute('data-reveal', String(Math.min(i * 70, 420)));
+      i++;
+    }
+  }
+  function lively() { var now = Date.now(); return now - bootAt < 4000 || now - lastAct < 1200; }
+  function auto() {
+    if (document.body.getAttribute('data-motion') === 'manual') return;
+    var c = document.querySelector(CONTAINERS);
+    if (!c) return;
+    if (!c.__autoTop) { c.__autoTop = true; markChildren(c, true); }
+    var hosts = document.querySelectorAll(HOSTS);
+    for (var h = 0; h < hosts.length; h++) {
+      var host = hosts[h];
+      // A redraw right after a click (or on first load) animates in; a quiet refresh does not.
+      if (lively()) markChildren(host, false);
+      else for (var k = 0; k < host.children.length; k++) host.children[k].__auto = true;
+    }
+  }
+
   window.FPMotion = { scan: scan, showAll: showAll };
   window.addEventListener('beforeprint', showAll);
   var start = function () {
+    if (canObserve) auto();
     scan(document);
-    if ('MutationObserver' in window) new MutationObserver(function () { scan(document); }).observe(document.body, { childList: true, subtree: true });
+    if ('MutationObserver' in window) new MutationObserver(function () { if (canObserve) auto(); scan(document); }).observe(document.body, { childList: true, subtree: true });
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

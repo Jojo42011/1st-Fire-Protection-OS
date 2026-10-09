@@ -17,6 +17,17 @@
 .js-rv [data-reveal]:not(.rv-done){transition:opacity 1s var(--ease-fp) var(--rv-d,0ms),transform 1.1s var(--ease-fp) var(--rv-d,0ms),filter 1s ease var(--rv-d,0ms)}
 .js-rv [data-reveal]:not(.rv-in){opacity:0;transform:translate3d(0,28px,0) scale(.985);filter:blur(6px)}
 
+/* The website reveal replaces the older quick rise-in on .view screens. */
+.js-rv .view>*{animation:none}
+
+/* ---- the OS's standard cards, chips and fields pick up the website's hover feel ---- */
+.kpi,.os-kpi,.os-acard,details.setup{transition:transform .45s var(--ease-fp),box-shadow .45s var(--ease-fp),border-color .2s var(--ease-std)}
+.kpi:hover,.os-kpi:hover,.os-acard:hover,details.setup:hover{transform:translateY(-3px);box-shadow:0 22px 44px -24px rgba(0,0,0,.22),0 0 0 1px rgba(214,45,42,.22)}
+.os-chip,.chip,.os-fb{transition:background-color .2s var(--ease-std),border-color .2s var(--ease-std),color .2s var(--ease-std),box-shadow .35s var(--ease-fp)}
+.os-chip:not(.on):hover,.chip:not(.on):hover,.os-fb:not(.on):hover{border-color:var(--ink);color:var(--ink)}
+input,textarea,select{transition:border-color .2s var(--ease-std),box-shadow .2s var(--ease-std)}
+a,.linkbtn{transition:color .2s var(--ease-std)}
+
 /* ---- cards lift on hover ---- */
 .lift{transition:transform .55s var(--ease-fp),box-shadow .55s var(--ease-fp)}
 .lift:hover{transform:translateY(-6px);box-shadow:0 34px 70px -28px rgba(0,0,0,.28),0 0 0 1px rgba(214,45,42,.28)}
@@ -55,7 +66,8 @@
   [data-reveal],.lift,.lift-sm,.btn,.btn-primary,.os-btn,.tlink .chev{transition:none!important}
   .js-rv [data-reveal]:not(.rv-in){opacity:1;transform:none;filter:none}
   .grow,.rows-in tbody tr,.live-dot{animation:none!important;transform:none!important}
-  .lift:hover,.lift-sm:hover,.btn:hover,.btn-primary:hover,.os-btn:hover{transform:none}
+  .lift:hover,.lift-sm:hover,.btn:hover,.btn-primary:hover,.os-btn:hover,.kpi:hover,.os-kpi:hover,.os-acard:hover,details.setup:hover{transform:none}
+  .kpi,.os-kpi,.os-acard,details.setup{transition:none!important}
 }
 @media print{
   .js-rv [data-reveal]:not(.rv-in){opacity:1;transform:none;filter:none}
