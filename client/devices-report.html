@@ -8,9 +8,20 @@
 <link rel="stylesheet" href="/brand/brand.css" />
 <link rel="stylesheet" href="/signal.css" />
 <link rel="stylesheet" href="/brand/site-theme.css" />
+<link rel="stylesheet" href="/brand/site-motion.css" />
 <style>
   /* Headline card, same anatomy as License cleanup: big money number | divider | summary | side figure. */
-  .hl{display:flex;align-items:center;gap:26px;padding:20px 22px;flex-wrap:wrap}
+  .hl{display:flex;align-items:center;gap:26px;padding:20px 22px;flex-wrap:wrap;position:relative;overflow:hidden}
+  .hl>*{position:relative;z-index:1}
+  .hl .glow{position:absolute;z-index:0;pointer-events:none;border-radius:50%;filter:blur(50px);opacity:.14}
+  .hl .glow.a{width:420px;height:420px;left:-140px;top:-220px;background:radial-gradient(circle,rgba(214,45,42,.9),transparent 65%);animation:fp-float 16s ease-in-out infinite alternate}
+  .hl .glow.b{width:360px;height:360px;right:-120px;top:-160px;background:radial-gradient(circle,rgba(255,149,0,.75),transparent 65%);animation:fp-float2 19s ease-in-out infinite alternate}
+  @keyframes fp-float{0%{transform:translate3d(-6%,-4%,0) scale(1)}50%{transform:translate3d(5%,6%,0) scale(1.12)}100%{transform:translate3d(-3%,8%,0) scale(.95)}}
+  @keyframes fp-float2{0%{transform:translate3d(8%,4%,0) scale(1.05)}50%{transform:translate3d(-6%,-6%,0) scale(.92)}100%{transform:translate3d(4%,-2%,0) scale(1.1)}}
+  @media (prefers-reduced-motion:reduce){ .hl .glow{animation:none} }
+  .card-head .tlink{margin-left:auto;font-size:13px}
+  .sec-h .tlink{font-size:13px}
+  .bar>span{animation:none}
   .hl .big{font-weight:800;font-size:34px;line-height:1;color:var(--money);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
   .hl .big small{display:block;font-weight:600;font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:normal}
   .hl .vr{width:1px;height:52px;background:var(--divider)}
@@ -51,7 +62,7 @@
   .nw{white-space:nowrap}
   @media print{
     @page{size:letter;margin:.5in}
-    .os-actions,.noprint{display:none!important}
+    .os-actions,.noprint,.hl .glow{display:none!important}
     body{background:#fff}
     .page{padding:0;max-width:none}
     .view>*{animation:none!important}
@@ -74,6 +85,7 @@
   <div id="out"><div class="loading">Loading the report…</div></div>
 </div>
 <script src="/os.js"></script>
+<script src="/brand/site-motion.js"></script>
 <script>
 "use strict";
 var R=null;
@@ -86,13 +98,15 @@ function fmtRange(r){ if(!r||!r.from||!r.to) return ''; var f=new Date(r.from+'T
 function pill(text, tone){ return '<span class="pill '+tone+'">'+esc(text)+'</span>'; }
 function tbl(head, rows, opts){ opts=opts||{};
   if(!rows.length) return '<div class="note-line" style="padding:0 18px 14px">'+esc(opts.empty||'None.')+'</div>';
-  return '<div class="tw"><table><thead><tr>'+head.map(function(h){ return '<th'+(h.r?' class="r"':'')+'>'+esc(h.label)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+  return '<div class="tw rows-in"><table><thead><tr>'+head.map(function(h){ return '<th'+(h.r?' class="r"':'')+'>'+esc(h.label)+'</th>'; }).join('')+'</tr></thead><tbody>'+
     rows.map(function(r){ return '<tr'+(r._total?' class="total"':'')+'>'+head.map(function(h){ return '<td class="'+(h.r?'r num':'')+'">'+h.cell(r)+'</td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>';
 }
-function card(title, n, body, foot){
-  return '<div class="card card-clip"><div class="card-head"><h2>'+title+'</h2>'+(n?'<span class="n">'+n+'</span>':'')+'</div>'+body+(foot?'<div class="card-foot">'+foot+'</div>':'')+'</div>';
+function card(title, n, body, foot, opts){ opts=opts||{};
+  return '<div class="card card-clip'+(opts.lift?' lift-sm':'')+'" data-reveal="'+(opts.d||0)+'"><div class="card-head"><h2>'+title+'</h2>'+(n?'<span class="n">'+n+'</span>':'')+(opts.link||'')+'</div>'+body+(foot?'<div class="card-foot">'+foot+'</div>':'')+'</div>';
 }
-function secH(title, n, aside){ return '<div class="sec-h"><h2>'+title+(n!=null?'<span class="n">'+n+'</span>':'')+'</h2>'+(aside?'<span class="aside">'+aside+'</span>':'')+'</div>'; }
+function secH(title, n, aside){ return '<div class="sec-h" data-reveal="0"><h2>'+title+(n!=null?'<span class="n">'+n+'</span>':'')+'</h2>'+(aside?'<span class="aside">'+aside+'</span>':'')+'</div>'; }
+/* A blue text link, as on the website, that opens Phones & iPads on the matching view. */
+function go(label, view){ return '<button class="tlink noprint" data-go="'+view+'">'+label+' <span class="chev">›</span></button>'; }
 
 function load(){
   fetch('/api/devices/report').then(function(r){return r.json();}).then(function(d){
@@ -110,16 +124,16 @@ function render(){
   var free=by('cancel_free'), owing=by('cancel_owing'), rmTeams=by('remove_teams'), heavy=by('drop_att_heavy');
   var html='';
 
-  html+='<div class="card hl"><div class="big">'+usd(t.yearly)+'<small>Savings available per year</small></div><div class="vr"></div>'+
+  html+='<div class="card hl lift" data-reveal="0"><span class="glow a"></span><span class="glow b"></span><div class="big"><span data-count>'+usd(t.yearly)+'</span><small>Savings available per year</small></div><div class="vr"></div>'+
     '<div class="side"><b>'+usd(t.monthly)+' a month</b> across four actions'+(t.oneTime?', for '+usd(t.oneTime)+' in one-time device payoffs':'')+'. '+
     (free.count?'The first, cancelling '+plural(free.count,'idle line')+' that are already paid off, costs nothing.':'')+'</div>'+
-    '<div class="fig"><div class="v">'+usd(free.monthly)+'</div><div class="l">free to cut per month</div></div></div>';
+    '<div class="fig"><div class="v" data-count>'+usd(free.monthly)+'</div><div class="l">free to cut per month</div></div></div>';
 
   html+='<div class="kpis" style="margin-top:14px">'+
-    '<div class="kpi"><div class="top"><span class="lab">AT&amp;T service</span>'+(est?pill('est.','amber'):'')+'</div><span class="val">'+usd(s.monthlyService)+'</span><span class="sub">per month</span></div>'+
-    '<div class="kpi"><div class="top"><span class="lab">Active lines</span></div><span class="val">'+s.activeLines+'</span><span class="sub">'+s.phones+' phones · '+s.tablets+' iPads</span></div>'+
-    '<div class="kpi"><div class="top"><span class="lab">Device installments</span></div><span class="val">'+usd(s.monthlyInstallments)+'</span><span class="sub">per month</span></div>'+
-    '<div class="kpi"><div class="top"><span class="lab">Still owed on devices</span></div><span class="val">'+usd(s.deviceBalance)+'</span><span class="sub">'+s.upgradeEligible+' lines can upgrade now</span></div></div>';
+    '<div class="kpi lift" data-reveal="90"><div class="top"><span class="lab">AT&amp;T service</span>'+(est?pill('est.','amber'):'')+'</div><span class="val" data-count>'+usd(s.monthlyService)+'</span><span class="sub">per month</span></div>'+
+    '<div class="kpi lift" data-reveal="160"><div class="top"><span class="lab">Active lines</span></div><span class="val" data-count>'+s.activeLines+'</span><span class="sub">'+s.phones+' phones · '+s.tablets+' iPads</span></div>'+
+    '<div class="kpi lift" data-reveal="230"><div class="top"><span class="lab">Device installments</span></div><span class="val" data-count>'+usd(s.monthlyInstallments)+'</span><span class="sub">per month</span></div>'+
+    '<div class="kpi lift" data-reveal="300"><div class="top"><span class="lab">Still owed on devices</span></div><span class="val" data-count>'+usd(s.deviceBalance)+'</span><span class="sub">'+s.upgradeEligible+' lines can upgrade now</span></div></div>';
 
   var why={cancel_free:'Idle and already paid off, including lines the offices cancelled that AT&amp;T still bills.',
     cancel_owing:'Idle with a device balance. Newer devices are better reassigned to the next hires.',
@@ -132,11 +146,11 @@ function render(){
     {label:'Per month', r:true, cell:function(r){ return usd(r._total?t.monthly:r.x.monthly); }},
     {label:'Per year', r:true, cell:function(r){ return usd(r._total?t.yearly:r.x.yearly); }},
     {label:'One-time', r:true, cell:function(r){ var v=r._total?t.oneTime:r.x.oneTime; return v?usd(v):'$0'; }}
-  ], rows), est?'AT&amp;T cost is estimated at '+usd(s.perLine,true)+' a line (the monthly bill divided by active lines) until plan costs are entered.':'');
+  ], rows), est?'AT&amp;T cost is estimated at '+usd(s.perLine,true)+' a line (the monthly bill divided by active lines) until plan costs are entered.':'', {d:90, link:est?go('Enter plan costs','costs'):''});
 
   var max=Math.max.apply(null,R.offices.map(function(x){return x.lines;}).concat([1]));
   var bars='<div class="bars">'+R.offices.map(function(x,i){
-    return '<div class="bar-row"><span class="lab">'+esc(x.label)+'</span><span class="bar'+(i<3?'':' quiet')+'"><span style="width:'+Math.max(2,Math.round(x.lines/max*100))+'%"></span></span>'+
+    return '<div class="bar-row"><span class="lab">'+esc(x.label)+'</span><span class="bar'+(i<3?'':' quiet')+'"><span class="grow" style="width:'+Math.max(2,Math.round(x.lines/max*100))+'%;--gd:'+(i*60)+'ms"></span></span>'+
       '<span class="v"><b>'+x.lines+'</b>'+esc(plural(x.phones,'phone')+' · '+plural(x.tablets,'iPad')+' · ~'+usd(x.monthly)+'/mo')+(x.idle?' · <span style="color:var(--money);font-weight:600">'+x.idle+' idle</span>':'')+'</span></div>';
   }).join('')+'</div>';
   var top3=R.offices.slice(0,3), top3n=top3.reduce(function(n,x){return n+x.lines;},0);
@@ -145,8 +159,8 @@ function render(){
     {label:'Devices', r:true, cell:function(r){ return r.count; }}
   ], R.risk);
   html+=secH('Fleet')+'<div class="split-even">'+
-    card('Lines by office', s.activeLines+' lines', bars, esc(top3.map(function(x){return x.label;}).join(', '))+' hold '+top3n+' of '+s.activeLines+' lines ('+Math.round(top3n/s.activeLines*100)+'%).')+
-    card('Device readiness', '', risk, 'Apple Business Manager and Addigy both track devices by serial number.')+'</div>';
+    card('Lines by office', s.activeLines+' lines', bars, esc(top3.map(function(x){return x.label;}).join(', '))+' hold '+top3n+' of '+s.activeLines+' lines ('+Math.round(top3n/s.activeLines*100)+'%).', {d:90})+
+    card('Device readiness', '', risk, 'Apple Business Manager and Addigy both track devices by serial number.', {d:180, link:go('See devices','attention')})+'</div>';
 
   var idleFree=R.idleLines.filter(function(l){return !l.balance;}), idleOwe=R.idleLines.filter(function(l){return l.balance;});
   var icols=[
@@ -156,8 +170,8 @@ function render(){
     {label:'Why it is idle', cell:function(r){ return esc(r.reason)+(r.holder?'<span class="sub">'+esc(r.holder)+'</span>':''); }},
     {label:'Balance', r:true, cell:function(r){ return r.balance?usd(r.balance):'None'; }}
   ];
-  html+=secH('Idle lines', R.idleLines.length, 'Cancel the free ones first; reassign newer devices that still owe')+
-    '<div class="card card-clip"><div class="grp">Free to cancel <span class="n">'+idleFree.length+'</span></div>'+tbl(icols, idleFree)+
+  html+=secH('Idle lines', R.idleLines.length, go('Work these on Phones &amp; iPads','cut'))+
+    '<div class="card card-clip" data-reveal="90"><div class="grp">Free to cancel <span class="n">'+idleFree.length+'</span></div>'+tbl(icols, idleFree)+
     '<div class="grp">Owe a device balance <span class="n">'+idleOwe.length+' · '+usd(idleOwe.reduce(function(n,l){return n+l.balance;},0))+'</span></div>'+tbl(icols, idleOwe)+'</div>';
 
   if(tv.synced){
@@ -168,13 +182,13 @@ function render(){
     ];
     var both=R.teams.remove.filter(function(r){return r.phones.length;}).length+R.teams.heavy.length+R.teams.review.length;
     var ranges=(o.teamsPstnRange?'<b>Outside calls:</b> '+fmtRange(o.teamsPstnRange):'')+(o.teamsUsageRange?' &nbsp;·&nbsp; <b>All Teams calls:</b> '+fmtRange(o.teamsUsageRange):'');
-    html+=secH('AT&amp;T phone or Teams Phone', null, both+' people pay for both')+
-      '<div class="banner">'+'<div>Calls to outside numbers show which one each person actually uses. Teams-to-Teams calls keep working without Teams Phone.'+(ranges?'<br>'+ranges:'')+'</div></div>'+
+    html+=secH('AT&amp;T phone or Teams Phone', null, go('Open the Teams audit','teams'))+
+      '<div class="banner" data-reveal="60">'+'<div>Calls to outside numbers show which one each person actually uses. Teams-to-Teams calls keep working without Teams Phone.'+(ranges?'<br>'+ranges:'')+'</div></div>'+
       '<div class="split-even">'+
-        card('Remove Teams Phone', R.teams.remove.length, tbl(pcols, R.teams.remove))+
-        '<div class="stack">'+card('Consider dropping the AT&amp;T phone', R.teams.heavy.length, tbl(pcols, R.teams.heavy, {empty:'Nobody.'}))+
-          (R.teams.review.length?card('Review with their manager', R.teams.review.length, tbl(pcols, R.teams.review)):'')+
-          (R.teams.disabled.length?card('Disabled accounts still holding one', R.teams.disabled.length, tbl(pcols, R.teams.disabled)):'')+'</div>'+
+        card('Remove Teams Phone', R.teams.remove.length, tbl(pcols, R.teams.remove), '', {d:120})+
+        '<div class="stack">'+card('Consider dropping the AT&amp;T phone', R.teams.heavy.length, tbl(pcols, R.teams.heavy, {empty:'Nobody.'}), '', {d:200})+
+          (R.teams.review.length?card('Review with their manager', R.teams.review.length, tbl(pcols, R.teams.review), '', {d:260}):'')+
+          (R.teams.disabled.length?card('Disabled accounts still holding one', R.teams.disabled.length, tbl(pcols, R.teams.disabled), '', {d:300}):'')+'</div>'+
       '</div>';
   }
 
@@ -185,9 +199,9 @@ function render(){
   dec.push(['Set the standard: one company number per person','Field staff keep an AT&T phone. Office staff who call from a computer use Teams Phone.']);
   if(heavy.count) dec.push(['Decide for the '+plural(heavy.count,'heavy Teams caller')+' whether to drop the AT&T phone','Saves '+usd(heavy.monthly)+' a month.']);
   dec.push(['Require Apple Business Manager and Addigy for every new device','Use the available upgrades to retire devices too old for current iOS.']);
-  html+=secH('Decisions for leadership')+'<div class="card card-clip dec">'+dec.map(function(d,i){ return '<div class="row"><span class="step">'+(i+1)+'</span><div><div class="t">'+esc(d[0])+'</div><div class="d">'+esc(d[1])+'</div></div></div>'; }).join('')+'</div>';
+  html+=secH('Decisions for leadership')+'<div class="card card-clip dec" data-reveal="90">'+dec.map(function(d,i){ return '<div class="row"><span class="step">'+(i+1)+'</span><div><div class="t">'+esc(d[0])+'</div><div class="d">'+esc(d[1])+'</div></div></div>'; }).join('')+'</div>';
 
-  html+='<div class="note-line">'+
+  html+='<div class="note-line" data-reveal="0">'+
     (est?'AT&amp;T cost is the monthly bill divided by active lines until real plan costs are entered on Phones &amp; iPads. ':'AT&amp;T cost uses the plan costs entered for '+s.priced+' lines. ')+
     'Device balances come from AT&amp;T installment terms, or from the device workbook where AT&amp;T shows none. '+
     'Teams Phone is priced at <b>'+usd(tv.cost,true)+'</b> per user per month'+(tv.estimated?' (list price for Teams Phone with Calling Plan, not your invoice)':'')+'.'+
@@ -199,7 +213,9 @@ function render(){
       .then(function(r){return r.json();}).then(function(d){ if(!d||!d.ok){ if(window.OS&&OS.toast) OS.toast((d&&d.error)||'Could not save.','bad'); return; } load(); });
   });
 }
-document.getElementById('print').addEventListener('click',function(){ window.print(); });
+document.getElementById('print').addEventListener('click',function(){ if(window.FPMotion) FPMotion.showAll(); setTimeout(function(){ window.print(); }, 50); });
+document.getElementById('out').addEventListener('click',function(e){ var b=e.target.closest('[data-go]'); if(!b) return;
+  var view=b.getAttribute('data-go'); if(window.OS&&OS.go) OS.go('devices',{param:'view='+encodeURIComponent(view)}); else location.href='/devices?view='+encodeURIComponent(view); });
 document.getElementById('back').addEventListener('click',function(){ if(window.OS&&OS.go) OS.go('devices'); else location.href='/devices'; });
 load();
 </script>

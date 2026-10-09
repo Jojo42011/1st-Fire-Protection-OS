@@ -5,6 +5,7 @@
 <script src="/theme-sync.js"></script>
 <link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
 <link rel="stylesheet" href="/brand/site-theme.css" />
+<link rel="stylesheet" href="/brand/site-motion.css" />
 <style>
   .dv-in{padding:7px 9px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit}
   .dv-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -31,9 +32,9 @@
       </div>
     </div>
 
-    <div id="strip"></div>
+    <div id="strip" data-reveal="0"></div>
 
-    <div class="os-sec os-block">Lines <span class="n" id="lineN"></span></div>
+    <div class="os-sec os-block" data-reveal="60">Lines <span class="n" id="lineN"></span></div>
     <div class="os-chips" id="chips"></div>
     <div class="dv-row" style="margin:10px 0">
       <input id="q" class="dv-in" type="text" placeholder="Search person, number, model, serial, IMEI…" spellcheck="false" style="flex:1;min-width:240px" />
@@ -43,16 +44,16 @@
     <div id="list"></div>
     <div id="detail" style="margin-top:14px"></div>
 
-    <div class="os-sec os-block" style="margin-top:28px">Teams voice vs AT&amp;T <span class="n" id="teamsN"></span></div>
-    <div class="os-card" style="padding:14px 16px">
+    <div class="os-sec os-block" style="margin-top:28px" data-reveal="0">Teams voice vs AT&amp;T <span class="n" id="teamsN"></span></div>
+    <div class="os-card" style="padding:14px 16px" data-reveal="90">
       <div class="dv-row"><button class="os-btn" id="syncTeams">Sync Teams voice</button><span class="os-filter-note" id="teamsNote"></span></div>
       <div id="teamsGaps" style="margin-top:8px"></div>
       <div class="os-chips" id="teamsChips" style="margin-top:10px"></div>
       <div id="teamsOut" style="margin-top:10px">Loading…</div>
     </div>
 
-    <div class="os-sec os-block" style="margin-top:28px">Import</div>
-    <div class="os-card" style="padding:14px 16px">
+    <div class="os-sec os-block" style="margin-top:28px" data-reveal="0">Import</div>
+    <div class="os-card" style="padding:14px 16px" data-reveal="90">
       <div class="dv-row"><b style="min-width:220px">1. AT&amp;T detail report (CSV)</b>
         <input id="attFile" type="file" accept=".csv,text/csv" style="font:inherit;color:inherit" />
         <button class="os-btn" id="attPreview" disabled>Preview</button><button class="os-btn primary" id="attImport" disabled>Import</button></div>
@@ -66,22 +67,28 @@
       <div id="wbOut" style="margin-top:10px"></div>
     </div>
 
-    <div class="os-sec os-block" style="margin-top:28px">Service cost</div>
-    <div class="os-card" style="padding:14px 16px">
+    <div class="os-sec os-block" style="margin-top:28px" data-reveal="0" id="costsSec">Service cost</div>
+    <div class="os-card" style="padding:14px 16px" data-reveal="90">
       <div class="dv-row"><b>Monthly AT&amp;T bill (all accounts)</b><input id="bill" class="dv-in" type="number" min="0" step="0.01" placeholder="e.g. 5200" style="width:140px" /><button class="os-btn" id="billSave">Save</button>
         <span class="os-filter-note">Used as an average per line only where no plan cost is set (shown as an estimate).</span></div>
       <div id="plans" style="margin-top:12px"></div>
     </div>
 
-    <div class="os-sec os-block" style="margin-top:28px">Connections</div>
-    <div class="dv-src" id="sources"></div>
+    <div class="os-sec os-block" style="margin-top:28px" data-reveal="0">Connections</div>
+    <div class="dv-src" id="sources" data-reveal="90"></div>
 
     <div class="os-foot" id="foot"></div>
   </div>
 <script src="/os.js"></script>
+<script src="/brand/site-motion.js"></script>
 <script>
 "use strict";
 var D=null, FILTER='attention', SEL=null, TEAMS=null, TFILTER='action';
+// Deep links from the executive report: ?view=<chip> filters the lines; teams / costs jump to that section.
+var VIEW=(function(){ try{ return new URLSearchParams(location.search).get('view')||''; }catch(_){ return ''; } })(), JUMPED=false;
+if(['attention','cut','still_billing','spare','unmatched','teams_overlap','upgrade','mdm','too_old','all'].indexOf(VIEW)>=0) FILTER=VIEW;
+function jumpOnce(){ if(JUMPED) return; JUMPED=true; var id=VIEW==='teams'?'teamsN':VIEW==='costs'?'costsSec':null; if(!id) return;
+  setTimeout(function(){ var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 350); }
 var CAN_EDIT=true;
 
 var CHIPS=[
@@ -106,7 +113,7 @@ function load(){
   document.getElementById('strip').innerHTML=OS.skeletonKpis(5);
   fetch('/api/devices').then(j).then(function(d){
     if(!d||!d.ok){ document.getElementById('strip').innerHTML=OS.errorBox((d&&d.error)==='people_auth_required'?'Sign in to see devices.':'Could not load devices.'); return; }
-    D=d; renderStrip(); renderOffices(); renderChips(); renderList(); renderPlans(); renderSources();
+    D=d; renderStrip(); renderOffices(); renderChips(); renderList(); renderPlans(); renderSources(); jumpOnce();
     if(SEL) openLine(SEL,true);
   }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load devices.'); });
   loadTeams();
