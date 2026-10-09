@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { brandPage } from '../services/brandPage';
 import { currentContext } from '../os/scope';
 import { canUseTasks, listTasks, addTask, updateTask, deleteTask, sendDigestNow, taskForToken, centralNow } from '../services/personalTasks';
 
@@ -48,26 +49,18 @@ router.post('/api/my-tasks/send-now', async (req, res) => {
 /* ─────────── signed "Mark done" link from the email ─────────── */
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 function page(title: string, body: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>${esc(title)}</title><style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,-apple-system,"Segoe UI",sans-serif;background:#f5f5f7;color:#1d1d1f}
-main{width:min(460px,calc(100% - 32px));margin:24px auto;padding:28px;background:#fff;border-radius:22px;box-shadow:0 0 0 1px rgba(0,0,0,.06),0 30px 60px -30px rgba(29,29,31,.3)}
-h1{font-size:21px;margin:0 0 6px;letter-spacing:-.02em}.sub{color:#6e6e73;margin:0 0 18px;line-height:1.5}
-.box{background:#f5f5f7;border-radius:12px;padding:12px 14px;margin:0 0 18px;font-size:14px;line-height:1.5;white-space:pre-wrap}.box b{display:block;font-size:15px;white-space:normal}
-button,a.btn{display:block;width:100%;box-sizing:border-box;text-align:center;min-height:46px;line-height:46px;border-radius:980px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;border:0;background:#d62d2a;color:#fff;text-decoration:none}
-a.btn{background:#fff;color:#1d1d1f;box-shadow:inset 0 0 0 1px #d2d2d7;margin-top:10px}.ok{color:#12805c;font-weight:700}
-</style></head><body><main>${body}</main></body></html>`;
+  return brandPage(title, body);
 }
 const invalid = () => page('Link not valid', `<h1>This link does not work anymore</h1><p class="sub">It may have expired or the task was deleted. Open My tasks in the OS instead.</p>`);
-const box = (t: { title: string; notes: string | null }) => `<div class="box"><b>${esc(t.title)}</b>${t.notes ? esc(t.notes) : ''}</div>`;
+const box = (t: { title: string; notes: string | null }) => `<div class="box"><b>${esc(t.title)}</b>${t.notes ? `<span class="pre">${esc(t.notes)}</span>` : ''}</div>`;
 
 router.get('/tasks/done/:token', (req, res) => {
   res.set('Cache-Control', 'no-store'); res.set('Referrer-Policy', 'no-referrer');
   const x = taskForToken(req.params.token);
   if (!x) return res.status(404).type('html').send(invalid());
-  if (x.test) return res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1><p class="sub">Test email: this is a sample task, so nothing on your list changes.</p>${box(x.task)}<form method="post"><button>Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
+  if (x.test) return res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1><p class="sub">Test email: this is a sample task, so nothing on your list changes.</p>${box(x.task)}<form method="post"><button class="go">Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
   if (x.task.status === 'done') return res.type('html').send(page('Already done', `<h1 class="ok">Already done</h1>${box(x.task)}<a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
-  res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1>${box(x.task)}<form method="post"><button>Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
+  res.type('html').send(page('Mark task done', `<h1>Mark this done?</h1>${box(x.task)}<form method="post"><button class="go">Mark done</button></form><a class="btn" href="/?tab=myTasks">Open My tasks</a>`));
 });
 router.post('/tasks/done/:token', express.urlencoded({ extended: false, limit: '2kb' }), (req, res) => {
   res.set('Cache-Control', 'no-store');

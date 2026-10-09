@@ -97,9 +97,11 @@
   .hidden{display:none!important}
   @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}
 </style>
+<link rel="stylesheet" href="/brand/site-motion.css" />
+<script src="/brand/site-motion.js" defer></script>
 </head>
 <body>
-<div class="card">
+<div class="card" data-reveal="0">
   <div class="head">
     <img class="emblem" src="/brand/logo-email.png" alt="1st Fire Protection">
     <div style="flex:1;min-width:0">
@@ -117,7 +119,7 @@
       <h2 id="title"></h2>
       <p class="blurb" id="blurb"></p>
     </div>
-    <div class="fields" id="fields"></div>
+    <div class="fields" id="fields" data-reveal-children></div>
     <div class="note">
       <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
       <div>

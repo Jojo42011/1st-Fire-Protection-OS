@@ -68,6 +68,7 @@ import oncall from './routes/oncall';
 import deficiencies from './routes/deficiencies';
 import scorecard from './routes/scorecard';
 import people from './routes/people';
+import { brandPage } from './services/brandPage';
 import devices from './routes/devices';
 import me from './routes/me';
 import sources from './routes/sources';
@@ -258,11 +259,7 @@ const PAGE_MODULE: Record<string, string> = {
   'department.html': 'access', 'agent.html': 'access', 'ad-audit.html': 'access',
   'readiness.html': 'access',
 };
-const NO_ACCESS_HTML = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>No access</title><style>html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;
-font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b0d10;color:#e7ebf0}
-.c{max-width:360px;text-align:center;padding:28px}.c h1{font-size:16px;margin:0 0 8px}.c p{font-size:13px;color:#9aa4b2;line-height:1.5;margin:0}</style>
-<div class="c"><h1>You do not have access to this area</h1><p>Your role does not include this part of 1st Fire Protection OS. If you think this is a mistake, ask a People admin to adjust your access under Access &amp; Roles.</p></div>`;
+const NO_ACCESS_HTML = brandPage('No access', `<h1>You do not have access to this area</h1><p class="sub">Your role does not include this part of 1st Fire Protection OS. If you think this is a mistake, ask a People admin to adjust your access under Access &amp; Roles.</p>`);
 const page = (name: string) => (req: express.Request, res: express.Response) => {
   // App shells are auth-gated and data-driven - never let a browser (or an iframe) serve a stale
   // copy captured before the session was active. Static assets keep their own caching elsewhere.

@@ -1,4 +1,5 @@
 import express, { Router } from 'express';
+import { brandPage } from '../services/brandPage';
 import { getDb } from '../db/index';
 import { verifyApproval } from '../services/approvalLinks';
 import { approveItem, rejectItem, OnboardingItem } from '../services/onboardingAgent';
@@ -13,15 +14,7 @@ const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g,
 const baseUrl = (req: express.Request) => (process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 
 function page(title: string, body: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>${esc(title)}</title><style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f7f9;color:#14213a}
-main{width:min(480px,calc(100% - 32px));margin:24px auto;padding:28px;background:#fff;border:1px solid #e5e8ed;border-radius:16px;box-shadow:0 8px 24px rgba(20,33,58,.06)}
-h1{font-size:21px;margin:0 0 6px;letter-spacing:-.02em}.sub{color:#5a6577;margin:0 0 18px;line-height:1.5}.box{background:#f2f5f9;border-radius:10px;padding:12px 14px;margin:0 0 18px;font-size:14px;line-height:1.5}
-.box b{display:block;font-size:15px}textarea{width:100%;box-sizing:border-box;min-height:74px;border:1px solid #d0d5dd;border-radius:10px;padding:10px;font:inherit;font-size:15px;margin:6px 0 12px}
-.row{display:flex;gap:10px;flex-wrap:wrap}button{flex:1;min-height:46px;border-radius:10px;font:inherit;font-size:15px;font-weight:600;cursor:pointer;border:1px solid #d0d5dd;background:#fff;color:#14213a}
-button.go{background:#14213a;border-color:#14213a;color:#fff}label{font-size:13px;color:#5a6577}.done{color:#12805c;font-weight:600}.no{color:#b42318;font-weight:600}
-</style></head><body><main>${body}</main></body></html>`;
+  return brandPage(title, body);
 }
 
 function load(token: string): { item: OnboardingItem; email: string; req: any; test?: boolean; next?: string } | null {

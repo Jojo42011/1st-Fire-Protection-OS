@@ -123,8 +123,7 @@
   function auto() {
     if (document.body.getAttribute('data-motion') === 'manual') return;
     var c = document.querySelector(CONTAINERS);
-    if (!c) return;
-    if (!c.__autoTop) { c.__autoTop = true; markChildren(c, true); }
+    if (c && !c.__autoTop) { c.__autoTop = true; markChildren(c, true); }
     var hosts = document.querySelectorAll(HOSTS);
     for (var h = 0; h < hosts.length; h++) {
       var host = hosts[h];
