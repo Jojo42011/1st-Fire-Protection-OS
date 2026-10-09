@@ -32,7 +32,7 @@
   .bar-row .lab{width:150px;font-weight:600;font-size:12.5px;color:var(--ink-2)}
   .bar-row .bar>span{background:var(--brand)}
   .bar-row .bar.quiet>span{background:var(--ink-3)}
-  .bar-row .v{width:auto;min-width:210px;text-align:left;font-weight:500;font-size:12.5px;color:var(--muted)}
+  .bar-row .v{flex:none;width:270px;white-space:nowrap;text-align:left;font-weight:500;font-size:12.5px;color:var(--muted)}
   .bar-row .v b{color:var(--ink);font-weight:800;margin-right:6px}
   .grp{padding:14px 18px 8px;font-weight:700;font-size:13px;color:var(--ink);display:flex;gap:6px;align-items:baseline;border-top:1px solid var(--divider)}
   .grp:first-child{border-top:0}
@@ -47,7 +47,8 @@
   .tvcost input{width:96px;padding:6px 10px;font-size:13px}
   .loading{padding:60px 0;text-align:center;font-weight:500;color:var(--muted)}
   @media (max-width:900px){ .kpis{grid-template-columns:1fr 1fr} .split-even{grid-template-columns:1fr} }
-  @media (max-width:640px){ .hl .vr{display:none} .hl .fig{text-align:left} .bar-row .lab{width:100px} .bar-row .v{min-width:0} }
+  @media (max-width:640px){ .hl .vr{display:none} .hl .fig{text-align:left} .bar-row{flex-wrap:wrap;row-gap:4px} .bar-row .lab{width:100%} .bar-row .v{width:100%;white-space:normal} }
+  .nw{white-space:nowrap}
   @media print{
     @page{size:letter;margin:.5in}
     .os-actions,.noprint{display:none!important}
@@ -68,7 +69,7 @@
       <h1>Phones &amp; iPads: executive report</h1>
       <div class="os-question" id="asof">Loading…</div>
     </div>
-    <div class="os-actions"><button class="os-btn primary" id="print">Print or save as PDF</button></div>
+    <div class="os-actions"><button class="btn-primary" id="print">Print or save as PDF</button></div>
   </div>
   <div id="out"><div class="loading">Loading the report…</div></div>
 </div>
@@ -149,7 +150,7 @@ function render(){
 
   var idleFree=R.idleLines.filter(function(l){return !l.balance;}), idleOwe=R.idleLines.filter(function(l){return l.balance;});
   var icols=[
-    {label:'Number', cell:function(r){ return '<span class="num">'+esc(r.number)+'</span>'; }},
+    {label:'Number', cell:function(r){ return '<span class="num nw">'+esc(r.number)+'</span>'; }},
     {label:'Office', cell:function(r){ return esc(r.office); }},
     {label:'Device', cell:function(r){ return esc(r.model); }},
     {label:'Why it is idle', cell:function(r){ return esc(r.reason)+(r.holder?'<span class="sub">'+esc(r.holder)+'</span>':''); }},
@@ -167,7 +168,7 @@ function render(){
     ];
     var both=R.teams.remove.filter(function(r){return r.phones.length;}).length+R.teams.heavy.length+R.teams.review.length;
     var ranges=(o.teamsPstnRange?'<b>Outside calls:</b> '+fmtRange(o.teamsPstnRange):'')+(o.teamsUsageRange?' &nbsp;·&nbsp; <b>All Teams calls:</b> '+fmtRange(o.teamsUsageRange):'');
-    html+=secH('AT&amp;T phone or Teams Phone', both, both+' people pay for both')+
+    html+=secH('AT&amp;T phone or Teams Phone', null, both+' people pay for both')+
       '<div class="banner">'+'<div>Calls to outside numbers show which one each person actually uses. Teams-to-Teams calls keep working without Teams Phone.'+(ranges?'<br>'+ranges:'')+'</div></div>'+
       '<div class="split-even">'+
         card('Remove Teams Phone', R.teams.remove.length, tbl(pcols, R.teams.remove))+
@@ -190,7 +191,7 @@ function render(){
     (est?'AT&amp;T cost is the monthly bill divided by active lines until real plan costs are entered on Phones &amp; iPads. ':'AT&amp;T cost uses the plan costs entered for '+s.priced+' lines. ')+
     'Device balances come from AT&amp;T installment terms, or from the device workbook where AT&amp;T shows none. '+
     'Teams Phone is priced at <b>'+usd(tv.cost,true)+'</b> per user per month'+(tv.estimated?' (list price for Teams Phone with Calling Plan, not your invoice)':'')+'.'+
-    '</div><div class="note-line noprint"><span class="tvcost">Teams Phone price from your invoice <input id="tvCost" type="number" min="0" step="0.01" value="'+(tv.estimated?'':tv.cost)+'" placeholder="'+tv.cost+'" /><button class="os-btn sm" id="tvSave">Save</button></span></div>';
+    '</div><div class="note-line noprint"><span class="tvcost">Teams Phone price from your invoice <input id="tvCost" type="number" min="0" step="0.01" value="'+(tv.estimated?'':tv.cost)+'" placeholder="'+tv.cost+'" /><button class="btn btn-sm" id="tvSave">Save</button></span></div>';
 
   document.getElementById('out').innerHTML=html;
   document.getElementById('tvSave').addEventListener('click',function(){
