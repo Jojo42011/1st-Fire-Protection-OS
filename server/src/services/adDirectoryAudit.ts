@@ -41,6 +41,11 @@ export function ouOffice(ouDn: string | null | undefined): string | null {
   }
   return null;
 }
+/** The OU is the target or sits anywhere below it. */
+function withinOu(ouDn: string | null | undefined, target: string): boolean {
+  const o = lc(ouDn), t = lc(target);
+  return !!o && !!t && (o === t || o.endsWith(',' + t));
+}
 /** The account sits in a default container (CN=Users) or the domain root, not an OU of its own. */
 function inDefaultContainer(ouDn: string | null | undefined): boolean {
   const first = String(ouDn || '').split(/(?<!\\),/)[0].trim();
@@ -157,9 +162,10 @@ export function directoryAudit(now = new Date()): DirectoryAudit {
     if (inDefaultContainer(a.ou)) {
       placement = 'default_container'; expectedOu = (res && res.matched !== 'default' ? res.ou : null) || (off ? suggestOu(off) : null);
       note = 'In the default Users container, not an office OU.';
-    } else if (res && res.matched !== 'default' && lc(res.ou) !== lc(a.ou)) {
+    } else if (res && res.matched !== 'default' && !withinOu(a.ou, res.ou)) {
+      // A sub-OU of the mapped one (MGMT / ACCOUNTING under MGMT) is the right place, not a mismatch.
       placement = 'not_mapped_ou'; expectedOu = res.ou;
-      note = `The OU mapping on the Active Directory page puts ${res.matched === 'department' ? `department "${e.department}"` : `office "${e.office}"`} somewhere else.`;
+      note = `${res.matched === 'department' ? `Department "${e.department}"` : `Office "${e.office}"`} is mapped to ${ouLabel(res.ou)} on the Active Directory page.`;
     } else if (oo && off && oo !== off) {
       placement = 'wrong_office'; expectedOu = suggestOu(off);
       note = `OU is for ${officeLabel(oo)}, BambooHR says ${officeLabel(off)}.`;

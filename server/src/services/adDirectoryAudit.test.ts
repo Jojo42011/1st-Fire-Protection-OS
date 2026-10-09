@@ -120,3 +120,21 @@ test('Office becomes the city, and the distribution lists keep their address and
   assert.match(plan.ddgScript, /\(Office -eq ''San Antonio'' -or Office -eq ''1st FP Services, LLC''\)/, 'matches the city and the old LLC text');
   assert.match(plan.backfillScript, /-Office 'San Antonio' -Company '1st Fire Protection'/);
 });
+
+test('a sub-OU of the mapped OU counts as the right place', () => {
+  const { setAdSettings } = require('./adProvision');
+  db.exec(`DELETE FROM employees`);
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, office, department, employment_status) VALUES ('Rita','Acct','rita@1stfp.com','1st FP Sprinkler Companies, LLC','MGMT','active')`).run();
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, office, department, employment_status) VALUES ('Ian','Sa','ian@1stfp.com','1st FP Sprinkler Companies, LLC','MGMT','active')`).run();
+  setAdSettings({ departmentOuMap: { MGMT: 'OU=MGMT,OU=USERS,OU=1FP,DC=corp,DC=local' } });
+  ingestInventory([
+    { objectGuid: 'r1', sam: 'rita', upn: 'rita@1stfp.com', displayName: 'Rita Acct', enabled: true, ou: 'OU=ACCOUNTING,OU=MGMT,OU=USERS,OU=1FP,DC=corp,DC=local' },
+    { objectGuid: 'i1', sam: 'ian', upn: 'ian@1stfp.com', displayName: 'Ian Sa', enabled: true, ou: 'OU=SA-FP SERVICES,OU=USERS,OU=1FP,DC=corp,DC=local' },
+  ]);
+  const d = directoryAudit();
+  assert.equal(d.people.find((p) => p.name === 'Rita Acct')!.placement, 'ok', 'MGMT / ACCOUNTING is inside MGMT');
+  const ian = d.people.find((p) => p.name === 'Ian Sa')!;
+  assert.equal(ian.placement, 'not_mapped_ou');
+  assert.match(ian.placementNote!, /Department "MGMT" is mapped to 1FP \/ USERS \/ MGMT/);
+  setAdSettings({ departmentOuMap: {} });
+});
