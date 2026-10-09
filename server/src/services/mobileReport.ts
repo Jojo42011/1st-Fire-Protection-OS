@@ -73,7 +73,7 @@ export function executiveReport(): any {
   const pick = (r: any) => ({ person: r.person, office: r.office, phones: r.phones, pstn_calls: r.pstn_calls, calls: r.calls, category: r.category, recommendation: r.recommendation });
   return {
     ok: true,
-    asOf: { att: summary.attReportAt, teams: tStatus?.ok ? tStatus.at : null, teamsPeriod: tStatus?.period || null, addigy: summary.addigySyncedAt, abm: summary.abmSyncedAt },
+    asOf: { att: summary.attReportAt, teams: tStatus?.ok ? tStatus.at : null, teamsPeriod: tStatus?.period || null, teamsUsageRange: tStatus?.ok ? tStatus.usageRange || null : null, teamsPstnRange: tStatus?.ok ? tStatus.pstnRange || null : null, addigy: summary.addigySyncedAt, abm: summary.abmSyncedAt },
     spend: {
       activeLines: summary.activeLines, phones: summary.phones, tablets: summary.tablets, monthlyService: summary.monthlyService,
       costEstimated, priced, billTotal: summary.billTotal, monthlyInstallments: summary.monthlyInstallments, deviceBalance: summary.deviceBalance,

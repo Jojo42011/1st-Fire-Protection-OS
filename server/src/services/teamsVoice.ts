@@ -29,7 +29,12 @@ export interface TeamsVoiceStatus {
   concealed: boolean;
   gaps: string[];
   period: string;
+  /** Days the "All Teams calls" counts cover: Microsoft's usage report period, ending on its refresh date. */
+  usageRange?: DateRange | null;
+  /** Days the "Outside calls" counts cover: the call-records window this sync asked for. */
+  pstnRange?: DateRange | null;
 }
+export interface DateRange { from: string; to: string }
 
 /** Service plans that mean "this person has Teams voice". MCOEV = Teams Phone, MCOPSTN* = Calling Plans.
  *  MCOEV_VIRTUALUSER is a resource account (auto attendant, call queue), not a person. */
@@ -54,6 +59,19 @@ export function parseTeamsActivity(csv: string): Map<string, { calls: number; me
     out.set(k, { calls: Number(r[calls]) || 0, meetings: Number(r[meetings]) || 0, last: (last >= 0 && r[last]) || null });
   }
   return out;
+}
+
+/** The days a Teams activity report covers, from its own "Report Refresh Date" and "Report Period"
+ *  columns (the period ends on the refresh date, which runs a day or two behind today). */
+export function activityRange(csv: string, period: string): DateRange | null {
+  const grid = parseCsv(csv || '');
+  if (grid.length < 2) return null;
+  const h = grid[0].map((x) => x.trim().toLowerCase());
+  const refresh = String(grid[1][h.indexOf('report refresh date')] || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(refresh)) return null;
+  const days = Number(grid[1][h.indexOf('report period')]) || Number(period.replace(/\D/g, '')) || 90;
+  const from = new Date(Date.parse(`${refresh}T00:00:00Z`) - (days - 1) * 86400000).toISOString().slice(0, 10);
+  return { from, to: refresh };
 }
 
 async function getJson(url: string, token: string): Promise<{ status: number; body: any }> {
@@ -127,8 +145,10 @@ export async function syncTeamsVoice(days = 90): Promise<TeamsVoiceStatus> {
     let activity = new Map<string, { calls: number; meetings: number; last: string | null }>();
     const rep = await fetch(`${GRAPH}/reports/getTeamsUserActivityUserDetail(period='${period}')`, { headers: { authorization: `Bearer ${token}` } });
     if (rep.ok) {
-      activity = parseTeamsActivity(await rep.text());
+      const csv = await rep.text();
+      activity = parseTeamsActivity(csv);
       status.usage = true;
+      status.usageRange = activityRange(csv, period);
       // Microsoft hides names in reports by default: UPNs come back as hashes until that setting is off.
       const keys = [...activity.keys()];
       status.concealed = keys.length > 0 && keys.filter((k) => !k.includes('@')).length > keys.length / 2;
@@ -153,6 +173,7 @@ export async function syncTeamsVoice(days = 90): Promise<TeamsVoiceStatus> {
       }
     }
     status.pstn = pstnOk;
+    status.pstnRange = pstnOk ? { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) } : null;
     if (!pstnOk) status.gaps.push('CallRecords.Read.PstnCalls (optional)');
 
     // 5. Match to employees and replace the snapshot.

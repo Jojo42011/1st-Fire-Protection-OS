@@ -38,6 +38,9 @@
   .eyebrow .no{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.08em}
   h2{font-size:20px;color:var(--ink);font-weight:700;letter-spacing:-.01em;margin:0}
   .lede{margin:6px 0 16px;color:var(--body);max-width:680px}
+  .range{display:block;margin-top:8px;font-size:12.5px;color:var(--muted)}
+  .range b{color:var(--ink);font-weight:600}
+  .range .sep{display:inline-block;width:18px}
   .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
   table{width:100%;border-collapse:collapse;font-size:13.5px}
   th{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 10px 8px 0;border-bottom:1px solid var(--ink)}
@@ -93,6 +96,8 @@ function esc(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,
 function usd(n,cents){ n=Number(n)||0; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:cents?2:0,maximumFractionDigits:cents?2:0}); }
 function plural(n,w){ return n+' '+w+(n===1?'':'s'); }
 function fmtDate(iso){ if(!iso) return ''; var d=new Date(String(iso).length===10?iso+'T12:00:00':iso); return isNaN(d)?String(iso):d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}); }
+function fmtRange(r){ if(!r||!r.from||!r.to) return ''; var f=new Date(r.from+'T12:00:00'), t=new Date(r.to+'T12:00:00');
+  var md={month:'short',day:'numeric'}; return f.toLocaleDateString('en-US',f.getFullYear()===t.getFullYear()?md:{month:'short',day:'numeric',year:'numeric'})+' to '+t.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 function tbl(head, rows, opts){ opts=opts||{};
   if(!rows.length) return '<p class="lede">'+esc(opts.empty||'None.')+'</p>';
   return '<div class="tw"><table><thead><tr>'+head.map(function(h){ return '<th'+(h.n?' class="n"':'')+'>'+esc(h.label)+'</th>'; }).join('')+'</tr></thead><tbody>'+
@@ -129,7 +134,7 @@ function render(){
   var by=function(k){ return a.filter(function(x){return x.key===k;})[0]||{count:0,monthly:0,yearly:0,oneTime:0}; };
   var free=by('cancel_free'), owing=by('cancel_owing'), rmTeams=by('remove_teams'), heavy=by('drop_att_heavy');
   var E=function(on){ return on?'<span class="est">est.</span>':''; };
-  var when=[]; if(R.asOf.att) when.push('AT&amp;T report of '+fmtDate(R.asOf.att)); if(R.asOf.teams) when.push('Teams usage for the '+(R.asOf.teamsPeriod||'D90').replace('D','last ')+' days');
+  var when=[]; if(R.asOf.att) when.push('AT&amp;T report of '+fmtDate(R.asOf.att)); if(R.asOf.teams) when.push(R.asOf.teamsPstnRange?'Teams calls '+fmtRange(R.asOf.teamsPstnRange):'Teams usage for the '+(R.asOf.teamsPeriod||'D90').replace('D','last ')+' days');
 
   var html='<div class="sheet">'+
     '<div class="mast"><div class="logo">1F</div><div class="org">1st Fire Protection</div><div class="kind">Executive report</div></div>'+
@@ -186,7 +191,8 @@ function render(){
     ];
     var both=R.teams.remove.filter(function(r){return r.phones.length;}).length+R.teams.heavy.length+R.teams.review.length;
     html+=section('04','AT&amp;T phone or Teams Phone',
-      both+' people pay for both a company cell and Teams Phone. Calls to outside numbers over the last 90 days show which one each person actually uses. Teams-to-Teams calls keep working without Teams Phone.',
+      both+' people pay for both a company cell and Teams Phone. Calls to outside numbers show which one each person actually uses. Teams-to-Teams calls keep working without Teams Phone.'+
+      '<span class="range">'+(R.asOf.teamsPstnRange?'<b>Outside calls:</b> '+fmtRange(R.asOf.teamsPstnRange):'')+(R.asOf.teamsUsageRange?'<span class="sep"></span><b>All Teams calls:</b> '+fmtRange(R.asOf.teamsUsageRange):'')+'</span>',
       '<div class="cols"><div class="group"><h3>Remove Teams Phone <span class="c">'+R.teams.remove.length+'</span></h3>'+tbl(pcols, R.teams.remove)+'</div>'+
       '<div><div class="group"><h3>Consider dropping the AT&amp;T phone <span class="c">'+R.teams.heavy.length+'</span></h3>'+tbl(pcols, R.teams.heavy, {empty:'Nobody.'})+'</div>'+
       (R.teams.review.length?'<div class="group"><h3>Review with their manager <span class="c">'+R.teams.review.length+'</span></h3>'+tbl(pcols, R.teams.review)+'</div>':'')+

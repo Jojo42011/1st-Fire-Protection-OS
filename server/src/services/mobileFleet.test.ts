@@ -13,7 +13,7 @@ import {
   normNumber, normPersonName, normDate, unsupportedModel, installmentRemaining, parseAttReport, importAttReport,
   parseWorkbook, importWorkbook, listLines, updateLine, addLineEvent, lineDetail, teamsAudit, setPlanCost, linesCsv,
 } from './mobileFleet';
-import { isVoicePlan, parseTeamsActivity } from './teamsVoice';
+import { isVoicePlan, parseTeamsActivity, activityRange } from './teamsVoice';
 import { abmClientAssertion, mapAddigyItem } from './appleDevices';
 import { executiveReport, setTeamsVoiceCost, DEFAULT_TEAMS_VOICE_COST } from './mobileReport';
 
@@ -260,6 +260,14 @@ test('Teams helpers recognize voice plans and the activity report', () => {
   assert.equal(isVoicePlan('EXCHANGE_S_STANDARD'), null);
   const m = parseTeamsActivity('﻿Report Refresh Date,User Principal Name,Last Activity Date,Call Count,Meeting Count\n2026-10-07,Josh@1stfp.com,2026-10-01,12,3\n');
   assert.deepEqual(m.get('josh@1stfp.com'), { calls: 12, meetings: 3, last: '2026-10-01' });
+});
+
+test('the Teams usage report says which days it covers', () => {
+  const csv = '﻿Report Refresh Date,User Principal Name,Call Count,Report Period\n2026-10-07,a@1stfp.com,3,90\n';
+  assert.deepEqual(activityRange(csv, 'D90'), { from: '2026-07-10', to: '2026-10-07' });
+  // No Report Period column: fall back to the period that was asked for.
+  assert.deepEqual(activityRange('Report Refresh Date,User Principal Name\n2026-10-07,a@1stfp.com\n', 'D30'), { from: '2026-09-08', to: '2026-10-07' });
+  assert.equal(activityRange('User Principal Name\na@1stfp.com\n', 'D90'), null);
 });
 
 test('ABM client assertion is a valid ES256 JWT for Apple', () => {
