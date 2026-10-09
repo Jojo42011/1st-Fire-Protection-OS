@@ -1264,6 +1264,11 @@ export function initDb(): void {
   addColumn('intake_links', 'employee_id', 'INTEGER');
   // A test link runs the whole manager flow but creates no request and emails no one on submit.
   addColumn('intake_links', 'is_test', 'INTEGER DEFAULT 0');
+  // The OneDrive handover is automatic now: say so on the open steps already on the board.
+  try {
+    db.prepare(`UPDATE offboarding_items SET detail = ? WHERE action_code = 'data_reassign' AND status = 'pending' AND detail NOT LIKE 'Automatic:%'`)
+      .run('Automatic: on their last day the OS gives you access to their OneDrive and emails you the link. Move what the team needs into SharePoint before the account is retired.');
+  } catch { /* table created later on a fresh database */ }
   // Personal to-do list (My tasks): one person's own items with due dates and a daily email.
   db.exec(`
     CREATE TABLE IF NOT EXISTS personal_tasks (

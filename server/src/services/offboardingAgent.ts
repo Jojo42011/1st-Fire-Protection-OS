@@ -165,7 +165,7 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'groups_remove', label: 'Remove from security and distribution groups', detail: groupCount ? `${groupCount} group${groupCount === 1 ? '' : 's'} captured for audit before removal.` : 'Group membership captured for audit before removal.', due_at: base, snapshot_json: groupSnapshot ? JSON.stringify(groupSnapshot) : undefined },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'fwd_set', label: `Forward mail to ${fwdTo} until ${fwd}`, due_at: base },
     { owner: 'it', stage: 's1', kind: 'task', action_code: 'autoreply_set', label: 'Set the mailbox auto-reply', due_at: base },
-    { owner: 'manager', stage: 's1', kind: 'task', action_code: 'data_reassign', label: 'Reassign OneDrive and shared files', detail: 'Grant the manager access to the departing user\'s files.', due_at: base },
+    { owner: 'manager', stage: 's1', kind: 'task', action_code: 'data_reassign', label: 'Reassign OneDrive and shared files', detail: 'Automatic: on their last day the OS gives you access to their OneDrive and emails you the link. Move what the team needs into SharePoint before the account is retired.', due_at: base },
 
     // HR checklist (day one). Some tasks notify a shared mailbox with one click (email_to).
     { owner: 'hr', stage: 's1', kind: 'task', action_code: 'hr_notify_safety', label: 'Notify the Safety department of the termination', detail: `Emails ${SAFETY_MBX}. Safety updates fleet, MVR, and fire-marshal licensing records.`, due_at: base, email_to: SAFETY_MBX },

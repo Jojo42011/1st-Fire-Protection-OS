@@ -19,6 +19,7 @@ import { syncReviews, googleConnected } from './googleBusiness';
 import { sendOnboardingReminders } from './onboardingOwners';
 import { sendOffboardingOverdueReminders } from './offboardingAgent';
 import { sendDailyTaskDigests } from './personalTasks';
+import { autoReassignOneDrive } from './offboardingAutomation';
 import { refreshAppAccess } from './appAccessSync';
 import { syncTeamsVoiceForScheduler } from './teamsVoice';
 import { syncAddigy, syncAbm } from './appleDevices';
@@ -128,14 +129,17 @@ export const SYNC_DEFS: SyncDef[] = [
   {
     key: 'lifecycle_reminders',
     label: 'Onboarding & offboarding reminders',
-    detail: 'Daily email to each team: onboarding tasks due in two days or overdue, and overdue offboarding steps (weekdays, business hours)',
+    detail: 'Daily email to each team: onboarding tasks due in two days or overdue, and overdue offboarding steps (weekdays, business hours). Hourly: on a leaver\'s last day, gives their manager their OneDrive and emails the link',
     defaultInterval: 60,
     run: async () => {
       const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
+      // Automatic offboarding steps first, so a step the OS just finished never shows up as overdue.
+      const od = await autoReassignOneDrive();
       const on = await sendOnboardingReminders(base);
       const off = await sendOffboardingOverdueReminders(base);
-      if (on.waiting && off.waiting) return 'outside business hours';
-      return `onboarding: ${on.sent} email(s) for ${on.items} due item(s); offboarding: ${off.sent} email(s) for ${off.items} overdue step(s)`;
+      const auto = od.done || od.failed ? `; OneDrive handover: ${od.done} done, ${od.failed} failed` : '';
+      if (on.waiting && off.waiting) return 'outside business hours' + auto;
+      return `onboarding: ${on.sent} email(s) for ${on.items} due item(s); offboarding: ${off.sent} email(s) for ${off.items} overdue step(s)${auto}`;
     },
   },
   {

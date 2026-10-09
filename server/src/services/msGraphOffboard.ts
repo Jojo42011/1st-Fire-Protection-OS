@@ -117,7 +117,7 @@ async function resolveUserId(token: string, upn: string): Promise<string | null>
   return j.id || null;
 }
 
-type StepResult = { ok: boolean; error?: string; detail?: string; already?: boolean };
+export type StepResult = { ok: boolean; error?: string; detail?: string; already?: boolean; url?: string | null };
 
 /**
  * Block sign-in (accountEnabled=false) and revoke every refresh/session token. For a hybrid-synced
@@ -282,7 +282,7 @@ export async function delegateOneDrive(upn: string, managerUpn: string): Promise
     if (!id) return { ok: false, error: `no directory user for ${upn}` };
 
     // Confirm the user has a provisioned OneDrive first (a clearer message than a raw 404 on invite).
-    const drive = await fetch(`${GRAPH}/users/${id}/drive?$select=id`, { headers: { authorization: `Bearer ${token}` } });
+    const drive = await fetch(`${GRAPH}/users/${id}/drive?$select=id,webUrl`, { headers: { authorization: `Bearer ${token}` } });
     if (!drive.ok) {
       if (drive.status === 401 || drive.status === 403) return { ok: false, error: accessDenied('Files.ReadWrite.All') };
       if (drive.status === 404) return { ok: false, error: 'this user has no provisioned OneDrive to delegate' };
@@ -303,7 +303,8 @@ export async function delegateOneDrive(upn: string, managerUpn: string): Promise
       if (res.status === 401 || res.status === 403) return { ok: false, error: accessDenied('Files.ReadWrite.All') };
       return { ok: false, error: `graph drive invite ${res.status}: ${(await res.text()).slice(0, 200)}` };
     }
-    return { ok: true, detail: `Granted ${managerUpn} write access to the OneDrive.` };
+    const webUrl = ((await drive.json().catch(() => ({}))) as { webUrl?: string }).webUrl || null;
+    return { ok: true, detail: `Granted ${managerUpn} write access to the OneDrive.`, url: webUrl };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
