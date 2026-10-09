@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
@@ -174,7 +174,11 @@ test('requests made before due dates existed get dated at startup', () => {
 
 test('the daily reminder sends each lane one email of what is due soon or late, once a day, in business hours', async () => {
   db.prepare(`UPDATE onboarding_requests SET status = 'complete'`).run(); // isolate from earlier tests
-  const { request } = createRequest({ name: 'Jo Soon', start_date: '2026-10-07', company_email: true, cell_reimburse: true });
+  // Due dates come from the clock, so build the request as of the test's Tuesday, not the real today.
+  mock.timers.enable({ apis: ['Date'], now: TUE_10AM });
+  let request: any;
+  try { request = createRequest({ name: 'Jo Soon', start_date: '2026-10-07', company_email: true, cell_reimburse: true }).request; }
+  finally { mock.timers.reset(); }
   db.prepare(`UPDATE onboarding_items SET due_at = '2026-10-05' WHERE request_id = ? AND owner = 'it'`).run(request.id); // yesterday: overdue
   outbox = [];
   const out = await sendOnboardingReminders(BASE, TUE_10AM);
