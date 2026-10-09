@@ -544,6 +544,16 @@ router.get('/api/ad-audit/office-dl-plan', (_req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: (e as Error).message }); }
 });
 
+/** The Exchange Online distribution-list script as a file, so it can be downloaded in one click. */
+router.get('/api/ad-audit/distribution-lists-script', (_req, res) => {
+  try {
+    const plan = buildOfficeDlPlan();
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="create-distribution-lists.ps1"');
+    res.send(plan.ddgScript);
+  } catch (e) { res.status(500).type('text').send((e as Error).message); }
+});
+
 /** Generate a domain-controller cleanup script from hand-picked audit findings. Body:
  *  { selections: [{ sam, code }] }. The server re-derives every fix from the live drift compute,
  *  so the browser only chooses which findings to act on, never the values written. */

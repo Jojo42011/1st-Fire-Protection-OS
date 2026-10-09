@@ -106,22 +106,23 @@
     </div>
   </details>
   <details id="dl" class="adset">
-    <summary>Location distribution lists (Office/Company backfill)</summary>
+    <summary>Location distribution lists</summary>
     <div id="dlBody" class="adsetBody">
-      <div class="offrow" style="grid-template-columns:auto auto 1fr;max-width:520px">
-        <button class="os-btn primary" id="dlLoad">Build backfill</button>
-        <button class="os-btn" id="dlBackfillDl" disabled>Download backfill .ps1</button>
+      <div class="offrow" style="grid-template-columns:auto auto 1fr;max-width:640px">
+        <a class="os-btn primary" href="/api/ad-audit/distribution-lists-script" download="create-distribution-lists.ps1">Download distribution list script (.ps1)</a>
+        <button class="os-btn" id="dlLoad">Show office counts</button>
         <span></span>
       </div>
-      <div id="dlResult" class="note" style="margin-top:10px">Stamps every active BambooHR employee with their Office + Company on-prem, so the per-site dynamic distribution lists resolve to the right people. Run it on a domain controller, then Start-ADSyncSyncCycle -PolicyType Delta. The creation script (one list per office) is also generated below.</div>
+      <div id="dlResult" class="note" style="margin-top:10px">Updates your existing office lists in place (and All Employees) in Exchange Online. Run it from any PC with the Exchange Online module: preview first, then again with -Apply. Office and Company on each account are set by fix-ad.ps1.</div>
     </div>
   </details>
   <details id="dir" class="adset">
     <summary>OU placement and email signature fields</summary>
     <div id="dirBody" class="adsetBody">
-      <div class="offrow" style="grid-template-columns:auto auto auto 1fr;max-width:820px">
+      <div class="offrow" style="grid-template-columns:auto auto auto auto 1fr;max-width:1100px">
         <button class="os-btn primary" id="dirLoad">Run audit</button>
         <a class="os-btn" id="dirDl" href="/api/ad-audit/directory/script" download="fix-ad.ps1">Download fix script (.ps1)</a>
+        <a class="os-btn" href="/api/ad-audit/distribution-lists-script" download="create-distribution-lists.ps1">Download distribution list script (.ps1)</a>
         <a class="os-btn" href="/api/ad-audit/agent-script" download="collectadinventory1stfp.ps1">Download DC agent (.ps1)</a>
         <span></span>
       </div>
@@ -470,7 +471,7 @@ function loadDlPlan(){
   var out=document.getElementById('dlResult'), btn=document.getElementById('dlLoad');
   btn.disabled=true; btn.textContent='Building…'; out.textContent='Matching BambooHR to the AD mirror…';
   fetch('/api/ad-audit/office-dl-plan').then(function(r){return r.json();}).then(function(d){
-    btn.disabled=false; btn.textContent='Build backfill';
+    btn.disabled=false; btn.textContent='Show office counts';
     if(!d||!d.ok){ out.textContent=(d&&d.error)||'Could not build the plan.'; return; }
     DLPLAN=d;
     var rows=(d.offices||[]).map(function(o){
@@ -478,21 +479,15 @@ function loadDlPlan(){
       var na=(o.noAccount&&o.noAccount.length)?(' · '+o.noAccount.length+' no account'):'';
       return '<tr><td>'+esc(o.office)+'</td><td class="mono">'+o.matched+'/'+o.headcount+'</td><td>'+warn+na+'</td></tr>';
     }).join('');
-    out.innerHTML='<div style="margin-bottom:8px"><b>'+d.backfillCount+'</b> Set-ADUser stamps across <b>'+(d.offices||[]).length+'</b> offices.'+
-      ' <button class="os-btn primary" id="dlBf2" style="margin-left:8px">Download backfill .ps1</button>'+
-      ' <button class="os-btn" id="dlCr2">Download creation .ps1</button></div>'+
+    out.innerHTML='<div style="margin-bottom:8px"><b>'+(d.offices||[]).length+'</b> office lists. "Need stamping" is people whose Office is not the city yet; fix-ad.ps1 sets it.</div>'+
       '<div class="card" style="overflow-x:auto;max-width:640px"><table><thead><tr><th>Office</th><th>Matched</th><th>Notes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
-    document.getElementById('dlBackfillDl').disabled=false;
-    document.getElementById('dlBf2').addEventListener('click',function(){dlDownload(d.backfillScript,'office-company-backfill.ps1');});
-    document.getElementById('dlCr2').addEventListener('click',function(){dlDownload(d.ddgScript,'create-distribution-lists.ps1');});
-  }).catch(function(){ btn.disabled=false; btn.textContent='Build backfill'; out.textContent='Could not reach the service.'; });
+  }).catch(function(){ btn.disabled=false; btn.textContent='Show office counts'; out.textContent='Could not reach the service.'; });
 }
 
 document.addEventListener('DOMContentLoaded',function(){
   if(!window.OS){ setTimeout(arguments.callee,50); return; }
   document.getElementById('refresh').addEventListener('click',load);
   document.getElementById('dlLoad').addEventListener('click',loadDlPlan);
-  document.getElementById('dlBackfillDl').addEventListener('click',function(){ if(DLPLAN) dlDownload(DLPLAN.backfillScript,'office-company-backfill.ps1'); });
   document.getElementById('spgLoad').addEventListener('click',loadSpGroups);
   document.getElementById('spgCsv').addEventListener('click',downloadSpCsv);
   document.getElementById('driftLoad').addEventListener('click',loadDrift);
