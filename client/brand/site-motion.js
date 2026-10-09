@@ -67,7 +67,17 @@
       for (var r = 0; r < rows.length; r++) rows[r].style.setProperty('--ri', String(Math.min(r, 14)));
       if (io) io.observe(el); else reveal(el);
     }
-    if (io) { clearTimeout(safety); safety = setTimeout(revealOnScreen, 1500); }
+    if (io) { clearTimeout(safety); safety = setTimeout(revealOnScreen, 1500); startTick(); }
+  }
+  // While anything is still hidden, re-check what is on screen about once a second; stops when all
+  // are shown and restarts when new blocks arrive.
+  var tick = null;
+  function startTick() {
+    if (tick || !document.querySelector('[data-reveal]:not(.rv-in)')) return;
+    tick = setInterval(function () {
+      revealOnScreen();
+      if (!document.querySelector('[data-reveal]:not(.rv-in)')) { clearInterval(tick); tick = null; }
+    }, 1200);
   }
   function showAll() {
     var els = document.querySelectorAll('[data-reveal]');
@@ -79,7 +89,6 @@
 
   window.FPMotion = { scan: scan, showAll: showAll };
   window.addEventListener('beforeprint', showAll);
-  window.addEventListener('scroll', function () { if (io) { clearTimeout(safety); safety = setTimeout(revealOnScreen, 400); } }, { passive: true });
   var start = function () {
     scan(document);
     if ('MutationObserver' in window) new MutationObserver(function () { scan(document); }).observe(document.body, { childList: true, subtree: true });
