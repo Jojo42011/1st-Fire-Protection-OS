@@ -68,6 +68,7 @@ import oncall from './routes/oncall';
 import deficiencies from './routes/deficiencies';
 import scorecard from './routes/scorecard';
 import people from './routes/people';
+import devices from './routes/devices';
 import me from './routes/me';
 import sources from './routes/sources';
 import reports from './routes/reports';
@@ -214,6 +215,7 @@ app.use(oncall);
 app.use(deficiencies);
 app.use(scorecard);
 app.use(people);
+app.use(devices);
 app.use(me);
 app.use(sources);
 app.use(reports);
@@ -250,7 +252,7 @@ const PAGE_MODULE: Record<string, string> = {
   'executive.html': 'overview', 'office-performance.html': 'overview', 'scoreboard.html': 'overview',
   'reports-money.html': 'accounting', 'reports-ops.html': 'service', 'reports-people.html': 'people',
   'reports-builder.html': 'overview',
-  'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access',
+  'offices.html': 'overview', 'it-systems.html': 'access', 'licenses.html': 'access', 'devices.html': 'access',
   'company-integrations.html': 'access', 'integrations.html': 'access', 'sync.html': 'access',
   'access.html': 'access', 'roster.html': 'access', 'harness.html': 'access',
   'department.html': 'access', 'agent.html': 'access', 'ad-audit.html': 'access',
@@ -353,6 +355,7 @@ app.get('/reports-money', page('reports-money.html'));
 app.get('/reports-people', page('reports-people.html'));
 app.get('/offices', page('offices.html'));
 app.get('/it-systems', page('it-systems.html'));
+app.get('/devices', page('devices.html'));
 app.get('/company-integrations', page('company-integrations.html'));
 app.get('/people', page('people.html'));
 app.get('/readiness', page('readiness.html'));

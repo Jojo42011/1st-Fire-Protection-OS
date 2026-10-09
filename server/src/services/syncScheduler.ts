@@ -20,6 +20,8 @@ import { sendOnboardingReminders } from './onboardingOwners';
 import { sendOffboardingOverdueReminders } from './offboardingAgent';
 import { sendDailyTaskDigests } from './personalTasks';
 import { refreshAppAccess } from './appAccessSync';
+import { syncTeamsVoiceForScheduler } from './teamsVoice';
+import { syncAddigy, syncAbm } from './appleDevices';
 
 export interface SyncDef {
   key: string;
@@ -94,6 +96,27 @@ export const SYNC_DEFS: SyncDef[] = [
       if (r && r.error) return `error: ${r.error}`;
       return r && r.synced ? `${r.synced} call(s) synced` : 'no new calls';
     },
+  },
+  {
+    key: 'teams_voice',
+    label: 'Teams voice (licenses and call activity)',
+    detail: 'Who holds Teams Phone or a Calling Plan, and how many Teams and PSTN calls they make, for the Phones & iPads audit',
+    defaultInterval: 720,
+    run: syncTeamsVoiceForScheduler,
+  },
+  {
+    key: 'addigy',
+    label: 'Addigy (MDM)',
+    detail: 'Which iPhones and iPads are enrolled and checking in, matched to AT&T lines by serial and IMEI',
+    defaultInterval: 360,
+    run: async () => (await syncAddigy()).message,
+  },
+  {
+    key: 'abm',
+    label: 'Apple Business Manager',
+    detail: 'Every Apple device the company owns and which MDM server it is assigned to',
+    defaultInterval: 720,
+    run: async () => (await syncAbm()).message,
   },
   {
     key: 'app_access',

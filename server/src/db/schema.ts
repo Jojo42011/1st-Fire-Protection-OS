@@ -1856,6 +1856,145 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_extact_status ON external_actions(status);
   `);
 
+  /* ---------- Phones & iPads: carrier lines, Apple devices, Teams voice ----------
+   * A carrier line (the phone number AT&T bills) and the device in it are tracked separately, because
+   * they move independently: upgrades belong to the line, a device can be swapped into another line,
+   * and a number can be transferred between AT&T accounts. The device itself is an employee_assets
+   * row (asset_type company_phone / ipad) so People, onboarding and offboarding already see it.
+   * Never stores an Apple ID password or a device passcode. */
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mobile_lines (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      number                 TEXT NOT NULL UNIQUE,      -- 10 digits, no punctuation
+      carrier                TEXT DEFAULT 'att',
+      billing_account        TEXT,
+      billing_account_name   TEXT,
+      office                 TEXT,                      -- canonical office key
+      kind                   TEXT,                      -- phone|tablet|hotspot|watch|data|other
+      employee_id            INTEGER,                   -- who the line is for (null = shared or spare)
+      shared_label           TEXT,                      -- "HR line", "Laredo service", "Hotspot"
+      holder_name            TEXT,                      -- the name on the workbook when it matched no employee
+      status                 TEXT DEFAULT 'active',     -- active|suspended|cancelled (the carrier's view)
+      status_date            TEXT,
+      carrier_status         TEXT,                      -- raw status from the latest carrier report
+      in_latest_report       INTEGER DEFAULT 0,         -- on the most recent report for its account
+      last_report_at         TEXT,
+      intent                 TEXT,                      -- what the office wants: cancel|freeze (null = keep)
+      intent_at              TEXT,
+      freeze_until           TEXT,                      -- a freeze auto-reconnects after 6 months
+      monthly_cost           REAL,                      -- service cost override; else the plan cost
+      rate_plan              TEXT,
+      group_plan             TEXT,
+      activation_date        TEXT,
+      last_upgrade_date      TEXT,
+      upgrade_eligible       TEXT,                      -- 'yes' or YYYY-MM-DD
+      early_upgrade_eligible TEXT,
+      upgrade_in_progress    INTEGER DEFAULT 0,
+      contract_type          TEXT,                      -- Installment|Standard|No Contract
+      contract_start         TEXT,
+      contract_end           TEXT,
+      contract_status        TEXT,
+      monthly_installment    REAL,
+      device_balance         REAL,                      -- remaining device balance as last recorded
+      balance_as_of          TEXT,
+      paid_off               INTEGER,
+      device_asset_id        INTEGER,                   -- employee_assets.id of the device in this line
+      att_user_name          TEXT,
+      att_email              TEXT,
+      imei                   TEXT,                      -- the device actually on the network
+      att_imei               TEXT,                      -- the device AT&T has on file (differs after a swap)
+      iccid                  TEXT,
+      sim_type               TEXT,
+      device_make            TEXT,
+      device_model           TEXT,
+      os_version             TEXT,
+      imei_mismatch          INTEGER DEFAULT 0,
+      apple_account          TEXT,                      -- the Apple account recorded for the device (never a password)
+      notes                  TEXT,
+      created_at             TEXT DEFAULT (datetime('now')),
+      updated_at             TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_mlines_emp ON mobile_lines(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_mlines_office ON mobile_lines(office);
+    CREATE INDEX IF NOT EXISTS idx_mlines_imei ON mobile_lines(imei);
+
+    /* The line's history: who had it, upgrades used (and by whom), device swaps, freezes, cancels. */
+    CREATE TABLE IF NOT EXISTS mobile_line_events (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      line_id     INTEGER NOT NULL,
+      kind        TEXT NOT NULL,      -- assigned|unassigned|upgrade|device_swap|freeze|cancel|reactivate|transfer|note|import
+      detail      TEXT,
+      employee_id INTEGER,
+      actor       TEXT,
+      at          TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (line_id) REFERENCES mobile_lines(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_mline_events_line ON mobile_line_events(line_id);
+
+    /* Monthly service cost per carrier plan name, set by IT, so lines without an override get a cost. */
+    CREATE TABLE IF NOT EXISTS mobile_plan_costs (
+      plan         TEXT PRIMARY KEY,
+      monthly_cost REAL,
+      updated_at   TEXT DEFAULT (datetime('now'))
+    );
+
+    /* Read-only mirror of Apple devices seen in Apple Business Manager and in Addigy (the MDM),
+     * keyed by serial. Each sync sets its own in_* flag; a device absent from a full sync is cleared. */
+    CREATE TABLE IF NOT EXISTS apple_devices (
+      serial              TEXT PRIMARY KEY,
+      imei                TEXT,
+      model               TEXT,
+      product_family      TEXT,
+      in_abm              INTEGER DEFAULT 0,
+      abm_status          TEXT,
+      abm_server          TEXT,
+      abm_added_at        TEXT,
+      abm_released_at     TEXT,
+      abm_purchase_source TEXT,
+      abm_order_number    TEXT,
+      abm_synced_at       TEXT,
+      in_addigy           INTEGER DEFAULT 0,
+      addigy_agent_id     TEXT,
+      addigy_device_name  TEXT,
+      addigy_user         TEXT,
+      addigy_last_online  TEXT,
+      addigy_os           TEXT,
+      addigy_supervised   INTEGER,
+      addigy_synced_at    TEXT,
+      updated_at          TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_apple_devices_imei ON apple_devices(imei);
+
+    /* Microsoft 365 users and their Teams voice: the Teams Phone / Calling Plan license and how much
+     * they actually call. Replaced on each successful sync. */
+    CREATE TABLE IF NOT EXISTS teams_voice_users (
+      upn              TEXT PRIMARY KEY,
+      entra_id         TEXT,
+      display_name     TEXT,
+      account_enabled  INTEGER,
+      employee_id      INTEGER,
+      mobile_phone     TEXT,
+      has_teams_phone  INTEGER DEFAULT 0,
+      has_calling_plan INTEGER DEFAULT 0,
+      voice_plans      TEXT,
+      licenses         TEXT,
+      call_count       INTEGER,            -- every Teams call in the report period (Teams-to-Teams included)
+      meeting_count    INTEGER,
+      pstn_calls       INTEGER,            -- calls to or from a real phone number (needs the call-records permission)
+      pstn_minutes     REAL,
+      last_activity    TEXT,
+      report_period    TEXT,
+      synced_at        TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_teams_voice_emp ON teams_voice_users(employee_id);
+  `);
+  // Phone and iPad detail on the device asset itself.
+  addColumn('employee_assets', 'imei', 'TEXT');
+  addColumn('employee_assets', 'model', 'TEXT');
+  addColumn('employee_assets', 'line_id', 'INTEGER');
+  addColumn('employee_assets', 'purchase_date', 'TEXT');
+  addColumn('employee_assets', 'source', 'TEXT');
+
   // Soft-delete for quotes: deletion archives instead of destroying the row (auditable, reversible).
   addColumn('est_quotes', 'deleted_at', 'TEXT');
 

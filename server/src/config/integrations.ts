@@ -76,6 +76,22 @@ const CATALOG: IntegrationDef[] = [
     isConnected: () => !!process.env.VAPI_API_KEY,
   },
   {
+    id: 'addigy',
+    name: 'Addigy (Apple MDM)',
+    category: 'Devices',
+    why: 'Shows which company iPhones and iPads are enrolled and checking in, so a device that left management stands out on Phones & iPads.',
+    baseline: 'available',
+    isConnected: () => !!process.env.ADDIGY_API_KEY,
+  },
+  {
+    id: 'apple_business_manager',
+    name: 'Apple Business Manager',
+    category: 'Devices',
+    why: 'The list of Apple devices the company owns and which MDM each is assigned to, matched to AT&T lines by serial and IMEI.',
+    baseline: 'available',
+    isConnected: () => !!(process.env.ABM_CLIENT_ID && process.env.ABM_KEY_ID && process.env.ABM_PRIVATE_KEY),
+  },
+  {
     id: 'twilio',
     name: 'Twilio',
     category: 'Voice & Telephony',

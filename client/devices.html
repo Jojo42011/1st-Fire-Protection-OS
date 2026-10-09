@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Phones &amp; iPads · 1st FP OS</title>
+<script src="/theme-sync.js"></script>
+<link rel="stylesheet" href="/brand/brand.css" /><link rel="stylesheet" href="/signal.css" /><link rel="stylesheet" href="/os.css" />
+<link rel="stylesheet" href="/brand/site-theme.css" />
+<style>
+  .dv-in{padding:7px 9px;border:1px solid var(--os-line,#2a2f3a);border-radius:8px;background:transparent;color:inherit;font:inherit}
+  .dv-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .dv-flags .os-pill{margin:0 4px 4px 0;display:inline-block}
+  .dv-sub{font-size:11.5px}
+  .dv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px}
+  .dv-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+  .dv-ev{border-left:2px solid var(--os-line,#2a2f3a);padding:4px 0 8px 10px;font-size:12.5px}
+  .dv-ev .muted{font-size:11px}
+  tr.click{cursor:pointer}
+  .dv-src{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+</style>
+</head><body>
+  <div class="os-wrap">
+    <div class="os-screen-head">
+      <div>
+        <h1>Phones &amp; iPads</h1>
+        <div class="os-question">Who has which line and device, what it costs, and what we can cut?</div>
+      </div>
+      <div class="os-actions">
+        <a class="os-btn" href="/api/devices/export.csv">Export to Excel</a>
+        <button class="os-btn primary" id="syncAll">Sync Teams, Addigy &amp; ABM</button>
+      </div>
+    </div>
+
+    <div id="strip"></div>
+
+    <div class="os-sec os-block">Lines <span class="n" id="lineN"></span></div>
+    <div class="os-chips" id="chips"></div>
+    <div class="dv-row" style="margin:10px 0">
+      <input id="q" class="dv-in" type="text" placeholder="Search person, number, model, serial, IMEI…" spellcheck="false" style="flex:1;min-width:240px" />
+      <select id="office" class="dv-in"><option value="">All offices</option></select>
+      <select id="kind" class="dv-in"><option value="">Phones and iPads</option><option value="phone">Phones</option><option value="tablet">iPads / tablets</option><option value="other">Hotspots, watches, data</option></select>
+    </div>
+    <div id="list"></div>
+    <div id="detail" style="margin-top:14px"></div>
+
+    <div class="os-sec os-block" style="margin-top:28px">Teams voice vs AT&amp;T <span class="n" id="teamsN"></span></div>
+    <div class="os-card" style="padding:14px 16px">
+      <div class="dv-row"><button class="os-btn" id="syncTeams">Sync Teams voice</button><span class="os-filter-note" id="teamsNote"></span></div>
+      <div id="teamsGaps" style="margin-top:8px"></div>
+      <div class="os-chips" id="teamsChips" style="margin-top:10px"></div>
+      <div id="teamsOut" style="margin-top:10px">Loading…</div>
+    </div>
+
+    <div class="os-sec os-block" style="margin-top:28px">Import</div>
+    <div class="os-card" style="padding:14px 16px">
+      <div class="dv-row"><b style="min-width:220px">1. AT&amp;T detail report (CSV)</b>
+        <input id="attFile" type="file" accept=".csv,text/csv" style="font:inherit;color:inherit" />
+        <button class="os-btn" id="attPreview" disabled>Preview</button><button class="os-btn primary" id="attImport" disabled>Import</button></div>
+      <div class="os-filter-note" style="margin-top:6px">From AT&amp;T Premier, the wireless detail report. This is the billing truth: status, plan, contract, installment, upgrade eligibility and the device actually in each SIM. Re-import it every month.</div>
+      <div id="attOut" style="margin-top:10px"></div>
+      <hr style="border:0;border-top:1px solid var(--os-line,#2a2f3a);margin:14px 0" />
+      <div class="dv-row"><b style="min-width:220px">2. Device workbook (Excel)</b>
+        <input id="wbFile" type="file" accept=".xlsx,.xls" style="font:inherit;color:inherit" />
+        <button class="os-btn" id="wbPreview" disabled>Preview</button><button class="os-btn primary" id="wbImport" disabled>Import</button></div>
+      <div class="os-filter-note" style="margin-top:6px">The AT&amp;T Company Lists workbook (one tab per account). It supplies who has each line, serial numbers and the history notes. <b>Apple ID passwords and device passcodes are removed in your browser and never uploaded.</b> Import the AT&amp;T report first.</div>
+      <div id="wbOut" style="margin-top:10px"></div>
+    </div>
+
+    <div class="os-sec os-block" style="margin-top:28px">Service cost</div>
+    <div class="os-card" style="padding:14px 16px">
+      <div class="dv-row"><b>Monthly AT&amp;T bill (all accounts)</b><input id="bill" class="dv-in" type="number" min="0" step="0.01" placeholder="e.g. 5200" style="width:140px" /><button class="os-btn" id="billSave">Save</button>
+        <span class="os-filter-note">Used as an average per line only where no plan cost is set (shown as an estimate).</span></div>
+      <div id="plans" style="margin-top:12px"></div>
+    </div>
+
+    <div class="os-sec os-block" style="margin-top:28px">Connections</div>
+    <div class="dv-src" id="sources"></div>
+
+    <div class="os-foot" id="foot"></div>
+  </div>
+<script src="/os.js"></script>
+<script>
+"use strict";
+var D=null, FILTER='attention', SEL=null, TEAMS=null, TFILTER='action';
+var CAN_EDIT=true;
+
+var CHIPS=[
+  ['attention','Needs attention',function(l){return l.flags.some(function(f){return f.tone==='bad'||f.tone==='warn';});}],
+  ['cut','Cut candidates',function(l){return has(l,'still_billing')||has(l,'spare')||has(l,'termed_holder');}],
+  ['still_billing','AT&T still billing',function(l){return has(l,'still_billing');}],
+  ['spare','Spare lines',function(l){return has(l,'spare');}],
+  ['unmatched','Not matched',function(l){return has(l,'unmatched');}],
+  ['teams_overlap','Also has Teams Phone',function(l){return has(l,'teams_overlap');}],
+  ['upgrade','Upgrade eligible',function(l){return l.upgrade_eligible_now;}],
+  ['mdm','Not in Addigy',function(l){return has(l,'not_in_mdm');}],
+  ['too_old','Too old',function(l){return has(l,'too_old');}],
+  ['all','All',function(){return true;}]
+];
+function has(l,k){ return l.flags.some(function(f){return f.key===k;}); }
+function usd(n){ return n==null?'':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function j(r){ return r.json(); }
+function post(url,body){ return fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body||{})}).then(j); }
+function warnBox(msg){ return '<div class="os-card" style="padding:10px 12px;border-color:var(--os-warn,#a86)">'+OS.esc(msg)+'</div>'; }
+
+function load(){
+  document.getElementById('strip').innerHTML=OS.skeletonKpis(5);
+  fetch('/api/devices').then(j).then(function(d){
+    if(!d||!d.ok){ document.getElementById('strip').innerHTML=OS.errorBox((d&&d.error)==='people_auth_required'?'Sign in to see devices.':'Could not load devices.'); return; }
+    D=d; renderStrip(); renderOffices(); renderChips(); renderList(); renderPlans(); renderSources();
+    if(SEL) openLine(SEL,true);
+  }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load devices.'); });
+  loadTeams();
+}
+
+function renderStrip(){
+  var s=D.summary;
+  var est=s.monthlyServiceEstimated||(!s.monthlyServiceKnown&&s.billTotal);
+  var cells=[
+    {label:'Active lines',display:OS.num(s.activeLines),sub:s.phones+' phones · '+s.tablets+' iPads'+(s.suspendedLines?(' · '+s.suspendedLines+' frozen'):'')},
+    {label:'Monthly service',display:s.monthlyService?OS.money(s.monthlyService):'<span class="muted">set costs</span>',tag:s.monthlyService?(est?'est':'real'):null,sub:s.monthlyServiceKnown?(s.monthlyServiceKnown+' lines priced'):(s.billTotal?'bill total / lines':'add plan costs below')},
+    {label:'Device balance owed',display:OS.money(s.deviceBalance),sub:OS.money(s.monthlyInstallments)+'/mo in installments'},
+    {label:'Cut candidates',display:'<span style="color:'+(s.cutCandidates?'var(--os-bad)':'var(--ink)')+'">'+OS.num(s.cutCandidates)+'</span>',sub:s.cutMonthly?(OS.money(s.cutMonthly)+'/mo · '+OS.money(s.cutBalance)+' to pay off'):'spare, termed, or AT&T still billing'},
+    {label:'Needs attention',display:OS.num(s.needsAttention),sub:s.upgradeEligible+' eligible to upgrade now'}
+  ];
+  document.getElementById('strip').innerHTML=OS.metricStrip(cells);
+}
+function renderOffices(){
+  var sel=document.getElementById('office'), cur=sel.value;
+  var keys=Object.keys(D.summary.byOffice||{}).sort(function(a,b){ return (D.summary.byOffice[a].label||'').localeCompare(D.summary.byOffice[b].label||''); });
+  sel.innerHTML='<option value="">All offices</option>'+keys.map(function(k){ var o=D.summary.byOffice[k]; return '<option value="'+OS.esc(k)+'"'+(k===cur?' selected':'')+'>'+OS.esc(o.label)+' ('+o.lines+')</option>'; }).join('');
+}
+function baseRows(){
+  var q=(document.getElementById('q').value||'').toLowerCase().trim(), off=document.getElementById('office').value, kind=document.getElementById('kind').value;
+  return D.lines.filter(function(l){
+    if(off&&l.office!==off) return false;
+    if(kind==='phone'&&l.kind!=='phone') return false;
+    if(kind==='tablet'&&l.kind!=='tablet') return false;
+    if(kind==='other'&&(l.kind==='phone'||l.kind==='tablet')) return false;
+    if(!q) return true;
+    return [l.number,l.number_fmt,l.employee,l.shared_label,l.holder_name,l.model,l.serial,l.imei,l.office_label,l.att_user_name,l.apple_account].join(' ').toLowerCase().indexOf(q)>=0;
+  });
+}
+function renderChips(){
+  var rows=baseRows();
+  document.getElementById('chips').innerHTML=CHIPS.map(function(c){
+    var n=rows.filter(c[2]).length;
+    return '<button class="os-chip'+(FILTER===c[0]?' on':'')+'" data-f="'+c[0]+'">'+c[1]+'<span class="cc">'+n+'</span></button>';
+  }).join('');
+}
+function who(l){
+  if(l.employee) return '<span class="strong">'+OS.esc(l.employee)+'</span>'+(l.employment_status&&l.employment_status!=='active'?' '+OS.pill(l.employment_status,'bad'):'');
+  if(l.shared_label) return OS.esc(l.shared_label)+' '+OS.pill('shared','neutral');
+  if(l.holder_name) return '<span style="color:var(--os-warn)">'+OS.esc(l.holder_name)+'</span><div class="muted dv-sub">not matched to an employee</div>';
+  return '<span class="muted">spare</span>';
+}
+function upgradeCell(l){
+  if(l.upgrade_in_progress) return OS.pill('upgrade in progress','neutral');
+  if(l.upgrade_eligible_now) return OS.pill('eligible now','good');
+  if(l.upgrade_eligible) return '<span class="muted">'+OS.esc(l.upgrade_eligible)+'</span>';
+  return '<span class="muted">n/a</span>';
+}
+function mdmCell(l){
+  if(!l.mdm) return '<span class="muted">not seen</span>';
+  var bits=[];
+  bits.push(l.mdm.in_addigy?OS.pill('Addigy','good'):OS.pill('not in Addigy','warn'));
+  if(l.mdm.in_abm) bits.push(OS.pill('ABM','neutral'));
+  return bits.join(' ')+(l.mdm.last_online?'<div class="muted dv-sub">seen '+OS.esc(OS.ago(l.mdm.last_online)||String(l.mdm.last_online).slice(0,10))+'</div>':'');
+}
+function renderList(){
+  var pred=(CHIPS.filter(function(c){return c[0]===FILTER;})[0]||CHIPS[0])[2];
+  var rows=baseRows().filter(pred);
+  rows.sort(function(a,b){ return sev(b)-sev(a) || (a.office_label||'').localeCompare(b.office_label||'') || a.number.localeCompare(b.number); });
+  document.getElementById('lineN').textContent='· '+rows.length+' shown of '+D.lines.length;
+  var cols=[
+    {as:'number_fmt',label:'Line',render:function(v,r){ return '<span class="strong">'+OS.esc(v)+'</span><div class="muted dv-sub">'+OS.esc(r.office_label)+' · '+OS.esc(r.kind||'')+(r.status!=='active'?' · '+OS.esc(r.status):'')+'</div>'; }},
+    {as:'employee',label:'Assigned to',render:function(v,r){ return who(r); }},
+    {as:'model',label:'Device',render:function(v,r){ return OS.esc(r.model||'')+'<div class="muted dv-sub">'+(r.serial?'SN '+OS.esc(r.serial):'no serial')+(r.imei?' · IMEI …'+OS.esc(String(r.imei).slice(-4)):'')+'</div>'; }},
+    {as:'monthly_cost',label:'Cost / mo',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':(usd(v)+(r.cost_source&&r.cost_source.indexOf('estimate')===0?' '+OS.pill('est','warn'):'')); }},
+    {as:'device_balance',label:'Device',render:function(v,r){ if(r.paid_off) return OS.pill('paid off','good'); return v?usd(v)+'<div class="muted dv-sub">owed'+(r.contract_end?' · ends '+OS.esc(r.contract_end):'')+'</div>':'<span class="muted">n/a</span>'; }},
+    {as:'upgrade_eligible',label:'Upgrade',render:function(v,r){ return upgradeCell(r); }},
+    {as:'mdm',label:'MDM',render:function(v,r){ return mdmCell(r); }},
+    {as:'flags',label:'Flags',render:function(v,r){ return '<div class="dv-flags">'+r.flags.map(function(f){return OS.pill(f.label,f.tone);}).join('')+'</div>'; }}
+  ];
+  var html=OS.table(cols, rows, {empty:D.lines.length?'Nothing in this view.':'No lines yet. Import the AT&T report below to start.', onRow:true});
+  document.getElementById('list').innerHTML=html;
+  CURRENT=rows;
+}
+var CURRENT=[];
+function sev(l){ var s=0; l.flags.forEach(function(f){ s+=f.tone==='bad'?3:f.tone==='warn'?1:0; }); return s; }
+
+/* ---- line detail ---- */
+function empOptions(sel){
+  return '<option value="">(nobody: spare or shared)</option>'+(D.employees||[]).map(function(e){ return '<option value="'+e.id+'"'+(e.id===sel?' selected':'')+'>'+OS.esc(e.name)+(e.office?' · '+OS.esc(e.office):'')+'</option>'; }).join('');
+}
+function openLine(id, quiet){
+  SEL=id;
+  fetch('/api/devices/lines/'+id).then(j).then(function(d){
+    if(!d||!d.ok){ document.getElementById('detail').innerHTML=OS.errorBox('Could not load the line.'); return; }
+    renderDetail(d.line); if(!quiet) document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'});
+  });
+}
+function renderDetail(l){
+  var ev=(l.events||[]).map(function(e){ return '<div class="dv-ev"><b>'+OS.esc(e.kind.replace('_',' '))+'</b> '+OS.esc(e.detail||'')+'<div class="muted">'+OS.esc(String(e.at||'').slice(0,16))+' · '+OS.esc(e.actor||'')+'</div></div>'; }).join('')||'<div class="os-filter-note">No history yet.</div>';
+  var facts=[
+    ['AT&T account',l.account],['AT&T user name',l.att_user_name],['Plan',l.plan],['Model',l.model],['OS',l.os_version],['Serial',l.serial],['IMEI',l.imei],['SIM',l.sim_type],
+    ['Installment',l.monthly_installment?usd(l.monthly_installment)+'/mo':''],['Device balance',l.paid_off?'paid off':(l.device_balance?usd(l.device_balance)+(l.balance_as_of?' as of '+l.balance_as_of:''):'')],
+    ['Contract ends',l.contract_end],['Last upgrade',l.last_upgrade_date],['Upgrade eligible',l.upgrade_eligible_now?'now':l.upgrade_eligible],
+    ['Teams',l.teams?(l.teams.has_teams_phone?'Teams Phone · '+(l.teams.calls==null?'?':l.teams.calls)+' calls':'no Teams Phone'):''],
+    ['Addigy',l.mdm?(l.mdm.in_addigy?'enrolled'+(l.mdm.addigy_user?' · '+l.mdm.addigy_user:''):'not enrolled'):''],['ABM',l.mdm?(l.mdm.in_abm?(l.mdm.abm_status||'in ABM')+(l.mdm.abm_server?' · '+l.mdm.abm_server:''):'not in ABM'):'']
+  ].filter(function(x){return x[1];}).map(function(x){ return '<div><div class="muted dv-sub">'+OS.esc(x[0])+'</div>'+OS.esc(String(x[1]))+'</div>'; }).join('');
+  document.getElementById('detail').innerHTML='<div class="os-card" style="padding:16px 18px">'+
+    '<div class="dv-row" style="justify-content:space-between"><div><b style="font-size:16px">'+OS.esc(l.number_fmt)+'</b> <span class="muted">'+OS.esc(l.office_label)+' · '+OS.esc(l.kind||'')+' · '+OS.esc(l.status)+'</span></div><button class="os-btn" data-close>Close</button></div>'+
+    '<div class="dv-flags" style="margin-top:8px">'+l.flags.map(function(f){return OS.pill(f.label,f.tone);}).join('')+'</div>'+
+    '<div class="dv-grid" style="margin-top:12px">'+facts+'</div>'+
+    '<div class="os-sec" style="margin-top:18px">Edit</div>'+
+    '<div class="dv-grid">'+
+      '<label>Assigned to<select id="eEmp" class="dv-in">'+empOptions(l.employee_id)+'</select></label>'+
+      '<label>Shared line label<input id="eShared" class="dv-in" value="'+OS.esc(l.shared_label||'')+'" placeholder="e.g. HR line, Laredo service" /></label>'+
+      '<label>Monthly cost override<input id="eCost" class="dv-in" type="number" min="0" step="0.01" value="'+(l.cost_source==='set on line'?OS.esc(l.monthly_cost):'')+'" placeholder="'+(l.monthly_cost!=null?'now '+usd(l.monthly_cost):'$/mo')+'" /></label>'+
+      '<label>Pending with AT&amp;T<select id="eIntent" class="dv-in"><option value="">Keep</option><option value="cancel"'+(l.intent==='cancel'?' selected':'')+'>Cancel requested</option><option value="freeze"'+(l.intent==='freeze'?' selected':'')+'>Freeze requested</option></select></label>'+
+      '<label>Freeze ends<input id="eFreeze" class="dv-in" type="date" value="'+OS.esc(l.freeze_until||'')+'" /></label>'+
+      '<label>Apple account on device<input id="eApple" class="dv-in" value="'+OS.esc(l.apple_account||'')+'" placeholder="email only, never a password" /></label>'+
+    '</div>'+
+    '<label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);margin-top:10px">Notes<textarea id="eNotes" class="dv-in" rows="3">'+OS.esc(l.notes||'')+'</textarea></label>'+
+    '<div class="dv-row" style="margin-top:10px"><button class="os-btn primary" data-save="'+l.id+'">Save</button></div>'+
+    '<div class="os-sec" style="margin-top:18px">Log an event</div>'+
+    '<div class="dv-row"><select id="evKind" class="dv-in"><option value="upgrade">Upgrade used</option><option value="device_swap">Device swapped</option><option value="transfer">Transferred account</option><option value="freeze">Frozen</option><option value="cancel">Cancelled</option><option value="reactivate">Reactivated</option><option value="note">Note</option></select>'+
+      '<input id="evDetail" class="dv-in" style="flex:1;min-width:240px" placeholder="e.g. Ida used this line\'s upgrade for her iPhone 15 Pro" /><button class="os-btn" data-event="'+l.id+'">Add</button></div>'+
+    '<div class="os-sec" style="margin-top:18px">History</div>'+ev+'</div>';
+}
+document.getElementById('list').addEventListener('click',function(e){ var tr=e.target.closest('[data-row]'); if(!tr) return; var l=CURRENT[Number(tr.getAttribute('data-row'))]; if(l) openLine(l.id); });
+document.getElementById('detail').addEventListener('click',function(e){
+  if(e.target.closest('[data-close]')){ SEL=null; document.getElementById('detail').innerHTML=''; return; }
+  var s=e.target.closest('[data-save]'); if(s){
+    var id=Number(s.getAttribute('data-save')); s.disabled=true;
+    var empV=document.getElementById('eEmp').value, shared=document.getElementById('eShared').value.trim();
+    var body={employee_id:empV?Number(empV):null, monthly_cost:document.getElementById('eCost').value, intent:document.getElementById('eIntent').value,
+      freeze_until:document.getElementById('eFreeze').value, apple_account:document.getElementById('eApple').value.trim(), notes:document.getElementById('eNotes').value};
+    if(!empV) body.shared_label=shared;
+    post('/api/devices/lines/'+id, body).then(function(d){ s.disabled=false; if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not save.','bad'); return; } OS.toast('Saved.'); load(); })
+      .catch(function(){ s.disabled=false; OS.toast('Save failed.','bad'); });
+    return;
+  }
+  var a=e.target.closest('[data-event]'); if(a){
+    var lid=Number(a.getAttribute('data-event'));
+    post('/api/devices/lines/'+lid+'/events',{kind:document.getElementById('evKind').value, detail:document.getElementById('evDetail').value})
+      .then(function(d){ if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not add.','bad'); return; } renderDetail(d.line); });
+  }
+});
+document.getElementById('chips').addEventListener('click',function(e){ var b=e.target.closest('[data-f]'); if(!b) return; FILTER=b.getAttribute('data-f'); renderChips(); renderList(); });
+['q','office','kind'].forEach(function(id){ document.getElementById(id).addEventListener(id==='q'?'input':'change',function(){ renderChips(); renderList(); }); });
+
+/* ---- Teams voice audit ---- */
+var TCHIPS=[
+  ['action','Act on',function(r){return ['disabled','overlap_unused','unused','overlap','no_m365'].indexOf(r.category)>=0;}],
+  ['overlap','Has both',function(r){return r.category==='overlap'||r.category==='overlap_unused';}],
+  ['unused','Teams voice unused',function(r){return r.category==='unused'||r.category==='overlap_unused';}],
+  ['disabled','Disabled account',function(r){return r.category==='disabled';}],
+  ['all','All',function(){return true;}]
+];
+function loadTeams(){
+  fetch('/api/devices/teams-audit').then(j).then(function(d){ if(!d||!d.ok){ document.getElementById('teamsOut').innerHTML=OS.errorBox('Could not load the Teams audit.'); return; } TEAMS=d; renderTeams(); })
+    .catch(function(){ document.getElementById('teamsOut').innerHTML=OS.errorBox('Could not load the Teams audit.'); });
+}
+function renderTeams(){
+  var st=TEAMS.status, gaps=TEAMS.permissionGaps;
+  document.getElementById('teamsNote').textContent=st?('Last sync '+(OS.ago(st.at)||st.at)+(st.ok?(': '+st.users+' users, '+st.voiceUsers+' with Teams Phone, '+st.period.replace('D','last ')+' days'):(': '+(st.error||'failed')))):'Not synced yet.';
+  var gapList=(gaps&&gaps.length)?gaps:(st&&st.gaps)||[];
+  var g='';
+  if(gapList.length) g+=warnBox('The Microsoft 365 app is missing: '+gapList.join(', ')+'. In Entra > App registrations > the OS app > API permissions, add these as Application permissions (Microsoft Graph) and click Grant admin consent. Delegated permissions do not work here because the sync runs in the background with no one signed in.');
+  if(st&&st.concealed) g+=warnBox('Microsoft is hiding names in usage reports, so call counts cannot be matched to people. Turn off "Display concealed user, group, and site names in all reports" in Microsoft 365 admin center > Settings > Org settings > Reports, then sync again.');
+  if(st&&st.ok&&!st.pstn) g+='<div class="os-filter-note" style="margin-top:6px">PSTN call detail is not available, so "Call count" includes Teams-to-Teams calls. Add CallRecords.Read.PstnCalls to see calls to real phone numbers.</div>';
+  document.getElementById('teamsGaps').innerHTML=g;
+  var rows=TEAMS.rows||[];
+  document.getElementById('teamsN').textContent=TEAMS.synced?'· '+rows.length+' people':'· not synced';
+  document.getElementById('teamsChips').innerHTML=TCHIPS.map(function(c){ return '<button class="os-chip'+(TFILTER===c[0]?' on':'')+'" data-tf="'+c[0]+'">'+c[1]+'<span class="cc">'+rows.filter(c[2]).length+'</span></button>'; }).join('');
+  if(!TEAMS.synced){ document.getElementById('teamsOut').innerHTML=OS.empty('Sync Teams voice to compare who has an AT&T phone, Teams Phone, or both, and who never uses Teams calling.'); return; }
+  var pred=(TCHIPS.filter(function(c){return c[0]===TFILTER;})[0]||TCHIPS[0])[2];
+  var cols=[
+    {as:'person',label:'Person',render:function(v,r){ return '<span class="strong">'+OS.esc(v)+'</span><div class="muted dv-sub">'+OS.esc(r.upn||r.office||'')+'</div>'; }},
+    {as:'phones',label:'AT&T phone',render:function(v,r){ return v.length?OS.esc(v.join(', '))+(r.phone_cost?'<div class="muted dv-sub">'+usd(r.phone_cost)+'/mo'+(r.phone_balance?' · '+usd(r.phone_balance)+' owed':'')+'</div>':''):'<span class="muted">none</span>'; }},
+    {as:'teams_phone',label:'Teams voice',render:function(v,r){ if(r.teams_phone==null) return '<span class="muted">no account</span>'; return r.teams_phone?OS.pill(r.calling_plan?'Teams Phone + Calling Plan':'Teams Phone','neutral'):'<span class="muted">none</span>'; }},
+    {as:'calls',label:'Teams calls',kind:'num',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':OS.num(v); }},
+    {as:'pstn_calls',label:'PSTN calls',kind:'num',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':OS.num(v); }},
+    {as:'recommendation',label:'Recommendation',render:function(v,r){ return v?OS.pill(r.category.replace('_',' '),r.tone)+' '+OS.esc(v):''; }}
+  ];
+  document.getElementById('teamsOut').innerHTML=OS.table(cols, rows.filter(pred), {empty:'Nobody in this view.'});
+}
+document.getElementById('teamsChips').addEventListener('click',function(e){ var b=e.target.closest('[data-tf]'); if(!b) return; TFILTER=b.getAttribute('data-tf'); renderTeams(); });
+function runSync(src, btn){
+  var t=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Syncing…'; }
+  return post('/api/devices/sync/'+src).then(function(d){ if(btn){ btn.disabled=false; btn.textContent=t; }
+    if(!d||!d.ok) OS.toast(src+': '+((d&&d.error)||'sync failed'),'bad'); return d; })
+    .catch(function(){ if(btn){ btn.disabled=false; btn.textContent=t; } });
+}
+document.getElementById('syncTeams').addEventListener('click',function(){ runSync('teams',this).then(load); });
+document.getElementById('syncAll').addEventListener('click',function(){ var b=this; b.disabled=true;
+  Promise.all(['teams','addigy','abm'].filter(function(s){ return s==='teams'?D.sources.teams.connected:D.sources[s].connected; }).map(function(s){ return runSync(s); }))
+    .then(function(){ b.disabled=false; OS.toast('Sync finished.'); load(); }); });
+
+/* ---- imports ---- */
+var ATT_CSV='', WB_SHEETS=null;
+function importSummary(d, kind){
+  var bits=[OS.pill(d.total+' lines','neutral'), OS.pill(d.created+' new','good'), OS.pill(d.updated+' updated','neutral')];
+  if(kind==='wb'){ bits.push(OS.pill(d.matched+' matched to employees',d.matched?'good':'neutral')); if(d.unmatched) bits.push(OS.pill(d.unmatched+' not matched','warn')); }
+  if(kind==='att'&&d.missingFromReport) bits.push(OS.pill(d.missingFromReport+' active lines missing from this report','warn'));
+  var head='<div class="dv-row" style="margin-bottom:8px">'+bits.join(' ')+(d.committed?' '+OS.pill('imported','good'):'')+'</div>';
+  if(kind==='wb'&&d.employeeCount===0) head+=warnBox('No employees are imported yet, so nobody can be matched. Import the roster from BambooHR first.');
+  var rows=(d.rows||[]).slice(0,200).map(function(r){
+    if(kind==='att') return '<tr><td>'+OS.esc(r.number)+'</td><td>'+OS.esc(r.office)+'</td><td>'+OS.esc(r.kind)+'</td><td>'+OS.esc(r.model||'')+'</td><td>'+OS.esc(r.status)+'</td><td>'+(r.action==='update'?OS.pill('update','neutral'):OS.pill('new','good'))+(r.imei_changed?' '+OS.pill('device changed','warn'):'')+'</td></tr>';
+    var m=r.status==='assigned'?(r.matched_to?OS.esc(r.matched_to)+' <span class="muted dv-sub">by '+OS.esc(r.how)+'</span>':'<span style="color:var(--os-warn)">not matched</span>'):'<span class="muted">'+OS.esc(r.status.replace('_',' '))+'</span>';
+    return '<tr><td>'+OS.esc(r.number)+'</td><td>'+OS.esc(r.tab)+'</td><td>'+OS.esc(r.employee||'')+'</td><td>'+m+'</td><td>'+OS.esc(r.model||'')+'</td><td>'+((r.status==='cancelled'||r.status==='old_account')&&r.att_active?OS.pill('AT&T still active','bad'):'')+'</td></tr>';
+  }).join('');
+  var th=kind==='att'?'<th>Number</th><th>Office</th><th>Kind</th><th>Model</th><th>Status</th><th></th>':'<th>Number</th><th>Tab</th><th>Workbook name</th><th>Employee</th><th>Model</th><th></th>';
+  return head+'<div class="os-tablewrap"><div class="os-tablescroll"><table class="os-table"><thead><tr>'+th+'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function runImport(kind, commit){
+  var out=document.getElementById(kind==='att'?'attOut':'wbOut');
+  var pv=document.getElementById(kind==='att'?'attPreview':'wbPreview'), im=document.getElementById(kind==='att'?'attImport':'wbImport');
+  pv.disabled=true; im.disabled=true; out.innerHTML='<div class="os-filter-note">'+(commit?'Importing…':'Reading…')+'</div>';
+  var url=kind==='att'?'/api/devices/import/att-report':'/api/devices/import/workbook';
+  var body=kind==='att'?{csv:ATT_CSV,commit:commit}:{sheets:WB_SHEETS,commit:commit};
+  post(url, body).then(function(d){
+    pv.disabled=false; im.disabled=!(d&&d.ok);
+    if(!d||!d.ok){ out.innerHTML=warnBox((d&&d.error)||'Import failed.'); return; }
+    out.innerHTML=importSummary(d, kind);
+    if(commit){ OS.toast('Imported '+d.total+' lines.'); load(); }
+  }).catch(function(){ pv.disabled=false; out.innerHTML=warnBox('The import request failed.'); });
+}
+document.getElementById('attFile').addEventListener('change',function(e){ var f=e.target.files&&e.target.files[0]; ATT_CSV='';
+  document.getElementById('attPreview').disabled=true; document.getElementById('attImport').disabled=true; if(!f) return;
+  var rd=new FileReader(); rd.onload=function(){ ATT_CSV=String(rd.result||''); document.getElementById('attPreview').disabled=!ATT_CSV;
+    document.getElementById('attOut').innerHTML='<div class="os-filter-note">Loaded '+OS.esc(f.name)+'. Click Preview.</div>'; }; rd.readAsText(f); });
+document.getElementById('attPreview').addEventListener('click',function(){ runImport('att',false); });
+document.getElementById('attImport').addEventListener('click',function(){ runImport('att',true); });
+
+// SheetJS reads the workbook in the browser. Any column whose header names a password, passcode or
+// PIN is blanked here, before anything is sent to the server.
+var SECRET_HEAD=/password|passcode|device code|\bpin\b/i;
+var XLSX_READY=null;
+function loadXlsx(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(XLSX_READY) return XLSX_READY;
+  XLSX_READY=new Promise(function(resolve,reject){ var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=function(){ resolve(window.XLSX); }; s.onerror=function(){ XLSX_READY=null; reject(new Error('could not load the Excel reader')); };
+    document.head.appendChild(s); });
+  return XLSX_READY;
+}
+function stripSecrets(rows){
+  var secretCols=[];
+  for(var h=0;h<Math.min(rows.length,15);h++){ rows[h].forEach(function(c,i){ if(SECRET_HEAD.test(String(c))) secretCols.push(i); }); }
+  return rows.map(function(r){ return r.map(function(c,i){ return secretCols.indexOf(i)>=0?'':c; }); });
+}
+document.getElementById('wbFile').addEventListener('change',function(e){ var f=e.target.files&&e.target.files[0]; WB_SHEETS=null;
+  document.getElementById('wbPreview').disabled=true; document.getElementById('wbImport').disabled=true; if(!f) return;
+  var out=document.getElementById('wbOut'); out.innerHTML='<div class="os-filter-note">Reading the workbook…</div>';
+  loadXlsx().then(function(X){ return f.arrayBuffer().then(function(buf){
+    var wb=X.read(new Uint8Array(buf),{type:'array',cellDates:false});
+    var removed=0;
+    WB_SHEETS=wb.SheetNames.map(function(n){
+      var rows=X.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''});
+      var before=JSON.stringify(rows).length, clean=stripSecrets(rows); if(JSON.stringify(clean).length!==before) removed++;
+      return {name:n, rows:clean};
+    });
+    document.getElementById('wbPreview').disabled=false;
+    out.innerHTML='<div class="os-filter-note">Loaded '+OS.esc(f.name)+': '+WB_SHEETS.length+' tabs. Password and passcode columns were removed on '+removed+' tab'+(removed===1?'':'s')+' before upload. Click Preview.</div>';
+  }); }).catch(function(err){ out.innerHTML=warnBox('Could not read the workbook: '+String(err&&err.message||err)); });
+});
+document.getElementById('wbPreview').addEventListener('click',function(){ runImport('wb',false); });
+document.getElementById('wbImport').addEventListener('click',function(){ runImport('wb',true); });
+
+/* ---- cost ---- */
+function renderPlans(){
+  var s=D.summary; document.getElementById('bill').value=s.billTotal||'';
+  var p=D.plans||[];
+  if(!p.length){ document.getElementById('plans').innerHTML='<div class="os-filter-note">Plans appear here after the AT&amp;T report is imported.</div>'; return; }
+  document.getElementById('plans').innerHTML='<div class="os-filter-note" style="margin-bottom:6px">Set the monthly service cost for each AT&amp;T plan (from your bill). Every line on that plan gets the cost unless the line has its own override.</div>'+
+    '<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Plan</th><th class="num">Lines</th><th>$ / line / month</th></tr></thead><tbody>'+
+    p.map(function(x,i){ return '<tr><td>'+OS.esc(x.plan)+'</td><td class="num">'+x.lines+'</td><td><input class="dv-in" type="number" min="0" step="0.01" style="width:110px" data-plan="'+i+'" value="'+(x.monthly_cost==null?'':x.monthly_cost)+'" /></td></tr>'; }).join('')+'</tbody></table></div>';
+}
+document.getElementById('plans').addEventListener('change',function(e){ var inp=e.target.closest('[data-plan]'); if(!inp) return; var p=D.plans[Number(inp.getAttribute('data-plan'))];
+  post('/api/devices/plan-costs',{plan:p.plan, monthly_cost:inp.value}).then(function(d){ if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not save.','bad'); return; } OS.toast('Plan cost saved.'); load(); }); });
+document.getElementById('billSave').addEventListener('click',function(){ post('/api/devices/bill-total',{amount:document.getElementById('bill').value}).then(function(d){ if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not save.','bad'); return; } OS.toast('Saved.'); load(); }); });
+
+/* ---- connections ---- */
+function renderSources(){
+  var s=D.sources;
+  var card=function(title, ok, line, how, src){ return '<div class="os-card" style="padding:12px 14px"><div class="dv-row" style="justify-content:space-between"><b>'+title+'</b>'+(ok?OS.pill('connected','good'):OS.pill('not connected','neutral'))+'</div>'+
+    '<div class="os-filter-note" style="margin-top:6px">'+line+'</div>'+(ok||!how?'':'<div class="os-filter-note" style="margin-top:6px">'+how+'</div>')+
+    (src&&ok?'<button class="os-btn" style="margin-top:8px" data-sync="'+src+'">Sync now</button>':'')+'</div>'; };
+  document.getElementById('sources').innerHTML=
+    card('AT&amp;T', !!s.att.reportAt, s.att.reportAt?'Latest report: '+OS.esc(s.att.reportAt):'Import the Premier detail report above.', '', null)+
+    card('Microsoft Teams voice', s.teams.connected, s.teams.last?('Last sync '+OS.esc(OS.ago(s.teams.last.at)||s.teams.last.at)):'Not synced yet.', 'Uses the OS Microsoft 365 app (MS_GRAPH_*).', 'teams')+
+    card('Addigy', s.addigy.connected, s.addigy.syncedAt?('Last sync '+OS.esc(OS.ago(s.addigy.syncedAt)||s.addigy.syncedAt)):'Not synced yet.', 'Create a V2 API token with View Devices (Account &gt; Integrations &gt; API &amp; Webhooks) and set ADDIGY_API_KEY.', 'addigy')+
+    card('Apple Business Manager', s.abm.connected, s.abm.syncedAt?('Last sync '+OS.esc(OS.ago(s.abm.syncedAt)||s.abm.syncedAt)):'Not synced yet.', 'In ABM, Preferences &gt; API: create a key, then set ABM_CLIENT_ID, ABM_KEY_ID and ABM_PRIVATE_KEY.', 'abm');
+}
+document.getElementById('sources').addEventListener('click',function(e){ var b=e.target.closest('[data-sync]'); if(!b) return; runSync(b.getAttribute('data-sync'),b).then(load); });
+
+document.getElementById('foot').innerHTML='AT&amp;T is the billing truth: a line the office marked cancelled stays flagged until the next AT&amp;T report shows it cancelled. '+
+  '“Cut candidates” are active lines that are spare, held by someone leaving, or still billing after a cancel request; cancelling a line with a device balance means paying that balance off. '+
+  'No Apple ID password or device passcode is stored anywhere in the OS.';
+
+OS.ready(load); OS.onChange(load);
+</script></body></html>
