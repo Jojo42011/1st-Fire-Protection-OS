@@ -27,6 +27,7 @@
   details.grp>summary{cursor:pointer;padding:11px 14px;font-weight:700;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px;list-style:none}
   details.grp>summary::-webkit-details-marker{display:none}
   details.grp[open]>summary{border-bottom:1px solid var(--divider)}
+  #reqApply:disabled{opacity:.45;cursor:default;box-shadow:none}
 </style>
 <script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed');</script>
 </head>
@@ -39,16 +40,16 @@
 
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
 
-  <div class="card" id="reqBox" style="margin-top:12px;padding:14px 16px">
+  <div class="card" id="reqBox" style="margin-top:12px;padding:16px 18px">
     <div style="font-weight:800;font-size:14px;color:var(--ink)">Requested permission changes</div>
     <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px">HR off the Houston folder; Payroll onto Houston, College Station and Lubbock; 1Auto Insurance and External Extinguishers off the onboarding form. Preview changes nothing.</div>
-    <label style="font-size:12.5px;color:var(--ink-2);margin-right:8px">Keep for San Antonio:
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label style="font-size:12.5px;color:var(--ink-2)">Keep for San Antonio:
       <select id="reqKeep" style="font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--border)">
         <option value="sanantonio">SG-SP-SanAntonio (retire Services)</option>
         <option value="services">SG-SP-Services (retire SanAntonio)</option>
       </select></label>
-    <button class="os-btn" id="reqPreview">Preview</button>
-    <button class="os-btn primary" id="reqApply" disabled>Apply these changes</button>
+    <button class="btn" id="reqPreview">Preview</button>
+    <button class="btn-primary" id="reqApply" disabled>Apply these changes</button></div>
     <div id="reqOut" style="margin-top:12px"></div>
   </div>
 
