@@ -39,12 +39,17 @@ async function members(groupId: string, token: string): Promise<{ name: string; 
   return out;
 }
 
-export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE): Promise<{ ok: boolean; applied: boolean; lines: string[]; servicesOnly: { name: string; upn: string }[] }> {
+export type KeepGroup = 'services' | 'sanantonio';
+const KEEP_NAME: Record<KeepGroup, string> = { services: 'SG-SP-Services', sanantonio: 'SG-SP-SanAntonio' };
+
+export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE, keep: KeepGroup = 'services'): Promise<{ ok: boolean; applied: boolean; keep: string; retire: string; lines: string[]; servicesOnly: { name: string; upn: string }[] }> {
+  const keepName = KEEP_NAME[keep] || KEEP_NAME.services;
+  const retireName = keepName === KEEP_NAME.services ? KEEP_NAME.sanantonio : KEEP_NAME.services;
   const lines: string[] = [];
   const token = await graphToken();
-  if (!token) return { ok: false, applied: false, lines: ['Microsoft Graph is not connected.'], servicesOnly: [] };
+  if (!token) return { ok: false, applied: false, keep: keepName, retire: retireName, lines: ['Microsoft Graph is not connected.'], servicesOnly: [] };
   const top = await getTopFolderGrants(site);
-  if (!top.ok) return { ok: false, applied: false, lines: [`Could not read the folders: ${top.error}`], servicesOnly: [] };
+  if (!top.ok) return { ok: false, applied: false, keep: keepName, retire: retireName, lines: [`Could not read the folders: ${top.error}`], servicesOnly: [] };
   const byName = new Map(top.folders.map((f) => [f.folder.toLowerCase(), f]));
 
   // 1) HR off the Houston folder (only its own grant there; an inherited one is reported, not touched).
@@ -82,36 +87,38 @@ export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE):
     if (RETIRED.test(c.name)) { if (apply) removeCatalogItem(c.id); lines.push(`Form: ${c.name} ${apply ? 'is no longer offered' : 'would no longer be offered'}.`); }
   }
 
-  // 4) Who would lose San Antonio if Services is deleted today.
+  // 4) Who would lose the San Antonio folder when the retired group is deleted: members of the
+  //    retired group who are not in the kept one.
   let servicesOnly: { name: string; upn: string }[] = [];
   try {
-    const [sa, sv] = await Promise.all([groupByName('SG-SP-SanAntonio', token), groupByName('SG-SP-Services', token)]);
-    if (sa && sv) {
-      const inSa = new Set((await members(sa.id, token)).map((m) => m.upn));
-      const svm = await members(sv.id, token);
-      servicesOnly = svm.filter((m) => !inSa.has(m.upn));
-      lines.push(`San Antonio vs Services: SG-SP-Services has ${svm.length} member(s), ${servicesOnly.length} of them not in SG-SP-SanAntonio.`);
+    const [kg, rg] = await Promise.all([groupByName(keepName, token), groupByName(retireName, token)]);
+    if (kg && rg) {
+      const kept = await members(kg.id, token);
+      const inKeep = new Set(kept.map((m) => m.upn));
+      const rm = await members(rg.id, token);
+      servicesOnly = rm.filter((m) => !inKeep.has(m.upn));
+      lines.push(`Keeping ${keepName} (${kept.length} member(s)) and retiring ${retireName} (${rm.length} member(s), ${servicesOnly.length} of them not in ${keepName} yet).`);
     }
-  } catch (e) { lines.push(`Could not compare San Antonio and Services members: ${(e as Error).message}`); }
+  } catch (e) { lines.push(`Could not compare the two San Antonio groups: ${(e as Error).message}`); }
 
   if (apply) {
     const cov = await refreshCoverage(site);
     lines.push(cov.ok ? 'Coverage re-read, so the onboarding form uses the new permissions.' : `Coverage not re-read: ${cov.error}`);
   }
-  return { ok: true, applied: apply, lines, servicesOnly };
+  return { ok: true, applied: apply, keep: keepName, retire: retireName, lines, servicesOnly };
 }
 
-export function changesReportHtml(r: { applied: boolean; lines: string[]; servicesOnly: { name: string; upn: string }[] }): string {
+export function changesReportHtml(r: { applied: boolean; keep: string; retire: string; lines: string[]; servicesOnly: { name: string; upn: string }[] }): string {
   const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
   const ps = (s: string) => `'${s.replace(/'/g, "''")}'`;
   const move = r.servicesOnly.length
-    ? `<p style="margin:16px 0 6px"><b>Before deleting SG-SP-Services</b>, add these ${r.servicesOnly.length} people to SG-SP-SanAntonio so they keep the San Antonio folder:</p>
+    ? `<p style="margin:16px 0 6px"><b>Before deleting ${esc(r.retire)}</b>, add these ${r.servicesOnly.length} people to ${esc(r.keep)} so they keep the San Antonio folder:</p>
        <ul style="margin:0 0 10px;padding-left:20px">${r.servicesOnly.map((m) => `<li>${esc(m.name)} (${esc(m.upn)})</li>`).join('')}</ul>`
-    : '<p style="margin:16px 0 6px">Everyone in SG-SP-Services is already in SG-SP-SanAntonio, so it can be deleted as is.</p>';
+    : `<p style="margin:16px 0 6px">Everyone in ${esc(r.retire)} is already in ${esc(r.keep)}, so it can be deleted as is.</p>`;
   const script = [
     '# On a domain controller. Preview first (-WhatIf), then run again without it.',
-    ...r.servicesOnly.map((m) => `Add-ADGroupMember -Identity 'SG-SP-SanAntonio' -Members (Get-ADUser -Filter "UserPrincipalName -eq ${ps(m.upn)}") -WhatIf`),
-    "Remove-ADGroup -Identity 'SG-SP-Services' -Confirm:$false -WhatIf",
+    ...r.servicesOnly.map((m) => `Add-ADGroupMember -Identity ${ps(r.keep)} -Members (Get-ADUser -Filter "UserPrincipalName -eq ${ps(m.upn)}") -WhatIf`),
+    `Remove-ADGroup -Identity ${ps(r.retire)} -Confirm:$false -WhatIf`,
     "Remove-ADGroup -Identity 'SG-SP-1AutoInsurance' -Confirm:$false -WhatIf",
     "Remove-ADGroup -Identity 'SG-SP-ExternalExtinguishers' -Confirm:$false -WhatIf",
     '# Then on the Entra Connect server:  Start-ADSyncSyncCycle -PolicyType Delta',
@@ -120,7 +127,7 @@ export function changesReportHtml(r: { applied: boolean; lines: string[]; servic
   <p style="font-size:20px;font-weight:800;margin:0 0 8px">SharePoint permission changes: ${r.applied ? 'done' : 'preview (nothing changed yet)'}</p>
   <ul style="margin:0 0 8px;padding-left:20px">${r.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>
   ${move}
-  <p style="margin:16px 0 6px"><b>Deleting the three groups in AD</b> (SG-SP-Services, SG-SP-1AutoInsurance, SG-SP-ExternalExtinguishers):</p>
+  <p style="margin:16px 0 6px"><b>Deleting the three groups in AD</b> (${esc(r.retire)}, SG-SP-1AutoInsurance, SG-SP-ExternalExtinguishers):</p>
   <pre style="background:#f5f5f7;border-radius:12px;padding:12px 14px;font-size:12px;white-space:pre-wrap">${esc(script)}</pre>
   <p style="font-size:12px;color:#86868b">1Auto Insurance and External Extinguishers opened no top-level folder; if they were granted on a deeper folder, deleting them removes that access too.</p>
 </div>`;

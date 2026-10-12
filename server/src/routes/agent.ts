@@ -507,7 +507,8 @@ router.post('/api/ad-audit/sp-requested-changes', async (req, res) => {
   if (!sc.all && !sc.offboarding.has('it')) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const apply = !!(req.body && req.body.apply);
   const { applyOct2026SpChanges, changesReportHtml } = require('../services/spPermissionChanges');
-  const r = await applyOct2026SpChanges(apply);
+  const keep = req.body && req.body.keep === 'sanantonio' ? 'sanantonio' : 'services';
+  const r = await applyOct2026SpChanges(apply, undefined, keep);
   if (apply) {
     const { osAudit, actorLabel } = require('../os/audit');
     osAudit({ actor: actorLabel(ctx), actor_email: ctx.user?.email ?? null, module: 'access', action: 'sharepoint.requested_changes', detail: r.lines.join(' | ').slice(0, 1800) });

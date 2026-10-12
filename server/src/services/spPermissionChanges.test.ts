@@ -40,7 +40,10 @@ test('preview changes nothing and says what it would do', async () => {
   assert.ok(r.lines.some((l) => /HR: would be removed from 1st FP Houston/.test(l)));
   assert.ok(r.lines.some((l) => /Payroll: would be added to 1st FP Houston/.test(l)));
   assert.ok(r.lines.some((l) => /Payroll: already opens 1st FP Lubbock/.test(l)));
-  assert.deepEqual(r.servicesOnly.map((m) => m.upn), ['only@x.com']);
+  assert.deepEqual(r.servicesOnly.map((m) => m.upn), [], 'keeping Services: SanAntonio has no one extra');
+  const r2 = await applyOct2026SpChanges(false, 'https://1stfp.sharepoint.com/sites/Shared/', 'sanantonio');
+  assert.deepEqual(r2.servicesOnly.map((m) => m.upn), ['only@x.com'], 'keeping SanAntonio: move the Services-only member first');
+  assert.equal(r2.retire, 'SG-SP-Services');
 });
 
 test('apply removes only HR from Houston and adds Payroll only where it is missing', async () => {

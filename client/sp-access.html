@@ -42,6 +42,11 @@
   <div class="card" id="reqBox" style="margin-top:12px;padding:14px 16px">
     <div style="font-weight:800;font-size:14px;color:var(--ink)">Requested permission changes</div>
     <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px">HR off the Houston folder; Payroll onto Houston, College Station and Lubbock; 1Auto Insurance and External Extinguishers off the onboarding form. Preview changes nothing.</div>
+    <label style="font-size:12.5px;color:var(--ink-2);margin-right:8px">Keep for San Antonio:
+      <select id="reqKeep" style="font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--border)">
+        <option value="services">SG-SP-Services (retire SanAntonio)</option>
+        <option value="sanantonio">SG-SP-SanAntonio (retire Services)</option>
+      </select></label>
     <button class="os-btn" id="reqPreview">Preview</button>
     <button class="os-btn primary" id="reqApply" disabled>Apply these changes</button>
     <div id="reqOut" style="margin-top:12px"></div>
@@ -684,13 +689,14 @@ loadLatestScan();
 function runReq(apply){
   var out=document.getElementById('reqOut'), ap=document.getElementById('reqApply');
   out.textContent=apply?'Applying…':'Checking the folders…';
-  fetch('/api/ad-audit/sp-requested-changes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({apply:!!apply})})
+  fetch('/api/ad-audit/sp-requested-changes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({apply:!!apply,keep:document.getElementById('reqKeep').value})})
     .then(function(r){return r.json();}).then(function(d){
       out.innerHTML=d.html||('<div class="note">'+((d.lines||[]).join('<br>')||d.error||'Could not run.')+'</div>');
       ap.disabled=!!apply||!d.ok;
     }).catch(function(){ out.textContent='Could not reach the server.'; });
 }
 document.getElementById('reqPreview').addEventListener('click',function(){ runReq(false); });
+document.getElementById('reqKeep').addEventListener('change',function(){ document.getElementById('reqApply').disabled=true; document.getElementById('reqOut').innerHTML=''; });
 document.getElementById('reqApply').addEventListener('click',function(){
   if(!confirm('Apply these SharePoint permission changes now? HR loses the Houston folder and Payroll gains Houston, College Station and Lubbock.')) return;
   runReq(true);
