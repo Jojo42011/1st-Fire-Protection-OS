@@ -486,7 +486,7 @@ setTimeout(() => {
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');
   const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
-  const flag = 'test_intake_link_v2'; // v2: bound to a BambooHR hire
+  const flag = 'test_intake_link_v3'; // v3: one work phone, badge, fob and card
   try {
     if (getState(flag) === '1') return;
     setState(flag, '1'); // claim first so a restart mid-send never makes a second link
