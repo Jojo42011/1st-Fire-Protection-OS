@@ -6,11 +6,11 @@
  * with bgcolor rather than CSS borders for the same reason.
  *
  * Design constraints, deliberately narrow so future emails cannot drift:
- *   - one column, white ground, no card, no footer band, no fills
+ *   - one column on a white card over the light grey canvas, no footer band, no fills
  *   - hairline rules (#EEF0F3) are the only grouping device
- *   - exactly one CTA, always ink (#101828)
- *   - nothing lighter than #667085 carries text
- *   - one radius (6px, the button); it degrades to square in Outlook, which is fine
+ *   - exactly one CTA, a red pill (#d62d2a), as on 1stfpservices.com
+ *   - nothing lighter than #6e6e73 carries text
+ *   - rounded card and pill button; both degrade to square in Outlook, which is fine
  */
 
 export interface EmailShellOptions {
@@ -35,12 +35,17 @@ export interface EmailShellOptions {
   logoUrl?: string | null;
 }
 
-const INK = '#101828';
-const BODY = '#344054';
-const MUTED = '#667085';
-const RULE = '#EEF0F3';
+// The website look (1stfpservices.com): near-black ink, the brand red for the one button, Inter where
+// the reader has it, a light grey canvas behind a white card.
+const INK = '#1d1d1f';
+const BODY = '#424245';
+const MUTED = '#6e6e73';
+const RULE = '#e8e8ed';
 const GOLD = '#8A6A2F';
-const FONT = `'Helvetica Neue', Helvetica, Arial, sans-serif`;
+const RED = '#d62d2a';
+const CANVAS = '#f5f5f7';
+const FONT = `Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`;
+const LOGO = `${(process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '')}/brand/logo-email.png`;
 
 export function escapeHtml(s: unknown): string {
   return String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
@@ -83,8 +88,8 @@ export function renderEmail(o: EmailShellOptions): string {
 
   const cta = o.cta
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;"><tr>` +
-      `<td bgcolor="${INK}" style="border-radius:6px;">` +
-      `<a href="${escapeAttr(o.cta.url)}" style="display:inline-block;padding:13px 24px;font-family:${FONT};font-size:14px;font-weight:500;color:#FFFFFF;text-decoration:none;border-radius:6px;">${escapeHtml(o.cta.label)}</a>` +
+      `<td bgcolor="${RED}" style="border-radius:980px;">` +
+      `<a href="${escapeAttr(o.cta.url)}" style="display:inline-block;padding:14px 26px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:980px;">${escapeHtml(o.cta.label)}</a>` +
       `</td></tr></table>`
     : '';
 
@@ -115,12 +120,8 @@ export function renderEmail(o: EmailShellOptions): string {
       </td></tr>`
     : `<tr><td class="pad" style="padding:44px 48px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-          <td width="26" style="width:26px;padding-right:11px;">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-              <td width="26" height="26" align="center" valign="middle" bgcolor="${INK}" style="width:26px;height:26px;border-radius:6px;font-family:${FONT};font-size:15px;font-weight:700;color:#FFFFFF;line-height:26px;">1</td>
-            </tr></table>
-          </td>
-          <td style="font-family:${FONT};font-size:14.5px;font-weight:600;color:${INK};">1st Fire Protection</td>
+          <td width="36" style="width:36px;padding-right:12px;"><img src="${LOGO}" width="36" height="36" alt="1st Fire Protection" style="display:block;width:36px;height:36px;border:0;border-radius:50%;"></td>
+          <td style="font-family:${FONT};font-size:15px;font-weight:800;letter-spacing:-.01em;color:${INK};">1st Fire Protection</td>
           ${eyebrow}
         </tr></table>
       </td></tr>`;
@@ -139,10 +140,10 @@ export function renderEmail(o: EmailShellOptions): string {
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:#FFFFFF;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="background:#FFFFFF;">
-<tr><td align="center">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;">
+<body style="margin:0;padding:0;background:${CANVAS};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${CANVAS}" style="background:${CANVAS};">
+<tr><td align="center" style="padding:28px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:600px;max-width:100%;background:#FFFFFF;border-radius:22px;">
 
   ${header}
 

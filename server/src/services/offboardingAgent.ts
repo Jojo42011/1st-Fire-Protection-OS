@@ -463,11 +463,11 @@ export async function sendDepartmentDigest(requestId: number, dept: string, by =
   const subject = `Offboarding: ${who}${idLine} - ${DEPT_LABEL[dept as Dept]} tasks to complete`;
   const html =
     `<p>The following ${DEPT_LABEL[dept as Dept]} tasks still need to be completed for an employee offboarding.</p>` +
-    `<table cellpadding="4" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin-bottom:8px">` +
+    `<table cellpadding="4" style="border-collapse:collapse;font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;margin-bottom:8px">` +
     `<tr><td><b>Employee</b></td><td>${esc(who)}${esc(idLine)}</td></tr>` +
     (req.office ? `<tr><td><b>Office</b></td><td>${esc(req.office)}</td></tr>` : '') +
     `<tr><td><b>Termination</b></td><td>${esc(term)}</td></tr></table>` +
-    `<ol style="font-family:Arial,sans-serif;font-size:14px;padding-left:18px">${rows}</ol>` +
+    `<ol style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;padding-left:18px">${rows}</ol>` +
     `<p style="color:#666;font-size:12px">Sent by the 1st Fire Protection OS offboarding board. Reply to this mailbox to coordinate.</p>`;
 
   const out = await sendMail(mailbox, subject, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
@@ -535,7 +535,7 @@ export async function sendOffboardingEmail(itemId: number, by = 'operator'): Pro
   const subject = `Offboarding: ${who}${idLine} - ${item.label}`;
   const html =
     `<p>Please action the following as part of an employee offboarding.</p>` +
-    `<table cellpadding="4" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px">` +
+    `<table cellpadding="4" style="border-collapse:collapse;font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px">` +
     `<tr><td><b>Employee</b></td><td>${esc(who)}${esc(idLine)}</td></tr>` +
     (req.office ? `<tr><td><b>Office</b></td><td>${esc(req.office)}</td></tr>` : '') +
     `<tr><td><b>Termination</b></td><td>${esc(term)}</td></tr>` +
@@ -788,10 +788,10 @@ export async function notifyAutoStarted(created: { id: number; name: string }[],
   if (!mailCredsPresent()) return 0;
   const esc = (t: string) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const names = created.map((c) => esc(c.name)).join(', ');
-  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
+  const html = `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;color:#1d1d1f;max-width:560px">
     <p><b>${names}</b> ${created.length === 1 ? 'was' : 'were'} marked terminated in BambooHR, so offboarding started automatically.</p>
     <p>Day-one steps are due today: disable the AD account, revoke sessions, remove groups, and collect devices.</p>
-    <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p></div>`;
+    <p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:9px 16px;border-radius:980px;display:inline-block">Open offboarding</a></p></div>`;
   let sent = 0;
   for (const to of [IT_MBX, IT_MGR_MBX, HR_MBX]) {
     // eslint-disable-next-line no-await-in-loop
@@ -840,14 +840,14 @@ export async function sendOffboardingOverdueReminders(base: string, now = new Da
     const shown = items.slice(0, REMINDER_LIST_CAP);
     const lines = shown.map((it) => {
       const days = Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${String(it.due_at).slice(0, 10)}T12:00:00Z`)) / 86400000);
-      return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1"><b>${esc(it.person)}</b>: ${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;color:#B42318;font-size:12px;font-weight:600">${days} day${days === 1 ? '' : 's'} overdue</td></tr>`;
+      return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e8e8ed"><b>${esc(it.person)}</b>: ${esc(it.label)}</td><td style="padding:6px 10px;border-bottom:1px solid #e8e8ed;white-space:nowrap;color:#B42318;font-size:12px;font-weight:600">${days} day${days === 1 ? '' : 's'} overdue</td></tr>`;
     }).join('');
     const board = !NO_BOARD_MBX.has(to.toLowerCase());
-    const more = items.length > shown.length ? `<p style="color:#667085;font-size:13px">And ${items.length - shown.length} more${board ? ' on the board' : ''}.</p>` : '';
-    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
+    const more = items.length > shown.length ? `<p style="color:#6e6e73;font-size:13px">And ${items.length - shown.length} more${board ? ' on the board' : ''}.</p>` : '';
+    const html = `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;color:#1d1d1f;max-width:600px">
       <p><b>${items.length} offboarding step${items.length === 1 ? ' is' : 's are'} past due.</b> Until they are done, a former employee may still have access or a paid seat.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${lines}</tbody></table>${more}
-      ${board ? `<p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open offboarding</a></p>` : `<p style="color:#667085;font-size:13px">These close on their own once the change shows up in ServiceTrade.</p>`}</div>`;
+      ${board ? `<p style="margin-top:16px"><a href="${esc(base)}/offboarding" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:9px 16px;border-radius:980px;display:inline-block">Open offboarding</a></p>` : `<p style="color:#6e6e73;font-size:13px">These close on their own once the change shows up in ServiceTrade.</p>`}</div>`;
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(to, `${items.length} offboarding step${items.length === 1 ? '' : 's'} overdue`, html, { from: offboardingFrom(), fromName: '1st FP Offboarding' });
     if (out.ok) { setState(key, today); sent++; }

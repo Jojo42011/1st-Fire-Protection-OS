@@ -1291,7 +1291,8 @@ export function initDb(): void {
   // Badge, building access and the company card: the onboarding side of what offboarding collects.
   addColumn('onboarding_requests', 'id_badge', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'key_fob', 'INTEGER DEFAULT 0');
-  addColumn('onboarding_requests', 'credit_card', 'INTEGER DEFAULT 0');    // name/asset tag of a machine being transferred to this hire
+  addColumn('onboarding_requests', 'credit_card', 'INTEGER DEFAULT 0');
+  addColumn('onboarding_requests', 'phone_reuse', 'TEXT'); // an old company phone to reassign: its number or a note    // name/asset tag of a machine being transferred to this hire
   addColumn('onboarding_items', 'due_at', 'TEXT');      // YYYY-MM-DD, from the hire's start date
   addColumn('onboarding_items', 'parent_id', 'INTEGER'); // the approval this follow-up task came from
   addColumn('onboarding_items', 'note', 'TEXT');        // e.g. the reason an approval was rejected

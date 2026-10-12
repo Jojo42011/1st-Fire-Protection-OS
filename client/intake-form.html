@@ -45,6 +45,10 @@
   .blurb{font-weight:500;font-size:13.5px;line-height:1.6;color:var(--muted);margin:8px 0 0}
   .body{padding:20px 26px 2px}
   .fields{display:flex;flex-direction:column;gap:18px;padding:16px 26px 4px}
+  /* Only a step change animates; a click inside a step redraws in place, so nothing jumps. */
+  @keyframes stepIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .fields.step-in{animation:stepIn .32s cubic-bezier(.2,.7,.2,1)}
+  @media (prefers-reduced-motion:reduce){.fields.step-in{animation:none}}
   label{display:block;font-weight:700;font-size:13px;letter-spacing:-.01em}
   .help{font-weight:500;font-size:12px;color:var(--muted);margin-top:3px}
   .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
@@ -119,7 +123,7 @@
       <h2 id="title"></h2>
       <p class="blurb" id="blurb"></p>
     </div>
-    <div class="fields" id="fields" data-reveal-children></div>
+    <div class="fields" id="fields"></div>
     <div class="note">
       <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
       <div>
@@ -178,6 +182,8 @@
         { key: 'phone', label: 'Work phone', help: 'Pick one. Nobody needs both.', radio: true, def: 'none', noneLabel: 'No work phone', noneSpec: 'They use their own number',
           opts: [{ key: 'teams', label: 'Teams number', spec: 'A work number that rings in Teams on their computer and phone' },
                  { key: 'att', label: 'AT&T company cell phone', spec: 'A company iPhone on an AT&T line' }] },
+        { key: 'phone_reuse', label: "Reusing someone's old phone?", help: 'Optional. Give its phone number, or a note like "Mike Lopez\'s old phone". Leave blank and a new phone is ordered.', text: true,
+          placeholder: "e.g. 210-555-0142 or Mike Lopez's old phone", showIf: function () { return vals.phone === 'att'; } },
         { key: 'sharepoint', label: 'SharePoint groups', help: 'Tap the groups they need. Some need an owner to approve them.', opts: [], def: [], multi: true },
         { key: 'printers', label: 'Printers', help: 'Tap any they should be connected to.', opts: [], def: [], multi: true, hideIfEmpty: true },
         { key: 'sage', label: 'Sage Intacct access', help: 'A paid seat. Accounting approves it before access is set up.', radio: true, opts: [], def: 'none', noneLabel: 'No Sage access needed', noneSpec: 'Skip this application', hideIfEmpty: true },
@@ -201,6 +207,12 @@
       ] }
   ];
 
+  // SharePoint groups carry short internal names (MGMT, ACCT); show people the plain-English one.
+  var GROUP_NAMES = { MGMT: 'Management', ACCT: 'Accounting', SAFETY: 'Safety', HR: 'HR', 'Services (San Antonio)': 'San Antonio' };
+  function friendlyGroup(n) {
+    if (GROUP_NAMES[n]) return GROUP_NAMES[n];
+    return /^[A-Z]{4,}$/.test(n) ? n.charAt(0) + n.slice(1).toLowerCase() : n;
+  }
   function eachField(key, fn) { STEPS.forEach(function (s) { s.fields.forEach(function (f) { if (f.key === key) fn(f); }); }); }
   // Replace a single-select field's options with the real set, keeping any prefilled value in the
   // list. Long single-select lists (many job titles) become a dropdown; multi fields stay as chips.
@@ -238,6 +250,7 @@
   var step = 0, vals = defaults();
   // text fields not declared with def in STEPS need an explicit blank so vals always has the key
   vals.existing_computer = vals.existing_computer || '';
+  vals.phone_reuse = vals.phone_reuse || '';
   var el = function (id) { return document.getElementById(id); };
   var HIRE = null, DOCK_PRICE = 200, SHOW_ERR = false, IS_TEST = false;
   var STANDALONE = document.body.classList.contains('standalone');
@@ -370,6 +383,7 @@
     STEPS[step].fields.forEach(function (f) {
       // A field with nothing to offer (e.g. no printers configured) is skipped, not shown empty.
       if (f.hideIfEmpty && (!f.opts || !f.opts.length)) return;
+      if (f.showIf && !f.showIf()) return; // e.g. the old-phone box only shows for an AT&T phone
       var box = document.createElement('div');
       var lab = document.createElement('label');
       lab.textContent = f.label;
@@ -456,7 +470,7 @@
           var b = document.createElement('button');
           b.type = 'button';
           b.className = 'chip';
-          b.textContent = o;
+          b.textContent = f.key === 'sharepoint' ? friendlyGroup(o) : o;
           var on = f.multi ? (vals[f.key] || []).indexOf(o) > -1 : vals[f.key] === o;
           b.setAttribute('aria-pressed', on ? 'true' : 'false');
           b.onclick = function () {
@@ -492,7 +506,8 @@
   function niceDate(d) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ''); if (!m) return d || ''; return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }); }
   function renderSummary() {
     var accounts = vals.accounts || [], sp = vals.sharepoint || [], sw = vals.software || [], gear = vals.safety_gear || [];
-    var access = accounts.concat(sp);
+    var access = accounts.concat(sp.map(friendlyGroup));
+    var reuse = vals.phone === 'att' ? String(vals.phone_reuse || '').trim() : '';
     var hasComp = vals.computer_type && vals.computer_type !== 'none';
     var rows = [
       ['New hire', HIRE ? HIRE.name : (vals.legal || 'Unnamed hire'), HIRE ? 'from BambooHR' : (vals.preferred ? 'goes by ' + vals.preferred : 'legal name')],
@@ -500,7 +515,7 @@
       ['First day', niceDate(vals.start) || 'Not set', 'IT needs five working days'],
       ['Manager', flipName(vals.manager) || 'Not set', 'runs their day to day'],
       ['Accounts and SharePoint', access.length + ' item' + (access.length === 1 ? '' : 's'), access.join(', ') || 'none selected'],
-      ['Work phone', vals.phone === 'teams' ? 'Teams number' : vals.phone === 'att' ? 'AT&T company cell' : 'None', vals.phone === 'att' ? 'the IT manager orders the line and phone' : vals.phone === 'teams' ? 'IT sets up the number' : 'they use their own number'],
+      ['Work phone', vals.phone === 'teams' ? 'Teams number' : vals.phone === 'att' ? (reuse ? 'Reused AT&T phone' : 'AT&T company cell') : 'None', vals.phone === 'att' ? (reuse ? reuse : 'the IT manager orders a new line and phone') : vals.phone === 'teams' ? 'IT sets up the number' : 'they use their own number'],
       ['Software', sw.length + ' app' + (sw.length === 1 ? '' : 's'), sw.join(', ') || 'none selected'],
       ['New computer', computerLabel(), hasComp ? 'your manager approves, then IT orders it' : 'nothing ordered']
     ];
@@ -538,6 +553,7 @@
       : 'This link works once and expires in 7 days.';
     renderDots();
     renderFields();
+    var fl = el('fields'); fl.classList.remove('step-in'); void fl.offsetWidth; fl.classList.add('step-in');
     reportHeight();
   }
 

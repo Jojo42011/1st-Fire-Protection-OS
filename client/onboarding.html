@@ -694,7 +694,7 @@ function openOwnerEmail(id,owner){
 /* ─────────────── full onboarding request form (preserves POST /api/onboarding) ─────────────── */
 function renderForm(){
   var o=OPTIONS||{};
-  var sp=(o.sharepoint||[]).map(function(g){return fchk('sp',g.name,g.name+(g.kind==='approval'?' (approval)':''));}).join('');
+  var sp=(o.sharepoint||[]).map(function(g){return fchk('sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':''));}).join('');
   var pr=(o.printers||[]).map(function(p){return fchk('pr',p,p);}).join('');
   var sw=(o.software||[]).map(function(s){return fchk('sw',s.name,s.name+(s.kind==='approval'?' (owner approval)':''));}).join('');
   var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span class="rc"><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
@@ -719,6 +719,7 @@ function renderForm(){
         '<div class="fsub2">Work phone (pick one)</div><div class="fradios">'+
           [['none','No work phone','They use their own number'],['teams','Teams number','Rings in Teams on their computer and phone'],['att','AT&amp;T company cell phone','A company iPhone on an AT&amp;T line']].map(function(o,i){
             return '<label class="fradio"><input type="radio" name="phone" value="'+o[0]+'"'+(i===0?' checked':'')+'><span class="rc"><span class="rt">'+o[1]+'</span><span class="rs">'+o[2]+'</span></span></label>';}).join('')+'</div>'+
+        '<div class="ffield" id="phoneReuseBox" style="margin-top:10px;display:none"><label>Reusing someone\'s old phone? (optional)</label><input name="phone_reuse" placeholder="Its number, or a note like Mike Lopez\'s old phone"></div>'+
         '<div class="fsub2">SharePoint groups</div><div class="fchecks">'+sp+'</div>'+
         (pr?'<div class="fsub2">Printers</div><div class="fchecks">'+pr+'</div>':''))+
       formSection('Equipment and software','A new computer routes to an owner approval; software installs route to IT or its licence owner',
@@ -742,6 +743,11 @@ function renderForm(){
 }
 function ffield(l,name,ph,req){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" placeholder="'+esc(ph||'')+'"'+(req?' required':'')+'></div>';}
 function ffieldDate(l,name){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" type="date"></div>';}
+// SharePoint groups carry short internal names (MGMT, ACCT); show the plain-English one. The real name is still the value.
+var GROUP_NAMES={MGMT:'Management',ACCT:'Accounting',SAFETY:'Safety',HR:'HR','Services (San Antonio)':'San Antonio'};
+function friendlyGroup(n){ if(GROUP_NAMES[n]) return GROUP_NAMES[n]; return /^[A-Z]{4,}$/.test(n)?n.charAt(0)+n.slice(1).toLowerCase():n; }
+// The old-phone box only applies to an AT&T company cell.
+document.addEventListener('change',function(e){ if(e.target&&e.target.name==='phone'){ var b=document.getElementById('phoneReuseBox'); if(b) b.style.display=e.target.value==='att'?'':'none'; } });
 function fchk(name,val,label){return '<label class="fchk"><input type="checkbox" name="'+name+'"'+(val?' value="'+esc(val)+'"':'')+'> <span>'+esc(label)+'</span></label>';}
 // A pick-one role radio group (Sage / ServiceTrade), with a "None" default and optional price.
 function roleRadios(name,opts,withPrice){
@@ -766,6 +772,7 @@ function submitForm(e){
     teams_number:((f.querySelector('input[name="phone"]:checked')||{}).value==='teams'),
     company_cell:((f.querySelector('input[name="phone"]:checked')||{}).value==='att'), ipad:checked('ipad'),
     id_badge:checked('id_badge'), key_fob:checked('key_fob'), credit_card:checked('credit_card'),
+    phone_reuse:(f.phone_reuse||{value:''}).value.trim(),
     company_vehicle:checked('company_vehicle'), vehicle_details:f.vehicle_details.value.trim(),
     vehicle_transfer:checked('vehicle_transfer'), wex_card:checked('wex_card'),
     computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',

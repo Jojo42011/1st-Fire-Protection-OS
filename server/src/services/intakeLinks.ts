@@ -201,6 +201,7 @@ function toPayload(vals: any): OnboardingPayload {
     sharepoint: arr(vals.sharepoint),
     printers: arr(vals.printers),
     company_cell: phone === 'att' || (!phone && gear.includes('Company cell phone')),
+    phone_reuse: phone === 'att' ? String(vals.phone_reuse || '').trim() || undefined : undefined,
     id_badge: access.includes('Company ID badge'),
     key_fob: access.includes('Key fob / access card'),
     credit_card: access.includes('Company credit card'),

@@ -203,3 +203,15 @@ test('the intake form asks for ONE work phone, and badge, fob and card become ta
   assert.ok(items2.some((i) => /Teams number/.test(i.label)));
   assert.ok(!items2.some((i) => /AT&T/.test(i.label)));
 });
+
+test('an AT&T phone can reuse someone\'s old phone, and the IT manager is told which', () => {
+  const l = createIntakeLink({ recipient_name: 'Reuse Test' });
+  const out = submitIntake(l.token, { legal: 'Ria Reuse', phone: 'att', phone_reuse: "Mike Lopez's old phone" }) as any;
+  const items = db.prepare(`SELECT owner, label, detail FROM onboarding_items WHERE request_id = ?`).all(out.request_id) as any[];
+  const t = items.find((i) => /Reassign an old company cell phone/.test(i.label));
+  assert.ok(t && t.owner === 'it_manager');
+  assert.match(t.detail, /Mike Lopez's old phone/);
+  assert.ok(!items.some((i) => /Order an AT&T line/.test(i.label)), 'no new line ordered');
+  const teams = submitIntake(createIntakeLink({ recipient_name: 'Reuse Test' }).token, { legal: 'Tom Teams', phone: 'teams', phone_reuse: 'ignored' }) as any;
+  assert.equal((db.prepare(`SELECT phone_reuse FROM onboarding_requests WHERE id = ?`).get(teams.request_id) as any).phone_reuse, null, 'only kept for an AT&T phone');
+});

@@ -119,6 +119,7 @@ export interface OnboardingPayload {
   id_badge?: boolean;    // company ID badge
   key_fob?: boolean;     // key fob / access card for the building
   credit_card?: boolean; // company credit card / purchasing card
+  phone_reuse?: string;  // reuse an old company phone instead of ordering one: its number or a note
 }
 
 export interface OnboardingItem {
@@ -336,7 +337,12 @@ function routeItems(req: any): DraftItem[] {
   if (bool(req.dock)) items.push({ owner: 'it', kind: 'task', label: 'Provide docking station', detail: `$${DOCK_PRICE}` });
 
   // ── IT manager: the physical side (offboarding collects these from the same person) ──
-  if (bool(req.company_cell)) items.push({ owner: 'it_manager', kind: 'task', label: 'Order an AT&T line and issue a company cell phone', detail: 'Enroll the phone in device management and set its PIN.' });
+  if (bool(req.company_cell)) {
+    const reuse = String(req.phone_reuse || '').trim();
+    items.push(reuse
+      ? { owner: 'it_manager', kind: 'task', label: `Reassign an old company cell phone to ${req.name}`, detail: `Phone: ${reuse}. Wipe it, move the AT&T line to them, re-enroll it in device management and set its PIN.` }
+      : { owner: 'it_manager', kind: 'task', label: 'Order an AT&T line and issue a company cell phone', detail: 'Enroll the phone in device management and set its PIN.' });
+  }
   if (bool(req.ipad)) items.push({ owner: 'it_manager', kind: 'task', label: 'Issue company iPad', detail: 'Enroll the iPad in device management and set its PIN.' });
   if (bool(req.id_badge)) items.push({ owner: 'it_manager', kind: 'task', label: 'Make the company ID badge' });
   if (bool(req.key_fob)) items.push({ owner: 'it_manager', kind: 'task', label: 'Issue and activate a key fob / access card' });
@@ -381,12 +387,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer, id_badge, key_fob, credit_card)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer, id_badge, key_fob, credit_card, phone_reuse)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer, @id_badge, @key_fob, @credit_card)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer, @id_badge, @key_fob, @credit_card, @phone_reuse)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -423,6 +429,7 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       id_badge: bool(payload.id_badge) ? 1 : 0,
       key_fob: bool(payload.key_fob) ? 1 : 0,
       credit_card: bool(payload.credit_card) ? 1 : 0,
+      phone_reuse: bool(payload.company_cell) ? (String(payload.phone_reuse || '').trim().slice(0, 200) || null) : null,
     });
 
   const requestId = Number(info.lastInsertRowid);

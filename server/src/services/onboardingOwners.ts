@@ -108,7 +108,7 @@ export function startDateInfo(raw: string | null | undefined, now = new Date()):
 
 function startLineHtml(start: StartDateInfo | null): string {
   if (!start) return `<p style="margin:0 0 14px;padding:10px 12px;background:#FFF7E6;border-radius:8px;color:#8A5A00;font-size:14px"><b>Start date:</b> not provided yet. Check with HR before scheduling the work.</p>`;
-  return `<p style="margin:0 0 14px;padding:10px 12px;background:#F2F5F9;border-radius:8px;font-size:14px"><b>Start date:</b> ${esc(start.long)}${start.relative ? ` <span style="color:#667085">(${esc(start.relative)})</span>` : ''}. Please have these done before their first day.</p>`;
+  return `<p style="margin:0 0 14px;padding:10px 12px;background:#f5f5f7;border-radius:8px;font-size:14px"><b>Start date:</b> ${esc(start.long)}${start.relative ? ` <span style="color:#6e6e73">(${esc(start.relative)})</span>` : ''}. Please have these done before their first day.</p>`;
 }
 
 /** Subject for a lane's email, carrying the start date so it is visible in the inbox list. */
@@ -132,7 +132,7 @@ export function recipientFor(it: { owner: string; email_to?: string | null }, ma
 /** Approve/Reject link for an approval sent to `email`, so they can decide without signing in. */
 function approveButton(it: OnboardingItem, email: string | null, base: string): string {
   if (it.kind !== 'approval' || it.status !== 'pending' || !email) return '';
-  return `<div style="margin-top:8px"><a href="${esc(approvalUrl(base, it.id, email))}" style="background:#101828;color:#fff;text-decoration:none;padding:7px 12px;border-radius:7px;font-size:13px;display:inline-block">Review and approve</a></div>`;
+  return `<div style="margin-top:8px"><a href="${esc(approvalUrl(base, it.id, email))}" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:7px 12px;border-radius:980px;font-size:13px;display:inline-block">Review and approve</a></div>`;
 }
 
 /** Recipients who do not sign in to the OS (ServiceTrade's Laura): no "Open the board" button for them. */
@@ -151,8 +151,8 @@ export function hiringManagerFor(request: { id?: number; employee_id?: number | 
   return { name: m.name ? flipName(m.name) : null, email };
 }
 function hiringManagerHtml(hm: HiringManager | null): string {
-  const who = hm ? [hm.name ? esc(hm.name) : '', hm.email ? `<a href="mailto:${esc(hm.email)}" style="color:#101828">${esc(hm.email)}</a>` : ''].filter(Boolean).join(hm.name && hm.email ? ' &middot; ' : '') : '';
-  return `<p style="margin:-6px 0 14px;padding:10px 12px;background:#F2F5F9;border-radius:8px;font-size:14px"><b>Hiring manager:</b> ${who || '<span style="color:#8A5A00">not on file yet</span>'}</p>`;
+  const who = hm ? [hm.name ? esc(hm.name) : '', hm.email ? `<a href="mailto:${esc(hm.email)}" style="color:#1d1d1f">${esc(hm.email)}</a>` : ''].filter(Boolean).join(hm.name && hm.email ? ' &middot; ' : '') : '';
+  return `<p style="margin:-6px 0 14px;padding:10px 12px;background:#f5f5f7;border-radius:8px;font-size:14px"><b>Hiring manager:</b> ${who || '<span style="color:#8A5A00">not on file yet</span>'}</p>`;
 }
 /** IT support (the "it" lane address) gets the hiring manager on every email about a hire. */
 function wantsManager(email: string | null | undefined, map: Partial<Record<Owner, string>> = ownerEmailMap()): boolean {
@@ -162,15 +162,15 @@ function wantsManager(email: string | null | undefined, map: Partial<Record<Owne
 function ownerTasksHtml(hireName: string, items: OnboardingItem[], boardUrl: string, start: StartDateInfo | null, intro?: string, approver?: { email: string; base: string }, extra: { manager?: HiringManager | null | false; board?: boolean } = {}): string {
   const rows = items.map((it) => {
     const due = dueLabel(it.due_at);
-    const dueHtml = due ? `<div style="color:${due.late ? '#B42318;font-weight:600' : '#667085'};font-size:12px;margin-top:2px">${esc(due.text)}</div>` : '';
-    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${it.detail ? `<div style="color:#667085;font-size:12px">${esc(it.detail)}</div>` : ''}${approver ? approveButton(it, approver.email, approver.base) : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #E7E6E1;color:#667085;font-size:12px;white-space:nowrap;text-align:right">${esc(it.kind)}${dueHtml}</td></tr>`;
+    const dueHtml = due ? `<div style="color:${due.late ? '#B42318;font-weight:600' : '#6e6e73'};font-size:12px;margin-top:2px">${esc(due.text)}</div>` : '';
+    return `<tr><td style="padding:8px 10px;border-bottom:1px solid #e8e8ed">${esc(it.label)}${it.detail ? `<div style="color:#6e6e73;font-size:12px">${esc(it.detail)}</div>` : ''}${approver ? approveButton(it, approver.email, approver.base) : ''}</td><td style="padding:8px 10px;border-bottom:1px solid #e8e8ed;color:#6e6e73;font-size:12px;white-space:nowrap;text-align:right">${esc(it.kind)}${dueHtml}</td></tr>`;
   }).join('');
-  return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
+  return `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;color:#1d1d1f;max-width:560px">
     <p>${intro ? esc(intro) : `New-hire onboarding for <b>${esc(hireName)}</b> has tasks for your team:`}</p>
     ${startLineHtml(start)}${extra.manager === undefined || extra.manager === false ? '' : hiringManagerHtml(extra.manager)}
     <table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${rows}</tbody></table>
-    ${extra.board === false ? '' : `<p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>`}
-    <p style="color:#667085;font-size:12px">You are receiving this because your team is the routing target for these onboarding tasks.${extra.board === false ? '' : ' Nothing provisions automatically: each item waits for the owner to act.'}</p>
+    ${extra.board === false ? '' : `<p style="margin-top:16px"><a href="${esc(boardUrl)}" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:9px 16px;border-radius:980px;display:inline-block">Open the onboarding board</a></p>`}
+    <p style="color:#6e6e73;font-size:12px">You are receiving this because your team is the routing target for these onboarding tasks.${extra.board === false ? '' : ' Nothing provisions automatically: each item waits for the owner to act.'}</p>
   </div>`;
 }
 
@@ -343,12 +343,12 @@ export async function notifyRejection(item: OnboardingItem, by: string, base: st
   // The manager turned it down themselves: tell IT (who would have ordered it), not the manager.
   if (to && to.toLowerCase() === String(by).toLowerCase()) to = ownerEmailMap().it_manager || ownerEmailMap().it || null;
   if (!req || !to) return { ok: false, error: 'no manager email on file' };
-  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:560px">
+  const html = `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;color:#1d1d1f;max-width:560px">
     <p>For <b>${esc(req.name)}</b>'s onboarding, <b>${esc(item.label.replace(/^Approve /, ''))}</b> was not approved by ${esc(by)}.</p>
-    ${item.detail ? `<p style="color:#667085;font-size:13px">${esc(item.detail)}</p>` : ''}
+    ${item.detail ? `<p style="color:#6e6e73;font-size:13px">${esc(item.detail)}</p>` : ''}
     <p style="padding:10px 12px;background:#FEF3F2;border-radius:8px;font-size:14px"><b>Reason:</b> ${esc(item.note || 'No reason given.')}</p>
     <p>Reply to this email or talk to ${esc(by)} if something else is needed instead.</p>
-    <p style="margin-top:16px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>
+    <p style="margin-top:16px"><a href="${esc(base)}/onboarding" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:9px 16px;border-radius:980px;display:inline-block">Open the onboarding board</a></p>
   </div>`;
   const out = await sendMail(to, `Not approved: ${item.label.replace(/^Approve /, '')} for ${req.name}`, html, { from: sender.address, fromName: sender.name });
   return out.ok ? { ok: true, to } : { ok: false, error: out.error };
@@ -388,16 +388,16 @@ export async function sendOnboardingReminders(base: string, now = new Date()): P
     const sections = [...hires.values()].map((its) => {
       const st = startDateInfo(its[0].start_date);
       const hm = wantsManager(email, map) ? hiringManagerFor({ id: its[0].request_id, employee_id: its[0].hire_employee_id, manager_name: its[0].hire_manager_name }) : false;
-      const hmLine = hm === false ? '' : `<div style="font-size:13px;color:#667085;margin:0 0 4px">Hiring manager: ${hm ? esc([hm.name, hm.email].filter(Boolean).join(', ')) : 'not on file yet'}</div>`;
-      return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#667085;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` + hmLine +
+      const hmLine = hm === false ? '' : `<div style="font-size:13px;color:#6e6e73;margin:0 0 4px">Hiring manager: ${hm ? esc([hm.name, hm.email].filter(Boolean).join(', ')) : 'not on file yet'}</div>`;
+      return `<h3 style="font-size:15px;margin:18px 0 4px">${esc(its[0].hire)}${st ? ` <span style="font-weight:400;color:#6e6e73;font-size:13px">starts ${esc(st.long)}${st.relative ? ` (${esc(st.relative)})` : ''}</span>` : ''}</h3>` + hmLine +
         `<table style="width:100%;border-collapse:collapse;font-size:14px"><tbody>${its.map((it) => {
           const due = dueLabel(it.due_at, now);
-          return `<tr><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1">${esc(it.label)}${approveButton(it, email, base)}</td><td style="padding:6px 10px;border-bottom:1px solid #E7E6E1;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#667085'}">${esc(due ? due.text : '')}</td></tr>`;
+          return `<tr><td style="padding:6px 10px;border-bottom:1px solid #e8e8ed">${esc(it.label)}${approveButton(it, email, base)}</td><td style="padding:6px 10px;border-bottom:1px solid #e8e8ed;white-space:nowrap;text-align:right;font-size:12px;color:${due && due.late ? '#B42318;font-weight:600' : '#6e6e73'}">${esc(due ? due.text : '')}</td></tr>`;
         }).join('')}</tbody></table>`;
     }).join('');
-    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;color:#101828;max-width:600px">
+    const html = `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;color:#1d1d1f;max-width:600px">
       <p>${late ? `<b>${late} onboarding task${late === 1 ? ' is' : 's are'} overdue.</b> ` : ''}Here is everything your team has due in the next two days for new hires:</p>${sections}
-      ${showsBoard(email, map) ? `<p style="margin-top:18px"><a href="${esc(base)}/onboarding" style="background:#101828;color:#fff;text-decoration:none;padding:9px 16px;border-radius:8px;display:inline-block">Open the onboarding board</a></p>` : ''}</div>`;
+      ${showsBoard(email, map) ? `<p style="margin-top:18px"><a href="${esc(base)}/onboarding" style="background:#d62d2a;color:#fff;font-weight:700;text-decoration:none;padding:9px 16px;border-radius:980px;display:inline-block">Open the onboarding board</a></p>` : ''}</div>`;
     // eslint-disable-next-line no-await-in-loop
     const out = await sendMail(email, `${late ? `${late} overdue, ` : ''}${items.length} onboarding task${items.length === 1 ? '' : 's'} due`, html, { from: sender.address, fromName: sender.name });
     if (out.ok) { setS(key, today); sent++; }
