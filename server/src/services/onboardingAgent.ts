@@ -116,6 +116,9 @@ export interface OnboardingPayload {
   sage?: string;              // selected Sage role
   servicetrade?: string;      // selected ServiceTrade role
   existing_computer?: string; // name or asset tag of a computer being transferred to this hire
+  id_badge?: boolean;    // company ID badge
+  key_fob?: boolean;     // key fob / access card for the building
+  credit_card?: boolean; // company credit card / purchasing card
 }
 
 export interface OnboardingItem {
@@ -251,9 +254,12 @@ function routeItems(req: any): DraftItem[] {
   const misc = (req.misc_exceptions || '').trim();
   if (misc) items.push({ owner: 'bamboo', kind: 'task', label: 'Misc pay/HR exception', detail: misc });
 
-  // ── IT: email + Teams number ──
+  // ── HR: benefits enrollment (offboarding terminates it in Employee Navigator) ──
+  items.push({ owner: 'sandi', kind: 'task', label: 'Enroll in Employee Navigator (benefits)' });
+
+  // ── IT: email, and ONE work phone: a Teams number or an AT&T company cell (never both) ──
   if (bool(req.company_email)) items.push({ owner: 'it', kind: 'task', label: 'Set up company email' });
-  if (bool(req.teams_number)) items.push({ owner: 'it', kind: 'task', label: 'Set up Teams number' });
+  if (bool(req.teams_number)) items.push({ owner: 'it', kind: 'task', label: 'Set up Teams number', detail: 'Assign a Teams Phone license and a number.' });
 
   // ── software (IT for standard, Mario approval for premium) ──
   const software: string[] = safeArray(req.software_json);
@@ -329,9 +335,13 @@ function routeItems(req: any): DraftItem[] {
   // ── IT: docking station (a computer accessory) ──
   if (bool(req.dock)) items.push({ owner: 'it', kind: 'task', label: 'Provide docking station', detail: `$${DOCK_PRICE}` });
 
-  // ── IT: company devices (cell phone + iPad are provisioned by IT) ──
-  if (bool(req.company_cell)) items.push({ owner: 'it', kind: 'task', label: 'Issue company cell phone' });
-  if (bool(req.ipad)) items.push({ owner: 'it', kind: 'task', label: 'Issue company iPad' });
+  // ── IT manager: the physical side (offboarding collects these from the same person) ──
+  if (bool(req.company_cell)) items.push({ owner: 'it_manager', kind: 'task', label: 'Order an AT&T line and issue a company cell phone', detail: 'Enroll the phone in device management and set its PIN.' });
+  if (bool(req.ipad)) items.push({ owner: 'it_manager', kind: 'task', label: 'Issue company iPad', detail: 'Enroll the iPad in device management and set its PIN.' });
+  if (bool(req.id_badge)) items.push({ owner: 'it_manager', kind: 'task', label: 'Make the company ID badge' });
+  if (bool(req.key_fob)) items.push({ owner: 'it_manager', kind: 'task', label: 'Issue and activate a key fob / access card' });
+  // ── Accounting: company card (offboarding collects and cancels it) ──
+  if (bool(req.credit_card)) items.push({ owner: 'rebecca', kind: 'task', label: 'Issue a company credit card / purchasing card' });
   // ── Safety (Denise): fleet/vehicle equipment ──
   if (bool(req.vehicle_transfer)) items.push({ owner: 'denise', kind: 'task', label: 'Company vehicle transfer' });
   if (bool(req.wex_card)) items.push({ owner: 'denise', kind: 'task', label: 'Issue WEX fuel card' });
@@ -340,6 +350,7 @@ function routeItems(req: any): DraftItem[] {
   if (bool(req.company_vehicle)) {
     const vd = (req.vehicle_details || '').trim();
     items.push({ owner: 'sandi', kind: 'task', label: "Send driver's license to Denise + run motor vehicle report" });
+    items.push({ owner: 'sandi', kind: 'task', label: 'Vehicle insurance: add them to the 1st FP licensing filed with the fire marshals' });
     items.push({ owner: 'denise', kind: 'task', label: 'Add to State Auto Policy (after the MVR clears)', detail: vd ? `Vehicle: ${vd}` : undefined });
   }
 
@@ -370,12 +381,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer, id_badge, key_fob, credit_card)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer, @id_badge, @key_fob, @credit_card)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -409,6 +420,9 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       sage: (payload.sage || '').trim() || null,
       servicetrade: (payload.servicetrade || '').trim() || null,
       existing_computer: (payload.existing_computer || '').trim() || null,
+      id_badge: bool(payload.id_badge) ? 1 : 0,
+      key_fob: bool(payload.key_fob) ? 1 : 0,
+      credit_card: bool(payload.credit_card) ? 1 : 0,
     });
 
   const requestId = Number(info.lastInsertRowid);

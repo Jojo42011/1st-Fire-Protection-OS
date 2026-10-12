@@ -174,7 +174,10 @@
     { label: 'IT and access', title: 'What should they be able to get into?',
       blurb: 'IT provisions these. Add only what they genuinely need.',
       fields: [
-        { key: 'accounts', label: 'Accounts', help: 'Tap to add or remove.', opts: ['Company email', 'Teams number'], def: ['Company email'], multi: true },
+        { key: 'accounts', label: 'Accounts', help: 'Tap to add or remove.', opts: ['Company email'], def: ['Company email'], multi: true },
+        { key: 'phone', label: 'Work phone', help: 'Pick one. Nobody needs both.', radio: true, def: 'none', noneLabel: 'No work phone', noneSpec: 'They use their own number',
+          opts: [{ key: 'teams', label: 'Teams number', spec: 'A work number that rings in Teams on their computer and phone' },
+                 { key: 'att', label: 'AT&T company cell phone', spec: 'A company iPhone on an AT&T line' }] },
         { key: 'sharepoint', label: 'SharePoint groups', help: 'Tap the groups they need. Some need an owner to approve them.', opts: [], def: [], multi: true },
         { key: 'printers', label: 'Printers', help: 'Tap any they should be connected to.', opts: [], def: [], multi: true, hideIfEmpty: true },
         { key: 'sage', label: 'Sage Intacct access', help: 'A paid seat. Accounting approves it before access is set up.', radio: true, opts: [], def: 'none', noneLabel: 'No Sage access needed', noneSpec: 'Skip this application', hideIfEmpty: true },
@@ -187,7 +190,8 @@
         { key: 'existing_computer', label: 'Existing computer', help: 'If they are taking over a computer already in service instead of getting a new one, enter the computer name or asset tag here. IT will wipe and set it up for them.', text: true, placeholder: 'e.g. DESKTOP-1FP042 or serial number' },
         { key: 'dock', label: 'Docking station', help: 'A desk dock for their laptop.', toggle: true, toggleLabel: 'Add a docking station', def: false },
         { key: 'software', label: 'Software', help: 'Tap to add or remove. Bluebeam, AutoCAD and HydraCAD need IT manager approval.', opts: [], def: [], multi: true },
-        { key: 'safety_gear', label: 'Safety-issued equipment', help: 'Company phone, iPad, a vehicle transfer, or a fuel card.', opts: ['Company cell phone', 'Company iPad', 'Company vehicle transfer', 'WEX fuel card'], def: [], multi: true }
+        { key: 'access_items', label: 'Badge, building access and cards', help: 'Tap what they need. The IT manager makes badges and fobs; Accounting issues cards.', opts: ['Company ID badge', 'Key fob / access card', 'Company credit card'], def: ['Company ID badge'], multi: true },
+        { key: 'safety_gear', label: 'Other equipment', help: 'An iPad, a vehicle transfer, or a fuel card.', opts: ['Company iPad', 'Company vehicle transfer', 'WEX fuel card'], def: [], multi: true }
       ] },
     { label: 'vehicle', title: 'Last part: do they need a company vehicle?',
       blurb: 'A company vehicle fans out to Safety, HR, and Ops (the MVR check, insurance, and the truck itself).',
@@ -496,6 +500,7 @@
       ['First day', niceDate(vals.start) || 'Not set', 'IT needs five working days'],
       ['Manager', flipName(vals.manager) || 'Not set', 'runs their day to day'],
       ['Accounts and SharePoint', access.length + ' item' + (access.length === 1 ? '' : 's'), access.join(', ') || 'none selected'],
+      ['Work phone', vals.phone === 'teams' ? 'Teams number' : vals.phone === 'att' ? 'AT&T company cell' : 'None', vals.phone === 'att' ? 'the IT manager orders the line and phone' : vals.phone === 'teams' ? 'IT sets up the number' : 'they use their own number'],
       ['Software', sw.length + ' app' + (sw.length === 1 ? '' : 's'), sw.join(', ') || 'none selected'],
       ['New computer', computerLabel(), hasComp ? 'your manager approves, then IT orders it' : 'nothing ordered']
     ];
@@ -503,7 +508,9 @@
     if (vals.dock) rows.push(['Docking station', 'Yes' + (DOCK_PRICE != null ? ' · $' + Number(DOCK_PRICE).toLocaleString() : ''), 'routes to IT']);
     if (vals.sage && vals.sage !== 'none') rows.push(['Sage Intacct', vals.sage, 'routed to Accounting for approval']);
     if (vals.servicetrade && vals.servicetrade !== 'none') rows.push(['ServiceTrade', vals.servicetrade, 'routed to Laura for provisioning']);
-    rows.push(['Safety-issued equipment', gear.length + ' item' + (gear.length === 1 ? '' : 's'), gear.join(', ') || 'none']);
+    var badges = vals.access_items || [];
+    rows.push(['Badge, access and cards', badges.length + ' item' + (badges.length === 1 ? '' : 's'), badges.join(', ') || 'none']);
+    rows.push(['Other equipment', gear.length + ' item' + (gear.length === 1 ? '' : 's'), gear.join(', ') || 'none']);
     rows.push(['Company vehicle', vals.company_vehicle ? 'Yes' : 'No', vals.company_vehicle ? 'fans out to Safety, HR, and Ops' : 'not needed']);
     var s = el('summary');
     s.innerHTML = '';

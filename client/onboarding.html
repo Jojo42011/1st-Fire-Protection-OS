@@ -715,7 +715,10 @@ function renderForm(){
         ffield('Manager','manager_name','Their manager')+
       '</div>')+
       formSection('IT and access','Accounts and SharePoint groups IT provisions',
-        '<div class="fsub2">Accounts</div><div class="fchecks">'+fchk('company_email','','Company email')+fchk('teams_number','','Teams number')+'</div>'+
+        '<div class="fsub2">Accounts</div><div class="fchecks">'+fchk('company_email','','Company email')+'</div>'+
+        '<div class="fsub2">Work phone (pick one)</div><div class="fradios">'+
+          [['none','No work phone','They use their own number'],['teams','Teams number','Rings in Teams on their computer and phone'],['att','AT&amp;T company cell phone','A company iPhone on an AT&amp;T line']].map(function(o,i){
+            return '<label class="fradio"><input type="radio" name="phone" value="'+o[0]+'"'+(i===0?' checked':'')+'><span class="rc"><span class="rt">'+o[1]+'</span><span class="rs">'+o[2]+'</span></span></label>';}).join('')+'</div>'+
         '<div class="fsub2">SharePoint groups</div><div class="fchecks">'+sp+'</div>'+
         (pr?'<div class="fsub2">Printers</div><div class="fchecks">'+pr+'</div>':''))+
       formSection('Equipment and software','A new computer routes to an owner approval; software installs route to IT or its licence owner',
@@ -723,8 +726,11 @@ function renderForm(){
         '<div class="fchecks" style="margin-top:9px">'+fchk('dock','',dockLabel)+'</div>'+
         '<div class="ffield" style="margin-top:12px"><label>Existing computer (if transferring instead of buying new)</label><input name="existing_computer" placeholder="e.g. DESKTOP-1FP042 or serial number"></div>'+
         '<div class="fsub2">Software</div><div class="fchecks">'+sw+'</div>'+
-        '<div class="fsub2">Safety-issued equipment</div><div class="fchecks">'+
-          fchk('company_cell','','Company cell phone')+fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
+        '<div class="fsub2">Badge, building access and cards</div><div class="fchecks">'+
+          fchk('id_badge','','Company ID badge')+fchk('key_fob','','Key fob / access card')+fchk('credit_card','','Company credit card')+
+        '</div>'+
+        '<div class="fsub2">Other equipment</div><div class="fchecks">'+
+          fchk('ipad','','Company iPad')+fchk('vehicle_transfer','','Company vehicle transfer')+fchk('wex_card','','WEX fuel card')+
         '</div>')+
       appAccess+
       formSection('Vehicle','A company vehicle fans out to Safety, HR, and Ops',
@@ -756,8 +762,10 @@ function submitForm(e){
   var payload={
     name:f.name.value.trim(), personal_email:f.personal_email.value.trim(), start_date:f.start_date.value,
     cell_phone:f.cell_phone.value.trim(), job_position:f.job_position.value.trim(), manager_name:f.manager_name.value.trim(),
-    company_email:checked('company_email'), teams_number:checked('teams_number'),
-    company_cell:checked('company_cell'), ipad:checked('ipad'),
+    company_email:checked('company_email'),
+    teams_number:((f.querySelector('input[name="phone"]:checked')||{}).value==='teams'),
+    company_cell:((f.querySelector('input[name="phone"]:checked')||{}).value==='att'), ipad:checked('ipad'),
+    id_badge:checked('id_badge'), key_fob:checked('key_fob'), credit_card:checked('credit_card'),
     company_vehicle:checked('company_vehicle'), vehicle_details:f.vehicle_details.value.trim(),
     vehicle_transfer:checked('vehicle_transfer'), wex_card:checked('wex_card'),
     computer_type:(f.querySelector('input[name="computer_type"]:checked')||{}).value||'none',

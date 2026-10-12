@@ -183,3 +183,23 @@ test('a link made without an email gets the hire\'s manager from BambooHR, and a
   db.prepare(`UPDATE intake_links SET expires_at = '2020-01-01T00:00:00Z' WHERE id = ?`).run(link.id);
   assert.equal(nudgeIntakeLink(link.id), false, 'expired: resend instead');
 });
+
+test('the intake form asks for ONE work phone, and badge, fob and card become tasks for the right people', () => {
+  const att = createIntakeLink({ recipient_name: 'Phone Test' });
+  const out = submitIntake(att.token, { legal: 'Pat Phone', phone: 'att', accounts: ['Company email'], access_items: ['Company ID badge', 'Key fob / access card', 'Company credit card'] });
+  assert.equal(out.ok, true);
+  const items = db.prepare(`SELECT owner, label FROM onboarding_items WHERE request_id = ?`).all((out as any).request_id) as { owner: string; label: string }[];
+  const has = (owner: string, re: RegExp) => items.some((i) => i.owner === owner && re.test(i.label));
+  assert.ok(has('it_manager', /AT&T line/), 'AT&T phone goes to the IT manager');
+  assert.ok(!items.some((i) => /Teams number/.test(i.label)), 'not a Teams number too');
+  assert.ok(has('it_manager', /ID badge/));
+  assert.ok(has('it_manager', /key fob/i));
+  assert.ok(has('rebecca', /credit card/));
+  assert.ok(has('sandi', /Employee Navigator/), 'every hire is enrolled in benefits');
+
+  const teams = createIntakeLink({ recipient_name: 'Phone Test' });
+  const out2 = submitIntake(teams.token, { legal: 'Tia Teams', phone: 'teams' });
+  const items2 = db.prepare(`SELECT label FROM onboarding_items WHERE request_id = ?`).all((out2 as any).request_id) as { label: string }[];
+  assert.ok(items2.some((i) => /Teams number/.test(i.label)));
+  assert.ok(!items2.some((i) => /AT&T/.test(i.label)));
+});

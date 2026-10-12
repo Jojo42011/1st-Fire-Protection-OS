@@ -183,6 +183,8 @@ function toPayload(vals: any): OnboardingPayload {
   const arr = (x: unknown): string[] => (Array.isArray(x) ? (x as string[]) : []);
   const accounts = arr(vals.accounts);
   const gear = arr(vals.safety_gear);
+  const access = arr(vals.access_items);
+  const phone = String(vals.phone || '').trim(); // 'teams' | 'att' | 'none' (one work phone, not both)
   return {
     name: String(vals.legal || vals.preferred || '').trim(),
     personal_email: vals.email || undefined,
@@ -191,14 +193,17 @@ function toPayload(vals: any): OnboardingPayload {
     job_position: vals.title || undefined,
     manager_name: vals.manager || undefined,
     company_email: accounts.includes('Company email'),
-    teams_number: accounts.includes('Teams number'),
+    teams_number: phone === 'teams' || (!phone && accounts.includes('Teams number')),
     computer_type: vals.computer_type && vals.computer_type !== 'none' ? String(vals.computer_type) : 'none',
     dock: !!vals.dock,
     existing_computer: (vals.existing_computer || '').trim() || undefined,
     software: arr(vals.software),
     sharepoint: arr(vals.sharepoint),
     printers: arr(vals.printers),
-    company_cell: gear.includes('Company cell phone'),
+    company_cell: phone === 'att' || (!phone && gear.includes('Company cell phone')),
+    id_badge: access.includes('Company ID badge'),
+    key_fob: access.includes('Key fob / access card'),
+    credit_card: access.includes('Company credit card'),
     ipad: gear.includes('Company iPad'),
     vehicle_transfer: gear.includes('Company vehicle transfer'),
     wex_card: gear.includes('WEX fuel card'),
