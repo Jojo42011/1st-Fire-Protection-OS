@@ -20,6 +20,7 @@ import { sendOnboardingReminders } from './onboardingOwners';
 import { sendOffboardingOverdueReminders } from './offboardingAgent';
 import { sendDailyTaskDigests } from './personalTasks';
 import { autoReassignOneDrive } from './offboardingAutomation';
+import { refreshCoverage } from './spCoverage';
 import { refreshAppAccess } from './appAccessSync';
 import { syncTeamsVoiceForScheduler } from './teamsVoice';
 import { syncAddigy, syncAbm } from './appleDevices';
@@ -140,6 +141,17 @@ export const SYNC_DEFS: SyncDef[] = [
       const auto = od.done || od.failed ? `; OneDrive handover: ${od.done} done, ${od.failed} failed` : '';
       if (on.waiting && off.waiting) return 'outside business hours' + auto;
       return `onboarding: ${on.sent} email(s) for ${on.items} due item(s); offboarding: ${off.sent} email(s) for ${off.items} overdue step(s)${auto}`;
+    },
+  },
+  {
+    key: 'sp_coverage',
+    label: 'SharePoint group coverage',
+    detail: 'Which SharePoint groups already include others (from the Shared site folder permissions), so the onboarding form never offers a redundant group',
+    defaultInterval: 1440,
+    run: async () => {
+      const r = await refreshCoverage();
+      if (!r.ok) throw new Error(r.error || 'could not read the folder permissions');
+      return `${r.groups} group(s) across ${r.folders} top-level folder(s)`;
     },
   },
   {

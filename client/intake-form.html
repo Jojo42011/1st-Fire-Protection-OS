@@ -208,10 +208,19 @@
   ];
 
   // SharePoint groups carry short internal names (MGMT, ACCT); show people the plain-English one.
-  var GROUP_NAMES = { MGMT: 'Management', ACCT: 'Accounting', SAFETY: 'Safety', HR: 'HR', 'Services (San Antonio)': 'San Antonio' };
+  var GROUP_NAMES = { MGMT: 'Management', ACCT: 'Accounting', SAFETY: 'Safety', HR: 'HR', 'Services (San Antonio)': 'San Antonio', Services: 'San Antonio' };
   function friendlyGroup(n) {
-    if (GROUP_NAMES[n]) return GROUP_NAMES[n];
-    return /^[A-Z]{4,}$/.test(n) ? n.charAt(0) + n.slice(1).toLowerCase() : n;
+    var s = String(n || '').replace(/^SG-?SP-?/i, '');                 // SG-SP-Accounting -> Accounting
+    if (GROUP_NAMES[s]) return GROUP_NAMES[s];
+    if (/^[A-Z]{4,}$/.test(s)) return s.charAt(0) + s.slice(1).toLowerCase(); // SAFETY -> Safety
+    return s.replace(/([a-z])([A-Z])/g, '$1 $2');                       // SanAntonio -> San Antonio
+  }
+  // Groups that already include others (from the real SharePoint folder permissions).
+  var SP_INCLUDES = {};
+  function hiddenGroups() {
+    var hide = {};
+    (vals.sharepoint || []).forEach(function (g) { (SP_INCLUDES[g] || []).forEach(function (b) { hide[b] = g; }); });
+    return hide;
   }
   function eachField(key, fn) { STEPS.forEach(function (s) { s.fields.forEach(function (f) { if (f.key === key) fn(f); }); }); }
   // Replace a single-select field's options with the real set, keeping any prefilled value in the
@@ -228,7 +237,9 @@
   // full form), so the manager intake offers the exact company list.
   function applyCatalog(cat) {
     if (!cat) return;
-    if (cat.sharepoint) setFieldOpts('sharepoint', cat.sharepoint);
+    // Everyone gets All Staff automatically, so it is not a choice.
+    if (cat.sharepoint) setFieldOpts('sharepoint', cat.sharepoint.filter(function (n) { return !/all\s*staff/i.test(n); }));
+    if (cat.spIncludes) SP_INCLUDES = cat.spIncludes;
     if (cat.software) setFieldOpts('software', cat.software);
     if (cat.printers) setFieldOpts('printers', cat.printers);
     if (cat.computers) eachField('computer_type', function (f) { f.opts = cat.computers.slice(); });
@@ -466,7 +477,10 @@
       } else {
         var row = document.createElement('div');
         row.className = 'chips';
+        var hidden = f.key === 'sharepoint' ? hiddenGroups() : {};
+        var covered = {};
         f.opts.forEach(function (o) {
+          if (hidden[o]) { (covered[hidden[o]] = covered[hidden[o]] || []).push(friendlyGroup(o)); return; } // already included
           var b = document.createElement('button');
           b.type = 'button';
           b.className = 'chip';
@@ -478,6 +492,8 @@
               var arr = (vals[f.key] || []).slice();
               var i = arr.indexOf(o);
               if (i > -1) arr.splice(i, 1); else arr.push(o);
+              // Picking a group that already includes others drops those from the list.
+              if (f.key === 'sharepoint' && i < 0 && SP_INCLUDES[o]) arr = arr.filter(function (x) { return SP_INCLUDES[o].indexOf(x) < 0; });
               vals[f.key] = arr;
             } else {
               vals[f.key] = o;
@@ -487,6 +503,13 @@
           row.appendChild(b);
         });
         box.appendChild(row);
+        Object.keys(covered).forEach(function (g) {
+          var n = document.createElement('div');
+          n.className = 'help';
+          n.style.marginTop = '8px';
+          n.textContent = friendlyGroup(g) + ' already opens ' + covered[g].join(', ') + ', so those are not listed.';
+          box.appendChild(n);
+        });
         errLine(box, f);
       }
       wrap.appendChild(box);

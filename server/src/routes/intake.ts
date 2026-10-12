@@ -9,6 +9,7 @@ import { resolveToken, markOpened, submitIntake, boundHire } from '../services/i
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
+import { includesMap } from '../services/spCoverage';
 import { computerTierList, DOCK_PRICE, getRequest } from '../services/onboardingAgent';
 import { notifyOwners } from '../services/onboardingOwners';
 import { sendMail, mailCredsPresent } from '../services/msGraphMail';
@@ -20,7 +21,7 @@ import { intakeSubmittedHtml } from '../services/onboardingEmail';
 function intakeOptions(): {
   offices: string[];
   positions: string[];
-  catalog: { software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string; price: number }[]; dockPrice: number; sage: { name: string; spec: string | null; price: number | null }[]; servicetrade: { name: string; spec: string | null }[] };
+  catalog: { spIncludes: Record<string, string[]>; software: string[]; sharepoint: string[]; printers: string[]; computers: { key: string; label: string; spec: string; price: number }[]; dockPrice: number; sage: { name: string; spec: string | null; price: number | null }[]; servicetrade: { name: string; spec: string | null }[] };
 } {
   const offices = operatingOffices().map((o) => o.label);
   let positions: string[] = [];
@@ -35,6 +36,8 @@ function intakeOptions(): {
     dockPrice: DOCK_PRICE,
     sage: catalogByKind('sage').map((s) => ({ name: s.name, spec: s.spec, price: s.price })),
     servicetrade: catalogByKind('servicetrade').map((s) => ({ name: s.name, spec: s.spec })),
+    // Which groups already include others (from the real folder permissions), so the form can hide them.
+    spIncludes: includesMap(catalogByKind('sharepoint').map((s) => s.name)),
   };
   return { offices, positions, catalog };
 }

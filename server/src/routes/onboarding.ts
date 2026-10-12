@@ -33,6 +33,7 @@ import { senderFor, listMailSenders, setMailSender } from '../services/mailSende
 import { operatingOffices } from '../os/office';
 import { getDb } from '../db/index';
 import { catalogByKind } from '../services/onboardingCatalog';
+import { includesMap } from '../services/spCoverage';
 import { addUserToGroup, graphConfigured } from '../services/msGraphGroups';
 import { buildProvisionScript, buildProvisionPlan, getAdSettings, setAdSettings } from '../services/adProvision';
 import { enqueue, latestJobForRef } from '../services/dcJobs';
@@ -66,6 +67,7 @@ router.get('/api/onboarding/form-options', (_req, res) => {
     dockPrice: DOCK_PRICE,
     sage: catalogByKind('sage').map((s) => ({ name: s.name, spec: s.spec, price: s.price })),
     servicetrade: catalogByKind('servicetrade').map((s) => ({ name: s.name, spec: s.spec })),
+    spIncludes: includesMap(catalogByKind('sharepoint').map((s) => s.name)),
   };
   res.json({ offices: operatingOffices().map((o) => o.label), positions, catalog });
 });

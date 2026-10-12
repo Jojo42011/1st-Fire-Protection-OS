@@ -451,6 +451,24 @@ setTimeout(() => {
       .catch(() => setState(flag, '0'));
   } catch (e) { console.warn('[ad] directory audit error:', (e as Error).message); }
 }, 1000 * 65).unref();
+// One-time: read what each SharePoint group opens, and email the IT manager the breakdown.
+setTimeout(async () => {
+  const { getState, setState } = require('./db/schema');
+  const flag = 'sp_coverage_email_v1';
+  try {
+    if (getState(flag) === '1') return;
+    const { mailCredsPresent, sendMail } = require('./services/msGraphMail');
+    if (!mailCredsPresent()) return;
+    setState(flag, '1');
+    const c = require('./services/spCoverage');
+    const r = await c.refreshCoverage();
+    if (!r.ok) { setState(flag, '0'); console.warn('[sp] coverage not read:', r.error); return; }
+    const names = require('./services/onboardingCatalog').catalogByKind('sharepoint').map((x: { name: string }) => x.name);
+    const sender = require('./services/mailSenders').senderFor('onboarding');
+    const out = await sendMail('devon.booker@1stfpservices.com', 'SharePoint groups: what each one opens', c.coverageReportHtml(c.loadCoverage(), names), sender ? { from: sender.address, fromName: sender.name } : undefined);
+    if (!out.ok) setState(flag, '0');
+  } catch (e) { setState(flag, '0'); console.warn('[sp] coverage email error:', (e as Error).message); }
+}, 1000 * 70).unref();
 // One-time test of the My tasks daily email (sample tasks), for the IT manager.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');

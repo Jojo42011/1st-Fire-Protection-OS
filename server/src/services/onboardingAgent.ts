@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { dropIncluded } from './spCoverage';
 import { catalogByKind, catalogAll, CatalogItem } from './onboardingCatalog';
 import { addUserToGroup, graphConfigured } from './msGraphGroups';
 import { managerEmailByName, managerOfByName } from './offboardingAgent';
@@ -274,7 +275,8 @@ function routeItems(req: any): DraftItem[] {
   }
 
   // ── SharePoint groups (IT, or Mario/Rebecca/Sandi approval per group) ──
-  const groups: string[] = safeArray(req.sharepoint_json);
+  // A group another chosen group already includes (Accounting opens every office folder) adds nothing.
+  const groups: string[] = dropIncluded(safeArray(req.sharepoint_json));
   for (const name of groups) {
     const g = catalogRoute('sharepoint', name);
     if (!g) continue;
