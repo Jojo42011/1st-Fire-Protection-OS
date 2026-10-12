@@ -9,7 +9,7 @@
  */
 import crypto from 'crypto';
 import { getDb } from '../db/index';
-import { createRequest, OnboardingPayload, OWNERS } from './onboardingAgent';
+import { createRequest, OnboardingPayload, OWNERS, resolveHireManager } from './onboardingAgent';
 
 const OWNER_TAG: Record<string, string> = OWNERS.reduce((m, o) => ((m[o.key] = o.tag), m), {} as Record<string, string>);
 
@@ -68,7 +68,7 @@ function present(row: IntakeLink) {
     hire,
     job_title: row.job_title || (hire ? hire.job_position : null),
     office: row.office || (hire ? hire.office : null),
-    recipient_name: row.recipient_name,
+    recipient_name: flipName(row.recipient_name),
     recipient_email: row.recipient_email,
     status,
     sent_at: row.sent_at,
@@ -112,6 +112,8 @@ export function createIntakeLink(input: {
   // When bound to a confirmed hire, snapshot their role/office from the employee record so the link
   // and its list row read correctly even before the manager opens the form.
   const hire = input.employee_id ? boundHire({ employee_id: input.employee_id }) : null;
+  // No email typed: send it to the hire's manager from BambooHR, so Email manager and Nudge work.
+  const mgr = input.employee_id && !input.recipient_email ? resolveHireManager({ employee_id: input.employee_id }) : null;
   const info = db
     .prepare(
       `INSERT INTO intake_links (token, employee_id, job_title, office, recipient_name, recipient_email, status, created_by, expires_at, is_test)
@@ -122,8 +124,8 @@ export function createIntakeLink(input: {
       input.employee_id || null,
       input.job_title || (hire ? hire.job_position : null),
       input.office || (hire ? hire.office : null),
-      input.recipient_name || (hire ? hire.manager : null),
-      input.recipient_email || null,
+      input.recipient_name || flipName(hire ? hire.manager : null),
+      input.recipient_email || (mgr && mgr.email) || null,
       input.created_by || 'system',
       expires,
       input.test ? 1 : 0
@@ -151,7 +153,7 @@ export function linkForEmail(id: number, base: string): { url: string; recipient
   const status = liveStatus(row);
   const usable = status === 'sent' || status === 'opened';
   const hire = boundHire(row);
-  return { url: usable ? `${base}/intake/${row.token}` : '', recipient_name: row.recipient_name, recipient_email: row.recipient_email, hire, job_title: row.job_title || (hire ? hire.job_position : null), office: row.office || (hire ? hire.office : null), status };
+  return { url: usable ? `${base}/intake/${row.token}` : '', recipient_name: flipName(row.recipient_name), recipient_email: row.recipient_email, hire, job_title: row.job_title || (hire ? hire.job_position : null), office: row.office || (hire ? hire.office : null), status };
 }
 
 /** Resolve a token for the public form. Returns null when it cannot be used (with a reason). */
@@ -288,11 +290,45 @@ export function voidIntakeLink(id: number): { ok: true } | { ok: false; reason: 
 }
 
 /** Record that a reminder was due (no email backend yet, so this only timestamps the nudge). */
+/** Nudge a live link: record it and give the manager a fresh 7 days, so a reminder never points at a
+ *  link about to die. Expired links are not nudged (they need a resend, which issues a new token). */
 export function nudgeIntakeLink(id: number): boolean {
-  const info = getDb()
-    .prepare(`UPDATE intake_links SET nudged_at = datetime('now') WHERE id = ? AND status IN ('sent','opened')`)
-    .run(id);
-  return info.changes > 0;
+  const row = getDb().prepare(`SELECT * FROM intake_links WHERE id = ?`).get(id) as IntakeLink | undefined;
+  if (!row || liveStatus(row) === 'expired' || !['sent', 'opened'].includes(row.status)) return false;
+  const expires = new Date(Date.now() + LINK_TTL_DAYS * 86400000).toISOString();
+  getDb().prepare(`UPDATE intake_links SET nudged_at = datetime('now'), expires_at = ? WHERE id = ?`).run(expires, id);
+  return true;
+}
+
+/** Make sure a link has a manager email: keep the one it has, else the hire's manager from BambooHR,
+ *  else one typed in now. Saves what it finds. Returns the email or null. */
+export function ensureRecipientEmail(id: number, typed?: string | null): string | null {
+  const db = getDb();
+  const row = db.prepare(`SELECT * FROM intake_links WHERE id = ?`).get(id) as IntakeLink | undefined;
+  if (!row) return null;
+  const clean = String(typed || '').trim().toLowerCase();
+  let email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean) ? clean : (row.recipient_email || null);
+  if (!email && row.employee_id) email = resolveHireManager({ employee_id: row.employee_id }).email;
+  if (!email && row.recipient_name) email = resolveHireManager({ manager_name: row.recipient_name }).email;
+  if (email && email !== row.recipient_email) db.prepare(`UPDATE intake_links SET recipient_email = ? WHERE id = ?`).run(email, id);
+  return email;
+}
+
+/** "Ellis, Ray" -> "Ray Ellis" (BambooHR writes supervisors last name first). */
+function flipName(n: string | null | undefined): string | null {
+  const s = String(n || '').trim();
+  if (!s) return null;
+  if (s.indexOf(',') < 0) return s;
+  const p = s.split(',');
+  return (p.slice(1).join(',').trim() + ' ' + p[0].trim()).trim();
+}
+
+/** Fill in missing manager emails on every live link (run at boot and before the board loads). */
+export function backfillRecipientEmails(): number {
+  const rows = getDb().prepare(`SELECT id FROM intake_links WHERE (recipient_email IS NULL OR recipient_email = '') AND status IN ('sent','opened')`).all() as { id: number }[];
+  let n = 0;
+  for (const r of rows) if (ensureRecipientEmail(r.id)) n++;
+  return n;
 }
 
 /** The submitted values for one link (for "View submission"). */

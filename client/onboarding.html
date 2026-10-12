@@ -258,6 +258,24 @@ function lifecycle(l){
   if(l.status==='voided')  chain+=' <span class="il-stage stop"><span class="dot"></span>Voided</span>';
   return chain;
 }
+// Nudge, resend or send a link. When BambooHR has no email for the manager, ask for one and try again.
+function linkPost(l, verb, email){
+  fetch('/api/onboarding/intake-links/'+l.id+'/'+verb,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(email?{email:email}:{})})
+    .then(function(r){return r.json();}).then(function(d){
+      var res=verb==='send'?d:(d&&d.emailed);
+      if(!d||(verb!=='send'&&!d.ok)){ OS.toast((d&&d.error)||'Could not do that.','bad'); return; }
+      if(res&&res.needEmail&&!email){
+        var typed=window.prompt((res.error||'No email on file for this manager.')+'\n\nManager email:','');
+        if(typed&&typed.trim()) linkPost(l,verb,typed.trim());
+        return;
+      }
+      if(verb==='resend'&&d.url){ try{ navigator.clipboard.writeText(d.url); }catch(_){} }
+      if(res&&res.ok) OS.toast((verb==='resend'?'Fresh link emailed to ':verb==='nudge'?'Reminder emailed to ':'Invite emailed to ')+res.to+'. It works for 7 days.');
+      else if(res&&res.error) OS.toast('The email did not send: '+res.error,'bad');
+      else OS.toast(verb==='resend'?'New link issued and copied. The old one no longer works.':'Done.');
+      loadLinks();
+    }).catch(function(){ OS.toast('Could not reach the server.','bad'); });
+}
 function linkPrimary(l){
   if(l.status==='submitted') return 'View submission';
   if(l.status==='expired'||l.status==='voided') return 'Resend';
@@ -280,7 +298,7 @@ function linkCardHTML(l){
   var expTxt=l.status==='submitted'?'Submitted '+OS.date(l.submitted_at):l.status==='voided'?'Discarded':l.status==='expired'?'Expired '+OS.date(l.expires_at):(d<=0?'Expires today':'Expires '+OS.date(l.expires_at));
   var copyBtn=l.url?'<button class="il-btn" data-link-copy="'+l.id+'">Copy link</button>':'';
   // Email the invite via Microsoft 365, when mail is set up and the link is still live and addressed.
-  var sendBtn=(!gone && MAIL_CONFIGURED && l.recipient_email)?'<button class="il-btn" data-link-send="'+l.id+'">Email manager</button>':'';
+  var sendBtn=(!gone && MAIL_CONFIGURED)?'<button class="il-btn" data-link-send="'+l.id+'">Email manager</button>':'';
   // Discard is offered only while a link is still live (sent or opened, never submitted).
   var discardBtn=(!gone)?'<button class="il-btn" data-link-void="'+l.id+'">Discard</button>':'';
   // Bound to a confirmed hire: lead with their name; otherwise fall back to the role/recipient.
@@ -328,22 +346,8 @@ document.getElementById('links').addEventListener('click',function(e){
         var v=d.submission||{}; OS.toast((v.legal||v.preferred||'The hire')+' submitted for '+(v.office||'their office')+' as '+(v.title||'a new hire')+'.');
       }); return;
     }
-    if(l.status==='expired'||l.status==='voided'){
-      fetch('/api/onboarding/intake-links/'+l.id+'/resend',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-        if(!d||!d.ok){ OS.toast('Could not resend this link.','bad'); return; }
-        if(d.url){ try{ navigator.clipboard.writeText(d.url); }catch(_){} }
-        OS.toast('New link issued for '+(l.job_title||'the role')+'. The old token is now void and the fresh link is copied.');
-        loadLinks();
-      }); return;
-    }
-    fetch('/api/onboarding/intake-links/'+l.id+'/nudge',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-      if(!d||!d.ok){ OS.toast('This link cannot be nudged.','bad'); return; }
-      var who=l.recipient_name||'the manager';
-      if(d.emailed&&d.emailed.ok){ OS.toast('Reminder emailed to '+d.emailed.to+'.'); }
-      else if(d.emailed&&d.emailed.error){ OS.toast('Nudge recorded, but the email did not send: '+d.emailed.error+' Send the link manually.','bad'); }
-      else { OS.toast('Nudge recorded for '+who+'.'); }
-      loadLinks();
-    });
+    if(l.status==='expired'||l.status==='voided'){ linkPost(l,'resend'); return; }
+    linkPost(l,'nudge');
     return;
   }
   var c=e.target.closest('[data-link-copy]');
@@ -353,13 +357,7 @@ document.getElementById('links').addEventListener('click',function(e){
     return;
   }
   var s=e.target.closest('[data-link-send]');
-  if(s){ var id=s.getAttribute('data-link-send'); s.disabled=true; s.textContent='Sending…';
-    fetch('/api/onboarding/intake-links/'+id+'/send',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-      s.disabled=false; s.textContent='Email manager';
-      if(d&&d.ok){ OS.toast('Invite emailed to '+d.to+'.'); } else { OS.toast('Could not send: '+((d&&d.error)||'unknown error'),'bad'); }
-    }).catch(function(){ s.disabled=false; s.textContent='Email manager'; OS.toast('Could not send the email.','bad'); });
-    return;
-  }
+  if(s){ var ls=LINKS.filter(function(x){return String(x.id)===s.getAttribute('data-link-send');})[0]; if(ls) linkPost(ls,'send'); return; }
   var v=e.target.closest('[data-link-void]');
   if(v){ var l3=LINKS.filter(function(x){return String(x.id)===v.getAttribute('data-link-void');})[0]; if(!l3) return;
     if(!confirm('Discard the intake link for '+(l3.recipient_name||'this manager')+'? The link will stop working immediately and cannot be reopened.')) return;

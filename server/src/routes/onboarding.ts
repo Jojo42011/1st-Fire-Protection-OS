@@ -24,6 +24,8 @@ import {
   getSubmission,
   linkForEmail,
   duplicateOnboardingWarning,
+  ensureRecipientEmail,
+  backfillRecipientEmails,
 } from '../services/intakeLinks';
 import { sendMail, mailCredsPresent } from '../services/msGraphMail';
 import { intakeInviteHtml } from '../services/onboardingEmail';
@@ -215,6 +217,7 @@ router.put('/api/onboarding/:id(\\d+)/start-date', async (req, res) => {
 /** The intake-link list for the Onboarding screen. */
 router.get('/api/onboarding/intake-links', (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
+  try { backfillRecipientEmails(); } catch { /* best effort: the board still loads */ }
   res.json({ ok: true, links: listIntakeLinks(base) });
 });
 
@@ -237,9 +240,10 @@ async function emailInvite(id: number, base: string, subjectPrefix = ''): Promis
   if (!mailCredsPresent()) return { ok: false, error: 'Microsoft 365 is not connected yet.' };
   const sender = senderFor('onboarding');
   if (!sender) return { ok: false, error: 'No sending mailbox set for onboarding invites. Set one in Integrations.' };
+  ensureRecipientEmail(id); // fill it from BambooHR if the link was made without one
   const ctx = linkForEmail(id, base);
   if (!ctx) return { ok: false, error: 'link not found' };
-  if (!ctx.recipient_email) return { ok: false, error: 'This link has no manager email to send to.' };
+  if (!ctx.recipient_email) return { ok: false, error: `No email on file for ${ctx.recipient_name || 'the manager'} in BambooHR. Type their email to send it.`, needEmail: true } as any;
   if (!ctx.url) return { ok: false, error: 'This link can no longer be sent (submitted, expired, or discarded).' };
   const hireName = ctx.hire ? ctx.hire.name : null;
   const html = intakeInviteHtml({ managerName: ctx.recipient_name, hireName, role: ctx.job_title, office: ctx.office, start: ctx.hire ? ctx.hire.start_date : null, url: ctx.url });
@@ -364,25 +368,30 @@ router.put('/api/onboarding/ad-settings', (req, res) => {
 
 /** Send (or re-send) the invite email for an existing link. */
 router.post('/api/onboarding/intake-links/:id/send', async (req, res) => {
+  if (req.body && req.body.email) ensureRecipientEmail(Number(req.params.id), String(req.body.email));
   const base = `${req.protocol}://${req.get('host')}`;
   const out = await emailInvite(Number(req.params.id), base);
   res.status(out.ok ? 200 : 400).json(out);
 });
 
 /** Resend: void the old token, issue a fresh one for the same recipient. */
-router.post('/api/onboarding/intake-links/:id/resend', (req, res) => {
+router.post('/api/onboarding/intake-links/:id/resend', async (req, res) => {
   const out = resendIntakeLink(Number(req.params.id), actor(req));
   if (!out) return res.status(404).json({ ok: false, error: 'not_found' });
   const base = `${req.protocol}://${req.get('host')}`;
-  res.json({ ok: true, link: out.link, url: `${base}/intake/${out.token}` });
+  if (req.body && req.body.email) ensureRecipientEmail(out.link.id, String(req.body.email));
+  // Email the fresh link straight to the manager when mail is connected (the old one is now void).
+  const emailed = mailCredsPresent() ? await emailInvite(out.link.id, base) : undefined;
+  res.json({ ok: true, link: out.link, url: `${base}/intake/${out.token}`, emailed });
 });
 
 /** Nudge: re-send the invite email to the manager and timestamp the reminder. Only for links that are
  *  still open (sent/opened). Keyless-safe: records the nudge even when mail is not connected. */
 router.post('/api/onboarding/intake-links/:id/nudge', async (req, res) => {
   const id = Number(req.params.id);
+  if (req.body && req.body.email) ensureRecipientEmail(id, String(req.body.email));
   const recorded = nudgeIntakeLink(id);
-  if (!recorded) return res.json({ ok: false, error: 'not_nudgeable' });
+  if (!recorded) return res.json({ ok: false, error: 'This link expired. Use Resend to send the manager a fresh one.' });
   const base = `${req.protocol}://${req.get('host')}`;
   const emailed = await emailInvite(id, base);
   res.json({ ok: true, nudged: true, emailed });

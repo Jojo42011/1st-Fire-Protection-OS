@@ -156,3 +156,30 @@ test('a test link previews the teams but creates no request, closes the token, a
   const again = resolveToken(token);
   assert.equal(again.ok, false, 'single-use like a real link');
 });
+
+test('a link made without an email gets the hire\'s manager from BambooHR, and a nudge gives it 7 fresh days', async () => {
+  const { ensureRecipientEmail, backfillRecipientEmails, nudgeIntakeLink } = await import('./intakeLinks');
+  db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, work_email, employment_status) VALUES ('Ray','Ellis','ray.ellis@1stfpservices.com','active')`).run();
+  const hireId = Number(db.prepare(`INSERT INTO employees (legal_first_name, legal_last_name, manager, employment_status) VALUES ('Jo','Hire','Ellis, Ray','onboarding')`).run().lastInsertRowid);
+  const { link } = createIntakeLink({ employee_id: hireId });
+  assert.equal(link.recipient_email, 'ray.ellis@1stfpservices.com', 'filled from BambooHR at creation');
+  assert.equal(link.recipient_name, 'Ray Ellis', 'first name first');
+
+  // An older link saved with no email is filled in when the board loads.
+  db.prepare(`UPDATE intake_links SET recipient_email = NULL WHERE id = ?`).run(link.id);
+  assert.equal(backfillRecipientEmails() >= 1, true);
+  assert.equal((db.prepare(`SELECT recipient_email FROM intake_links WHERE id = ?`).get(link.id) as any).recipient_email, 'ray.ellis@1stfpservices.com');
+
+  // A typed email wins when BambooHR has none.
+  const orphan = createIntakeLink({ recipient_name: 'Nobody Known' }).link;
+  assert.equal(ensureRecipientEmail(orphan.id), null);
+  assert.equal(ensureRecipientEmail(orphan.id, 'Boss@1stFPservices.com'), 'boss@1stfpservices.com');
+
+  // Nudge pushes the expiry 7 days out; an expired link cannot be nudged.
+  db.prepare(`UPDATE intake_links SET expires_at = ? WHERE id = ?`).run(new Date(Date.now() + 3600_000).toISOString(), link.id);
+  assert.equal(nudgeIntakeLink(link.id), true);
+  const days = (Date.parse((db.prepare(`SELECT expires_at FROM intake_links WHERE id = ?`).get(link.id) as any).expires_at) - Date.now()) / 86400000;
+  assert.ok(days > 6.9, 'fresh 7 days');
+  db.prepare(`UPDATE intake_links SET expires_at = '2020-01-01T00:00:00Z' WHERE id = ?`).run(link.id);
+  assert.equal(nudgeIntakeLink(link.id), false, 'expired: resend instead');
+});
