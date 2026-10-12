@@ -145,6 +145,7 @@
       </div>
       <div class="os-actions">
         <button class="os-btn" id="previewForm">Preview the form</button>
+        <button class="os-btn" id="newAcct" hidden title="An AD account and company email for someone already working here">Account for existing employee</button>
         <button class="os-btn primary" id="newLink">New intake link</button>
       </div>
     </div>
@@ -191,6 +192,37 @@
         <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:18px">
           <button class="os-btn" data-mkclose>Cancel</button>
           <button class="os-btn primary" id="mk-create">Create link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ov" id="ak" aria-hidden="true">
+    <div class="ov-scrim" data-akclose></div>
+    <div class="ov-panel" style="max-width:520px">
+      <button class="ov-x" data-akclose aria-label="Close">&times;</button>
+      <div class="card card-pad" style="background:var(--panel);border-radius:16px;padding:22px">
+        <h2 style="font-weight:800;font-size:18px;color:var(--ink);margin:0 0 4px">Account for an existing employee</h2>
+        <p class="muted" style="font-size:12.5px;margin:0 0 6px">For someone already working here who never got an AD account. This creates one IT task, bound to their BambooHR record, to create the account and their company email. No hiring tasks are created.</p>
+        <label class="mkl" for="ak-q">Employee (from BambooHR)</label>
+        <input id="ak-q" class="mki" placeholder="Search by name, office or title" autocomplete="off" />
+        <select id="ak-emp" class="mki" style="margin-top:6px"></select>
+        <div id="ak-sum" class="muted" style="font-size:12px;margin:6px 0 2px"></div>
+        <label class="mkl">Account type</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label class="fchk"><input type="radio" name="ak-type" value="Email Only" checked> <span>Email only (Microsoft 365, no company computer)</span></label>
+          <label class="fchk"><input type="radio" name="ak-type" value="AD + Email"> <span>AD + Email (signs in to a company computer)</span></label>
+        </div>
+        <label class="mkl">SharePoint access (optional)</label>
+        <div id="ak-sp" style="display:flex;flex-wrap:wrap;gap:6px 14px"></div>
+        <label class="mkl">Printers (optional)</label>
+        <div id="ak-pr" style="display:flex;flex-wrap:wrap;gap:6px 14px"></div>
+        <label class="fchk" style="margin-top:12px"><input type="checkbox" id="ak-teams"> <span>Also set up a Teams number</span></label>
+        <label class="mkl" for="ak-note">Note for IT (optional)</label>
+        <input id="ak-note" class="mki" maxlength="500" placeholder="Anything IT should know" />
+        <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:18px">
+          <button class="os-btn" data-akclose>Cancel</button>
+          <button class="os-btn primary" id="ak-create">Create IT task</button>
         </div>
       </div>
     </div>
@@ -440,6 +472,59 @@ window.addEventListener('message',function(e){
 });
 
 /* ─────────────── onboarding board (live: /api/onboarding) ─────────────── */
+/* ─────────────── account for an existing employee (IT / admin) ─────────────── */
+var ak=document.getElementById('ak'), AK_PEOPLE=[], AK_SYNCED=true;
+function akStatus(p){ if(p.openRequestId) return 'request already open'; if(p.ad&&p.ad.enabled) return 'in AD as '+(p.ad.sam||p.ad.upn||'an account'); if(p.ad) return 'AD account disabled'; return AK_SYNCED?'no AD account':'AD not synced yet'; }
+function akRender(){
+  var q=document.getElementById('ak-q').value.trim().toLowerCase(), sel=document.getElementById('ak-emp'), cur=sel.value;
+  var list=AK_PEOPLE.filter(function(p){ return !q||[p.name,p.office,p.title,p.department].join(' ').toLowerCase().indexOf(q)>=0; });
+  sel.innerHTML='<option value="">'+(list.length?'Select the employee ('+list.length+')':'No one matches')+'</option>'+list.slice(0,300).map(function(p){
+    return '<option value="'+p.id+'"'+(String(p.id)===cur?' selected':'')+'>'+esc(p.name)+' · '+esc(p.office||'no office')+' · '+esc(akStatus(p))+'</option>'; }).join('');
+  akSummary();
+}
+function akPicked(){ var id=document.getElementById('ak-emp').value; return AK_PEOPLE.filter(function(p){return String(p.id)===String(id);})[0]||null; }
+function akSummary(){
+  var p=akPicked(), el=document.getElementById('ak-sum');
+  if(!p){ el.innerHTML=''; return; }
+  var bits=[p.title||'no title', p.office||'no office', p.started?('started '+OS.date(p.started)):'', p.workEmail?('BambooHR work email '+p.workEmail):'no work email in BambooHR'].filter(Boolean);
+  var warn=p.openRequestId?'An account request is already open for them.':(p.ad&&p.ad.enabled?'AD already has an enabled account for them ('+(p.ad.sam||p.ad.upn)+'). Check before creating another.':'');
+  el.innerHTML=esc(bits.join(' · '))+(warn?'<div style="color:var(--bad,#b42318);margin-top:4px">'+esc(warn)+'</div>':'');
+}
+function akChecks(){
+  var o=OPTIONS||{}, seen={};
+  document.getElementById('ak-sp').innerHTML=(o.sharepoint||[]).filter(function(g){ if(/all\s*staff|former\s*employees|1\s*auto\s*insurance|external\s*extinguishers/i.test(g.name)) return false; var k=friendlyGroup(g.name).toLowerCase(); if(seen[k]) return false; seen[k]=1; return true; })
+    .map(function(g){ return fchk('ak-sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':'')); }).join('')||'<span class="muted" style="font-size:12px">No SharePoint groups in the catalog.</span>';
+  document.getElementById('ak-pr').innerHTML=(o.printers||[]).map(function(p){ return fchk('ak-pr',p,p); }).join('')||'<span class="muted" style="font-size:12px">No printers in the catalog.</span>';
+}
+function loadAk(){
+  return fetch('/api/onboarding/existing-employees').then(function(r){ return r.ok?r.json():null; }).then(function(d){
+    var b=document.getElementById('newAcct'); if(!d||!d.ok){ b.hidden=true; return; }
+    b.hidden=false; AK_PEOPLE=d.people||[]; AK_SYNCED=d.adSynced!==false; akRender();
+  }).catch(function(){});
+}
+function openAk(){ akChecks(); loadAk(); ak.classList.add('on'); ak.setAttribute('aria-hidden','false'); setTimeout(function(){ document.getElementById('ak-q').focus(); },50); }
+function closeAk(){ ak.classList.remove('on'); ak.setAttribute('aria-hidden','true'); }
+document.getElementById('newAcct').addEventListener('click',openAk);
+ak.addEventListener('click',function(e){ if(e.target.closest('[data-akclose]')) closeAk(); });
+document.getElementById('ak-q').addEventListener('input',akRender);
+document.getElementById('ak-emp').addEventListener('change',akSummary);
+document.getElementById('ak-create').addEventListener('click',function(){
+  var p=akPicked(); if(!p){ OS.toast('Pick the employee first.','bad'); return; }
+  var vals=function(n){ return Array.prototype.map.call(ak.querySelectorAll('input[name="'+n+'"]:checked'),function(i){return i.value;}); };
+  var type=(ak.querySelector('input[name="ak-type"]:checked')||{}).value||'Email Only';
+  var btn=this; btn.disabled=true;
+  fetch('/api/onboarding/account-for-existing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({employee_id:p.id,account_type:type,sharepoint:vals('ak-sp'),printers:vals('ak-pr'),teams_number:document.getElementById('ak-teams').checked,note:document.getElementById('ak-note').value.trim()})})
+    .then(function(r){return r.json();}).then(function(d){
+      btn.disabled=false;
+      if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not create the IT task.','bad'); return; }
+      closeAk(); OS.toast('IT task created for '+p.name+'. Use Create account on DC to make the account.');
+      if(d.warning) setTimeout(function(){ OS.toast('Heads up: '+d.warning,'bad'); },2800);
+      document.getElementById('ak-note').value=''; document.getElementById('ak-teams').checked=false;
+      OPEN_ID=d.request&&d.request.id; loadBoard();
+    }).catch(function(){ btn.disabled=false; OS.toast('Could not reach the server.','bad'); });
+});
+loadAk();
+
 var OPTIONS=null, OPEN_ID=null, REQS=[];
 function loadBoard(){
   return fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){
@@ -456,12 +541,12 @@ function loadBoard(){
     document.getElementById('boardn').textContent=REQS.length;
     if(!REQS.length){ document.getElementById('board').innerHTML=(!v.all&&!v.signedIn)?'':OS.empty(v.all?'No one is onboarding right now. Send an intake link to start.':'Nothing for your team right now.','✓'); return; }
     var cols=[
-      {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
-      {as:'starts',label:'Starts',render:function(v,r){return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
+      {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.request_type==='account_only'?' '+OS.pill('Account only','neutral'):'')+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
+      {as:'starts',label:'Starts',render:function(v,r){if(r.request_type==='account_only') return '<span class="muted">Already working</span>'; return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
       {as:'prog',label:'Progress',render:function(v,r){var ru=r.rollup||{},done=r.status==='complete';return '<div style="display:flex;align-items:center;gap:9px"><span class="ob-bar'+(done?' done':'')+'"><span style="width:'+(ru.progress||0)+'%"></span></span><span class="muted" style="font-size:11.5px;white-space:nowrap">'+(ru.done||0)+'/'+(ru.total||0)+'</span></div>';}},
       {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):r.status==='needs_attention'?OS.pill('Needs attention','bad'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
     ];
-    document.getElementById('board').innerHTML=OS.table(cols, REQS.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id};}), {onRow:true});
+    document.getElementById('board').innerHTML=OS.table(cols, REQS.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id,request_type:r.request_type};}), {onRow:true});
     if(OPEN_ID) openReq(OPEN_ID);
   }).catch(function(){ document.getElementById('board').innerHTML=OS.errorBox('Could not load the onboarding board.'); });
 }
@@ -514,9 +599,9 @@ function openReq(id){
     document.getElementById('listView').style.display='none';
     document.getElementById('obHead').style.display='none';
     document.getElementById('detail').innerHTML='<button class="crumb" id="closeReq">← Onboarding</button>'+
-      '<div class="dhead"><div><h1>'+esc(req.name)+'</h1><div class="dsub">'+esc(req.job_position||'New hire')+(req.manager_name?(' · reports to <b>'+esc(req.manager_name)+'</b>'):'')+'</div></div>'+
+      '<div class="dhead"><div><h1>'+esc(req.name)+'</h1><div class="dsub">'+(req.request_type==='account_only'?'Existing employee: AD account and email only · ':'')+esc(req.job_position||'New hire')+(req.manager_name?(' · reports to <b>'+esc(req.manager_name)+'</b>'):'')+'</div></div>'+
       '<div class="dacts">'+createBtn+provBtn+'<button class="os-btn danger" id="discardReq" title="Remove this request from the board">Discard</button></div></div>'+
-      '<div class="dmeta"><span class="mchip">Starts <b>'+startTxt+'</b> <button class="linkbtn" id="changeStart" data-current="'+esc(req.start_date||'')+'">Change</button></span>'+
+      '<div class="dmeta">'+(req.request_type==='account_only'?'<span class="mchip">Requested <b>'+startTxt+'</b></span>':'<span class="mchip">Starts <b>'+startTxt+'</b> <button class="linkbtn" id="changeStart" data-current="'+esc(req.start_date||'')+'">Change</button></span>')+
       '<span class="mchip"><b>'+ru.done+' of '+ru.total+'</b> done</span>'+
       (ru.pendingApprovals?'<span class="mchip"><b>'+ru.pendingApprovals+'</b> approval'+(ru.pendingApprovals===1?'':'s')+' waiting</span>':'')+'</div>'+
       '<div class="pbar'+(ru.done>=ru.total?' done':'')+'" style="margin:12px 0 4px"><span style="width:'+(ru.total?Math.round(ru.done/ru.total*100):0)+'%"></span></div>'+groups;

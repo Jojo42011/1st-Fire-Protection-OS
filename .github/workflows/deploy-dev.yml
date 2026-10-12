@@ -2,7 +2,7 @@ name: Deploy DEV preview to Fly.io
 
 # Stands up an ISOLATED development/preview app (first-fp-os-dev) from fly.dev.toml so
 # Devon can visually compare development vs production. It is a separate app with its own
-# volume in Devon's Fly account — it never touches production (first-fp-os).
+# volume in Devon's Fly account: it never touches production (first-fp-os).
 #
 # Boots keyless on seeded sample data (no secrets required beyond FLY_API_TOKEN).
 #
@@ -28,7 +28,7 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      # keyless boot smoke test — must start on seeded data with no secrets
+      # keyless boot smoke test: must start on seeded data with no secrets
       - name: Boot smoke test
         run: |
           DB_PATH=/tmp/ci.db PORT=3900 node server/dist/app.js &
@@ -42,32 +42,43 @@ jobs:
     name: Deploy DEV to Fly.io
     needs: build
     runs-on: ubuntu-latest
-    concurrency: deploy-dev-group   # one dev machine, one volume — never race deploys
+    concurrency: deploy-dev-group   # one dev machine, one volume, never race deploys
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy the isolated dev preview (bootstraps app + volume on first run)
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # A token that can reach the dev app. Every dev deploy from July 21 on failed within seconds
+          # at this step: the repo's FLY_API_TOKEN cannot see or create first-fp-os-dev. Set
+          # FLY_DEV_API_TOKEN (an org token: `fly tokens create org`) to turn the preview back on.
+          # Without one the preview is skipped with a warning (the Fly error included), not failed.
+          FLY_DEV_API_TOKEN: ${{ secrets.FLY_DEV_API_TOKEN }}
+          FLY_PROD_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_ORG: ${{ vars.FLY_ORG || 'personal' }}
         run: |
+          export FLY_API_TOKEN="${FLY_DEV_API_TOKEN:-$FLY_PROD_TOKEN}"
           if [ -z "$FLY_API_TOKEN" ]; then
-            echo "::error::No FLY_API_TOKEN secret set on this repo."
-            echo "Add it in: repo -> Settings -> Secrets and variables -> Actions -> New repository secret (name: FLY_API_TOKEN)."
-            exit 1
+            echo "::warning title=Dev preview skipped::No FLY_DEV_API_TOKEN (or FLY_API_TOKEN) secret on this repo."
+            exit 0
           fi
 
           # app name is the single source of truth in fly.dev.toml
           APP=$(grep -E '^app\s*=' fly.dev.toml | head -1 | sed -E 's/.*"(.*)".*/\1/')
           echo "Target DEV app: $APP"
 
-          # create the dev app once (idempotent — no-op if it already exists)
-          if ! flyctl status --app "$APP" >/dev/null 2>&1; then
+          # create the dev app once (idempotent). If this token can neither see nor create it, say
+          # why and skip: the dev preview is optional and must not mark every push red.
+          if ! STATUS_OUT=$(flyctl status --app "$APP" 2>&1); then
+            echo "flyctl status: $STATUS_OUT"
             echo "Creating app $APP in org $FLY_ORG ..."
-            flyctl apps create "$APP" --org "$FLY_ORG"
+            if ! CREATE_OUT=$(flyctl apps create "$APP" --org "$FLY_ORG" 2>&1); then
+              WHY=$(printf '%s %s' "$STATUS_OUT" "$CREATE_OUT" | tr '\n' ' ' | cut -c1-400)
+              echo "::warning title=Dev preview skipped::This Fly token cannot reach or create $APP. Add a FLY_DEV_API_TOKEN secret (fly tokens create org) to enable it. Fly said: $WHY"
+              exit 0
+            fi
           else
-            echo "App $APP already exists — deploying update."
+            echo "App $APP already exists, deploying update."
           fi
 
           # --ha=false keeps it to ONE machine (SQLite on one volume). fly.dev.toml

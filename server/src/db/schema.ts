@@ -1293,6 +1293,10 @@ export function initDb(): void {
   addColumn('onboarding_requests', 'key_fob', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'credit_card', 'INTEGER DEFAULT 0');
   addColumn('onboarding_requests', 'phone_reuse', 'TEXT'); // an old company phone to reassign: its number or a note    // name/asset tag of a machine being transferred to this hire
+  // 'account_only': an existing employee (already in BambooHR, often working for months) who only
+  // needs an AD account and company email. Routes to IT alone, no hiring tasks.
+  addColumn('onboarding_requests', 'request_type', "TEXT DEFAULT 'new_hire'");
+  addColumn('onboarding_requests', 'account_type', 'TEXT'); // AD + Email | Email Only, when picked by hand
   addColumn('onboarding_items', 'due_at', 'TEXT');      // YYYY-MM-DD, from the hire's start date
   addColumn('onboarding_items', 'parent_id', 'INTEGER'); // the approval this follow-up task came from
   addColumn('onboarding_items', 'note', 'TEXT');        // e.g. the reason an approval was rejected

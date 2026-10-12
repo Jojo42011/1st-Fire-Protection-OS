@@ -186,7 +186,8 @@ export interface ProvisionPlan {
  * are rendered from this, so they never drift. Reads only; writes no state.
  */
 /** "AD + Email" when the hire gets a computer (new or reassigned) and so signs in to the domain, else "Email Only". */
-export function accountType(request: { computer_type?: string | null; existing_computer?: string | null }): 'AD + Email' | 'Email Only' {
+export function accountType(request: { computer_type?: string | null; existing_computer?: string | null; account_type?: string | null }): 'AD + Email' | 'Email Only' {
+  if (request.account_type === 'AD + Email' || request.account_type === 'Email Only') return request.account_type; // picked by hand
   const newComputer = !!request.computer_type && request.computer_type !== 'none';
   return newComputer || !!String(request.existing_computer || '').trim() ? 'AD + Email' : 'Email Only';
 }

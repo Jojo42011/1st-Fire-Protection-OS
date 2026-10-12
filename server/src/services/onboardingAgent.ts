@@ -121,6 +121,9 @@ export interface OnboardingPayload {
   key_fob?: boolean;     // key fob / access card for the building
   credit_card?: boolean; // company credit card / purchasing card
   phone_reuse?: string;  // reuse an old company phone instead of ordering one: its number or a note
+  request_type?: 'new_hire' | 'account_only'; // account_only: an existing employee who needs AD + email only
+  account_type?: 'AD + Email' | 'Email Only';
+  note?: string;         // account_only: anything IT should know
 }
 
 export interface OnboardingItem {
@@ -229,6 +232,7 @@ export function dueFor(kind: 'task' | 'approval', startDate: string | null | und
  * it is set/checked, so a sparse form makes a short, clean queue. */
 function routeItems(req: any): DraftItem[] {
   const items: DraftItem[] = [];
+  if (req.request_type === 'account_only') return routeAccountOnly(req);
 
   // ── BambooHR: the new-hire record is always ONE task ──
   const recordDetail = [
@@ -365,6 +369,37 @@ function routeItems(req: any): DraftItem[] {
   return items;
 }
 
+/**
+ * An existing employee (already in BambooHR, often working for months) who never got an AD account:
+ * IT creates the account and its company email, plus the SharePoint and printer groups picked. No
+ * BambooHR record, benefits or hiring tasks: they are already done.
+ */
+function routeAccountOnly(req: any): DraftItem[] {
+  const items: DraftItem[] = [];
+  const type = req.account_type || 'Email Only';
+  const detail = [
+    'Existing employee, already in BambooHR.',
+    `Account type: ${type}${type === 'AD + Email' ? ' (signs in to a company computer)' : ' (email and Microsoft 365 only)'}.`,
+    'Use "Create account on DC" on this request (or "Script instead"), then run a delta sync so the mailbox is created.',
+    req.misc_exceptions ? `Note: ${req.misc_exceptions}` : '',
+  ].filter(Boolean).join(' ');
+  items.push({ owner: 'it', kind: 'task', label: 'Create AD account and company email', detail });
+  if (bool(req.teams_number)) items.push({ owner: 'it', kind: 'task', label: 'Set up Teams number', detail: 'Assign a Teams Phone license and a number.' });
+  for (const name of dropIncluded(safeArray(req.sharepoint_json))) {
+    const g = catalogRoute('sharepoint', name);
+    if (!g) continue;
+    if (g.kind === 'approval') items.push({ owner: g.owner, kind: 'approval', label: `Approve SharePoint group: ${name}`, detail: 'Restricted group - needs approval before access.' });
+    else items.push({ owner: g.owner, kind: 'task', label: `Add to SharePoint group: ${name}` });
+  }
+  const printerCatalog = catalogByKind('printer');
+  for (const name of safeArray(req.printers_json)) {
+    const p = printerCatalog.find((c) => c.name === name);
+    if (p && p.group_name) items.push({ owner: 'it', kind: 'task', label: `Add to security group: ${p.group_name}`, detail: `${name} printers. Entra group ${p.group_name}${p.group_id ? ` (${p.group_id})` : ''}.` });
+    else items.push({ owner: 'it', kind: 'task', label: `Connect printer: ${name}` });
+  }
+  return items;
+}
+
 function safeArray(json: unknown): string[] {
   if (Array.isArray(json)) return json as string[];
   if (typeof json !== 'string' || !json) return [];
@@ -389,12 +424,12 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
         (name, employee_id, personal_email, start_date, cell_phone, job_position, salary, manager_name,
          company_email, teams_number, cell_reimburse, pto_plan, hours_80_40, probation_waived,
          incentive_plan, vehicle_allowance, misc_exceptions, company_cell, ipad, company_vehicle,
-         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer, id_badge, key_fob, credit_card, phone_reuse)
+         vehicle_details, vehicle_transfer, wex_card, computer_type, dock, software_json, sharepoint_json, printers_json, sage, servicetrade, existing_computer, id_badge, key_fob, credit_card, phone_reuse, request_type, account_type)
        VALUES
         (@name, @employee_id, @personal_email, @start_date, @cell_phone, @job_position, @salary, @manager_name,
          @company_email, @teams_number, @cell_reimburse, @pto_plan, @hours_80_40, @probation_waived,
          @incentive_plan, @vehicle_allowance, @misc_exceptions, @company_cell, @ipad, @company_vehicle,
-         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer, @id_badge, @key_fob, @credit_card, @phone_reuse)`
+         @vehicle_details, @vehicle_transfer, @wex_card, @computer_type, @dock, @software_json, @sharepoint_json, @printers_json, @sage, @servicetrade, @existing_computer, @id_badge, @key_fob, @credit_card, @phone_reuse, @request_type, @account_type)`
     )
     .run({
       name: String(payload.name).trim(),
@@ -413,7 +448,7 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       probation_waived: bool(payload.probation_waived) ? 1 : 0,
       incentive_plan: bool(payload.incentive_plan) ? 1 : 0,
       vehicle_allowance: bool(payload.vehicle_allowance) ? 1 : 0,
-      misc_exceptions: (payload.misc_exceptions || '').trim() || null,
+      misc_exceptions: (payload.misc_exceptions || payload.note || '').trim() || null,
       company_cell: bool(payload.company_cell) ? 1 : 0,
       ipad: bool(payload.ipad) ? 1 : 0,
       company_vehicle: bool(payload.company_vehicle) ? 1 : 0,
@@ -432,6 +467,8 @@ export function createRequest(payload: OnboardingPayload): { request: any; items
       key_fob: bool(payload.key_fob) ? 1 : 0,
       credit_card: bool(payload.credit_card) ? 1 : 0,
       phone_reuse: bool(payload.company_cell) ? (String(payload.phone_reuse || '').trim().slice(0, 200) || null) : null,
+      request_type: payload.request_type === 'account_only' ? 'account_only' : 'new_hire',
+      account_type: payload.account_type === 'AD + Email' || payload.account_type === 'Email Only' ? payload.account_type : null,
     });
 
   const requestId = Number(info.lastInsertRowid);

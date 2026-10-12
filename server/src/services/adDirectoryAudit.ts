@@ -120,6 +120,13 @@ function pairs(): { a: any; e: EmpRow }[] & { unmatched?: any[] } {
   return out;
 }
 
+/** Each employee's matched AD account (same matching as the audit), by employee id. */
+export function adAccountsByEmployee(): Map<number, { sam: string | null; upn: string | null; enabled: boolean }> {
+  const m = new Map<number, { sam: string | null; upn: string | null; enabled: boolean }>();
+  for (const { a, e } of pairs()) m.set(e.id, { sam: a.sam || null, upn: a.upn || null, enabled: !!a.enabled });
+  return m;
+}
+
 export function directoryAudit(now = new Date()): DirectoryAudit {
   const settings = getAdSettings();
   const mapped = Object.keys(settings.officeOuMap).length > 0 || Object.keys(settings.departmentOuMap).length > 0;

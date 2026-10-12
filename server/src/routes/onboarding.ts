@@ -40,6 +40,7 @@ import { enqueue, latestJobForRef } from '../services/dcJobs';
 import { adOuOptions } from '../services/adAudit';
 import { licenseStatusForRef } from '../services/entraLicensing';
 import { notifyOwners, ownerEmailMap, setOwnerEmail, ownerEmailPreview, sendOwnerEmailNow, notifyFollowUp, notifyRejection, notifyStartDateChange, sendTestApprovalEmail } from '../services/onboardingOwners';
+import { existingEmployeeCandidates, createAccountRequest } from '../services/accountForExisting';
 import { decider, sendDenied } from '../people/decider';
 import { currentUser } from '../people/authz';
 import { taskScope, seesOnboardingItem, scopeSummary, TaskScope } from '../people/taskScope';
@@ -86,6 +87,27 @@ router.post('/api/onboarding', (req, res) => {
   try {
     const out = createRequest(req.body || {});
     res.json({ ok: true, request: out.request, items: out.items });
+    const base = `${req.protocol}://${req.get('host')}`;
+    void notifyOwners(out.request, out.items, base).catch(() => {});
+  } catch (err) {
+    res.status(400).json({ ok: false, error: (err as Error).message });
+  }
+});
+
+/** An AD account + company email for someone already working here (IT or an admin): the BambooHR
+ *  employees to pick from, those without an AD account first. */
+const itOrAdmin = (req: any): boolean => { const s = scopeOf(req); return s.all || s.onboarding.has('it'); };
+router.get('/api/onboarding/existing-employees', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
+  res.json({ ok: true, ...existingEmployeeCandidates() });
+});
+
+/** Create the "account only" request: one IT task (create AD account + email) plus any groups picked. */
+router.post('/api/onboarding/account-for-existing', (req, res) => {
+  if (!itOrAdmin(req)) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
+  try {
+    const out = createAccountRequest(req.body || {});
+    res.json({ ok: true, request: out.request, items: out.items, warning: out.warning });
     const base = `${req.protocol}://${req.get('host')}`;
     void notifyOwners(out.request, out.items, base).catch(() => {});
   } catch (err) {
