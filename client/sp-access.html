@@ -42,7 +42,7 @@
 
   <div class="card" id="reqBox" style="margin-top:12px;padding:16px 18px">
     <div style="font-weight:800;font-size:14px;color:var(--ink)">Requested permission changes</div>
-    <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px">HR off the Houston folder; Payroll onto Houston, College Station and Lubbock; 1Auto Insurance and External Extinguishers off the onboarding form. Preview changes nothing.</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px">HR off the Houston folder; Payroll onto Houston, College Station and Lubbock; Safety onto every office folder; 1Auto Insurance and External Extinguishers off the onboarding form. Preview changes nothing.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label style="font-size:12.5px;color:var(--ink-2)">Keep for San Antonio:
       <select id="reqKeep" style="font:inherit;padding:5px 8px;border-radius:8px;border:1px solid var(--border)">
         <option value="sanantonio">SG-SP-SanAntonio (retire Services)</option>
@@ -699,7 +699,7 @@ function runReq(apply){
 document.getElementById('reqPreview').addEventListener('click',function(){ runReq(false); });
 document.getElementById('reqKeep').addEventListener('change',function(){ document.getElementById('reqApply').disabled=true; document.getElementById('reqOut').innerHTML=''; });
 document.getElementById('reqApply').addEventListener('click',function(){
-  if(!confirm('Apply these SharePoint permission changes now? HR loses the Houston folder and Payroll gains Houston, College Station and Lubbock.')) return;
+  if(!confirm('Apply these SharePoint permission changes now? HR loses the Houston folder, Payroll gains Houston, College Station and Lubbock, and Safety gains every office folder.')) return;
   runReq(true);
 });
 </script>

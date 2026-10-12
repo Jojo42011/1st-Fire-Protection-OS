@@ -10,12 +10,15 @@ import { catalogByKind, removeCatalogItem } from './onboardingCatalog';
  *   - HR no longer opens the 1st FP Houston folder (its direct grant there is removed).
  *   - Payroll opens 1st FP Houston, College Station and Lubbock, at the same level it has on the
  *     other office folders.
+ *   - Safety opens every office folder ("1st FP ..." at the top of the site), same level as elsewhere.
  *   - SG-SP-1AutoInsurance and SG-SP-ExternalExtinguishers come off the onboarding form (the groups
  *     themselves are deleted in AD by a person).
  * It also lists who is in SG-SP-Services but not SG-SP-SanAntonio, so Services can be retired without
  * anyone losing the San Antonio folder. Every step is idempotent: a re-run skips what is already done.
  */
 const PAYROLL_ADD = ['1st FP Houston', '1st FP College Station', '1st FP Lubbock'];
+/** An office (location) folder at the top of the Shared site: "1st FP Austin", "1st FP Services", ... */
+const LOCATION = /^1st\s*fp\s+/i;
 const RETIRED = /^sg-sp-(1autoinsurance|externalextinguishers)$/i;
 
 async function gjson(url: string, token: string): Promise<any> {
@@ -116,20 +119,29 @@ export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE, 
     }
   }
 
-  // 2) Payroll onto Houston, College Station and Lubbock, at the level it has elsewhere.
-  const payroll = await groupByName('SG-SP-Payroll', token);
-  const sample = top.folders.flatMap((f) => f.grants).find((g) => g.kind !== 'user' && groupKey(g.name) === 'payroll' && !g.inherited);
-  const role = sample && /write|owner|edit/i.test(sample.roles) ? 'write' : 'read';
-  if (!payroll) lines.push('Payroll: the SG-SP-Payroll group was not found in Entra, nothing granted.');
-  else for (const name of PAYROLL_ADD) {
-    const f = byName.get(name.toLowerCase());
-    if (!f) { lines.push(`Payroll: no "${name}" folder found.`); continue; }
-    if (f.grants.some((g) => g.kind !== 'user' && groupKey(g.name) === 'payroll')) { lines.push(`Payroll: already opens ${name}.`); continue; }
-    if (!apply) { lines.push(`Payroll: would be added to ${name} (${role === 'write' ? 'edit' : 'read'}, same as its other office folders).`); continue; }
-    // eslint-disable-next-line no-await-in-loop
-    const r = await grantGroupToItem(f.driveId, f.itemId, payroll.id, token, role);
-    lines.push(r.ok ? `Payroll: added to ${name} (${role === 'write' ? 'edit' : 'read'}, same as its other office folders).` : `Payroll: could not add to ${name}: ${r.error}`);
-  }
+  // 2) Payroll onto Houston, College Station and Lubbock; Safety onto every office folder. Each at
+  //    the level the group already has on its other folders.
+  const addGroup = async (label: string, groupName: string, targets: string[]) => {
+    const key = groupKey(groupName);
+    const grp = await groupByName(groupName, token);
+    const sample = top.folders.flatMap((f) => f.grants).find((g) => g.kind !== 'user' && groupKey(g.name) === key && !g.inherited);
+    const role = sample && /write|owner|edit/i.test(sample.roles) ? 'write' : 'read';
+    const level = `${role === 'write' ? 'edit' : 'read'}, same as its other folders`;
+    if (!grp) { lines.push(`${label}: the ${groupName} group was not found in Entra, nothing granted.`); return; }
+    for (const name of targets) {
+      const f = byName.get(name.toLowerCase());
+      if (!f) { lines.push(`${label}: no "${name}" folder found.`); continue; }
+      if (f.grants.some((g) => g.kind !== 'user' && groupKey(g.name) === key)) { lines.push(`${label}: already opens ${f.folder}.`); continue; }
+      if (!apply) { lines.push(`${label}: would be added to ${f.folder} (${level}).`); continue; }
+      // eslint-disable-next-line no-await-in-loop
+      const r = await grantGroupToItem(f.driveId, f.itemId, grp.id, token, role);
+      lines.push(r.ok ? `${label}: added to ${f.folder} (${level}).` : `${label}: could not add to ${f.folder}: ${r.error}`);
+    }
+  };
+  await addGroup('Payroll', 'SG-SP-Payroll', PAYROLL_ADD);
+  const offices = [...new Set(top.folders.map((f) => f.folder).filter((n) => LOCATION.test(n)))].sort();
+  if (!offices.length) lines.push('Safety: no office folders ("1st FP ...") found.');
+  await addGroup('Safety', 'SG-SP-Safety', offices);
 
   // 3) The two unused groups come off the onboarding form.
   for (const c of catalogByKind('sharepoint')) {

@@ -26,7 +26,8 @@ const folders: Record<string, { id: string; perms: any[] }> = {
   '1st FP Houston': { id: 'hou', perms: [{ id: 'p-hr', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-HR' } } }, { id: 'p-hou', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-Houston' } } }] },
   '1st FP College Station': { id: 'cst', perms: [] },
   '1st FP Lubbock': { id: 'lub', perms: [{ id: 'p-pay', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-Payroll' } } }] },
-  '1st FP Austin': { id: 'aus', perms: [{ id: 'p-pay2', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-Payroll' } } }] },
+  '1st FP Austin': { id: 'aus', perms: [{ id: 'p-pay2', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-Payroll' } } }, { id: 'p-saf', roles: ['write'], grantedToV2: { group: { displayName: 'SG-SP-Safety' } } }] },
+  Safety: { id: 'saf', perms: [] },
 };
 const SUB: Record<string, any[]> = { aus: [{ id: 'ins', name: 'Insurance', folder: {}, webUrl: 'https://1stfp.sharepoint.com/sites/Shared/Documents/1st FP Austin/Insurance' }] };
 const SUBPERMS: Record<string, any[]> = { ins: [{ id: 'p-ins', roles: ['read'], grantedToV2: { group: { displayName: 'SG-SP-1AutoInsurance' } } }] };
@@ -58,6 +59,9 @@ test('preview changes nothing and says what it would do', async () => {
   assert.ok(r.lines.some((l) => /HR: would be removed from 1st FP Houston/.test(l)));
   assert.ok(r.lines.some((l) => /Payroll: would be added to 1st FP Houston/.test(l)));
   assert.ok(r.lines.some((l) => /Payroll: already opens 1st FP Lubbock/.test(l)));
+  assert.ok(r.lines.some((l) => /Safety: would be added to 1st FP Houston \(edit/.test(l)));
+  assert.ok(r.lines.some((l) => /Safety: already opens 1st FP Austin/.test(l)));
+  assert.ok(!r.lines.some((l) => /Safety: .*added to Safety$/.test(l)), 'only office folders, not the Safety folder itself');
   const r2 = await applyOct2026SpChanges(false, 'https://1stfp.sharepoint.com/sites/Shared/', 'sanantonio');
   assert.deepEqual(r2.servicesOnly.map((m) => m.upn), ['only@x.com'], 'keeping SanAntonio: move the Services-only member first');
   assert.deepEqual((r2.alreadyCovered || []).map((m) => m.upn), ['lisa@x.com'], 'Accounting staff already open the folder: not added');
@@ -67,12 +71,13 @@ test('preview changes nothing and says what it would do', async () => {
   assert.match((r2.deep || [])[0].url || '', /Insurance$/);
 });
 
-test('apply removes only HR from Houston and adds Payroll only where it is missing', async () => {
+test('apply removes only HR from Houston and adds Payroll and Safety only where they are missing', async () => {
   writes = [];
   const r = await applyOct2026SpChanges(true, 'https://1stfp.sharepoint.com/sites/Shared/');
   assert.equal(r.applied, true);
   assert.ok(writes.includes('DELETE /drives/d1/items/hou/permissions/p-hr'), 'HR grant removed');
   assert.ok(!writes.some((w) => /p-hou/.test(w)), 'the Houston group itself is untouched');
   const invites = writes.filter((w) => /\/invite$/.test(w)).sort();
-  assert.deepEqual(invites, ['POST /drives/d1/items/cst/invite', 'POST /drives/d1/items/hou/invite'], 'Payroll added to Houston and College Station; Lubbock already had it');
+  assert.deepEqual(invites, ['POST /drives/d1/items/cst/invite', 'POST /drives/d1/items/cst/invite', 'POST /drives/d1/items/hou/invite', 'POST /drives/d1/items/hou/invite', 'POST /drives/d1/items/lub/invite'],
+    'Payroll added to Houston and College Station (Lubbock already had it); Safety added to College Station, Houston and Lubbock (Austin already had it)');
 });
