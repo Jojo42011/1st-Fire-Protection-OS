@@ -496,6 +496,25 @@ router.get('/api/ad-audit/directory/script', (_req, res) => {
   res.send(directoryAudit().script);
 });
 
+/** The SharePoint permission changes the IT manager asked for (HR off Houston, Payroll onto Houston,
+ *  College Station and Lubbock, two unused groups off the form). Body { apply }: without apply it is a
+ *  preview that changes nothing. Admins and IT only; every apply is audited. */
+router.post('/api/ad-audit/sp-requested-changes', async (req, res) => {
+  const { taskScope } = require('../people/taskScope');
+  const { currentContext } = require('../os/scope');
+  const ctx = currentContext(req);
+  const sc = taskScope(ctx.user);
+  if (!sc.all && !sc.offboarding.has('it')) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
+  const apply = !!(req.body && req.body.apply);
+  const { applyOct2026SpChanges, changesReportHtml } = require('../services/spPermissionChanges');
+  const r = await applyOct2026SpChanges(apply);
+  if (apply) {
+    const { osAudit, actorLabel } = require('../os/audit');
+    osAudit({ actor: actorLabel(ctx), actor_email: ctx.user?.email ?? null, module: 'access', action: 'sharepoint.requested_changes', detail: r.lines.join(' | ').slice(0, 1800) });
+  }
+  res.status(r.ok ? 200 : 400).json({ ...r, html: changesReportHtml(r) });
+});
+
 /** The current DC agent script (no secrets in it: the token comes from the DC's environment), so
  *  the copy on the domain controller can be replaced from the OS instead of from the repo. */
 router.get('/api/ad-audit/agent-script', (_req, res) => {

@@ -39,6 +39,14 @@
 
   <div class="kpis" id="kpis" style="margin-top:14px"></div>
 
+  <div class="card" id="reqBox" style="margin-top:12px;padding:14px 16px">
+    <div style="font-weight:800;font-size:14px;color:var(--ink)">Requested permission changes</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:4px 0 10px">HR off the Houston folder; Payroll onto Houston, College Station and Lubbock; 1Auto Insurance and External Extinguishers off the onboarding form. Preview changes nothing.</div>
+    <button class="os-btn" id="reqPreview">Preview</button>
+    <button class="os-btn primary" id="reqApply" disabled>Apply these changes</button>
+    <div id="reqOut" style="margin-top:12px"></div>
+  </div>
+
   <div class="card card-clip" style="margin-top:12px">
     <div class="card-head">
       <h2>Cleanup queue</h2>
@@ -160,8 +168,8 @@ function load(){
       return '<tr class="flag-row">'+
         '<td><input type="checkbox" class="flag-cb" data-group="'+esc(f.group)+'" data-upn="'+esc(m.upn)+'" onclick="updateSelCount()" /></td>'+
         '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'<div class="sub-off">'+esc(m.upn||'')+'</div></td>'+
-        '<td>'+esc(m.title||'—')+'</td>'+
-        '<td>'+esc(m.office||'—')+'</td>'+
+        '<td>'+esc(m.title||'')+'</td>'+
+        '<td>'+esc(m.office||'')+'</td>'+
         '<td><span class="chip">'+esc(f.group)+'</span></td>'+
         '<td><span class="reason">'+esc(f.reason)+'</span></td>'+
         '<td class="right"><button class="btn btn-sm" onclick="removeOne(\''+esc(f.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button></td>'+
@@ -179,8 +187,8 @@ function load(){
         return '<tr class="grp-row grp-row-'+gid+'">'+
           '<td>'+(m.upn?'<input type="checkbox" class="grp-cb grp-cb-'+gid+'" data-group="'+esc(g.group)+'" data-upn="'+esc(m.upn)+'" onclick="updateGrpSel(\''+gid+'\')" />':'')+'</td>'+
           '<td style="font-weight:600;color:var(--ink)">'+esc(m.name||m.upn)+'</td>'+
-          '<td>'+esc(m.title||'—')+'</td>'+
-          '<td>'+esc(m.office||'—')+'</td>'+
+          '<td>'+esc(m.title||'')+'</td>'+
+          '<td>'+esc(m.office||'')+'</td>'+
           '<td>'+(m.enabled===false?'<span class="tag crit">disabled</span>':(m.matched?'':'<span class="tag warn">no HR match</span>'))+(m.locationMismatch?' <span class="tag warn">off-office</span>':'')+(r?' <span class="reason">'+esc(r)+'</span>':'')+'</td>'+
           '<td class="right">'+(m.upn?'<button class="btn btn-sm" onclick="removeOne(\''+esc(g.group)+'\',\''+esc(m.upn)+'\',this)">Remove</button>':'')+'</td>'+
         '</tr>';
@@ -293,7 +301,7 @@ function dsRowHtml(x){
   var meta=JSON.stringify({driveId:x.driveId,itemId:x.itemId,permId:x.permId,who:x.grantedTo,item:x.item});
   return '<tr class="ds-row">'+
     '<td><input type="checkbox" class="ds-cb" data-drive="'+esc(x.driveId)+'" data-item="'+esc(x.itemId)+'" data-perm="'+esc(x.permId)+'" onclick="updateDsSelCount()" /></td>'+
-    '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'—')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
+    '<td style="font-weight:600;color:var(--ink)">'+esc(x.grantedTo||'')+(x.email?'<div class="sub-off">'+esc(x.email)+'</div>':'')+'</td>'+
     '<td><span class="chip">'+esc(x.roles||'?')+'</span></td>'+
     '<td>'+esc(x.item)+'<div class="sub-off">'+esc(x.path)+'</div></td>'+
     '<td>'+dsFlagTag(x.flag)+'</td>'+
@@ -672,6 +680,21 @@ function renameCloud(btn){
 }
 load();
 loadLatestScan();
+// The folder-permission changes the IT manager asked for: preview first, then apply on purpose.
+function runReq(apply){
+  var out=document.getElementById('reqOut'), ap=document.getElementById('reqApply');
+  out.textContent=apply?'Applying…':'Checking the folders…';
+  fetch('/api/ad-audit/sp-requested-changes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({apply:!!apply})})
+    .then(function(r){return r.json();}).then(function(d){
+      out.innerHTML=d.html||('<div class="note">'+((d.lines||[]).join('<br>')||d.error||'Could not run.')+'</div>');
+      ap.disabled=!!apply||!d.ok;
+    }).catch(function(){ out.textContent='Could not reach the server.'; });
+}
+document.getElementById('reqPreview').addEventListener('click',function(){ runReq(false); });
+document.getElementById('reqApply').addEventListener('click',function(){
+  if(!confirm('Apply these SharePoint permission changes now? HR loses the Houston folder and Payroll gains Houston, College Station and Lubbock.')) return;
+  runReq(true);
+});
 </script>
 </body>
 </html>

@@ -695,7 +695,7 @@ function openOwnerEmail(id,owner){
 function renderForm(){
   var o=OPTIONS||{};
   var spSeen={};
-  var sp=(o.sharepoint||[]).filter(function(g){ if(/all\s*staff|former\s*employees/i.test(g.name)) return false; var k=friendlyGroup(g.name).toLowerCase(); if(spSeen[k]) return false; spSeen[k]=1; return true; }).map(function(g){return fchk('sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':''));}).join('');
+  var sp=(o.sharepoint||[]).filter(function(g){ if(/all\s*staff|former\s*employees|1\s*auto\s*insurance|external\s*extinguishers/i.test(g.name)) return false; var k=friendlyGroup(g.name).toLowerCase(); if(spSeen[k]) return false; spSeen[k]=1; return true; }).map(function(g){return fchk('sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':''));}).join('');
   var pr=(o.printers||[]).map(function(p){return fchk('pr',p,p);}).join('');
   var sw=(o.software||[]).map(function(s){return fchk('sw',s.name,s.name+(s.kind==='approval'?' (owner approval)':''));}).join('');
   var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span class="rc"><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+

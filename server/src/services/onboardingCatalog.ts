@@ -219,7 +219,8 @@ const SP_ROUTING: Record<string, { owner: string; approval: boolean }> = {
  * abbreviation transform). Idempotent. `groups` come from Entra (the caller does the Graph read).
  */
 export function syncSharepointCatalog(groups: { id: string; name: string }[]): { added: number; retired: number; names: string[] } {
-  const sg = groups.filter((g) => /^sg-sp-/i.test(g.name));
+  // Groups retired on purpose are never offered again, even while they still exist in AD.
+  const sg = groups.filter((g) => /^sg-sp-/i.test(g.name) && !/^sg-sp-(1autoinsurance|externalextinguishers|formeremployeesonedrive)$/i.test(g.name));
   const existing = new Map(catalogByKind('sharepoint').map((c) => [c.name.toLowerCase(), c]));
   let added = 0; const names: string[] = [];
   for (const g of sg) {

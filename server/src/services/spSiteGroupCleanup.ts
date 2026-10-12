@@ -185,7 +185,7 @@ function modernToken(oldName: string): string {
   return ALIAS[k] || k;
 }
 
-async function grantGroupToItem(driveId: string, itemId: string, groupId: string, token: string, role: string): Promise<{ ok: boolean; error?: string }> {
+export async function grantGroupToItem(driveId: string, itemId: string, groupId: string, token: string, role: string): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/invite`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },

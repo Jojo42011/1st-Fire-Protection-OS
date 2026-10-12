@@ -244,7 +244,7 @@
     if (cat.sharepoint) {
       var seen = {};
       setFieldOpts('sharepoint', cat.sharepoint.filter(function (n) {
-        if (/all\s*staff|former\s*employees/i.test(n)) return false;
+        if (/all\s*staff|former\s*employees|1\s*auto\s*insurance|external\s*extinguishers/i.test(n)) return false;
         var label = friendlyGroup(n).toLowerCase();
         if (seen[label]) return false;
         seen[label] = 1; return true;
