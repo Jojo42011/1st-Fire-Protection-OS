@@ -504,7 +504,7 @@ setTimeout(() => {
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');
   const base = (process.env.PUBLIC_BASE_URL || 'https://os.1stfpservices.com').replace(/\/$/, '');
-  const flag = 'test_intake_link_v4'; // v4: old phone, friendly groups, no shake, new email look
+  const flag = 'test_intake_link_v5'; // v5: SharePoint groups another group includes are hidden
   try {
     if (getState(flag) === '1') return;
     setState(flag, '1'); // claim first so a restart mid-send never makes a second link
