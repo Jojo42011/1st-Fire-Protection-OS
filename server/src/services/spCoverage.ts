@@ -89,7 +89,8 @@ export async function refreshCoverage(site = SHARED_SITE): Promise<{ ok: boolean
 
 /* ─────────── the report: what each group opens, and what it already includes ─────────── */
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
-const nice = (n: string) => n.replace(/^sg-?sp-?/i, '').replace(/([a-z])([A-Z])/g, '$1 $2');
+const NICE: Record<string, string> = { McAllen: 'McAllen', ContractPayAppSOVLiens: 'Contract Pay Apps, SOV and Lien Waivers', '1AutoInsurance': 'Auto Insurance', OneStop: 'One Stop Code', Firecon: 'FireCon', Services: 'Services (San Antonio)', SanAntonio: 'San Antonio' };
+const nice = (n: string) => { const s = n.replace(/^sg-?sp-?/i, ''); return NICE[s] || s.replace(/([a-z])([A-Z])/g, '$1 $2'); };
 
 export function coverageReportHtml(data: CoverageData, catalogNames: string[]): string {
   const inc = includesMap(catalogNames, data);

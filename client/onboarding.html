@@ -694,7 +694,8 @@ function openOwnerEmail(id,owner){
 /* ─────────────── full onboarding request form (preserves POST /api/onboarding) ─────────────── */
 function renderForm(){
   var o=OPTIONS||{};
-  var sp=(o.sharepoint||[]).filter(function(g){return !/all\s*staff/i.test(g.name);}).map(function(g){return fchk('sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':''));}).join('');
+  var spSeen={};
+  var sp=(o.sharepoint||[]).filter(function(g){ if(/all\s*staff|former\s*employees/i.test(g.name)) return false; var k=friendlyGroup(g.name).toLowerCase(); if(spSeen[k]) return false; spSeen[k]=1; return true; }).map(function(g){return fchk('sp',g.name,friendlyGroup(g.name)+(g.kind==='approval'?' (approval)':''));}).join('');
   var pr=(o.printers||[]).map(function(p){return fchk('pr',p,p);}).join('');
   var sw=(o.software||[]).map(function(s){return fchk('sw',s.name,s.name+(s.kind==='approval'?' (owner approval)':''));}).join('');
   var radios='<label class="fradio"><input type="radio" name="computer_type" value="none" checked><span class="rc"><span class="rt">No computer</span><span class="rs">Nothing routed</span></span></label>'+
@@ -744,7 +745,7 @@ function renderForm(){
 function ffield(l,name,ph,req){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" placeholder="'+esc(ph||'')+'"'+(req?' required':'')+'></div>';}
 function ffieldDate(l,name){return '<div class="ffield"><label>'+esc(l)+'</label><input name="'+name+'" type="date"></div>';}
 // SharePoint groups carry short internal names (MGMT, ACCT); show the plain-English one. The real name is still the value.
-var GROUP_NAMES={MGMT:'Management',ACCT:'Accounting',SAFETY:'Safety',HR:'HR','Services (San Antonio)':'San Antonio',Services:'San Antonio'};
+var GROUP_NAMES={MGMT:'Management',ACCT:'Accounting',SAFETY:'Safety',HR:'HR','Services (San Antonio)':'San Antonio',Services:'San Antonio',McAllen:'McAllen',ContractPayAppSOVLiens:'Contract Pay Apps, SOV and Lien Waivers','1AutoInsurance':'Auto Insurance',OneStop:'One Stop Code',Firecon:'FireCon',FormerEmployeesOnedrive:'Former Employees OneDrive'};
 function friendlyGroup(n){ var s=String(n||'').replace(/^SG-?SP-?/i,''); if(GROUP_NAMES[s]) return GROUP_NAMES[s]; if(/^[A-Z]{4,}$/.test(s)) return s.charAt(0)+s.slice(1).toLowerCase(); return s.replace(/([a-z])([A-Z])/g,'$1 $2'); }
 // The old-phone box only applies to an AT&T company cell.
 document.addEventListener('change',function(e){ if(e.target&&e.target.name==='phone'){ var b=document.getElementById('phoneReuseBox'); if(b) b.style.display=e.target.value==='att'?'':'none'; } });

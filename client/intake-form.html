@@ -208,7 +208,7 @@
   ];
 
   // SharePoint groups carry short internal names (MGMT, ACCT); show people the plain-English one.
-  var GROUP_NAMES = { MGMT: 'Management', ACCT: 'Accounting', SAFETY: 'Safety', HR: 'HR', 'Services (San Antonio)': 'San Antonio', Services: 'San Antonio' };
+  var GROUP_NAMES = { MGMT: 'Management', ACCT: 'Accounting', SAFETY: 'Safety', HR: 'HR', 'Services (San Antonio)': 'San Antonio', Services: 'San Antonio', McAllen: 'McAllen', ContractPayAppSOVLiens: 'Contract Pay Apps, SOV and Lien Waivers', '1AutoInsurance': 'Auto Insurance', OneStop: 'One Stop Code', Firecon: 'FireCon', FormerEmployeesOnedrive: 'Former Employees OneDrive' };
   function friendlyGroup(n) {
     var s = String(n || '').replace(/^SG-?SP-?/i, '');                 // SG-SP-Accounting -> Accounting
     if (GROUP_NAMES[s]) return GROUP_NAMES[s];
@@ -238,7 +238,18 @@
   function applyCatalog(cat) {
     if (!cat) return;
     // Everyone gets All Staff automatically, so it is not a choice.
-    if (cat.sharepoint) setFieldOpts('sharepoint', cat.sharepoint.filter(function (n) { return !/all\s*staff/i.test(n); }));
+    // Not choices for a new hire: All Staff (everyone gets it automatically) and the former-employee
+    // OneDrive archive. Two groups that read the same (SG-SP-SanAntonio and SG-SP-Services open the
+    // same folder) show once.
+    if (cat.sharepoint) {
+      var seen = {};
+      setFieldOpts('sharepoint', cat.sharepoint.filter(function (n) {
+        if (/all\s*staff|former\s*employees/i.test(n)) return false;
+        var label = friendlyGroup(n).toLowerCase();
+        if (seen[label]) return false;
+        seen[label] = 1; return true;
+      }));
+    }
     if (cat.spIncludes) SP_INCLUDES = cat.spIncludes;
     if (cat.software) setFieldOpts('software', cat.software);
     if (cat.printers) setFieldOpts('printers', cat.printers);
