@@ -688,7 +688,7 @@ loadLatestScan();
 // The folder-permission changes the IT manager asked for: preview first, then apply on purpose.
 function runReq(apply){
   var out=document.getElementById('reqOut'), ap=document.getElementById('reqApply');
-  out.textContent=apply?'Applying…':'Checking the folders…';
+  out.textContent=apply?'Applying…':'Checking the folders and group members. This takes up to a minute…';
   fetch('/api/ad-audit/sp-requested-changes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({apply:!!apply,keep:document.getElementById('reqKeep').value})})
     .then(function(r){return r.json();}).then(function(d){
       out.innerHTML=d.html||('<div class="note">'+((d.lines||[]).join('<br>')||d.error||'Could not run.')+'</div>');
