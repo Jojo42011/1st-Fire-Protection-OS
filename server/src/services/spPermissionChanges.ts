@@ -42,8 +42,8 @@ async function members(groupId: string, token: string): Promise<{ name: string; 
 export type KeepGroup = 'services' | 'sanantonio';
 const KEEP_NAME: Record<KeepGroup, string> = { services: 'SG-SP-Services', sanantonio: 'SG-SP-SanAntonio' };
 
-export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE, keep: KeepGroup = 'services'): Promise<{ ok: boolean; applied: boolean; keep: string; retire: string; lines: string[]; servicesOnly: { name: string; upn: string }[] }> {
-  const keepName = KEEP_NAME[keep] || KEEP_NAME.services;
+export async function applyOct2026SpChanges(apply: boolean, site = SHARED_SITE, keep: KeepGroup = 'sanantonio'): Promise<{ ok: boolean; applied: boolean; keep: string; retire: string; lines: string[]; servicesOnly: { name: string; upn: string }[] }> {
+  const keepName = KEEP_NAME[keep] || KEEP_NAME.sanantonio;
   const retireName = keepName === KEEP_NAME.services ? KEEP_NAME.sanantonio : KEEP_NAME.services;
   const lines: string[] = [];
   const token = await graphToken();

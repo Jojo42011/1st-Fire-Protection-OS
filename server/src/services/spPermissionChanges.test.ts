@@ -34,7 +34,7 @@ let writes: string[] = [];
 
 test('preview changes nothing and says what it would do', async () => {
   writes = [];
-  const r = await applyOct2026SpChanges(false, 'https://1stfp.sharepoint.com/sites/Shared/');
+  const r = await applyOct2026SpChanges(false, 'https://1stfp.sharepoint.com/sites/Shared/', 'services');
   assert.equal(r.ok, true);
   assert.deepEqual(writes, [], 'no writes in a preview');
   assert.ok(r.lines.some((l) => /HR: would be removed from 1st FP Houston/.test(l)));

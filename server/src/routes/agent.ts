@@ -507,7 +507,7 @@ router.post('/api/ad-audit/sp-requested-changes', async (req, res) => {
   if (!sc.all && !sc.offboarding.has('it')) return res.status(403).json({ ok: false, error: 'IT or an admin only.' });
   const apply = !!(req.body && req.body.apply);
   const { applyOct2026SpChanges, changesReportHtml } = require('../services/spPermissionChanges');
-  const keep = req.body && req.body.keep === 'sanantonio' ? 'sanantonio' : 'services';
+  const keep = req.body && req.body.keep === 'services' ? 'services' : 'sanantonio'; // keep SanAntonio by default
   const r = await applyOct2026SpChanges(apply, undefined, keep);
   if (apply) {
     const { osAudit, actorLabel } = require('../os/audit');
