@@ -14,7 +14,7 @@ import {
   parseWorkbook, importWorkbook, listLines, updateLine, addLineEvent, lineDetail, teamsAudit, setPlanCost, linesCsv,
 } from './mobileFleet';
 import { isVoicePlan, parseTeamsActivity, activityRange } from './teamsVoice';
-import { abmClientAssertion, mapAddigyItem, abmDeviceRow, abmImeis } from './appleDevices';
+import { abmClientAssertion, mapAddigyItem, abmDeviceRow, abmImeis, normalizePem } from './appleDevices';
 import { executiveReport, setTeamsVoiceCost, DEFAULT_TEAMS_VOICE_COST } from './mobileReport';
 
 initDb();
@@ -311,4 +311,30 @@ test('Apple Business rows keep every IMEI and lines match on either one', () => 
   assert.ok(f('2102400187').includes('not_in_abm'));
   db.prepare(`UPDATE apple_devices SET abm_status = 'ASSIGNED' WHERE serial = 'ABC123'`).run();
   assert.ok(!listLines().lines.find((l) => l.number === '2102400023')!.flags.some((x: any) => x.key === 'abm_unassigned'));
+});
+
+test('the Apple Business private key works however it was pasted into the secret', () => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const sec1 = privateKey.export({ type: 'sec1', format: 'pem' }).toString();
+  const oneLine = pem.replace(/\n/g, '');
+  const variants: Record<string, string> = {
+    'as downloaded': pem,
+    'newlines written as \n': pem.replace(/\n/g, '\n'),
+    'newlines written as \\n': pem.replace(/\n/g, '\\n'),
+    'Windows line endings': pem.replace(/\n/g, '\r\n'),
+    'all on one line': oneLine,
+    'wrapped in quotes': `"${pem.trim()}"`,
+    'whole file base64-encoded': Buffer.from(pem).toString('base64'),
+    'EC (SEC1) key format': sec1.replace(/\n/g, '\n'),
+  };
+  for (const [name, raw] of Object.entries(variants)) {
+    const jwt = abmClientAssertion({ clientId: 'BUSINESSAPI.abc', keyId: 'K', privateKeyPem: raw });
+    const [h, p, s] = jwt.split('.');
+    const ok = crypto.verify('sha256', Buffer.from(`${h}.${p}`), { key: publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64'));
+    assert.equal(ok, true, name);
+  }
+  assert.ok(normalizePem(oneLine).split('\n').length > 3);
+  // A wrong value fails with a clear message that names the secret, never echoing the key.
+  assert.throws(() => abmClientAssertion({ clientId: 'x', keyId: 'K', privateKeyPem: 'not a key' }), (e: Error) => /ABM_PRIVATE_KEY/.test(e.message) && !/not a key/.test(e.message));
 });

@@ -96,13 +96,40 @@ export async function syncAddigy(): Promise<{ ok: boolean; message: string; devi
 
 const b64url = (b: Buffer | string) => Buffer.from(b).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+/**
+ * The private key as stored in a secret often arrives altered: newlines written as "\n" (or "\\n"),
+ * Windows line endings, wrapping quotes, the whole key on one line, or the file base64-encoded.
+ * Rebuild a standard PEM from any of those. Never logs or returns the key in an error.
+ */
+export function normalizePem(raw: string): string {
+  let s = String(raw || '').trim().replace(/^["']+|["']+$/g, '');
+  s = s.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\r/g, '');
+  if (!s.includes('-----BEGIN')) {
+    const decoded = Buffer.from(s.replace(/\s+/g, ''), 'base64').toString('utf8');
+    if (decoded.includes('-----BEGIN')) s = decoded.trim().replace(/\r/g, '');
+  }
+  const m = s.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
+  if (!m) return s;
+  const body = m[2].replace(/\s+/g, '');
+  return `-----BEGIN ${m[1]}-----\n${(body.match(/.{1,64}/g) || []).join('\n')}\n-----END ${m[1]}-----\n`;
+}
+
+/** Load the Apple Business private key, with a plain-language error that names the secret (not its value). */
+export function abmPrivateKey(raw: string): crypto.KeyObject {
+  try {
+    return crypto.createPrivateKey(normalizePem(raw));
+  } catch {
+    throw new Error('The Apple Business private key in ABM_PRIVATE_KEY could not be read. Set it again from the .pem file Apple Business gave you.');
+  }
+}
+
 /** The ES256 client assertion Apple exchanges for an access token. Exported for tests. */
 export function abmClientAssertion(opts: { clientId: string; keyId: string; teamId?: string; privateKeyPem: string; now?: number }): string {
   const now = Math.floor((opts.now ?? Date.now()) / 1000);
   const header = { alg: 'ES256', kid: opts.keyId, typ: 'JWT' };
   const payload = { iss: opts.teamId || opts.clientId, sub: opts.clientId, aud: ABM_AUDIENCE, iat: now - 30, exp: now + 600, jti: crypto.randomUUID() };
   const input = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(payload))}`;
-  const sig = crypto.sign('sha256', Buffer.from(input), { key: opts.privateKeyPem, dsaEncoding: 'ieee-p1363' });
+  const sig = crypto.sign('sha256', Buffer.from(input), { key: abmPrivateKey(opts.privateKeyPem), dsaEncoding: 'ieee-p1363' });
   return `${input}.${b64url(sig)}`;
 }
 

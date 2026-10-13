@@ -320,7 +320,8 @@
   /* ---------- toast: bottom-centre, ink bg, green check, auto-dismiss ----------
      Copy should always name the outcome (and where it routed), never just "Saved". */
   var toastTimer=null;
-  OS.toast = function(msg, opts){ opts=opts||{};
+  // opts is {tone:'bad'} or just the tone string ('bad'); pages use both forms.
+  OS.toast = function(msg, opts){ opts=(typeof opts==='string')?{tone:opts}:(opts||{});
     var host=document.getElementById('os-toast-host');
     if(!host){ host=document.createElement('div'); host.id='os-toast-host'; document.body.appendChild(host); }
     host.innerHTML='<div class="os-toast'+(opts.tone==='bad'?' bad':'')+'" role="status">'+
