@@ -25,6 +25,12 @@
   .selbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap}
   .muted{color:var(--muted)} .empty{color:var(--muted);font-size:13px;padding:22px}
   .scriptbox textarea{width:100%;height:300px;font-family:var(--mono);font-size:11.5px;white-space:pre;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px}
+  details.donewrap{margin-top:12px;border:1px solid var(--border-card,var(--border));border-radius:14px;background:var(--panel);overflow:hidden}
+  details.donewrap > summary{list-style:none;cursor:pointer;padding:14px 18px;font-weight:700;font-size:14px;color:var(--ink);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  details.donewrap > summary::-webkit-details-marker{display:none}
+  details.donewrap > summary .hint{font-weight:500;font-size:12px;color:var(--muted)}
+  details.donewrap > summary:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+  details.donewrap .os-tablewrap{margin:0 12px 12px}
 </style>
 <script src="/os.js" defer></script>
 </head>
@@ -49,6 +55,7 @@ function esc(t){return OS.esc(t);}
 var SEV={critical:'bad',high:'bad',medium:'warn'};
 var STAGE={s1:'Day 0 · lock down',s2:'Stop paying',s3:'Cut the forward',s4:'Retire'};
 var TAB='board', OPEN=null, POLICY={forwardDays:90,retainDays:180};
+var DONE_OPEN=false; // the folded Completed section, kept open across reloads once opened
 var DEPT='', CAN_ALL=false; // department filter (admins can see all and narrow by dept)
 var DEPTS=[['','All teams'],['it','IT'],['it_physical','IT manager'],['hr','HR'],['accounting','Accounting'],['safety','Safety'],['servicetrade','ServiceTrade'],['manager','Manager']];
 function ownerQS(){return DEPT?('?dept='+encodeURIComponent(DEPT)):'';}
@@ -84,15 +91,19 @@ function loadBoard(){
     CAN_ALL=!!(d.viewer&&d.viewer.canSeeAll); var V=d.viewer||{};
     var bl=document.querySelector('#headActions [data-tab="backlog"]'); if(bl) bl.style.display=(CAN_ALL||(V.teams||[]).indexOf('IT')>=0)?'':'none'; // IT and admin tool
     var reqs=d.requests||[];
-    var rows=reqs.map(function(r){var ru=r.rollup||{};
-      var st=r.status==='complete'?OS.pill('Complete','good'):r.status==='cancelled'?OS.pill('Cancelled','neutral'):OS.pill('In progress','warn');
+    // Finished (complete or cancelled, or for a team view nothing left for that team) fold away.
+    var mine=function(r){var ru=r.rollup||{};return r.status==='open'&&ru.total>0&&ru.pending===0;};
+    var isDone=function(r){return r.status==='complete'||r.status==='cancelled'||mine(r);};
+    var rowHtml=function(r){var ru=r.rollup||{};
+      var st=r.status==='complete'?OS.pill('Complete','good'):r.status==='cancelled'?OS.pill('Cancelled','neutral'):mine(r)?OS.pill('Your part done','good'):OS.pill('In progress','warn');
       var pct=ru.total?Math.round(ru.done/ru.total*100):0;
       return '<tr class="rowlink click" data-id="'+r.id+'"><td><div class="who">'+esc(r.name)+(r.no_directory?'<span class="ob-tag">no AD or email</span>':'')+(r.source==='bamboo'?'<span class="ob-tag">from BambooHR</span>':r.source==='backlog'?'<span class="ob-tag">backlog</span>':'')+'</div><div class="sub2">'+esc(r.upn||r.office||'')+'</div></td>'+
         '<td><div style="display:flex;align-items:center;gap:9px"><span class="pbar'+(pct>=100?' done':'')+'"><span style="width:'+pct+'%"></span></span><span class="sub2" style="white-space:nowrap">'+ru.done+' of '+ru.total+'</span></div></td>'+
         '<td>'+st+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'')+'</td>'+
         '<td>'+esc(OS.date?OS.date(r.forward_until):r.forward_until||'')+'</td>'+
         '<td>'+esc(OS.date?OS.date(r.retain_until):r.retain_until||'')+'</td></tr>';
-    }).join('');
+    };
+    var openReqs=reqs.filter(function(r){return !isDone(r);}), doneReqs=reqs.filter(isDone);
     var open=reqs.filter(function(r){return r.status==='open';});
     var appr=reqs.reduce(function(n,r){return n+((r.rollup&&r.rollup.pendingApprovals)||0);},0);
     var steps=open.reduce(function(n,r){return n+((r.rollup&&r.rollup.pending)||0);},0);
@@ -103,16 +114,19 @@ function loadBoard(){
       {label:'Approvals waiting',value:appr,format:'count',drillable:false,sub:'account and mailbox deletes'},
       {label:'Completed',value:done,format:'count',drillable:false,sub:'fully offboarded'}
     ]);
-    var table=reqs.length?'<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Person</th><th>Progress</th><th>Status</th><th>Mail forwards until</th><th>Account retires</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-      :(!CAN_ALL&&!V.signedIn)?'':OS.empty(CAN_ALL?'No one is being offboarded. Start one, or run the backlog sweep.':'Nothing for your team right now.','✓');
+    var tbl=function(list){return '<div class="os-tablewrap"><table class="os-table"><thead><tr><th>Person</th><th>Progress</th><th>Status</th><th>Mail forwards until</th><th>Account retires</th></tr></thead><tbody>'+list.map(rowHtml).join('')+'</tbody></table></div>';};
+    var table=!reqs.length?((!CAN_ALL&&!V.signedIn)?'':OS.empty(CAN_ALL?'No one is being offboarded. Start one, or run the backlog sweep.':'Nothing for your team right now.','✓'))
+      :(openReqs.length?tbl(openReqs):OS.empty(CAN_ALL?'No one is being offboarded right now.':'Nothing open for your team right now.','✓'))+
+       (doneReqs.length?'<details class="donewrap" id="doneWrap"'+(DONE_OPEN?' open':'')+'><summary><span>Completed <span class="hint">'+doneReqs.length+'</span></span><span class="hint" id="doneHint">'+(DONE_OPEN?'Hide':'Show')+'</span></summary>'+tbl(doneReqs)+'</details>':'');
     var chips = CAN_ALL
       ? '<div class="os-chips">'+DEPTS.map(function(d2){return '<button class="os-chip'+(d2[0]===DEPT?' on':'')+'" data-dept="'+d2[0]+'">'+esc(d2[0]?d2[1]:'All teams')+'</button>';}).join('')+'</div>'
       : !V.signedIn ? '<div class="banner warn">Sign in with your Microsoft account to see your team\'s offboarding steps. The shared office password does not show tasks.</div>'
       : !(V.teams||[]).length ? '<div class="banner warn">Your account has no team in Access &amp; Roles, so no steps are shown. Ask a People admin to add one.</div>'
       : '<div class="note-line" style="margin:0 0 10px">Showing steps for <b>'+esc(V.teams.join(', '))+'</b> only.</div>';
-    document.getElementById('view').innerHTML=strip+'<div class="sec-h"><h2>People leaving<span class="n">'+open.length+'</span></h2><span class="aside">Click someone to see their checklist</span></div>'+chips+table+
+    document.getElementById('view').innerHTML=strip+'<div class="sec-h"><h2>People leaving<span class="n">'+openReqs.length+'</span></h2><span class="aside">Click someone to see their checklist</span></div>'+chips+table+
       '<div class="note-line policy">Mail forwards for <b>'+POLICY.forwardDays+' days</b>, then the account retires after <b>'+POLICY.retainDays+' days</b>. <button class="linkbtn" id="editPolicy">Change</button></div><div id="cloudPerm"></div>';
     document.querySelectorAll('.rowlink').forEach(function(tr){tr.addEventListener('click',function(){openReq(Number(tr.getAttribute('data-id')));});});
+    var dw=document.getElementById('doneWrap'); if(dw) dw.addEventListener('toggle',function(){DONE_OPEN=dw.open;document.getElementById('doneHint').textContent=dw.open?'Hide':'Show';});
     document.getElementById('editPolicy').addEventListener('click',function(e){e.preventDefault();editPolicy();});
     document.querySelectorAll('[data-dept]').forEach(function(b){b.addEventListener('click',function(){DEPT=b.getAttribute('data-dept');OPEN=null;loadBoard();});});
     loadCloudPerm();
