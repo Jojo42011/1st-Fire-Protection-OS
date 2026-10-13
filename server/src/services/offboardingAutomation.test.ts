@@ -65,3 +65,18 @@ test('not before the last day, and a failure is retried at most once a day', asy
   const st = (db.prepare(`SELECT status FROM offboarding_items WHERE request_id = ? AND action_code = 'data_reassign'`).get(request.id) as any).status;
   assert.equal(st, 'done');
 });
+
+test('Run now skips the wait after a failure, and lists who is still before their last day', async () => {
+  db.exec(`DELETE FROM offboarding_items; DELETE FROM offboarding_requests;`);
+  createOffboarding({ name: 'Past Leaver', upn: 'past@1stfpservices.com', manager_email: 'boss@1stfpservices.com', termination_date: '2026-10-01' });
+  createOffboarding({ name: 'Later Leaver', upn: 'later@1stfpservices.com', manager_email: 'boss@1stfpservices.com', termination_date: '2026-11-15' });
+  driveStatus = 404;
+  const fail = await autoReassignOneDrive(new Date('2026-10-13T15:00:00Z'));
+  assert.equal(fail.failed, 1);
+  assert.equal(fail.failures![0].name, 'Past Leaver');
+  driveStatus = 200;
+  assert.equal((await autoReassignOneDrive(new Date('2026-10-13T16:00:00Z'))).done, 0, 'the hourly job waits a day');
+  const now = await autoReassignOneDrive(new Date('2026-10-13T16:00:00Z'), { force: true });
+  assert.deepEqual(now.handed, ['Past Leaver'], 'Run now does not wait');
+  assert.deepEqual(now.waiting, [{ name: 'Later Leaver', lastDay: '2026-11-15' }], 'not before their last day');
+});

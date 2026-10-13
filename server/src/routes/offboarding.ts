@@ -138,6 +138,16 @@ router.post('/api/offboarding/items/:id(\\d+)/run-in-cloud', async (req, res) =>
   res.json({ ok: true, item: updated, detail: result.detail || cloudActionLabel(item.action_code), already: result.already });
 });
 
+/** Run the OneDrive handover now for everyone whose last day has arrived (the hourly job, without
+ *  its once-a-day wait after a failure). People still before their last day are listed, not touched. */
+router.post('/api/offboarding/onedrive-handover/run', async (req, res) => {
+  if (!canRunCloud(req)) return res.status(403).json({ ok: false, error: 'only IT or an admin can run cloud offboarding actions' });
+  const { autoReassignOneDrive } = require('../services/offboardingAutomation');
+  const out = await autoReassignOneDrive(new Date(), { force: true });
+  if (out.skipped) return res.status(400).json({ ok: false, error: out.skipped });
+  res.json({ ok: true, ...out });
+});
+
 /** Send one department its still-open tasks as a single digest email to its shared mailbox. */
 router.post('/api/offboarding/:id(\\d+)/email-department', async (req, res) => {
   const dept = String(req.body?.dept || '').trim();

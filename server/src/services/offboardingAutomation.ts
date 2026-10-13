@@ -40,7 +40,14 @@ export function managerHandoverHtml(r: { name: string; retain_until?: string | n
 </div>`;
 }
 
-export async function autoReassignOneDrive(now = new Date()): Promise<{ done: number; failed: number; skipped?: string }> {
+export interface HandoverRun { done: number; failed: number; skipped?: string; handed?: string[]; failures?: { name: string; error: string }[]; waiting?: { name: string; lastDay: string }[] }
+
+/**
+ * Hand each leaver's OneDrive to their manager once their last day arrives (hourly, from the
+ * scheduler). After a failure it waits a day before trying again; `force` (Run now) skips that wait.
+ * The result also lists who is still waiting for their last day.
+ */
+export async function autoReassignOneDrive(now = new Date(), opts: { force?: boolean } = {}): Promise<HandoverRun> {
   if (!graphOffboardConfigured()) return { done: 0, failed: 0, skipped: 'Microsoft Graph is not connected' };
   const today = todayCT(now);
   const rows = getDb().prepare(
@@ -51,9 +58,10 @@ export async function autoReassignOneDrive(now = new Date()): Promise<{ done: nu
         AND (i.due_at IS NULL OR substr(i.due_at, 1, 10) <= ?)`
   ).all(today) as any[];
   let done = 0, failed = 0;
+  const handed: string[] = [], failures: { name: string; error: string }[] = [];
   for (const r of rows) {
     const tried = `offb_auto_onedrive:${r.id}`;
-    if (getState(tried) === today) continue; // one attempt a day after a failure
+    if (!opts.force && getState(tried) === today) continue; // one attempt a day after a failure
     const to = String(r.forward_to || r.manager_email || '').trim();
     const out = await runCloudAction('data_reassign', r);
     osAudit({
@@ -62,13 +70,20 @@ export async function autoReassignOneDrive(now = new Date()): Promise<{ done: nu
       subject_type: 'offboarding_item', subject_id: r.id,
       detail: `${r.name}: ${out.ok ? out.detail || 'OneDrive access granted' : out.error || 'failed'}`,
     });
-    if (!out.ok) { setState(tried, today); failed++; continue; }
+    if (!out.ok) { setState(tried, today); failed++; failures.push({ name: r.name, error: out.error || 'failed' }); continue; }
     completeItemByScript(r.id);
     getDb().prepare(`UPDATE offboarding_items SET decided_by = 'automation' WHERE id = ?`).run(r.id);
-    done++;
+    done++; handed.push(r.name);
     if (to && mailCredsPresent()) {
       await sendMail(to, `You have access to ${r.name}'s OneDrive`, managerHandoverHtml(r, out.url || null), { from: offboardingFrom(), fromName: '1st FP Offboarding' }).catch(() => undefined);
     }
   }
-  return { done, failed };
+  const waiting = (getDb().prepare(
+    `SELECT r.name, substr(i.due_at, 1, 10) AS lastDay
+       FROM offboarding_items i JOIN offboarding_requests r ON r.id = i.request_id
+      WHERE i.action_code = 'data_reassign' AND i.status = 'pending'
+        AND (r.status IS NULL OR r.status = 'open') AND substr(i.due_at, 1, 10) > ?
+      ORDER BY i.due_at`
+  ).all(today) as { name: string; lastDay: string }[]);
+  return { done, failed, handed, failures, waiting };
 }

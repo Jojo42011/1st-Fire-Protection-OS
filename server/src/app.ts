@@ -500,6 +500,20 @@ setTimeout(() => {
       }).catch(() => setState(flag, '0'));
   } catch (e) { console.warn('[onboarding] example IT support email error:', (e as Error).message); }
 }, 1000 * 55).unref();
+// One-time OneDrive handover rerun the IT manager asked for (Oct 2026): the first runs failed on a
+// Graph limit that is now fixed, and a failure waits a day before retrying. Hands over now for
+// everyone past their last day; people still before it are left for the hourly job.
+setTimeout(() => {
+  const { getState, setState } = require('./db/schema');
+  const flag = 'onedrive_handover_rerun_v1';
+  try {
+    if (getState(flag) === '1') return;
+    setState(flag, '1');
+    require('./services/offboardingAutomation').autoReassignOneDrive(new Date(), { force: true })
+      .then((r: { done: number; failed: number; skipped?: string }) => console.log(`[offboarding] OneDrive handover rerun: ${r.skipped || `${r.done} done, ${r.failed} failed`}`))
+      .catch((e: Error) => console.warn('[offboarding] OneDrive handover rerun error:', e.message));
+  } catch (e) { console.warn('[offboarding] OneDrive handover rerun error:', (e as Error).message); }
+}, 1000 * 40).unref();
 // One-time test intake link for the IT manager: the full manager form, but submitting creates nothing.
 setTimeout(() => {
   const { getState, setState } = require('./db/schema');

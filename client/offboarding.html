@@ -124,10 +124,13 @@ function loadBoard(){
       : !(V.teams||[]).length ? '<div class="banner warn">Your account has no team in Access &amp; Roles, so no steps are shown. Ask a People admin to add one.</div>'
       : '<div class="note-line" style="margin:0 0 10px">Showing steps for <b>'+esc(V.teams.join(', '))+'</b> only.</div>';
     document.getElementById('view').innerHTML=strip+'<div class="sec-h"><h2>People leaving<span class="n">'+openReqs.length+'</span></h2><span class="aside">Click someone to see their checklist</span></div>'+chips+table+
-      '<div class="note-line policy">Mail forwards for <b>'+POLICY.forwardDays+' days</b>, then the account retires after <b>'+POLICY.retainDays+' days</b>. <button class="linkbtn" id="editPolicy">Change</button></div><div id="cloudPerm"></div>';
+      '<div class="note-line policy">Mail forwards for <b>'+POLICY.forwardDays+' days</b>, then the account retires after <b>'+POLICY.retainDays+' days</b>. <button class="linkbtn" id="editPolicy">Change</button></div>'+
+      (CAN_ALL||(V.teams||[]).indexOf('IT')>=0?'<div class="note-line policy">OneDrive goes to the manager automatically after each person\'s last day, and they get the link by email. <button class="linkbtn" id="runHandover">Run it now</button></div>':'')+
+      '<div id="cloudPerm"></div>';
     document.querySelectorAll('.rowlink').forEach(function(tr){tr.addEventListener('click',function(){openReq(Number(tr.getAttribute('data-id')));});});
     var dw=document.getElementById('doneWrap'); if(dw) dw.addEventListener('toggle',function(){DONE_OPEN=dw.open;document.getElementById('doneHint').textContent=dw.open?'Hide':'Show';});
     document.getElementById('editPolicy').addEventListener('click',function(e){e.preventDefault();editPolicy();});
+    var rh=document.getElementById('runHandover'); if(rh) rh.addEventListener('click',function(e){e.preventDefault();runHandover(rh);});
     document.querySelectorAll('[data-dept]').forEach(function(b){b.addEventListener('click',function(){DEPT=b.getAttribute('data-dept');OPEN=null;loadBoard();});});
     loadCloudPerm();
   });
@@ -143,6 +146,19 @@ function loadCloudPerm(){
     if(d.allPresent){el.innerHTML=box('#eaf6ee','#bfe3cb','#1a7f37','&#10003; <b>Cloud offboarding ready.</b> The connected app has all required Microsoft 365 permissions. "Run in cloud" works with no PowerShell.');return;}
     el.innerHTML=box('#fdf3e3','#f0dcb4','#8a5a12','&#9888; <b>Cloud offboarding: missing '+d.missing.length+' permission'+(d.missing.length===1?'':'s')+'.</b> Add these to the app registration and grant admin consent: <b>'+d.missing.map(esc).join(', ')+'</b>. Steps whose permission is already present still work.');
   }).catch(function(){});
+}
+// Hand over the OneDrive now for everyone past their last day (skips the job's wait after a failure).
+function runHandover(btn){
+  btn.disabled=true; btn.textContent='Running…';
+  fetch('/api/offboarding/onedrive-handover/run',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(function(r){return r.json();}).then(function(d){
+    btn.disabled=false; btn.textContent='Run it now';
+    if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not run the OneDrive handover.','bad'); return; }
+    var msg=d.done?('OneDrive handed over for '+d.handed.join(', ')+'. Their managers were emailed the link.'):'No one past their last day was waiting for a OneDrive handover.';
+    if(d.waiting&&d.waiting.length) msg+=' Waiting for their last day: '+d.waiting.map(function(w){return w.name+' ('+(OS.date?OS.date(w.lastDay):w.lastDay)+')';}).join(', ')+'.';
+    OS.toast(msg,{ms:9000});
+    if(d.failed) setTimeout(function(){ OS.toast('Failed for '+d.failures.map(function(f){return f.name+': '+f.error;}).join('; '),{tone:'bad',ms:12000}); },1500);
+    loadBoard();
+  }).catch(function(){ btn.disabled=false; btn.textContent='Run it now'; OS.toast('Could not reach the server.','bad'); });
 }
 function editPolicy(){
   var p=document.querySelector('.policy');
