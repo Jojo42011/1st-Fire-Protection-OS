@@ -270,7 +270,15 @@ export async function setForwarding(upn: string, fwd: string): Promise<StepResul
   }
 }
 
-/** Grant the manager write access to the departing user's OneDrive root (the SharePoint delegation). */
+/**
+ * Grant the manager write access to the departing user's OneDrive (the SharePoint delegation).
+ *
+ * Graph refuses to share the root of a OneDrive ("Sharing or permission updating on the default
+ * document library is not supported in OneDrive"), so each item at the top of it (every folder and
+ * file) is shared instead. Folders carry their contents, so the manager can open everything, and the
+ * items show under the OneDrive link and in their "Shared with me". Sharing an item twice is harmless,
+ * so a retry after a partial failure is safe.
+ */
 export async function delegateOneDrive(upn: string, managerUpn: string): Promise<StepResult> {
   if (!graphOffboardConfigured()) return { ok: false, error: 'Microsoft Graph is not connected' };
   if (!upn) return { ok: false, error: 'no UPN on file for this person' };
@@ -280,31 +288,63 @@ export async function delegateOneDrive(upn: string, managerUpn: string): Promise
     if (!token) return { ok: false, error: 'could not acquire a Graph token' };
     const id = await resolveUserId(token, upn);
     if (!id) return { ok: false, error: `no directory user for ${upn}` };
+    const auth = { authorization: `Bearer ${token}` };
 
     // Confirm the user has a provisioned OneDrive first (a clearer message than a raw 404 on invite).
-    const drive = await fetch(`${GRAPH}/users/${id}/drive?$select=id,webUrl`, { headers: { authorization: `Bearer ${token}` } });
+    const drive = await fetch(`${GRAPH}/users/${id}/drive?$select=id,webUrl`, { headers: auth });
     if (!drive.ok) {
       if (drive.status === 401 || drive.status === 403) return { ok: false, error: accessDenied('Files.ReadWrite.All') };
       if (drive.status === 404) return { ok: false, error: 'this user has no provisioned OneDrive to delegate' };
       return { ok: false, error: `graph drive ${drive.status}: ${(await drive.text()).slice(0, 200)}` };
     }
-    const res = await fetch(`${GRAPH}/users/${id}/drive/root/invite`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        recipients: [{ email: managerUpn }],
-        roles: ['write'],
-        requireSignIn: true,
-        sendInvitation: false,
-        message: 'Access to a departing team member\'s OneDrive for handover.',
-      }),
-    });
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) return { ok: false, error: accessDenied('Files.ReadWrite.All') };
-      return { ok: false, error: `graph drive invite ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    const dj = (await drive.json().catch(() => ({}))) as { id?: string; webUrl?: string };
+    const driveId = dj.id;
+    const webUrl = dj.webUrl || null;
+    if (!driveId) return { ok: false, error: 'the OneDrive did not report an id' };
+
+    // Everything at the top of the OneDrive.
+    const items: { id: string; name: string }[] = [];
+    let next: string | null = `${GRAPH}/drives/${driveId}/root/children?$select=id,name&$top=200`;
+    while (next) {
+      // eslint-disable-next-line no-await-in-loop
+      const r: Response = await fetch(next, { headers: auth });
+      if (!r.ok) {
+        if (r.status === 401 || r.status === 403) return { ok: false, error: accessDenied('Files.ReadWrite.All') };
+        return { ok: false, error: `graph drive children ${r.status}: ${(await r.text()).slice(0, 200)}` };
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const j: any = await r.json();
+      for (const it of j.value || []) if (it && it.id) items.push({ id: it.id, name: it.name || '' });
+      next = j['@odata.nextLink'] || null;
     }
-    const webUrl = ((await drive.json().catch(() => ({}))) as { webUrl?: string }).webUrl || null;
-    return { ok: true, detail: `Granted ${managerUpn} write access to the OneDrive.`, url: webUrl };
+    if (!items.length) return { ok: true, detail: 'Their OneDrive is empty, so there is nothing to share.', url: webUrl };
+
+    const invite = async (it: { id: string; name: string }): Promise<string | null> => {
+      const res = await fetch(`${GRAPH}/drives/${driveId}/items/${it.id}/invite`, {
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          recipients: [{ email: managerUpn }],
+          roles: ['write'],
+          requireSignIn: true,
+          sendInvitation: false,
+          message: 'Access to a departing team member\'s OneDrive for handover.',
+        }),
+      });
+      if (res.ok) return null;
+      if (res.status === 401 || res.status === 403) return accessDenied('Files.ReadWrite.All');
+      return `${it.name}: ${res.status} ${(await res.text()).slice(0, 160)}`;
+    };
+    // A few at a time, so a large OneDrive does not trip Graph throttling.
+    const errors: string[] = [];
+    for (let i = 0; i < items.length; i += 4) {
+      // eslint-disable-next-line no-await-in-loop
+      const out = await Promise.all(items.slice(i, i + 4).map(invite));
+      for (const e of out) if (e) errors.push(e);
+    }
+    const shared = items.length - errors.length;
+    if (errors.length) return { ok: false, error: `Shared ${shared} of ${items.length} OneDrive items with ${managerUpn}; ${errors.length} failed (running it again retries them). First error: ${errors[0]}` };
+    return { ok: true, detail: `Granted ${managerUpn} edit access to everything in the OneDrive (${items.length} folder${items.length === 1 ? '' : 's'} and file${items.length === 1 ? '' : 's'} at the top level).`, url: webUrl };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
