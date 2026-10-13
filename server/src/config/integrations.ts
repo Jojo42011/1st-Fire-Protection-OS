@@ -85,7 +85,7 @@ const CATALOG: IntegrationDef[] = [
   },
   {
     id: 'apple_business_manager',
-    name: 'Apple Business Manager',
+    name: 'Apple Business',
     category: 'Devices',
     why: 'The list of Apple devices the company owns and which MDM each is assigned to, matched to AT&T lines by serial and IMEI.',
     baseline: 'available',

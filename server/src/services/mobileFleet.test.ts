@@ -8,13 +8,13 @@ process.env.DB_PATH = path.join(os.tmpdir(), `os-mobile-test-${process.pid}.db`)
 process.env.OS_REQUIRE_IDENTITY = '0';
 
 import { getDb } from '../db/index';
-import { initDb } from '../db/schema';
+import { initDb, setState } from '../db/schema';
 import {
   normNumber, normPersonName, normDate, unsupportedModel, installmentRemaining, parseAttReport, importAttReport,
   parseWorkbook, importWorkbook, listLines, updateLine, addLineEvent, lineDetail, teamsAudit, setPlanCost, linesCsv,
 } from './mobileFleet';
 import { isVoicePlan, parseTeamsActivity, activityRange } from './teamsVoice';
-import { abmClientAssertion, mapAddigyItem } from './appleDevices';
+import { abmClientAssertion, mapAddigyItem, abmDeviceRow, abmImeis } from './appleDevices';
 import { executiveReport, setTeamsVoiceCost, DEFAULT_TEAMS_VOICE_COST } from './mobileReport';
 
 initDb();
@@ -292,4 +292,23 @@ test('Addigy items map by fact identifier', () => {
   assert.equal(d!.model, 'iPhone 16e');
   assert.equal(d!.lastOnline, '2026-10-01T00:00:00Z');
   assert.equal(mapAddigyItem({ facts: {} }), null);
+});
+
+test('Apple Business rows keep every IMEI and lines match on either one', () => {
+  assert.equal(abmImeis(['35 1418 4947 75801', '359999999999999']), '351418494775801,359999999999999');
+  assert.equal(abmImeis(null), null);
+  const row = abmDeviceRow({ id: 'abc123', attributes: { serialNumber: 'abc123', imei: ['359999999999999', '351418494775801'], status: 'UNASSIGNED', deviceModel: 'iPhone 16e' } }, new Map());
+  assert.equal(row.serial, 'ABC123');
+  assert.equal(row.imei, '359999999999999,351418494775801');
+  db.prepare(`INSERT INTO apple_devices (serial, imei, model, in_abm, abm_status) VALUES ('ABC123', '359999999999999,351418494775801', 'iPhone 16e', 1, 'UNASSIGNED')`).run();
+  setState('mobile.abm_synced_at', new Date().toISOString());
+  const { lines } = listLines();
+  const f = (n: string) => lines.find((l) => l.number === n)!.flags.map((x: any) => x.key);
+  // Matched on its second IMEI: in Apple Business, but not assigned to management.
+  assert.ok(f('2102400023').includes('abm_unassigned'));
+  assert.ok(!f('2102400023').includes('not_in_abm'));
+  // An Apple device Apple Business has never seen.
+  assert.ok(f('2102400187').includes('not_in_abm'));
+  db.prepare(`UPDATE apple_devices SET abm_status = 'ASSIGNED' WHERE serial = 'ABC123'`).run();
+  assert.ok(!listLines().lines.find((l) => l.number === '2102400023')!.flags.some((x: any) => x.key === 'abm_unassigned'));
 });

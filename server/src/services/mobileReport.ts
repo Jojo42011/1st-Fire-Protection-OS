@@ -66,6 +66,8 @@ export function executiveReport(): any {
     { key: 'imei_mismatch', label: 'A different device in the SIM than AT&T has on file', count: count('imei_mismatch'), why: 'Devices were swapped without a record' },
     { key: 'personal_apple_id', label: 'Personal Apple ID on a company device', count: count('personal_apple_id'), why: 'The company cannot lock or recover the device' },
     { key: 'not_in_mdm', label: 'Not enrolled in Addigy', count: count('not_in_mdm'), why: 'Not managed: no remote lock, wipe or app control' },
+    { key: 'not_in_abm', label: 'Not in Apple Business', count: count('not_in_abm'), why: 'Add with Apple Configurator at the next reset' },
+    { key: 'abm_unassigned', label: 'In Apple Business, not managed', count: count('abm_unassigned'), why: 'Assign to a management service so a reset comes back under company control' },
     { key: 'termed_holder', label: 'Line held by someone leaving or gone', count: count('termed_holder'), why: 'Recover the device and cancel or reassign the line' },
   ].filter((r) => r.count > 0 || r.key === 'no_serial');
 

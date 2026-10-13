@@ -174,14 +174,27 @@ export async function syncAbm(): Promise<{ ok: boolean; message: string; devices
       const a = d.attributes || {};
       const serial = String(a.serialNumber || d.id || '').toUpperCase();
       if (!serial || a.releasedFromOrgDateTime) continue; // released devices are no longer the company's
-      up.run({
-        serial, imei: (first(a.imei) || '').replace(/\D/g, '') || null, model: a.deviceModel || null, family: a.productFamily || null,
-        status: a.status || null, server: serverOf.get(serial) || null, added: a.addedToOrgDateTime || null, released: a.releasedFromOrgDateTime || null,
-        source: a.purchaseSourceType || null, order: a.orderNumber || null, now,
-      });
+      up.run({ ...abmDeviceRow(d, serverOf), now });
       n++;
     }
   })();
   setState('mobile.abm_synced_at', now);
-  return { ok: true, message: `${n} device(s) in Apple Business Manager`, devices: n };
+  return { ok: true, message: `${n} device(s) in Apple Business`, devices: n };
+}
+
+/** Every IMEI Apple lists for a device (dual-SIM iPhones have two; AT&T may report either), digits only, comma-joined. */
+export function abmImeis(v: unknown): string | null {
+  const list = (Array.isArray(v) ? v : String(v ?? '').split(/[,\s]+/)).map((x) => String(x).replace(/\D/g, '')).filter(Boolean);
+  return list.length ? [...new Set(list)].join(',') : null;
+}
+
+/** One orgDevices record from the Apple Business API as an apple_devices row. Exported for tests. */
+export function abmDeviceRow(d: any, serverOf: Map<string, string>): Record<string, string | null> {
+  const a = (d && d.attributes) || {};
+  const serial = String(a.serialNumber || (d && d.id) || '').toUpperCase();
+  return {
+    serial, imei: abmImeis(a.imei), model: a.deviceModel || null, family: a.productFamily || null,
+    status: a.status || null, server: serverOf.get(serial) || null, added: a.addedToOrgDateTime || null, released: a.releasedFromOrgDateTime || null,
+    source: a.purchaseSourceType || null, order: a.orderNumber || null,
+  };
 }

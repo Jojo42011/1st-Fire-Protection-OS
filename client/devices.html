@@ -99,6 +99,8 @@ var CHIPS=[
   ['unmatched','Not matched',function(l){return has(l,'unmatched');}],
   ['teams_overlap','Also has Teams Phone',function(l){return has(l,'teams_overlap');}],
   ['upgrade','Upgrade eligible',function(l){return l.upgrade_eligible_now;}],
+  ['abm','Not in Apple Business',function(l){return has(l,'not_in_abm');}],
+  ['abm_unassigned','Not managed yet',function(l){return has(l,'abm_unassigned');}],
   ['mdm','Not in Addigy',function(l){return has(l,'not_in_mdm');}],
   ['too_old','Too old',function(l){return has(l,'too_old');}],
   ['all','All',function(){return true;}]
@@ -405,7 +407,7 @@ function renderSources(){
     card('AT&amp;T', !!s.att.reportAt, s.att.reportAt?'Latest report: '+OS.esc(s.att.reportAt):'Import the Premier detail report above.', '', null)+
     card('Microsoft Teams voice', s.teams.connected, s.teams.last?('Last sync '+OS.esc(OS.ago(s.teams.last.at)||s.teams.last.at)):'Not synced yet.', 'Uses the OS Microsoft 365 app (MS_GRAPH_*).', 'teams')+
     card('Addigy', s.addigy.connected, s.addigy.syncedAt?('Last sync '+OS.esc(OS.ago(s.addigy.syncedAt)||s.addigy.syncedAt)):'Not synced yet.', 'Create a V2 API token with View Devices (Account &gt; Integrations &gt; API &amp; Webhooks) and set ADDIGY_API_KEY.', 'addigy')+
-    card('Apple Business Manager', s.abm.connected, s.abm.syncedAt?('Last sync '+OS.esc(OS.ago(s.abm.syncedAt)||s.abm.syncedAt)):'Not synced yet.', 'In ABM, Preferences &gt; API: create a key, then set ABM_CLIENT_ID, ABM_KEY_ID and ABM_PRIVATE_KEY.', 'abm');
+    card('Apple Business', s.abm.connected, s.abm.syncedAt?('Last sync '+OS.esc(OS.ago(s.abm.syncedAt)||s.abm.syncedAt)):'Not synced yet.', 'In Apple Business, create an API key, then set ABM_CLIENT_ID, ABM_KEY_ID and ABM_PRIVATE_KEY.', 'abm');
 }
 document.getElementById('sources').addEventListener('click',function(e){ var b=e.target.closest('[data-sync]'); if(!b) return; runSync(b.getAttribute('data-sync'),b).then(load); });
 

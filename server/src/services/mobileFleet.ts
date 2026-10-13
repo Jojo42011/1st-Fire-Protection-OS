@@ -536,7 +536,10 @@ export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: a
     ${opts.includeCancelled ? '' : `WHERE l.status != 'cancelled'`}
     ORDER BY l.office, l.kind, l.number`).all() as any[];
   const apple = new Map<string, any>(), appleByImei = new Map<string, any>();
-  for (const d of db.prepare(`SELECT * FROM apple_devices`).all() as any[]) { apple.set(String(d.serial).toUpperCase(), d); if (d.imei) appleByImei.set(d.imei, d); }
+  for (const d of db.prepare(`SELECT * FROM apple_devices`).all() as any[]) {
+    apple.set(String(d.serial).toUpperCase(), d);
+    for (const im of String(d.imei || '').split(',')) if (im) appleByImei.set(im, d); // dual-SIM phones list two IMEIs
+  }
   const teams = new Map<number, any>();
   for (const t of db.prepare(`SELECT * FROM teams_voice_users WHERE employee_id IS NOT NULL`).all() as any[]) teams.set(t.employee_id, t);
   const costs = planCosts();
@@ -548,7 +551,7 @@ export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: a
   const lines = rows.map((l) => {
     const employee = l.employee_id ? String(l.entra_display_name || `${l.preferred_name || l.legal_first_name || ''} ${l.legal_last_name || ''}`).trim() : null;
     const serial = String(l.asset_serial || '').toUpperCase();
-    const ad = (serial && apple.get(serial)) || (l.imei && appleByImei.get(l.imei)) || null;
+    const ad = (serial && apple.get(serial)) || (l.imei && appleByImei.get(l.imei)) || (l.att_imei && appleByImei.get(l.att_imei)) || null;
     const t = l.employee_id ? teams.get(l.employee_id) : null;
     const planCost = costs.get(l.group_plan || '') ?? costs.get(l.rate_plan || '') ?? null;
     const cost = l.monthly_cost ?? planCost;
@@ -571,7 +574,9 @@ export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: a
     if (apple_device && active && (l.kind === 'phone' || l.kind === 'tablet')) {
       if (!serial && !ad) flags.push({ key: 'no_serial', label: 'No serial number on file', tone: 'neutral' });
       if (addigyOn && !(ad && ad.in_addigy)) flags.push({ key: 'not_in_mdm', label: 'Not enrolled in Addigy', tone: 'warn' });
-      if (abmOn && !(ad && ad.in_abm)) flags.push({ key: 'not_in_abm', label: 'Not in Apple Business Manager', tone: 'neutral' });
+      if (abmOn && !(ad && ad.in_abm)) flags.push({ key: 'not_in_abm', label: 'Not in Apple Business', tone: 'warn' });
+      // In Apple Business but not assigned to a management service: resets come back as a personal phone.
+      if (abmOn && ad && ad.in_abm && String(ad.abm_status || '').toUpperCase() !== 'ASSIGNED') flags.push({ key: 'abm_unassigned', label: 'In Apple Business, not managed', tone: 'warn' });
       if (ad && ad.in_addigy && ad.addigy_last_online && ad.addigy_last_online.slice(0, 10) < offset(now, -30)) flags.push({ key: 'stale_checkin', label: 'No MDM check-in for 30+ days', tone: 'warn' });
     }
     if (l.apple_account && !COMPANY_DOMAIN.test(l.apple_account)) flags.push({ key: 'personal_apple_id', label: 'Personal Apple ID on a company device', tone: 'warn' });
