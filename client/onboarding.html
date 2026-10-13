@@ -525,7 +525,7 @@ document.getElementById('ak-create').addEventListener('click',function(){
 });
 loadAk();
 
-var OPTIONS=null, OPEN_ID=null, REQS=[];
+var OPTIONS=null, OPEN_ID=null, REQS=[], BOARD_OPEN=[], BOARD_DONE=[], DONE_OPEN=false;
 function loadBoard(){
   return fetch('/api/onboarding').then(function(r){return r.json();}).then(function(d){
     if(d.options && !OPTIONS){ OPTIONS=d.options; renderForm(); }
@@ -538,21 +538,32 @@ function loadBoard(){
     else sl.innerHTML='<div class="note-line" style="margin:0 0 10px">Showing tasks for <b>'+esc(v.teams.join(', '))+'</b> only.</div>';
     renderStrip();
     renderMetric();
-    document.getElementById('boardn').textContent=REQS.length;
+    // Open requests up top; completed ones folded away under their own heading.
+    // Done = complete, or (for a team view) nothing of theirs left to do. Needs attention stays open.
+    var isDone=function(r){ var ru=r.rollup||{}; return r.status==='complete' || (r.status!=='needs_attention' && ru.total>0 && ru.pending===0); };
+    BOARD_OPEN=REQS.filter(function(r){return !isDone(r);});
+    BOARD_DONE=REQS.filter(isDone);
+    document.getElementById('boardn').textContent=BOARD_OPEN.length;
     if(!REQS.length){ document.getElementById('board').innerHTML=(!v.all&&!v.signedIn)?'':OS.empty(v.all?'No one is onboarding right now. Send an intake link to start.':'Nothing for your team right now.','✓'); return; }
     var cols=[
       {as:'name',label:'New hire',strong:true,render:function(v,r){return '<span class="strong">'+esc(r.name)+'</span>'+(r.request_type==='account_only'?' '+OS.pill('Account only','neutral'):'')+(r.job_position?'<br><span class="muted" style="font-size:11.5px">'+esc(r.job_position)+'</span>':'');}},
       {as:'starts',label:'Starts',render:function(v,r){if(r.request_type==='account_only') return '<span class="muted">Already working</span>'; return r.start_date?OS.date(r.start_date):'<span class="muted">no start date</span>';}},
       {as:'prog',label:'Progress',render:function(v,r){var ru=r.rollup||{},done=r.status==='complete';return '<div style="display:flex;align-items:center;gap:9px"><span class="ob-bar'+(done?' done':'')+'"><span style="width:'+(ru.progress||0)+'%"></span></span><span class="muted" style="font-size:11.5px;white-space:nowrap">'+(ru.done||0)+'/'+(ru.total||0)+'</span></div>';}},
-      {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):r.status==='needs_attention'?OS.pill('Needs attention','bad'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
+      {as:'status',label:'Status',render:function(v,r){var ru=r.rollup||{};return (r.status==='complete'?OS.pill('Complete','good'):(r.status!=='needs_attention'&&ru.total>0&&ru.pending===0)?OS.pill('Your part done','good'):r.status==='needs_attention'?OS.pill('Needs attention','bad'):OS.pill('Open','neutral'))+(ru.pendingApprovals>0?' '+OS.pill(ru.pendingApprovals+' approval'+(ru.pendingApprovals===1?'':'s'),'warn'):'');}}
     ];
-    document.getElementById('board').innerHTML=OS.table(cols, REQS.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id,request_type:r.request_type};}), {onRow:true});
+    var rows=function(list){ return list.map(function(r){return {name:r.name,job_position:r.job_position,start_date:r.start_date,rollup:r.rollup,status:r.status,id:r.id,request_type:r.request_type};}); };
+    var openHtml=BOARD_OPEN.length?OS.table(cols, rows(BOARD_OPEN), {onRow:true}):OS.empty(v.all?'No one is onboarding right now. Send an intake link to start.':'Nothing open for your team right now.','✓');
+    var doneHtml=BOARD_DONE.length?'<details class="formwrap" id="doneWrap" style="margin-top:12px"'+(DONE_OPEN?' open':'')+'><summary><span><b>Completed</b> <span class="hint">'+BOARD_DONE.length+'</span></span><span class="hint">Show</span></summary><div data-list="done" style="padding:0 12px 12px">'+OS.table(cols, rows(BOARD_DONE), {onRow:true})+'</div></details>':'';
+    document.getElementById('board').innerHTML='<div data-list="open">'+openHtml+'</div>'+doneHtml;
+    var dw=document.getElementById('doneWrap'); if(dw) dw.addEventListener('toggle',function(){ DONE_OPEN=dw.open; dw.querySelector('summary > .hint').textContent=dw.open?'Hide':'Show'; });
+    if(dw&&dw.open) dw.querySelector('summary > .hint').textContent='Hide';
     if(OPEN_ID) openReq(OPEN_ID);
   }).catch(function(){ document.getElementById('board').innerHTML=OS.errorBox('Could not load the onboarding board.'); });
 }
 document.getElementById('board').addEventListener('click',function(e){
   var tr=e.target.closest('[data-row]'); if(!tr) return;
-  var idx=Number(tr.getAttribute('data-row')); var r=REQS[idx]; if(r) openReq(r.id);
+  var wrap=tr.closest('[data-list]'), list=wrap&&wrap.getAttribute('data-list')==='done'?BOARD_DONE:BOARD_OPEN;
+  var idx=Number(tr.getAttribute('data-row')); var r=list[idx]; if(r) openReq(r.id);
 });
 function renderMetric(){
   var open=REQS.filter(function(r){return r.status!=='complete';}).length;
