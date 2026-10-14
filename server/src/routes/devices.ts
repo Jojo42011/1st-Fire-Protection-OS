@@ -18,7 +18,7 @@ const IT = requirePeople('people_admin', 'it');
 const fail = (res: any, err: unknown, code = 400) => res.status(code).json({ ok: false, error: (err as Error).message });
 
 router.get('/api/devices', requirePeople(), (_req, res) => {
-  const { lines, summary } = fleet.listLines();
+  const { lines, summary } = fleet.listLines({ withDevices: true });
   const employees = getDb().prepare(`SELECT id, COALESCE(entra_display_name, COALESCE(preferred_name, legal_first_name) || ' ' || legal_last_name) AS name, office, employment_status AS status
     FROM employees WHERE employment_status != 'terminated' ORDER BY name`).all();
   res.json({

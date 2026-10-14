@@ -525,7 +525,7 @@ export function billTotal(): number | null {
 }
 const COMPANY_DOMAIN = /@(1stfpservices\.com|1stfp\.com|icloud\.com)$/i;
 
-export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: any[]; summary: any } {
+export function listLines(opts: { includeCancelled?: boolean; withDevices?: boolean } = {}): { lines: any[]; summary: any } {
   const db = getDb();
   const rows = db.prepare(`
     SELECT l.*, e.legal_first_name, e.legal_last_name, e.preferred_name, e.entra_display_name, e.employment_status, e.termination_date,
@@ -548,10 +548,12 @@ export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: a
   const attAt = getState('mobile.att_report_at');
   const now = today();
 
+  const linkedSerials = new Set<string>(); // Apple devices some line points at, by serial or either IMEI
   const lines = rows.map((l) => {
     const employee = l.employee_id ? String(l.entra_display_name || `${l.preferred_name || l.legal_first_name || ''} ${l.legal_last_name || ''}`).trim() : null;
     const serial = String(l.asset_serial || '').toUpperCase();
     const ad = (serial && apple.get(serial)) || (l.imei && appleByImei.get(l.imei)) || (l.att_imei && appleByImei.get(l.att_imei)) || null;
+    if (ad) linkedSerials.add(String(ad.serial).toUpperCase());
     const t = l.employee_id ? teams.get(l.employee_id) : null;
     const planCost = costs.get(l.group_plan || '') ?? costs.get(l.rate_plan || '') ?? null;
     const cost = l.monthly_cost ?? planCost;
@@ -635,8 +637,56 @@ export function listLines(opts: { includeCancelled?: boolean } = {}): { lines: a
     teamsOverlap: flagged('teams_overlap').length,
     attReportAt: attAt, addigySyncedAt: getState('mobile.addigy_synced_at'), abmSyncedAt: getState('mobile.abm_synced_at'),
     byOffice,
+    noLine: 0,
   };
+  if (opts.withDevices) addDeviceOnlyRows(lines, summary, { apple, appleByImei, abmOn, linked: linkedSerials, includeCancelled: !!opts.includeCancelled });
   return { lines, summary };
+}
+
+/** Apple Business / Addigy devices that no active line points at (new phones before the next AT&T import, Wi-Fi iPads,
+    old phones left over from upgrades). Added after the summary so they never count as lines or cost. */
+function addDeviceOnlyRows(lines: any[], summary: any, ctx: { apple: Map<string, any>; appleByImei: Map<string, any>; abmOn: boolean; linked: Set<string>; includeCancelled: boolean }) {
+  const db = getDb();
+  const { apple, appleByImei, abmOn } = ctx;
+  const linked = new Set(ctx.linked);
+  for (const l of lines) if (l.serial) linked.add(String(l.serial).toUpperCase());
+  const cancelledBy = new Map<string, any>();
+  if (!ctx.includeCancelled) {
+    for (const c of db.prepare(`SELECT l.number, l.imei, l.att_imei, a.serial FROM mobile_lines l LEFT JOIN employee_assets a ON a.id = l.device_asset_id WHERE l.status = 'cancelled'`).all() as any[]) {
+      const d = (c.serial && apple.get(String(c.serial).toUpperCase())) || (c.imei && appleByImei.get(c.imei)) || (c.att_imei && appleByImei.get(c.att_imei));
+      if (d) cancelledBy.set(String(d.serial).toUpperCase(), c);
+    }
+  }
+  const assetBySerial = new Map<string, any>();
+  for (const a of db.prepare(`SELECT a.serial, a.imei, a.employee_id, e.legal_first_name, e.legal_last_name, e.preferred_name, e.entra_display_name, e.employment_status
+      FROM employee_assets a LEFT JOIN employees e ON e.id = a.employee_id WHERE a.serial IS NOT NULL AND a.serial != '' AND a.status IN ('assigned','available')`).all() as any[]) {
+    assetBySerial.set(String(a.serial).toUpperCase(), a);
+  }
+  const seen = new Set<any>();
+  for (const d of apple.values()) {
+    const sn = String(d.serial).toUpperCase();
+    if (seen.has(d) || linked.has(sn) || !(d.in_abm || d.in_addigy)) continue;
+    seen.add(d);
+    const a = assetBySerial.get(sn);
+    const employee = a && a.employee_id ? String(a.entra_display_name || `${a.preferred_name || a.legal_first_name || ''} ${a.legal_last_name || ''}`).trim() : null;
+    const family = String(d.product_family || d.model || '');
+    const kind = /ipad/i.test(family) ? 'tablet' : /iphone/i.test(family) ? 'phone' : 'other';
+    const old = cancelledBy.get(sn);
+    const flags: LineFlag[] = [old
+      ? { key: 'no_line', label: `Its AT&T line (${fmtNumber(old.number)}) is cancelled`, tone: 'warn' }
+      : { key: 'no_line', label: 'No AT&T line in the OS', tone: kind === 'phone' ? 'warn' : 'neutral' }];
+    if (abmOn && d.in_abm && String(d.abm_status || '').toUpperCase() !== 'ASSIGNED') flags.push({ key: 'abm_unassigned', label: 'In Apple Business, not managed', tone: 'warn' });
+    if (unsupportedModel(d.model || '')) flags.push({ key: 'too_old', label: 'Too old for current iOS', tone: 'warn' });
+    lines.push({
+      id: null, device_only: true, number: '', number_fmt: 'No line', office: '', office_label: '', account: null, kind, status: 'device only',
+      employee_id: a ? a.employee_id : null, employee, employment_status: a ? a.employment_status || null : null,
+      model: d.model || '', imei: String(d.imei || '').split(',')[0] || '', imeis: d.imei || '', serial: sn, plan: '', monthly_cost: null, cost_source: null,
+      added_to_abm: d.abm_added_at || null, purchase_source: d.abm_purchase_source || null, order_number: d.abm_order_number || null,
+      mdm: { in_addigy: !!d.in_addigy, in_abm: !!d.in_abm, last_online: d.addigy_last_online, abm_status: d.abm_status, abm_server: d.abm_server, supervised: d.addigy_supervised, addigy_user: d.addigy_user },
+      teams: null, in_latest_report: false, flags,
+    });
+    summary.noLine++;
+  }
 }
 
 export function lineDetail(id: number): any {

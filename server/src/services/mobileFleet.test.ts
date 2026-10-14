@@ -313,6 +313,22 @@ test('Apple Business rows keep every IMEI and lines match on either one', () => 
   assert.ok(!listLines().lines.find((l) => l.number === '2102400023')!.flags.some((x: any) => x.key === 'abm_unassigned'));
 });
 
+test('Apple Business devices with no AT&T line show up on the Devices page only', () => {
+  db.prepare(`INSERT INTO apple_devices (serial, imei, model, product_family, in_abm, abm_status) VALUES ('NEW16E', '356700000000011,356700000000029', 'iPhone 16e', 'iPhone', 1, 'ASSIGNED')`).run();
+  db.prepare(`INSERT INTO apple_devices (serial, model, product_family, in_abm, abm_status) VALUES ('GONE01', 'iPhone 12', 'iPhone', 0, 'UNASSIGNED')`).run();
+  const plain = listLines();
+  assert.ok(!plain.lines.some((l) => l.device_only), 'report, CSV and Teams audit stay lines only');
+  const { lines, summary } = listLines({ withDevices: true });
+  const dev = lines.filter((l) => l.device_only);
+  // ABC123 matches a line on its second IMEI (test above), GONE01 has left Apple Business.
+  assert.deepEqual(dev.map((l) => l.serial), ['NEW16E'], 'linked and departed devices are left out');
+  assert.equal(dev[0].kind, 'phone');
+  assert.ok(dev[0].flags.some((f: any) => f.key === 'no_line' && f.tone === 'warn'));
+  assert.equal(summary.noLine, 1);
+  assert.equal(summary.activeLines, plain.summary.activeLines, 'device rows never count as lines');
+  db.prepare(`DELETE FROM apple_devices WHERE serial IN ('NEW16E','GONE01')`).run();
+});
+
 test('the Apple Business private key works however it was pasted into the secret', () => {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();

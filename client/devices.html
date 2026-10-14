@@ -86,7 +86,7 @@
 var D=null, FILTER='attention', SEL=null, TEAMS=null, TFILTER='action';
 // Deep links from the executive report: ?view=<chip> filters the lines; teams / costs jump to that section.
 var VIEW=(function(){ try{ return new URLSearchParams(location.search).get('view')||''; }catch(_){ return ''; } })(), JUMPED=false;
-if(['attention','cut','still_billing','spare','unmatched','teams_overlap','upgrade','mdm','too_old','all'].indexOf(VIEW)>=0) FILTER=VIEW;
+if(['attention','cut','still_billing','spare','unmatched','teams_overlap','upgrade','abm','abm_unassigned','no_line','mdm','too_old','all'].indexOf(VIEW)>=0) FILTER=VIEW;
 function jumpOnce(){ if(JUMPED) return; JUMPED=true; var id=VIEW==='teams'?'teamsN':VIEW==='costs'?'costsSec':null; if(!id) return;
   setTimeout(function(){ var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }, 350); }
 var CAN_EDIT=true;
@@ -101,6 +101,7 @@ var CHIPS=[
   ['upgrade','Upgrade eligible',function(l){return l.upgrade_eligible_now;}],
   ['abm','Not in Apple Business',function(l){return has(l,'not_in_abm');}],
   ['abm_unassigned','Not managed yet',function(l){return has(l,'abm_unassigned');}],
+  ['no_line','No AT&T line',function(l){return has(l,'no_line');}],
   ['mdm','Not in Addigy',function(l){return has(l,'not_in_mdm');}],
   ['too_old','Too old',function(l){return has(l,'too_old');}],
   ['all','All',function(){return true;}]
@@ -146,7 +147,7 @@ function baseRows(){
     if(kind==='tablet'&&l.kind!=='tablet') return false;
     if(kind==='other'&&(l.kind==='phone'||l.kind==='tablet')) return false;
     if(!q) return true;
-    return [l.number,l.number_fmt,l.employee,l.shared_label,l.holder_name,l.model,l.serial,l.imei,l.office_label,l.att_user_name,l.apple_account].join(' ').toLowerCase().indexOf(q)>=0;
+    return [l.number,l.number_fmt,l.employee,l.shared_label,l.holder_name,l.model,l.serial,l.imei,l.office_label,l.att_user_name,l.apple_account,l.imeis,l.order_number].join(' ').toLowerCase().indexOf(q)>=0;
   });
 }
 function renderChips(){
@@ -160,6 +161,7 @@ function who(l){
   if(l.employee) return '<span class="strong">'+OS.esc(l.employee)+'</span>'+(l.employment_status&&l.employment_status!=='active'?' '+OS.pill(l.employment_status,'bad'):'');
   if(l.shared_label) return OS.esc(l.shared_label)+' '+OS.pill('shared','neutral');
   if(l.holder_name) return '<span style="color:var(--os-warn)">'+OS.esc(l.holder_name)+'</span><div class="muted dv-sub">not matched to an employee</div>';
+  if(l.device_only) return '<span class="muted">not assigned</span>';
   return '<span class="muted">spare</span>';
 }
 function upgradeCell(l){
@@ -179,9 +181,10 @@ function renderList(){
   var pred=(CHIPS.filter(function(c){return c[0]===FILTER;})[0]||CHIPS[0])[2];
   var rows=baseRows().filter(pred);
   rows.sort(function(a,b){ return sev(b)-sev(a) || (a.office_label||'').localeCompare(b.office_label||'') || a.number.localeCompare(b.number); });
-  document.getElementById('lineN').textContent='· '+rows.length+' shown of '+D.lines.length;
+  var nDev=D.lines.filter(function(l){return l.device_only;}).length;
+  document.getElementById('lineN').textContent='· '+rows.length+' shown of '+(D.lines.length-nDev)+' lines'+(nDev?(' + '+nDev+' device'+(nDev===1?'':'s')+' with no line'):'');
   var cols=[
-    {as:'number_fmt',label:'Line',render:function(v,r){ return '<span class="strong">'+OS.esc(v)+'</span><div class="muted dv-sub">'+OS.esc(r.office_label)+' · '+OS.esc(r.kind||'')+(r.status!=='active'?' · '+OS.esc(r.status):'')+'</div>'; }},
+    {as:'number_fmt',label:'Line',render:function(v,r){ if(r.device_only) return '<span class="muted">No line</span><div class="muted dv-sub">'+OS.esc(r.kind==='tablet'?'iPad':r.kind==='phone'?'iPhone':'device')+' · Apple Business only</div>'; return '<span class="strong">'+OS.esc(v)+'</span><div class="muted dv-sub">'+OS.esc(r.office_label)+' · '+OS.esc(r.kind||'')+(r.status!=='active'?' · '+OS.esc(r.status):'')+'</div>'; }},
     {as:'employee',label:'Assigned to',render:function(v,r){ return who(r); }},
     {as:'model',label:'Device',render:function(v,r){ return OS.esc(r.model||'')+'<div class="muted dv-sub">'+(r.serial?'SN '+OS.esc(r.serial):'no serial')+(r.imei?' · IMEI …'+OS.esc(String(r.imei).slice(-4)):'')+'</div>'; }},
     {as:'monthly_cost',label:'Cost / mo',render:function(v,r){ return v==null?'<span class="muted">n/a</span>':(usd(v)+(r.cost_source&&r.cost_source.indexOf('estimate')===0?' '+OS.pill('est','warn'):'')); }},
@@ -237,7 +240,26 @@ function renderDetail(l){
       '<input id="evDetail" class="dv-in" style="flex:1;min-width:240px" placeholder="e.g. Ida used this line\'s upgrade for her iPhone 15 Pro" /><button class="os-btn" data-event="'+l.id+'">Add</button></div>'+
     '<div class="os-sec" style="margin-top:18px">History</div>'+ev+'</div>';
 }
-document.getElementById('list').addEventListener('click',function(e){ var tr=e.target.closest('[data-row]'); if(!tr) return; var l=CURRENT[Number(tr.getAttribute('data-row'))]; if(l) openLine(l.id); });
+document.getElementById('list').addEventListener('click',function(e){ var tr=e.target.closest('[data-row]'); if(!tr) return; var l=CURRENT[Number(tr.getAttribute('data-row'))]; if(!l) return; if(l.device_only){ SEL=null; renderDevice(l); document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'nearest'}); } else openLine(l.id); });
+/* A device in Apple Business that no AT&T line points at. Read-only: it links up by IMEI on the next AT&T import. */
+function renderDevice(l){
+  var m=l.mdm||{};
+  var facts=[
+    ['Model',l.model],['Serial',l.serial],['IMEI',String(l.imeis||'').split(',').join(', ')],['Assigned to',l.employee],
+    ['Apple Business',m.in_abm?(String(m.abm_status||'').toUpperCase()==='ASSIGNED'?'managed':'not managed yet'):'not in Apple Business'],['Management service',m.abm_server],
+    ['Added to Apple Business',l.added_to_abm?String(l.added_to_abm).slice(0,10):''],['Bought through',({APPLE:'Apple',RESELLER:'reseller',MANUALLY_ADDED:'added by hand'})[l.purchase_source]||l.purchase_source],['Order number',l.order_number],
+    ['Addigy',m.in_addigy?'enrolled'+(m.addigy_user?' · '+m.addigy_user:''):'']
+  ].filter(function(x){return x[1];}).map(function(x){ return '<div><div class="muted dv-sub">'+OS.esc(x[0])+'</div>'+OS.esc(String(x[1]))+'</div>'; }).join('');
+  var cancelled=l.flags.some(function(f){ return f.key==='no_line'&&f.label.indexOf('cancelled')>=0; });
+  var why=cancelled?'The AT&T line this device used is cancelled. If it is sitting in a drawer, it is a spare you can reuse or trade in.'
+    :l.kind==='phone'?'No AT&T line in the OS points at this phone. If it is new, export the latest detail report from AT&T Premier and import it below. It will link to its line by IMEI.'
+    :'No AT&T line in the OS points at this device. That is normal for a Wi-Fi iPad. If it has cellular service, import the latest AT&T report below.';
+  document.getElementById('detail').innerHTML='<div class="os-card" style="padding:16px 18px">'+
+    '<div class="dv-row" style="justify-content:space-between"><div><b style="font-size:16px">'+OS.esc(l.model||'Apple device')+'</b> <span class="muted">SN '+OS.esc(l.serial)+' · no AT&amp;T line</span></div><button class="os-btn" data-close>Close</button></div>'+
+    '<div class="dv-flags" style="margin-top:8px">'+l.flags.map(function(f){return OS.pill(f.label,f.tone);}).join('')+'</div>'+
+    '<div class="dv-grid" style="margin-top:12px">'+facts+'</div>'+
+    '<div class="os-filter-note" style="margin-top:12px">'+OS.esc(why)+'</div></div>';
+}
 document.getElementById('detail').addEventListener('click',function(e){
   if(e.target.closest('[data-close]')){ SEL=null; document.getElementById('detail').innerHTML=''; return; }
   var s=e.target.closest('[data-save]'); if(s){
