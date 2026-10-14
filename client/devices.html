@@ -142,12 +142,13 @@ function renderOffices(){
 function baseRows(){
   var q=(document.getElementById('q').value||'').toLowerCase().trim(), off=document.getElementById('office').value, kind=document.getElementById('kind').value;
   return D.lines.filter(function(l){
+    if(l.status==='cancelled'&&!q) return false; // cancelled lines stay out of the way until searched for
     if(off&&l.office!==off) return false;
     if(kind==='phone'&&l.kind!=='phone') return false;
     if(kind==='tablet'&&l.kind!=='tablet') return false;
     if(kind==='other'&&(l.kind==='phone'||l.kind==='tablet')) return false;
     if(!q) return true;
-    return [l.number,l.number_fmt,l.employee,l.shared_label,l.holder_name,l.model,l.serial,l.imei,l.office_label,l.att_user_name,l.apple_account,l.imeis,l.order_number].join(' ').toLowerCase().indexOf(q)>=0;
+    return [l.number,l.number_fmt,l.employee,l.shared_label,l.holder_name,l.model,l.serial,l.imei,l.office_label,l.att_user_name,l.apple_account,l.imeis,l.order_number,l.att_imei,l.mdm&&l.mdm.imeis,l.mdm&&l.mdm.serial].join(' ').toLowerCase().indexOf(q)>=0;
   });
 }
 function renderChips(){
@@ -181,8 +182,8 @@ function renderList(){
   var pred=(CHIPS.filter(function(c){return c[0]===FILTER;})[0]||CHIPS[0])[2];
   var rows=baseRows().filter(pred);
   rows.sort(function(a,b){ return sev(b)-sev(a) || (a.office_label||'').localeCompare(b.office_label||'') || a.number.localeCompare(b.number); });
-  var nDev=D.lines.filter(function(l){return l.device_only;}).length;
-  document.getElementById('lineN').textContent='· '+rows.length+' shown of '+(D.lines.length-nDev)+' lines'+(nDev?(' + '+nDev+' device'+(nDev===1?'':'s')+' with no line'):'');
+  var nDev=D.lines.filter(function(l){return l.device_only;}).length, nLines=D.lines.filter(function(l){return !l.device_only&&l.status!=='cancelled';}).length;
+  document.getElementById('lineN').textContent='· '+rows.length+' shown of '+nLines+' lines'+(nDev?(' + '+nDev+' device'+(nDev===1?'':'s')+' with no line'):'');
   var cols=[
     {as:'number_fmt',label:'Line',render:function(v,r){ if(r.device_only) return '<span class="muted">No line</span><div class="muted dv-sub">'+OS.esc(r.kind==='tablet'?'iPad':r.kind==='phone'?'iPhone':'device')+' · Apple Business only</div>'; return '<span class="strong">'+OS.esc(v)+'</span><div class="muted dv-sub">'+OS.esc(r.office_label)+' · '+OS.esc(r.kind||'')+(r.status!=='active'?' · '+OS.esc(r.status):'')+'</div>'; }},
     {as:'employee',label:'Assigned to',render:function(v,r){ return who(r); }},

@@ -326,7 +326,17 @@ test('Apple Business devices with no AT&T line show up on the Devices page only'
   assert.ok(dev[0].flags.some((f: any) => f.key === 'no_line' && f.tone === 'warn'));
   assert.equal(summary.noLine, 1);
   assert.equal(summary.activeLines, plain.summary.activeLines, 'device rows never count as lines');
-  db.prepare(`DELETE FROM apple_devices WHERE serial IN ('NEW16E','GONE01')`).run();
+  // A phone whose line the OS has as cancelled: the line comes back (for search) and the device says why it has no line.
+  db.prepare(`INSERT INTO mobile_lines (number, kind, status, imei) VALUES ('8065550199', 'phone', 'cancelled', '356700000000037')`).run();
+  db.prepare(`INSERT INTO apple_devices (serial, imei, model, product_family, in_abm, abm_status) VALUES ('OLD15', '356700000000037', 'iPhone 15', 'iPhone', 1, 'UNASSIGNED')`).run();
+  const all = listLines({ withDevices: true, includeCancelled: true });
+  const cancelledLine = all.lines.find((l) => l.number === '8065550199')!;
+  assert.equal(cancelledLine.mdm.serial, 'OLD15');
+  const orphan = all.lines.find((l) => l.device_only && l.serial === 'OLD15')!;
+  assert.ok(orphan.flags.some((f: any) => f.key === 'no_line' && /806-555-0199.*cancelled/.test(f.label)));
+  assert.equal(all.summary.activeLines, plain.summary.activeLines, 'cancelled lines never count');
+  db.prepare(`DELETE FROM mobile_lines WHERE number = '8065550199'`).run();
+  db.prepare(`DELETE FROM apple_devices WHERE serial IN ('NEW16E','GONE01','OLD15')`).run();
 });
 
 test('the Apple Business private key works however it was pasted into the secret', () => {

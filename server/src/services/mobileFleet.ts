@@ -553,7 +553,7 @@ export function listLines(opts: { includeCancelled?: boolean; withDevices?: bool
     const employee = l.employee_id ? String(l.entra_display_name || `${l.preferred_name || l.legal_first_name || ''} ${l.legal_last_name || ''}`).trim() : null;
     const serial = String(l.asset_serial || '').toUpperCase();
     const ad = (serial && apple.get(serial)) || (l.imei && appleByImei.get(l.imei)) || (l.att_imei && appleByImei.get(l.att_imei)) || null;
-    if (ad) linkedSerials.add(String(ad.serial).toUpperCase());
+    if (ad && l.status !== 'cancelled') linkedSerials.add(String(ad.serial).toUpperCase());
     const t = l.employee_id ? teams.get(l.employee_id) : null;
     const planCost = costs.get(l.group_plan || '') ?? costs.get(l.rate_plan || '') ?? null;
     const cost = l.monthly_cost ?? planCost;
@@ -588,12 +588,12 @@ export function listLines(opts: { includeCancelled?: boolean; withDevices?: bool
       id: l.id, number: l.number, number_fmt: fmtNumber(l.number), office: l.office, office_label: officeLabel(l.office || ''),
       account: l.billing_account_name, kind: l.kind, status: l.status, intent: l.intent, freeze_until: l.freeze_until,
       employee_id: l.employee_id, employee, employment_status: l.employment_status || null, shared_label: l.shared_label, holder_name: l.holder_name,
-      att_user_name: l.att_user_name, model, make: l.device_make, os_version: l.os_version, imei: l.imei, serial: serial || (ad ? ad.serial : ''),
+      att_user_name: l.att_user_name, model, make: l.device_make, os_version: l.os_version, imei: l.imei, att_imei: l.att_imei, serial: serial || (ad ? ad.serial : ''),
       sim_type: l.sim_type, plan: l.group_plan || l.rate_plan || '', monthly_cost: cost, cost_source: l.monthly_cost != null ? 'set on line' : planCost != null ? 'plan cost' : null,
       monthly_installment: l.monthly_installment, device_balance: l.device_balance, balance_as_of: l.balance_as_of, paid_off: l.paid_off,
       contract_end: l.contract_end, upgrade_eligible: l.upgrade_eligible, upgrade_eligible_now: eligibleNow, last_upgrade_date: l.last_upgrade_date,
       upgrade_in_progress: !!l.upgrade_in_progress, apple_account: l.apple_account, notes: l.notes,
-      mdm: ad ? { in_addigy: !!ad.in_addigy, in_abm: !!ad.in_abm, last_online: ad.addigy_last_online, abm_status: ad.abm_status, abm_server: ad.abm_server, supervised: ad.addigy_supervised, addigy_user: ad.addigy_user } : null,
+      mdm: ad ? { serial: ad.serial, imeis: ad.imei, in_addigy: !!ad.in_addigy, in_abm: !!ad.in_abm, last_online: ad.addigy_last_online, abm_status: ad.abm_status, abm_server: ad.abm_server, supervised: ad.addigy_supervised, addigy_user: ad.addigy_user } : null,
       teams: t ? { upn: t.upn, has_teams_phone: !!t.has_teams_phone, calls: t.call_count, pstn_calls: t.pstn_calls } : null,
       in_latest_report: !!l.in_latest_report, flags,
     };
@@ -639,19 +639,19 @@ export function listLines(opts: { includeCancelled?: boolean; withDevices?: bool
     byOffice,
     noLine: 0,
   };
-  if (opts.withDevices) addDeviceOnlyRows(lines, summary, { apple, appleByImei, abmOn, linked: linkedSerials, includeCancelled: !!opts.includeCancelled });
+  if (opts.withDevices) addDeviceOnlyRows(lines, summary, { apple, appleByImei, abmOn, linked: linkedSerials });
   return { lines, summary };
 }
 
 /** Apple Business / Addigy devices that no active line points at (new phones before the next AT&T import, Wi-Fi iPads,
     old phones left over from upgrades). Added after the summary so they never count as lines or cost. */
-function addDeviceOnlyRows(lines: any[], summary: any, ctx: { apple: Map<string, any>; appleByImei: Map<string, any>; abmOn: boolean; linked: Set<string>; includeCancelled: boolean }) {
+function addDeviceOnlyRows(lines: any[], summary: any, ctx: { apple: Map<string, any>; appleByImei: Map<string, any>; abmOn: boolean; linked: Set<string> }) {
   const db = getDb();
   const { apple, appleByImei, abmOn } = ctx;
   const linked = new Set(ctx.linked);
-  for (const l of lines) if (l.serial) linked.add(String(l.serial).toUpperCase());
+  for (const l of lines) if (l.serial && l.status !== 'cancelled') linked.add(String(l.serial).toUpperCase());
   const cancelledBy = new Map<string, any>();
-  if (!ctx.includeCancelled) {
+  {
     for (const c of db.prepare(`SELECT l.number, l.imei, l.att_imei, a.serial FROM mobile_lines l LEFT JOIN employee_assets a ON a.id = l.device_asset_id WHERE l.status = 'cancelled'`).all() as any[]) {
       const d = (c.serial && apple.get(String(c.serial).toUpperCase())) || (c.imei && appleByImei.get(c.imei)) || (c.att_imei && appleByImei.get(c.att_imei));
       if (d) cancelledBy.set(String(d.serial).toUpperCase(), c);
