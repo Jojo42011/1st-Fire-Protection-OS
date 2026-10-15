@@ -297,14 +297,14 @@ function renderEmployeeTable(){
   var list=EMPLOYEES.filter(function(e){
     if(empFO!=='all' && (e.office||'')!==empFO) return false;
     if(empFS!=='all' && (e.employment_status||'')!==empFS) return false;
-    if(empQ){ var h=(empDisplayName(e)+' '+(e.job_position||'')+' '+(e.office||'')+' '+(e.manager||'')).toLowerCase(); if(h.indexOf(empQ)<0) return false; }
+    if(empQ){ var h=(empDisplayName(e)+' '+(e.job_position||'')+' '+(e.office||'')+' '+(e.manager||'')+' '+(e.manager_name||'')).toLowerCase(); if(h.indexOf(empQ)<0) return false; }
     return true;
   });
   var cnt=document.getElementById('empCount'); if(cnt) cnt.textContent=list.length+' of '+EMPLOYEES.length;
   var host=document.getElementById('empTableHost'); if(!host) return;
   host.innerHTML = list.length
     ? '<div class="card card-clip"><table><thead><tr><th>Name</th><th>Position</th><th>Office</th><th>Manager</th><th>Status</th></tr></thead><tbody>'+
-        list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)"><span class="namecell">'+avatarHTML(empDisplayName(e),'sm')+esc(empDisplayName(e))+'</span></td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
+        list.map(function(e){return '<tr style="cursor:pointer" onclick="empDetail('+e.id+')"><td style="font-weight:600;color:var(--ink)"><span class="namecell">'+avatarHTML(empDisplayName(e),'sm')+esc(empDisplayName(e))+'</span></td><td>'+esc(e.job_position||'')+'</td><td>'+esc(e.office||'')+'</td><td>'+esc(e.manager_name||e.manager||'')+'</td><td><span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span></td></tr>';}).join('')+
       '</tbody></table></div>'
     : '<div class="card card-pad"><p class="muted">No employees match these filters.</p></div>';
 }
@@ -526,7 +526,7 @@ function renderEmp(){
   var name=empDisplayName(e);
   var tabs=[['overview','Overview'],['access','Access'],['assets','Assets'],['software','Software'],['credentials','Credentials'],['history','History']];
   var back=VIEW_META[cur]||VIEW_META.employees, backKey=cur;
-  setHead(name,[e.public_job_title||e.job_position||'',e.office||'',e.manager?'Manager: '+e.manager:''].filter(Boolean).join(' · '),{label:back.t,go:function(){go(backKey);}});
+  setHead(name,[e.public_job_title||e.job_position||'',e.office||'',e.manager?'Manager: '+(e.manager_name||e.manager):''].filter(Boolean).join(' · '),{label:back.t,go:function(){go(backKey);}});
   document.getElementById('metricstrip').style.display='none';
   document.getElementById('headActions').innerHTML='<span class="st '+esc(e.employment_status)+'">'+esc(human(e.employment_status))+'</span>'+
     (e.employment_status==='active'?'<button class="os-btn" onclick="goGlobal(\'offboarding\')">Start offboarding</button>':'');

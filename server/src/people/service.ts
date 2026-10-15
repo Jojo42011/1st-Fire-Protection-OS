@@ -248,14 +248,49 @@ export function listEmployees(filter: { status?: string; office?: string; q?: st
   if (filter.q) { where.push('(lower(legal_first_name || " " || legal_last_name) LIKE ? OR lower(preferred_name) LIKE ?)'); args.push(`%${filter.q.toLowerCase()}%`, `%${filter.q.toLowerCase()}%`); }
   const sql = `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, job_position, public_job_title, office, manager, employment_status, work_email, anticipated_start_date, actual_start_date
                FROM employees ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY employment_status, legal_last_name`;
-  return (getDb().prepare(sql).all(...args) as any[]).map((e) => ({ ...e, name: empName(e) }));
+  const mgrName = managerNameResolver();
+  return (getDb().prepare(sql).all(...args) as any[]).map((e) => ({ ...e, name: empName(e), manager_name: mgrName(e.manager) }));
+}
+
+/**
+ * BambooHR stores a supervisor as plain text (their legal name), so "David McCain" can be the same person
+ * the roster shows as "Jeff Mccain". This maps that text to the manager's own display name, so the Manager
+ * column matches the Name column. Falls back to the BambooHR text when no one (or more than one person)
+ * matches.
+ */
+export function managerNameResolver(): (manager: string | null | undefined) => string | null {
+  const rows = getDb().prepare(
+    `SELECT id, legal_first_name, legal_last_name, preferred_name, entra_display_name, employment_status FROM employees`
+  ).all() as any[];
+  const key = (s: string | null | undefined) => firstLast(s).toLowerCase();
+  const byName = new Map<string, string | null>(); // null marks a name shared by two different people
+  // Current employees first, so a former employee with the same name never shadows them.
+  for (const pass of [false, true]) {
+    const seen = new Map<string, string>();
+    for (const r of rows) {
+      if ((r.employment_status === 'terminated') !== pass) continue;
+      const shown = empName(r);
+      const names = [r.entra_display_name, `${r.legal_first_name || ''} ${r.legal_last_name || ''}`, `${r.preferred_name || ''} ${r.legal_last_name || ''}`];
+      for (const k of new Set(names.map(key).filter((n) => n.includes(' ')))) {
+        if (byName.has(k)) continue; // already claimed by a current employee
+        const prior = seen.get(k);
+        seen.set(k, prior === undefined || prior === shown ? shown : '');
+      }
+    }
+    for (const [k, v] of seen) byName.set(k, v || null);
+  }
+  return (manager) => {
+    if (!manager) return null;
+    return byName.get(key(manager)) || firstLast(manager) || null;
+  };
 }
 
 export function getEmployeeDetail(id: number, opts: { includeComp: boolean }): any | null {
   const db = getDb();
   const emp = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(id) as any;
   if (!emp) return null;
-  const access = db.prepare(`SELECT id, system, label, access_level, status, owner, external_ref, approved_at, provisioned_at, revoked_at FROM employee_access WHERE employee_id = ? ORDER BY status, system`).all(id);
+  emp.manager_name = managerNameResolver()(emp.manager);
+  const access =db.prepare(`SELECT id, system, label, access_level, status, owner, external_ref, approved_at, provisioned_at, revoked_at FROM employee_access WHERE employee_id = ? ORDER BY status, system`).all(id);
   const assets = db.prepare(`SELECT id, asset_type, identifier, serial, device_name, status, owner, assigned_at, returned_at, condition FROM employee_assets WHERE employee_id = ? ORDER BY status, asset_type`).all(id);
   const credentials = db.prepare(`SELECT id, credential_type, status, expires_at, verified_at, verified_by FROM employee_credentials WHERE employee_id = ? ORDER BY credential_type`).all(id);
   const workflows = db.prepare(`SELECT id, kind, status, created_at, completed_at FROM people_workflows WHERE employee_id = ? ORDER BY id DESC`).all(id);

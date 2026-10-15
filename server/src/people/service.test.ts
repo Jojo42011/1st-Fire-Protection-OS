@@ -80,3 +80,22 @@ test('finishing all tasks activates the employee; offboarding reverses the ACTUA
   assert.ok(off.some((t: any) => /terminated/i.test(t.title) && t.team === 'hr'), 'HR closeout present');
   assert.equal((getDb().prepare(`SELECT employment_status FROM employees WHERE id = ?`).get(employee_id) as any).employment_status, 'offboarding');
 });
+
+test('the Manager column shows the manager by their roster name, not the BambooHR legal name', () => {
+  const add = (first: string, last: string, preferred: string | null, entra: string | null, status: string, manager: string | null) =>
+    Number(getDb().prepare(`INSERT INTO employees (legal_first_name, legal_last_name, preferred_name, entra_display_name, employment_status, manager) VALUES (?,?,?,?,?,?)`)
+      .run(first, last, preferred, entra, status, manager).lastInsertRowid);
+  add('David', 'McCain', 'Jeff', 'Jeff Mccain', 'active', 'Trey Groce');
+  add('David', 'McCain', null, null, 'terminated', null); // a former namesake never wins
+  add('Sam', 'Twin', null, 'Sam Twin', 'active', null);
+  add('Sam', 'Twin', null, 'Samuel Twin', 'active', null); // two current people share a name
+  const report = add('Jameson', 'Burrow', null, null, 'active', 'David McCain');
+  const ambiguous = add('Kim', 'Report', null, null, 'active', 'Twin, Sam');
+  const unknown = add('Lee', 'Report', null, null, 'active', 'Nobody Known');
+  const byId = new Map(svc.listEmployees({ status: 'all' }).map((e: any) => [e.id, e]));
+  assert.equal(byId.get(report).manager_name, 'Jeff Mccain');
+  assert.equal(byId.get(report).manager, 'David McCain', 'the BambooHR text is kept');
+  assert.equal(byId.get(ambiguous).manager_name, 'Sam Twin', 'ambiguous names fall back to the BambooHR text');
+  assert.equal(byId.get(unknown).manager_name, 'Nobody Known');
+  assert.equal(svc.getEmployeeDetail(report, { includeComp: false }).employee.manager_name, 'Jeff Mccain');
+});
