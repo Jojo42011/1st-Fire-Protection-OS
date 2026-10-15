@@ -8,7 +8,7 @@ process.env.DB_PATH = path.join(os.tmpdir(), `os-offb-backlog-test-${process.pid
 import { getDb } from '../db/index';
 import { initDb } from '../db/schema';
 import { createFromBacklog } from './offboardingBacklog';
-import { createOffboarding } from './offboardingAgent';
+import { backfillManagerAddresses, createOffboarding } from './offboardingAgent';
 
 initDb();
 const db = getDb();
@@ -49,4 +49,24 @@ test('createOffboarding never stores a name in manager_email or forward_to', () 
   assert.deepEqual(req(b.id), { manager_email: null, forward_to: null });
   const c = createOffboarding({ name: 'Bo Gone', manager_email: 'boss@1stfpservices.com' }).request;
   assert.deepEqual(req(c.id), { manager_email: 'boss@1stfpservices.com', forward_to: 'boss@1stfpservices.com' });
+});
+
+test('startup backfill fixes a name stored on open requests only, and is idempotent', () => {
+  const put = (name: string, mgr: string | null, fwd: string | null, status: string) =>
+    Number(db.prepare(`INSERT INTO offboarding_requests (name, manager_email, forward_to, status) VALUES (?,?,?,?)`)
+      .run(name, mgr, fwd, status).lastInsertRowid);
+  const open = put('Old One', 'Ray Boss', 'Boss, Ray', 'open');
+  const lost = put('Old Two', 'Nobody Known', 'Nobody Known', 'open');
+  const mixed = put('Old Three', 'keep@1stfpservices.com', 'Ray Boss', 'open');
+  const done = put('Old Four', 'Ray Boss', 'Ray Boss', 'complete');
+  const item = Number(db.prepare(`INSERT INTO offboarding_items (request_id, owner, kind, label, status) VALUES (?,?,?,?,?)`)
+    .run(open, 'it', 'task', 'Forward mail', 'done').lastInsertRowid);
+
+  assert.equal(backfillManagerAddresses(), 3);
+  assert.deepEqual(req(open), { manager_email: 'ray.boss@1stfpservices.com', forward_to: 'ray.boss@1stfpservices.com' });
+  assert.deepEqual(req(lost), { manager_email: null, forward_to: null });
+  assert.deepEqual(req(mixed), { manager_email: 'keep@1stfpservices.com', forward_to: 'ray.boss@1stfpservices.com' });
+  assert.deepEqual(req(done), { manager_email: 'Ray Boss', forward_to: 'Ray Boss' });
+  assert.equal((db.prepare(`SELECT status FROM offboarding_items WHERE id = ?`).get(item) as any).status, 'done');
+  assert.equal(backfillManagerAddresses(), 0);
 });

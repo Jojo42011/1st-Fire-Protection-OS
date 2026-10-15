@@ -386,6 +386,26 @@ export function backfillOffboardingItems(): { requestsTouched: number; itemsAdde
   return { requestsTouched, itemsAdded };
 }
 
+/**
+ * Before the backlog sweep resolved supervisor names, it stored the BambooHR name ("First Last") in
+ * manager_email and forward_to. On open requests, resolve such a name to the manager's work email, or
+ * clear it when there is no match, so forwarding and reminders never target a name. Complete and
+ * cancelled requests are left as recorded. Idempotent: a field that already holds an address is skipped.
+ */
+export function backfillManagerAddresses(): number {
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT id, manager_email, forward_to FROM offboarding_requests
+      WHERE status = 'open'
+        AND ((manager_email IS NOT NULL AND manager_email NOT LIKE '%@%')
+          OR (forward_to IS NOT NULL AND forward_to NOT LIKE '%@%'))`
+  ).all() as { id: number; manager_email: string | null; forward_to: string | null }[];
+  const fix = (v: string | null) => (v == null || v.includes('@') ? v : asAddress(v) || null);
+  const upd = db.prepare(`UPDATE offboarding_requests SET manager_email = ?, forward_to = ?, updated_at = datetime('now') WHERE id = ?`);
+  for (const r of rows) upd.run(fix(r.manager_email), fix(r.forward_to), r.id);
+  return rows.length;
+}
+
 export interface OffRollup { total: number; done: number; pending: number; pendingApprovals: number; progress: number }
 function rollup(items: any[]): OffRollup {
   const total = items.length;

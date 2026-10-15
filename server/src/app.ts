@@ -121,6 +121,9 @@ ensureBootstrapAdmin();
 // card never claims "live in the roster" without a real agent behind it.
 const healed = healRoster();
 if (healed) console.log(`[harness] healed ${healed} shipped build order(s) into live agents`);
+// Replace a manager's name stored as an address on open offboardings (pre-fix backlog rows). Runs before
+// the item backfill so item routing and forward text are refreshed from the corrected address. Idempotent.
+try { const n = require('./services/offboardingAgent').backfillManagerAddresses(); if (n) console.log(`[offboarding] corrected the manager address on ${n} open request(s)`); } catch (e) { console.warn('[offboarding] manager address backfill error:', (e as Error).message); }
 // Backfill newly-defined offboarding checklist items (HR/Accounting/IT-device tasks) onto existing
 // open requests created before those items existed. Idempotent.
 try { const b = require('./services/offboardingAgent').backfillOffboardingItems(); if (b.itemsAdded) console.log(`[offboarding] backfilled ${b.itemsAdded} item(s) across ${b.requestsTouched} request(s)`); } catch (e) { console.warn('[offboarding] backfill error:', (e as Error).message); }
