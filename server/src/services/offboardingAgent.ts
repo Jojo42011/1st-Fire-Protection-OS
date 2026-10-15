@@ -215,6 +215,10 @@ function planItems(req: any, groupSnapshot: { name: string }[] | null): DraftIte
 /* ─────────────────────────── create / read ─────────────────────────── */
 export function createOffboarding(payload: OffboardingPayload): { request: any; items: any[] } {
   const db = getDb();
+  // manager_email and forward_to feed mail forwarding and reminders, so a manager's name never lands there.
+  if (payload) {
+    payload = { ...payload, manager_email: asAddress(payload.manager_email), forward_to: asAddress(payload.forward_to) };
+  }
   // When the picker passes an employee_id, fill any identity fields the caller left blank.
   if (payload && payload.employee_id) {
     const r = resolveOffboardingFromEmployee(Number(payload.employee_id));
@@ -593,6 +597,14 @@ export function managerOfByName(name: string | null | undefined): string | null 
     if (names.some((n) => want.has(n))) return r.manager;
   }
   return null;
+}
+
+/** An email address as given, or a person's name resolved to their work email; undefined when neither. */
+function asAddress(v: string | null | undefined): string | undefined {
+  const s = String(v || '').trim();
+  if (!s) return undefined;
+  if (s.includes('@')) return s;
+  return managerEmailByName(s) || undefined;
 }
 
 function mgrEmail(n2e: Map<string, string>, name: string | null | undefined): string | null {

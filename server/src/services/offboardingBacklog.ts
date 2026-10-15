@@ -1,6 +1,6 @@
 import { getDb } from '../db/index';
 import { buildEmployeeIndex, matchAdToEmployee } from './adAudit';
-import { createOffboarding, hasOffboarding } from './offboardingAgent';
+import { createOffboarding, hasOffboarding, managerEmailByName } from './offboardingAgent';
 
 /**
  * Backlog sweep: turn the pile of already-terminated AD accounts into an approvable list.
@@ -99,7 +99,8 @@ export function createFromBacklog(guids: string[], by = 'operator'): { created: 
       name: a.display_name || a.sam || a.upn || 'Unknown',
       upn: a.upn || undefined,
       sam: a.sam || undefined,
-      manager_email: e ? e.manager || undefined : undefined,
+      // employees.manager is the supervisor's name, not an address: resolve it to their work email.
+      manager_email: (e && managerEmailByName(e.manager)) || undefined,
       office: (e && e.office) || a.office || undefined,
       source: 'backlog',
       created_by: by,
