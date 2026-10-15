@@ -1,4 +1,5 @@
 import { getDb } from './index';
+import { flipStoredNames } from '../people/names';
 
 /**
  * ONE schema source of truth. Idempotent - safe to run on every boot.
@@ -2020,6 +2021,9 @@ export function initDb(): void {
   addColumn('est_quote_lines', 'override_sell', 'REAL');
   addColumn('est_quotes', 'after_hours', 'INTEGER DEFAULT 0');
   addColumn('est_quotes', 'waive_trip', 'INTEGER DEFAULT 0');
+
+  // Names are "First Last" everywhere; BambooHR supervisors and some directory names arrive "Last, First".
+  flipStoredNames(db);
 }
 
 /** Add a column only if it isn't already present (idempotent migration helper). */

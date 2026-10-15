@@ -9,6 +9,8 @@
  * can populate license_seats via the same SeatRecord shape (source='manual').
  */
 
+import { firstLastOrNull } from '../people/names';
+
 export type Vendor = 'adobe' | 'bluebeam' | 'autocad' | 'hydracad' | 'hfss' | 'microsoft';
 
 export interface SeatRecord {
@@ -98,7 +100,7 @@ export async function fetchMicrosoftSeats(): Promise<SeatRecord[] | null> {
             vendor: 'microsoft',
             product: part,
             assignee_email: u.userPrincipalName ? String(u.userPrincipalName).toLowerCase() : null,
-            assignee_name: u.displayName || u.userPrincipalName || null,
+            assignee_name: firstLastOrNull(u.displayName) || u.userPrincipalName || null,
             cost_monthly: skuCost(part),
             assigned_at: null,
             source: 'graph',

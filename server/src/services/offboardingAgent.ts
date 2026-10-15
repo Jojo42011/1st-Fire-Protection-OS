@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { firstLast } from '../people/names';
 import { appAccessFor, APP_GATED_ACTIONS } from './appAccess';
 import { getState, setState } from '../db/schema';
 
@@ -572,11 +573,7 @@ function recompute(requestId: number): void {
 const lc = (s: string | null | undefined) => String(s || '').toLowerCase().trim();
 const empFullName = (e: any) => `${e.preferred_name || e.legal_first_name || ''} ${e.legal_last_name || ''}`.trim();
 // BambooHR stores a manager as "Last, First"; employee names are "First Last". Flip so they match.
-const flipComma = (s: string) => {
-  const t = String(s || '').trim();
-  if (t.includes(',')) { const [last, ...rest] = t.split(','); return `${rest.join(',').trim()} ${last.trim()}`.trim(); }
-  return t;
-};
+const flipComma = (s: string) => firstLast(s);
 /** Resolve a manager name (either order) to a work email via the name->email map. */
 /** A manager's work email from their name as BambooHR stores it ("First Last" or "Last, First"). */
 export function managerEmailByName(name: string | null | undefined): string | null {

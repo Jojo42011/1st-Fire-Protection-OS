@@ -757,6 +757,40 @@ export function updateLine(id: number, body: any, actor: string): any {
   return lineDetail(id);
 }
 
+/**
+ * "This number goes to this person." Creates the line when the OS does not have it yet (a new phone
+ * before the next AT&T import), marks a line the OS had as cancelled active again, links an Apple
+ * Business device to it when one is picked, then assigns it like an edit on the line would.
+ */
+export function assignNumber(body: { number?: unknown; employee_id?: unknown; serial?: unknown }, actor: string): any {
+  const number = normNumber(body.number);
+  if (!number) throw new Error('Enter a 10-digit phone number.');
+  const empId = body.employee_id === '' || body.employee_id == null ? NaN : Number(body.employee_id);
+  if (!Number.isFinite(empId)) throw new Error('Pick an employee.');
+  const db = getDb();
+  const emp = db.prepare(`SELECT id, office FROM employees WHERE id = ?`).get(empId) as any;
+  if (!emp) throw new Error('employee not found');
+  const serial = String(body.serial ?? '').trim().toUpperCase();
+  const dev = serial ? (db.prepare(`SELECT * FROM apple_devices WHERE upper(serial) = ?`).get(serial) as any) : null;
+  if (serial && !dev) throw new Error('That device is not in Apple Business. Sync Apple Business and try again.');
+  const kind = dev && /ipad/i.test(`${dev.product_family || ''} ${dev.model || ''}`) ? 'tablet' : 'phone';
+  let l = lineByNumber(number);
+  if (!l) {
+    const id = writeLine(number, { carrier: 'AT&T', kind, status: 'active', office: emp.office ? canonicalOffice(emp.office) || null : null });
+    logEvent(id, 'note', 'Added in the OS (not on an AT&T report yet)', actor);
+    l = lineByNumber(number);
+  } else if (l.status === 'cancelled') {
+    writeLine(number, { status: 'active', intent: null, intent_at: null });
+    logEvent(l.id, 'reactivate', 'Marked active again: assigned to someone in the OS', actor);
+  }
+  if (dev) {
+    const imei = String(dev.imei || '').split(',')[0] || '';
+    ensureDevice(l.id, { kind, imei, serial: dev.serial, model: dev.model || '', employeeId: empId, purchase: '', source: 'Apple Business' }, actor);
+    if (!l.imei && imei) writeLine(number, { imei, device_make: 'Apple', device_model: l.device_model || dev.model || null });
+  }
+  return updateLine(l.id, { employee_id: empId }, actor);
+}
+
 const EVENT_KINDS = new Set(['upgrade', 'device_swap', 'freeze', 'cancel', 'reactivate', 'transfer', 'note']);
 export function addLineEvent(id: number, body: any, actor: string): any {
   const kind = String(body.kind || 'note');

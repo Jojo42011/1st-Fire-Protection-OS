@@ -10,6 +10,7 @@
  * Each step degrades on its own: a missing permission is reported, never thrown.
  */
 import { getDb } from '../db/index';
+import { firstLastOrNull } from '../people/names';
 import { getState, setState } from '../db/schema';
 import { graphToken } from './licenseSources';
 import { graphUsersConfigured } from './msGraphUsers';
@@ -201,7 +202,7 @@ export async function syncTeamsVoice(days = 90): Promise<TeamsVoiceStatus> {
         const a = activity.get(upn) || (u.mail ? activity.get(String(u.mail).toLowerCase()) : undefined);
         const pc = pstn.get(upn);
         ins.run({
-          upn, entra_id: u.id, display_name: u.displayName || null, account_enabled: u.accountEnabled === false ? 0 : 1,
+          upn, entra_id: u.id, display_name: firstLastOrNull(u.displayName), account_enabled: u.accountEnabled === false ? 0 : 1,
           employee_id: empBy.get(upn) ?? (u.mail ? empBy.get(String(u.mail).toLowerCase()) : undefined) ?? null,
           mobile_phone: u.mobilePhone || null, has_teams_phone: hasPhone ? 1 : 0, has_calling_plan: plans.some((p) => p.kind === 'calling_plan') ? 1 : 0,
           voice_plans: [...new Set(plans.map((p) => p.name))].join(', ') || null,

@@ -41,6 +41,17 @@
       <select id="office" class="dv-in"><option value="">All offices</option></select>
       <select id="kind" class="dv-in"><option value="">Phones and iPads</option><option value="phone">Phones</option><option value="tablet">iPads / tablets</option><option value="other">Hotspots, watches, data</option></select>
     </div>
+    <div class="os-card" id="assignCard" style="padding:12px 14px;margin:0 0 12px">
+      <div class="dv-row"><b>Assign a phone</b>
+        <input id="aNum" class="dv-in" type="text" inputmode="tel" placeholder="210-555-0123" style="width:150px" />
+        <span class="muted">goes to</span>
+        <input id="aEmp" class="dv-in" list="empList" placeholder="Start typing a name from BambooHR" spellcheck="false" style="flex:1;min-width:220px" />
+        <select id="aDev" class="dv-in" style="max-width:300px"><option value="">Device: keep what AT&amp;T reports</option></select>
+        <button class="os-btn primary" id="aGo">Assign</button>
+      </div>
+      <div class="os-filter-note" style="margin-top:6px">New numbers are added right away. Pick the phone from Apple Business if it is not on an AT&amp;T report yet.</div>
+    </div>
+    <datalist id="empList"></datalist>
     <div id="list"></div>
     <div id="detail" style="margin-top:14px"></div>
 
@@ -116,7 +127,7 @@ function load(){
   document.getElementById('strip').innerHTML=OS.skeletonKpis(5);
   fetch('/api/devices').then(j).then(function(d){
     if(!d||!d.ok){ document.getElementById('strip').innerHTML=OS.errorBox((d&&d.error)==='people_auth_required'?'Sign in to see devices.':'Could not load devices.'); return; }
-    D=d; renderStrip(); renderOffices(); renderChips(); renderList(); renderPlans(); renderSources(); jumpOnce();
+    D=d; renderStrip(); renderOffices(); renderChips(); renderList(); renderPlans(); renderSources(); renderPickers(); jumpOnce();
     if(SEL) openLine(SEL,true);
   }).catch(function(){ document.getElementById('strip').innerHTML=OS.errorBox('Could not load devices.'); });
   loadTeams();
@@ -201,9 +212,45 @@ function renderList(){
 var CURRENT=[];
 function sev(l){ var s=0; l.flags.forEach(function(f){ s+=f.tone==='bad'?3:f.tone==='warn'?1:0; }); return s; }
 
+/* ---- people picker (BambooHR roster) + assign ---- */
+function empLabel(e){ return e.name+(e.office?' · '+e.office:''); }
+function empById(id){ return (D.employees||[]).filter(function(e){ return e.id===id; })[0]||null; }
+// A typed or picked name -> employee id; null when blank, undefined when it matches nobody (or several people).
+function empFromInput(v){
+  v=String(v||'').trim(); if(!v) return null;
+  var lc=v.toLowerCase(), list=D.employees||[];
+  var hit=list.filter(function(e){ return empLabel(e).toLowerCase()===lc; });
+  if(!hit.length) hit=list.filter(function(e){ return String(e.name).toLowerCase()===lc; });
+  return hit.length===1?hit[0].id:undefined;
+}
+function fmtNum(v){ var d=String(v||'').replace(/\D/g,'').slice(-10); return d.length===10?d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6):String(v||'').trim(); }
+function devLabel(l){ return (l.model||'Apple device')+' · SN '+l.serial+(l.imei?' · IMEI …'+String(l.imei).slice(-4):''); }
+function renderPickers(){
+  document.getElementById('empList').innerHTML=(D.employees||[]).map(function(e){ return '<option value="'+OS.esc(empLabel(e))+'"></option>'; }).join('');
+  var sel=document.getElementById('aDev'), cur=sel.value;
+  sel.innerHTML='<option value="">Device: keep what AT&amp;T reports</option>'+D.lines.filter(function(l){ return l.device_only; }).map(function(l){
+    return '<option value="'+OS.esc(l.serial)+'"'+(l.serial===cur?' selected':'')+'>'+OS.esc(devLabel(l))+'</option>'; }).join('');
+}
+function assign(number, empText, serial, btn){
+  var id=empFromInput(empText);
+  if(!String(number||'').replace(/\D/g,'')){ OS.toast('Enter the phone number.','bad'); return; }
+  if(id==null){ OS.toast(id===null?'Pick who it goes to.':'No single BambooHR match for "'+empText+'". Pick a name from the list.','bad'); return; }
+  if(btn) btn.disabled=true;
+  post('/api/devices/assign',{number:number, employee_id:id, serial:serial||''}).then(function(d){
+    if(btn) btn.disabled=false;
+    if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not assign.','bad'); return; }
+    OS.toast(fmtNum(number)+' now goes to '+(empById(id)||{}).name+'.');
+    SEL=d.line.id; ['aNum','aEmp'].forEach(function(x){ document.getElementById(x).value=''; }); document.getElementById('aDev').value='';
+    load();
+  }).catch(function(){ if(btn) btn.disabled=false; OS.toast('Could not assign.','bad'); });
+}
+document.getElementById('aGo').addEventListener('click',function(){ assign(document.getElementById('aNum').value, document.getElementById('aEmp').value, document.getElementById('aDev').value, this); });
+document.getElementById('aNum').addEventListener('blur',function(){ this.value=fmtNum(this.value); });
+
 /* ---- line detail ---- */
-function empOptions(sel){
-  return '<option value="">(nobody: spare or shared)</option>'+(D.employees||[]).map(function(e){ return '<option value="'+e.id+'"'+(e.id===sel?' selected':'')+'>'+OS.esc(e.name)+(e.office?' · '+OS.esc(e.office):'')+'</option>'; }).join('');
+function empPicker(id, selId){
+  var e=selId!=null?empById(selId):null;
+  return '<input id="'+id+'" class="dv-in" list="empList" spellcheck="false" placeholder="Nobody (spare or shared)" value="'+OS.esc(e?empLabel(e):'')+'" />';
 }
 function openLine(id, quiet){
   SEL=id;
@@ -227,7 +274,7 @@ function renderDetail(l){
     '<div class="dv-grid" style="margin-top:12px">'+facts+'</div>'+
     '<div class="os-sec" style="margin-top:18px">Edit</div>'+
     '<div class="dv-grid">'+
-      '<label>Assigned to<select id="eEmp" class="dv-in">'+empOptions(l.employee_id)+'</select></label>'+
+      '<label>Assigned to'+empPicker('eEmp', l.employee_id)+'</label>'+
       '<label>Shared line label<input id="eShared" class="dv-in" value="'+OS.esc(l.shared_label||'')+'" placeholder="e.g. HR line, Laredo service" /></label>'+
       '<label>Monthly cost override<input id="eCost" class="dv-in" type="number" min="0" step="0.01" value="'+(l.cost_source==='set on line'?OS.esc(l.monthly_cost):'')+'" placeholder="'+(l.monthly_cost!=null?'now '+usd(l.monthly_cost):'$/mo')+'" /></label>'+
       '<label>Pending with AT&amp;T<select id="eIntent" class="dv-in"><option value="">Keep</option><option value="cancel"'+(l.intent==='cancel'?' selected':'')+'>Cancel requested</option><option value="freeze"'+(l.intent==='freeze'?' selected':'')+'>Freeze requested</option></select></label>'+
@@ -259,16 +306,22 @@ function renderDevice(l){
     '<div class="dv-row" style="justify-content:space-between"><div><b style="font-size:16px">'+OS.esc(l.model||'Apple device')+'</b> <span class="muted">SN '+OS.esc(l.serial)+' · no AT&amp;T line</span></div><button class="os-btn" data-close>Close</button></div>'+
     '<div class="dv-flags" style="margin-top:8px">'+l.flags.map(function(f){return OS.pill(f.label,f.tone);}).join('')+'</div>'+
     '<div class="dv-grid" style="margin-top:12px">'+facts+'</div>'+
-    '<div class="os-filter-note" style="margin-top:12px">'+OS.esc(why)+'</div></div>';
+    '<div class="os-filter-note" style="margin-top:12px">'+OS.esc(why)+'</div>'+
+    '<div class="os-sec" style="margin-top:18px">Assign this device</div>'+
+    '<div class="dv-row"><input id="dNum" class="dv-in" type="text" inputmode="tel" placeholder="Its phone number" style="width:150px" />'+
+      '<span class="muted">goes to</span>'+empPicker('dEmp', l.employee_id)+
+      '<button class="os-btn primary" data-assign="'+OS.esc(l.serial)+'">Assign</button></div></div>';
 }
 document.getElementById('detail').addEventListener('click',function(e){
   if(e.target.closest('[data-close]')){ SEL=null; document.getElementById('detail').innerHTML=''; return; }
+  var as=e.target.closest('[data-assign]'); if(as){ assign(document.getElementById('dNum').value, document.getElementById('dEmp').value, as.getAttribute('data-assign'), as); return; }
   var s=e.target.closest('[data-save]'); if(s){
     var id=Number(s.getAttribute('data-save')); s.disabled=true;
-    var empV=document.getElementById('eEmp').value, shared=document.getElementById('eShared').value.trim();
-    var body={employee_id:empV?Number(empV):null, monthly_cost:document.getElementById('eCost').value, intent:document.getElementById('eIntent').value,
+    var empText=document.getElementById('eEmp').value, empV=empFromInput(empText), shared=document.getElementById('eShared').value.trim();
+    if(empV===undefined){ s.disabled=false; OS.toast('No single BambooHR match for "'+empText+'". Pick a name from the list.','bad'); return; }
+    var body={employee_id:empV, monthly_cost:document.getElementById('eCost').value, intent:document.getElementById('eIntent').value,
       freeze_until:document.getElementById('eFreeze').value, apple_account:document.getElementById('eApple').value.trim(), notes:document.getElementById('eNotes').value};
-    if(!empV) body.shared_label=shared;
+    if(empV==null) body.shared_label=shared;
     post('/api/devices/lines/'+id, body).then(function(d){ s.disabled=false; if(!d||!d.ok){ OS.toast((d&&d.error)||'Could not save.','bad'); return; } OS.toast('Saved.'); load(); })
       .catch(function(){ s.disabled=false; OS.toast('Save failed.','bad'); });
     return;

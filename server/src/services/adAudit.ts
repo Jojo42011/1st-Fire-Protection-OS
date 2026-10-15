@@ -1,4 +1,5 @@
 import { getDb } from '../db/index';
+import { firstLastOrNull } from '../people/names';
 import { getState, setState } from '../db/schema';
 
 /**
@@ -70,7 +71,7 @@ export function ingestInventory(users: AdUserIn[], collectedAt?: string, ous?: A
         object_guid: String(u.objectGuid),
         sam: s(u.sam),
         upn: s(u.upn),
-        display_name: s(u.displayName),
+        display_name: firstLastOrNull(s(u.displayName)),
         given_name: s(u.givenName),
         surname: s(u.surname),
         title: s(u.title),

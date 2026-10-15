@@ -8,6 +8,7 @@
  * generates human-confirmed workflow tasks; real provisioning/de-provisioning is a later phase.
  */
 import { getDb } from '../db/index';
+import { firstLast, firstLastOrNull } from './names';
 import { JOB_POSITIONS } from './catalog';
 import { routeOnboarding, routeOffboarding, OnboardingIntake, WorkItem, Footprint } from './routing';
 import { fetchRosterForImport, bambooConfigured, BambooImportRow } from '../services/bamboo';
@@ -365,7 +366,7 @@ function displayName(h: NewHire): string {
 
 // The Microsoft 365 display name is authoritative once matched; fall back to the legal name, and only
 // then to the BambooHR nickname. This keeps real names (not nicknames) on assets, access, and lists.
-const empName = (e: any): string => e.entra_display_name || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || e.preferred_name || `Employee ${e.id}`;
+const empName = (e: any): string => firstLast(e.entra_display_name) || [e.legal_first_name, e.legal_last_name].filter(Boolean).join(' ') || e.preferred_name || `Employee ${e.id}`;
 /** The canonical display name for an employee row (Entra name, then legal, then nickname). Exported
  *  so other modules (software import, etc.) show the same real name. */
 export function empDisplayNameOf(e: any): string { return empName(e); }
@@ -481,7 +482,7 @@ export function mapBambooRow(row: BambooImportRow): MappedBambooEmployee | null 
     department: row.department,
     public_job_title: title,
     job_position: title, // seeds the role-template match; HR can correct it on review
-    manager: row.supervisor,
+    manager: firstLastOrNull(row.supervisor), // BambooHR writes supervisors "Last, First"
     actual_start_date: cleanDate(row.hireDate),
     bamboo_status,
   };
@@ -949,8 +950,9 @@ export async function syncIdentitiesFromM365(actor: string): Promise<{ ok: boole
       matched++;
       const e = empById.get(empId);
       const newUpn = u.upn || u.mail;
-      if ((newUpn && e.upn !== newUpn) || (u.displayName && e.entra_display_name !== u.displayName)) {
-        setId.run(newUpn || e.upn || null, u.mail || u.upn || null, u.displayName || e.entra_display_name || null, empId);
+      const entraName = firstLastOrNull(u.displayName);
+      if ((newUpn && e.upn !== newUpn) || (entraName && e.entra_display_name !== entraName)) {
+        setId.run(newUpn || e.upn || null, u.mail || u.upn || null, entraName || e.entra_display_name || null, empId);
         updated++;
       }
     }
@@ -1110,7 +1112,7 @@ export function linkIdentity(employee_id: number, upn: string, displayName: stri
   if (!u) throw new Error('upn_required');
   getDb().prepare(
     `UPDATE employees SET upn = ?, entra_display_name = COALESCE(?, entra_display_name), work_email = COALESCE(NULLIF(work_email, ''), ?) WHERE id = ?`
-  ).run(u, displayName || null, u.includes('@') ? u : null, employee_id);
+  ).run(u, firstLastOrNull(displayName), u.includes('@') ? u : null, employee_id);
   audit('identity_linked', `Linked to Microsoft 365 account ${u}`, { actor, employee_id });
   return { ok: true };
 }

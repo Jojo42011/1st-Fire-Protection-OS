@@ -40,6 +40,9 @@ router.get('/api/devices/lines/:id', requirePeople(), (req, res) => {
 router.post('/api/devices/lines/:id', IT, (req, res) => {
   try { res.json({ ok: true, line: fleet.updateLine(Number(req.params.id), req.body || {}, actor(req)) }); } catch (err) { fail(res, err); }
 });
+router.post('/api/devices/assign', IT, (req, res) => {
+  try { res.json({ ok: true, line: fleet.assignNumber(req.body || {}, actor(req)) }); } catch (err) { fail(res, err); }
+});
 router.post('/api/devices/lines/:id/events', IT, (req, res) => {
   try { res.json({ ok: true, line: fleet.addLineEvent(Number(req.params.id), req.body || {}, actor(req)) }); } catch (err) { fail(res, err); }
 });

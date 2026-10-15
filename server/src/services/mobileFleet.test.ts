@@ -10,11 +10,13 @@ process.env.OS_REQUIRE_IDENTITY = '0';
 import { getDb } from '../db/index';
 import { initDb, setState } from '../db/schema';
 import {
+  assignNumber,
   normNumber, normPersonName, normDate, unsupportedModel, installmentRemaining, parseAttReport, importAttReport,
   parseWorkbook, importWorkbook, listLines, updateLine, addLineEvent, lineDetail, teamsAudit, setPlanCost, linesCsv,
 } from './mobileFleet';
 import { isVoicePlan, parseTeamsActivity, activityRange } from './teamsVoice';
 import { abmClientAssertion, mapAddigyItem, abmDeviceRow, abmImeis, normalizePem } from './appleDevices';
+import { firstLast, flipStoredNames } from '../people/names';
 import { executiveReport, setTeamsVoiceCost, DEFAULT_TEAMS_VOICE_COST } from './mobileReport';
 
 initDb();
@@ -363,4 +365,40 @@ test('the Apple Business private key works however it was pasted into the secret
   assert.ok(normalizePem(oneLine).split('\n').length > 3);
   // A wrong value fails with a clear message that names the secret, never echoing the key.
   assert.throws(() => abmClientAssertion({ clientId: 'x', keyId: 'K', privateKeyPem: 'not a key' }), (e: Error) => /ABM_PRIVATE_KEY/.test(e.message) && !/not a key/.test(e.message));
+});
+
+test('names read First Last: BambooHR "Last, First" is flipped, suffixes and plain names are kept', () => {
+  assert.equal(firstLast('Ruiz, Dana'), 'Dana Ruiz');
+  assert.equal(firstLast('  Smith ,  Pat Ann '), 'Pat Ann Smith');
+  assert.equal(firstLast('Kernes, John, Jr'), 'John Kernes Jr');
+  assert.equal(firstLast('John Kernes, Jr'), 'John Kernes, Jr');
+  assert.equal(firstLast('Dana Ruiz'), 'Dana Ruiz');
+  assert.equal(firstLast(null), '');
+  db.prepare(`UPDATE employees SET manager = 'Salinas, Mario', entra_display_name = 'Peña, Joshua' WHERE id = 1`).run();
+  assert.equal(flipStoredNames(db), 2);
+  assert.deepEqual(db.prepare(`SELECT manager, entra_display_name FROM employees WHERE id = 1`).get(), { manager: 'Mario Salinas', entra_display_name: 'Joshua Peña' });
+  assert.equal(flipStoredNames(db), 0, 'running it again changes nothing');
+  db.prepare(`UPDATE employees SET manager = NULL, entra_display_name = NULL WHERE id = 1`).run();
+});
+
+test('assigning a number creates the line when needed and links the Apple Business phone', () => {
+  db.prepare(`INSERT INTO apple_devices (serial, imei, model, product_family, in_abm, abm_status) VALUES ('C7RRWFP422', '356700000000045,356700000000052', 'iPhone 17e', 'iPhone', 1, 'ASSIGNED')`).run();
+  assert.throws(() => assignNumber({ number: '210-55', employee_id: 3 }, 'it@1stfp.com'), /10-digit/);
+  assert.throws(() => assignNumber({ number: '2105550177' }, 'it@1stfp.com'), /Pick an employee/);
+  const l = assignNumber({ number: '(210) 555-0177', employee_id: 3, serial: 'c7rrwfp422' }, 'it@1stfp.com');
+  assert.equal(l.number, '2105550177');
+  assert.equal(l.employee_id, 3);
+  assert.equal(l.serial, 'C7RRWFP422');
+  assert.equal(l.imei, '356700000000045');
+  assert.ok(l.events.some((e: any) => e.kind === 'assigned' && /Mario Salinas/.test(e.detail)));
+  const { lines } = listLines({ withDevices: true });
+  assert.ok(!lines.some((x) => x.device_only && x.serial === 'C7RRWFP422'), 'the phone is no longer a device with no line');
+  // Reassigning an existing number just moves it.
+  assert.equal(assignNumber({ number: '2105550177', employee_id: 1 }, 'it@1stfp.com').employee_id, 1);
+  // A number the OS had as cancelled comes back as active when someone is given it.
+  db.prepare(`INSERT INTO mobile_lines (number, kind, status) VALUES ('2105550188', 'phone', 'cancelled')`).run();
+  assert.equal(assignNumber({ number: '2105550188', employee_id: 3 }, 'it@1stfp.com').status, 'active');
+  db.prepare(`DELETE FROM mobile_lines WHERE number IN ('2105550177','2105550188')`).run();
+  db.prepare(`DELETE FROM employee_assets WHERE serial = 'C7RRWFP422'`).run();
+  db.prepare(`DELETE FROM apple_devices WHERE serial = 'C7RRWFP422'`).run();
 });
